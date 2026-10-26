@@ -33,6 +33,7 @@ import { recordPortalAccess } from './assistant/temperature.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
 import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOption } from './lib/portalSession.mjs';
 import { cleanupOldEditVersions } from './lib/versionCleanup.mjs';
+import { createWebVideo, captureVideoUploads, isWebVariantName, originalNamesForWebVariant, WEB_TMP_DIR } from './lib/webVideo.mjs';
 import { buildProposalRevenueSchedule, stripRevenueMark } from './lib/proposalRevenues.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
@@ -73,6 +74,9 @@ app.use(cors());
 // Gzip: o payload do kanban da designer (centenas de cards com textos) cai ~80%.
 app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: '10mb' }));
+// Vídeo gravado por qualquer upload ou entrega (multer) que termina bem entra na fila da versão leve
+// (lib/webVideo.mjs; a instância é criada junto das rotas de upload, mais abaixo).
+app.use(captureVideoUploads((filePath) => webVideo.enqueue(filePath, { reason: 'upload' })));
 
 // Health Check: endpoint leve para monitoramento do Nginx/Uptime e Banco de Dados
 // Diagnóstico do Pente Fino: mostra o que faltava e repara o schema.
@@ -1678,6 +1682,8 @@ function removeUploadFile(fileUrl) {
   for (const root of uploadRoots()) {
     const candidate = path.resolve(root, relative);
     if (!candidate.startsWith(`${root}${path.sep}`)) continue;
+    // a versão leve (<nome>.web.mp4) sai junto com o original
+    freed += webVideo.removeWebVariantOf(candidate);
     try {
       if (!fs.existsSync(candidate)) continue;
       freed += fs.statSync(candidate).size;
@@ -1712,7 +1718,7 @@ async function runDailyVersionCleanup() {
     console.error('[limpeza-versoes] falha:', error?.message || error);
   }
 }
-setTimeout(runDailyVersionCleanup, 2 * 60 * 1000).unref?.();
+setTimeout(runDailyVersionCleanup, Number(process.env.VERSION_CLEANUP_DELAY_MS) || 2 * 60 * 1000).unref?.();
 setInterval(runDailyVersionCleanup, 3 * 60 * 60 * 1000).unref?.();
 
 async function cleanupOldPortalVideos(options = {}) {
@@ -17965,6 +17971,8 @@ const ORPHAN_SKIP_DIRS = new Set([
   'promo',
   'sorteios',
   'bio-links',
+  // Temporários da versão leve dos vídeos (lib/webVideo.mjs)
+  WEB_TMP_DIR,
 ]);
 
 /**
@@ -18059,6 +18067,9 @@ async function auditOrphanFiles({ minAgeDays = 7 } = {}) {
       }
       const rel = path.relative(root, full).split(path.sep).join('/');
       scanned += 1;
+      // A versão leve (<nome>.web.mp4) nunca é citada no banco: segue o original. Só conta como
+      // sem uso quando o original já não existe.
+      if (isWebVariantName(entry.name) && originalNamesForWebVariant(entry.name).some((n) => fs.existsSync(path.join(dir, n)))) continue;
       // Proteção tripla: caminho relativo, nome do arquivo citado em qualquer
       // lugar do banco e pasta de módulo protegida em qualquer profundidade.
       if (referenced.has(rel)) continue;
@@ -18167,7 +18178,7 @@ app.post('/api/portal-videos/delete-orphans', async (req, res) => {
       try {
         fs.unlinkSync(target.fullPath);
         deletedFiles += 1;
-        freedBytes += target.size;
+        freedBytes += target.size + webVideo.removeWebVariantOf(target.fullPath);
         console.log('[orphan-delete] removido:', target.path);
       } catch (error) {
         console.warn('[orphan-delete] falha ao remover:', target.fullPath, error?.message || error);
@@ -18897,6 +18908,7 @@ app.delete('/api/upload', express.json(), async (req, res) => {
       if (!candidate.startsWith(`${root}${path.sep}`)) continue;
       if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) continue;
       fs.unlinkSync(candidate);
+      webVideo.removeWebVariantOf(candidate);
       removed += 1;
     }
     if (removed === 0) return res.status(404).json({ error: 'Arquivo não encontrado', removed: false });
@@ -18906,6 +18918,20 @@ app.delete('/api/upload', express.json(), async (req, res) => {
     res.status(500).json({ error: error.message || 'Falha ao remover arquivo' });
   }
 });
+
+// ─── Versão leve dos vídeos para assistir (lib/webVideo.mjs) ───
+// <nome>.web.mp4 ao lado do original (H.264 ~6 Mbps, faststart). Usa a mesma fila de ffmpeg do 480p
+// do portal. Os players pedem a URL em /api/media/playback; o original segue para baixar e postar.
+const webVideo = createWebVideo({
+  pool,
+  uploadRoots,
+  runSlot: (task) => runPortalTranscodeSlot(task),
+  allowedOrigins: [...new Set(['https://agenciapulse.tech', (() => {
+    try { return new URL(process.env.PUBLIC_UPLOADS_URL || 'https://agenciapulse.tech/uploads').origin; } catch { return 'https://agenciapulse.tech'; }
+  })()])],
+});
+webVideo.registerRoutes(app, { verifyUser, readPortalToken: (token) => portalSession.read(token) });
+webVideo.start();
 
 // Busca REAL de empresas via OpenStreetMap (Overpass API) — sem chave de API.
 const OVERPASS_ENDPOINTS = [

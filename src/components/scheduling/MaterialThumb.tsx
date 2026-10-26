@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { isDirectVideo, type SchedulingItem } from '@/lib/postingSchedule';
 import { TYPE_STYLES } from './schedulingStyles';
+import { usePlaybackUrl } from '@/hooks/usePlaybackUrl';
 
 interface Props {
   item: Pick<SchedulingItem, 'thumb_url' | 'media_url' | 'media_kind' | 'type' | 'title'>;
@@ -18,6 +19,9 @@ export default function MaterialThumb({ item, className, videoFrame = false }: P
   const [visible, setVisible] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const useVideo = videoFrame && !item.thumb_url && item.media_kind === 'video' && isDirectVideo(item.media_url);
+
+  // quadro tirado da versão leve quando existe (o original continua sendo o que é postado)
+  const playback = usePlaybackUrl(useVideo && visible ? item.media_url : null);
 
   useEffect(() => { setFailed(false); }, [item.thumb_url, item.media_url]);
 
@@ -50,9 +54,9 @@ export default function MaterialThumb({ item, className, videoFrame = false }: P
           onError={() => setFailed(true)}
           className="h-full w-full object-cover"
         />
-      ) : useVideo && visible && !failed ? (
+      ) : useVideo && visible && !failed && playback.src ? (
         <video
-          src={`${item.media_url}#t=0.5`}
+          src={`${playback.src}#t=0.5`}
           preload="metadata"
           muted
           playsInline

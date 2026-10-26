@@ -14,6 +14,7 @@ import { Upload, Film, Image, Palette, Video, Trash2, ExternalLink, Eye, Loader2
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { motion } from 'framer-motion';
+import PlaybackVideo from '@/components/media/PlaybackVideo';
 
 const CONTENT_TYPES = [
   { value: 'reel', label: 'Reel', icon: Film },
@@ -58,7 +59,7 @@ function VideoPlayerModal({ content, onClose }: { content: ContentRow; onClose: 
           </Button>
         </div>
         {content.file_url?.match(/\.(mp4|mov|webm|avi)(\?|$)/i) || ['reel', 'institucional', 'anuncio'].includes(content.content_type) ? (
-          <video
+          <PlaybackVideo
             ref={videoRef}
             src={content.file_url || ''}
             controls
@@ -199,7 +200,7 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
 
       {/* Video preview layer — only load src on hover */}
       {isVideo && content.file_url && (
-        <video
+        <PlaybackVideo
           ref={videoRef}
           src={hovering ? content.file_url : undefined}
           muted

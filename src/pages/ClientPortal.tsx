@@ -30,6 +30,7 @@ import PortalRendimentoBovino from '@/components/portal/PortalRendimentoBovino';
 import PortalEvents from '@/components/portal/PortalEvents';
 import PortalTraining from '@/components/portal/PortalTraining';
 import { PortalInsightsTab } from '@/components/portal/PortalInsightsTab';
+import { peekPlayback, resolvePlayback } from '@/lib/playbackUrl';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte', otimizacao: 'Otimizado',
@@ -81,7 +82,10 @@ type TabView = 'library' | 'metrics' | 'insights' | 'criativa' | 'agenda' | 'pan
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
 
-type VideoQuality = '480p' | 'original';
+// Leve (padrão): a versão .web.mp4 direto do nginx. Original: o arquivo enviado. 480p: o proxy com ffmpeg.
+type VideoQuality = 'web' | 'original' | '480p';
+const VIDEO_QUALITIES: VideoQuality[] = ['web', 'original', '480p'];
+const VIDEO_QUALITY_LABELS: Record<VideoQuality, string> = { web: 'Leve', original: 'Original', '480p': '480p' };
 
 function isPortalVideo(content: Pick<PortalContent, 'content_type' | 'file_url'>) {
   if (!content.file_url) return false;
@@ -100,7 +104,7 @@ function playbackId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-async function createPortalVideoObjectUrl(url: string, quality: VideoQuality = '480p') {
+async function createPortalVideoObjectUrl(url: string, quality: '480p' | 'original' = '480p') {
   const params = new URLSearchParams({
     url,
     quality,
@@ -109,6 +113,13 @@ async function createPortalVideoObjectUrl(url: string, quality: VideoQuality = '
   });
 
   return `${PORTAL_MEDIA_PROXY_URL}?${params.toString()}`;
+}
+
+/** URL que o player toca, decidida uma vez por reprodução (não troca de arquivo no meio). */
+async function portalStreamUrl(url: string, quality: VideoQuality): Promise<string> {
+  if (quality === 'web') return (await resolvePlayback(url)).url;
+  if (quality === '480p' && shouldProxyPortalVideo(url)) return createPortalVideoObjectUrl(url, '480p');
+  return url;
 }
 
 export default function ClientPortal() {
@@ -134,9 +145,10 @@ export default function ClientPortal() {
   const [resolvedVideoUrl, setResolvedVideoUrl] = useState<string | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState<string | null>(null);
-  // Default 'original' → stream direto do nginx via Range requests (start-play em <1s).
-  // O modo 480p ainda existe como opt-in (transcoding on-demand no proxy é caro).
-  const [videoQuality, setVideoQuality] = useState<VideoQuality>('original');
+  // Padrão 'web' → versão leve direto do nginx (Range nativo). 'original' e '480p' (proxy com
+  // ffmpeg, caro) ficam como escolha do usuário.
+  const [videoQuality, setVideoQuality] = useState<VideoQuality>('web');
+  const [qualityMenuOpen, setQualityMenuOpen] = useState(false);
   const commentsEndRef = useRef<HTMLDivElement>(null);
   const [portalVideoState, setPortalVideoState] = useState({ hasNews: false, hasWelcome: false, isNewClient: false });
 
@@ -255,7 +267,7 @@ export default function ClientPortal() {
   }, [selectedContent?.id]);
 
   // Estável (useCallback): os cards memorizados não re-renderizam a cada timeupdate do player.
-  // Abre em 'original' (nginx direto); o 480p (ffmpeg na VPS) fica só como escolha do usuário.
+  // Abre na versão leve (nginx direto); original e 480p (ffmpeg na VPS) ficam como escolha do usuário.
   const handleSelectContent = useCallback((content: PortalContent) => {
     setSelectedContent(content);
     setShowAdjustment(false);
@@ -265,7 +277,8 @@ export default function ClientPortal() {
     setVideoDuration(0);
     setResolvedVideoUrl(null);
     setVideoLoadError(null);
-    setVideoQuality('original');
+    setVideoQuality('web');
+    setQualityMenuOpen(false);
     loadComments(content.id);
   }, []);
 
@@ -284,15 +297,18 @@ export default function ClientPortal() {
         return;
       }
 
-      // Modo 'original' → serve direto do nginx (Range requests nativos, start quase instantâneo).
-      // Só passa pelo proxy quando o usuário escolhe 480p (transcode leve pra conexões lentas).
-      const skipProxy =
+      // Original (ou arte/link externo) → direto, sem perguntar nada. Leve → pergunta uma vez qual
+      // arquivo tocar (a .web.mp4 ou o original). 480p → proxy com ffmpeg (conexão muito ruim).
+      const direct =
         !isPortalVideo(selectedContent) ||
-        !shouldProxyPortalVideo(selectedContent.file_url) ||
-        videoQuality === 'original';
+        videoQuality === 'original' ||
+        (videoQuality === '480p' && !shouldProxyPortalVideo(selectedContent.file_url));
 
-      if (skipProxy) {
-        setResolvedVideoUrl(selectedContent.file_url);
+      // a prévia do card já perguntou: sem tela de carregando
+      const known = videoQuality === 'web' && isPortalVideo(selectedContent) ? peekPlayback(selectedContent.file_url) : null;
+
+      if (direct || known) {
+        setResolvedVideoUrl(known ? known.url : selectedContent.file_url);
         setVideoLoadError(null);
         setVideoLoading(false);
         return;
@@ -303,7 +319,7 @@ export default function ClientPortal() {
       setVideoLoading(true);
 
       try {
-        const streamUrl = await createPortalVideoObjectUrl(selectedContent.file_url, videoQuality);
+        const streamUrl = await portalStreamUrl(selectedContent.file_url, videoQuality);
 
         if (cancelled) {
           return;
@@ -1136,7 +1152,7 @@ export default function ClientPortal() {
                     {videoLoading ? (
                       <div className="aspect-video flex flex-col items-center justify-center gap-3 bg-[#0c0c14] text-white/60">
                         <Loader2 className="w-8 h-8 animate-spin" />
-                        <p className="text-sm">Carregando em {videoQuality === '480p' ? '480p' : 'qualidade original'}...</p>
+                        <p className="text-sm">Carregando{videoQuality === '480p' ? ' em 480p' : ''}...</p>
                       </div>
                     ) : videoLoadError ? (
                       <div className="aspect-video flex flex-col items-center justify-center gap-3 bg-[#0c0c14] text-center px-6 text-white/60">
@@ -1148,7 +1164,7 @@ export default function ClientPortal() {
                             setResolvedVideoUrl(null);
                             setVideoLoading(true);
                             if (selectedContent?.file_url && shouldProxyPortalVideo(selectedContent.file_url)) {
-                              createPortalVideoObjectUrl(selectedContent.file_url, videoQuality)
+                              portalStreamUrl(selectedContent.file_url, videoQuality)
                                 .then(url => { setResolvedVideoUrl(url); setVideoLoading(false); })
                                 .catch(err => { setVideoLoadError(err instanceof Error ? err.message : 'Erro'); setVideoLoading(false); });
                             } else if (selectedContent?.file_url) {
@@ -1176,13 +1192,18 @@ export default function ClientPortal() {
                           onTimeUpdate={handleTimeUpdate}
                           onLoadedMetadata={handleTimeUpdate}
                           onError={() => {
+                            // versão leve que não abriu: segue no original
+                            if (videoQuality === 'web' && resolvedVideoUrl !== selectedContent.file_url) {
+                              setVideoQuality('original');
+                              return;
+                            }
                             setVideoLoadError('Não foi possível carregar o vídeo.');
                             setIsPlaying(false);
                           }}
                           onClick={() => void togglePlay()}
                         />
-                        {/* Custom controls */}
-                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-3 sm:p-4 pt-12 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        {/* Custom controls (acima do botão central: qualidade e barra funcionam com o vídeo pausado) */}
+                        <div className="absolute bottom-0 inset-x-0 z-10 bg-gradient-to-t from-black/80 to-transparent p-3 sm:p-4 pt-12 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                           {/* Progress bar */}
                           <div className="cursor-pointer h-1 bg-white/20 rounded-full mb-3 group/bar" onClick={handleSeek}>
                             <div
@@ -1208,21 +1229,35 @@ export default function ClientPortal() {
                               </span>
                             </div>
                             <div className="flex items-center gap-1">
-                              {/* Quality selector */}
-                              <button
-                                onClick={() => {
-                                  const next: VideoQuality = videoQuality === '480p' ? 'original' : '480p';
-                                  setVideoQuality(next);
-                                }}
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
-                                  videoQuality === 'original'
-                                    ? 'bg-white/25 text-white'
-                                    : 'bg-white/10 text-white/60 hover:bg-white/20'
-                                }`}
-                                title={videoQuality === '480p' ? 'Clique para qualidade HD' : 'Clique para 480p (mais rápido)'}
-                              >
-                                {videoQuality === '480p' ? '480p' : 'HD'}
-                              </button>
+                              {/* Qualidade: Leve (padrão), Original ou 480p */}
+                              <div className="relative">
+                                <button
+                                  onClick={() => setQualityMenuOpen(open => !open)}
+                                  className="px-2 py-0.5 rounded text-[10px] font-bold transition-colors bg-white/15 text-white hover:bg-white/25"
+                                  title="Qualidade"
+                                  aria-haspopup="menu"
+                                  aria-expanded={qualityMenuOpen}
+                                >
+                                  {VIDEO_QUALITY_LABELS[videoQuality]}
+                                </button>
+                                {qualityMenuOpen && (
+                                  <div role="menu" className="absolute bottom-full right-0 mb-2 min-w-[88px] rounded-lg border border-white/10 bg-black/90 py-1 shadow-xl">
+                                    {VIDEO_QUALITIES.map(q => (
+                                      <button
+                                        key={q}
+                                        role="menuitemradio"
+                                        aria-checked={q === videoQuality}
+                                        onClick={() => { setVideoQuality(q); setQualityMenuOpen(false); }}
+                                        className={`block w-full px-3 py-1.5 text-left text-[11px] font-semibold transition-colors ${
+                                          q === videoQuality ? 'text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'
+                                        }`}
+                                      >
+                                        {VIDEO_QUALITY_LABELS[q]}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                               <button onClick={toggleFullscreen} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
                                 <Maximize size={16} />
                               </button>
@@ -1504,6 +1539,7 @@ const ReelsCard = memo(function ReelsCard({ content, clientColor, onSelect, paus
   const Icon = CONTENT_TYPE_ICONS[content.content_type] || Film;
   const statusStyle = STATUS_COLORS[content.status];
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const cardRef = useRef<HTMLButtonElement>(null);
   const previewRef = useRef<HTMLVideoElement>(null);
@@ -1527,11 +1563,18 @@ const ReelsCard = memo(function ReelsCard({ content, clientColor, onSelect, paus
     return () => observer.disconnect();
   }, [isVideo, content.file_url]);
 
-  // URL da prévia: o arquivo direto (Range do nginx), sem passar pelo proxy/ffmpeg
+  // URL da prévia: a versão leve (ou o original) direto do nginx, sem passar pelo proxy/ffmpeg.
+  // Os cards que aparecem juntos perguntam num pedido só.
   useEffect(() => {
-    if (!isVisible || !isVideo || !content.file_url || previewUrl) return;
-    setPreviewUrl(content.file_url);
-  }, [isVisible, isVideo, content.file_url, previewUrl]);
+    if (!isVisible || !isVideo || !content.file_url || previewUrl || previewFailed) return;
+    let cancelled = false;
+    resolvePlayback(content.file_url).then((playback) => {
+      if (!cancelled) setPreviewUrl(playback.url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isVisible, isVideo, content.file_url, previewUrl, previewFailed]);
 
   // Pausa com o player aberto ou fora da tela; volta a tocar quando reaparece
   useEffect(() => {
@@ -1574,8 +1617,10 @@ const ReelsCard = memo(function ReelsCard({ content, clientColor, onSelect, paus
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${previewVisible ? 'opacity-100' : 'opacity-0'}`}
             onLoadedData={() => setPreviewVisible(true)}
             onError={() => {
+              // sem prévia (fica a capa); não tenta de novo em loop
               setPreviewVisible(false);
               setPreviewUrl(null);
+              setPreviewFailed(true);
             }}
             onTimeUpdate={(e) => {
               const vid = e.currentTarget;

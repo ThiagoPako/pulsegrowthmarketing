@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { avulsoAction } from '@/lib/portalApi';
+import PlaybackVideo from '@/components/media/PlaybackVideo';
 import { toast } from 'sonner';
 import pulseLogo from '@/assets/pulse-logo.png';
 
@@ -314,7 +315,7 @@ export default function AvulsoApproval() {
 
                 {videoUrl ? (
                   <div className="aspect-[9/16] bg-black flex items-center justify-center">
-                    <video src={videoUrl} controls className="w-full h-full object-contain" playsInline />
+                    <PlaybackVideo src={videoUrl} avulsoTaskId={task.id} controls className="w-full h-full object-contain" playsInline />
                   </div>
                 ) : (
                   <div className="aspect-[9/16] bg-[#111118] flex flex-col items-center justify-center gap-3">

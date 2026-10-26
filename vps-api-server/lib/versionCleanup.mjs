@@ -45,7 +45,8 @@ async function collectReferencedUploads(pool, uploadRelativePath) {
 
 /**
  * Apaga os vídeos das versões antigas sem uso. Devolve o resumo (arquivos, bytes, ignorados).
- * deps: removeUploadFile(url) → bytes liberados; uploadRelativePath(url) → caminho relativo.
+ * deps: removeUploadFile(url) → bytes liberados (o do server apaga junto a versão leve <nome>.web.mp4,
+ * e os bytes dela entram na conta); uploadRelativePath(url) → caminho relativo.
  */
 export async function cleanupOldEditVersions(pool, { removeUploadFile, uploadRelativePath, dryRun = false, now = Date.now() } = {}) {
   await pool.query(`ALTER TABLE edit_versions ADD COLUMN IF NOT EXISTS video_deleted_at TIMESTAMPTZ`);

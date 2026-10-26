@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Check, Film, Image as ImageIcon, Loader2, Search, RefreshCw } from 'lucide-react';
 import type { ClientMediaAsset } from '@/services/socialPostsApi';
+import PlaybackVideo from '@/components/media/PlaybackVideo';
 
 export interface MediaLibraryPickerProps {
   assets: ClientMediaAsset[];
@@ -100,7 +101,7 @@ export function MediaLibraryPicker({
                 {asset.thumbnail ? (
                   <img src={asset.thumbnail} alt={asset.title} className="h-full w-full object-cover" loading="lazy" />
                 ) : asset.kind === 'video' ? (
-                  <video src={asset.url} className="h-full w-full object-cover" muted preload="metadata" />
+                  <PlaybackVideo src={asset.url} className="h-full w-full object-cover" muted preload="metadata" />
                 ) : (
                   <img src={asset.url} alt={asset.title} className="h-full w-full object-cover" loading="lazy" />
                 )}

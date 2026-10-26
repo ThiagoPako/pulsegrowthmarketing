@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Download, FileVideo, Image as ImageIcon, Search, Stethoscope, Building2, Cake, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import PlaybackVideo from '@/components/media/PlaybackVideo';
 
 export interface MediaOwner {
   id: string;
@@ -206,7 +207,7 @@ export default function MediaLibrary({ owners, className }: MediaLibraryProps) {
                     {asset.type === 'image' ? (
                       <img src={asset.url} alt={asset.fileName} loading="lazy" className="h-28 w-full object-cover" />
                     ) : (
-                      <video src={asset.url} muted preload="metadata" className="h-28 w-full object-cover" />
+                      <PlaybackVideo src={asset.url} muted preload="metadata" className="h-28 w-full object-cover" />
                     )}
                   </button>
                   <figcaption className="flex items-center gap-1 p-2">
@@ -237,7 +238,7 @@ export default function MediaLibrary({ owners, className }: MediaLibraryProps) {
               {preview.type === 'image' ? (
                 <img src={preview.url} alt={preview.fileName} className="max-h-[70vh] w-full rounded-lg object-contain" />
               ) : (
-                <video src={preview.url} controls className="max-h-[70vh] w-full rounded-lg" />
+                <PlaybackVideo src={preview.url} controls className="max-h-[70vh] w-full rounded-lg" />
               )}
               <div className="flex flex-wrap items-center gap-2">
                 <p className="truncate text-sm font-medium">{preview.ownerLabel}</p>

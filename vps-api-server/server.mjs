@@ -14189,10 +14189,11 @@ app.post('/api/discount-claim', async (req, res) => {
       return res.status(400).json({ error: 'Informe um WhatsApp válido com DDD.' });
     }
 
-    // Limite por IP e por telefone: cada resgate manda WhatsApp para o número informado.
+    // Limite por IP (folgado: clientes na mesma rede da loja) e por telefone: cada resgate
+    // manda WhatsApp para o número informado.
     const ip = getClientIp(req);
-    if ((!isLoopbackIp(ip) && promoRateLimited(`discount-claim:${ip}`, 10))
-      || promoRateLimited(`discount-claim-phone:${phoneKey}`, 5, 10 * 60_000)) {
+    if ((!isLoopbackIp(ip) && promoRateLimited(`discount-claim:${ip}`, 30))
+      || promoRateLimited(`discount-claim-phone:${phoneKey}`, 10, 10 * 60_000)) {
       return res.status(429).json({ error: 'Muitas tentativas. Aguarde alguns minutos.' });
     }
 

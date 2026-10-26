@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { vpsAuthedFetch, supabase } from '@/lib/vpsDb';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -50,6 +50,41 @@ const QUALITY_FILTERS = [
 
 const PAGE_SIZES = ['25', '50', '100', '250', '500', '1000'];
 
+// Parâmetros da última busca feita (não os campos em edição): a lista só muda ao clicar em Colher
+// ou trocar de página. Antes a queryKey tinha os filtros e a página, então mexer num filtro ou
+// clicar em 'Próxima' trocava a chave e a lista sumia.
+interface HarvestParams {
+  city: string; state: string; location: string; niche: string; term: string; mode: 'rapido' | 'profundo';
+  contactFilter: string; onlyWithDecisor: boolean; minCompletude: string; pageSize: string; page: number; nonce: number;
+}
+
+async function fetchHarvest(p: HarvestParams): Promise<HarvestResult> {
+  const res = await vpsAuthedFetch('/crm/harvest/search', {
+    method: 'POST',
+    body: JSON.stringify({
+      city: p.city, state: p.state, location: p.location, niche: p.niche, term: p.term, mode: p.mode,
+      // Busca rápida não enriquece durante a requisição (evita timeout sem resultados);
+      // use o botão "Enriquecer leads" depois.
+      enrich: p.mode === 'profundo',
+      contactFilter: p.contactFilter, onlyWithDecisor: p.onlyWithDecisor,
+      minCompletude: Number(p.minCompletude),
+      pageSize: Number(p.pageSize), page: p.page, limit: 5000,
+    }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.error || 'Falha ao buscar empresas');
+  return {
+    data: (json.data || []) as Company[],
+    total: json.total || 0,
+    com_contato: json.com_contato || 0,
+    potencial_total: json.potencial_total || 0,
+    page: json.page || 1,
+    total_pages: json.total_pages || 1,
+    stats: json.stats,
+    mode: json.mode,
+  };
+}
+
 export function LeadHarvester() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -63,44 +98,23 @@ export function LeadHarvester() {
   const [minCompletude, setMinCompletude] = useState('0');
   const [mode, setMode] = useState<'rapido' | 'profundo'>('rapido');
   const [pageSize, setPageSize] = useState('100');
-  const [page, setPage] = useState(1);
+  const [searchParams, setSearchParams] = useState<HarvestParams | null>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [bulkLoading, setBulkLoading] = useState(false);
   const [enriching, setEnriching] = useState(false);
 
-  const queryKey = ['lead_harvest', city, state, location, niche, term, contactFilter, onlyWithDecisor, minCompletude, mode, pageSize, page];
+  const queryKey = ['lead_harvest', searchParams];
 
-  const { data: result, isLoading, refetch } = useQuery<HarvestResult>({
+  const { data: result, isFetching: isLoading } = useQuery<HarvestResult>({
     queryKey,
-    queryFn: async () => {
-      const res = await vpsAuthedFetch('/crm/harvest/search', {
-        method: 'POST',
-        body: JSON.stringify({
-          city, state, location, niche, term, mode,
-          // Busca rápida não enriquece durante a requisição (evita timeout sem resultados);
-          // use o botão "Enriquecer leads" depois.
-          enrich: mode === 'profundo',
-          contactFilter, onlyWithDecisor,
-          minCompletude: Number(minCompletude),
-          pageSize: Number(pageSize), page, limit: 5000,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || 'Falha ao buscar empresas');
-      return {
-        data: (json.data || []) as Company[],
-        total: json.total || 0,
-        com_contato: json.com_contato || 0,
-        potencial_total: json.potencial_total || 0,
-        page: json.page || 1,
-        total_pages: json.total_pages || 1,
-        stats: json.stats,
-        mode: json.mode,
-      };
-    },
-    enabled: false,
+    queryFn: () => fetchHarvest(searchParams!),
+    enabled: !!searchParams,
     retry: false,
+    staleTime: Infinity,
+    // Ao paginar, a página anterior fica na tela até a nova chegar.
+    placeholderData: keepPreviousData,
   });
+  const page = result?.page || searchParams?.page || 1;
 
   const companies = result?.data || [];
   const stats = result?.stats;
@@ -206,16 +220,25 @@ export function LeadHarvester() {
     setSelected(next);
   };
 
-  const runSearch = async (targetPage = 1) => {
-    if (city === 'all' && !location.trim()) {
+  // Colher usa os filtros da tela; Anterior/Próxima repetem a última busca em outra página.
+  const runSearch = async (targetPage = 1, keepLastFilters = false) => {
+    const base = keepLastFilters && searchParams
+      ? searchParams
+      : { city, state, location, niche, term, mode, contactFilter, onlyWithDecisor, minCompletude, pageSize };
+    if (base.city === 'all' && !base.location.trim()) {
       toast.error('Informe uma cidade para buscar empresas reais.');
       return;
     }
+    const params: HarvestParams = { ...base, page: targetPage, nonce: Date.now() };
     setSelected({});
-    setPage(targetPage);
-    const res = await refetch();
-    if (res.error) toast.error((res.error as Error).message);
-    else if ((res.data?.data || []).length === 0) toast.info('Nenhuma empresa encontrada com esses filtros.');
+    setSearchParams(params);
+    try {
+      // Mesma chave do useQuery: o react-query aproveita a requisição em andamento.
+      const data = await queryClient.fetchQuery({ queryKey: ['lead_harvest', params], queryFn: () => fetchHarvest(params), retry: false, staleTime: Infinity });
+      if (data.data.length === 0) toast.info('Nenhuma empresa encontrada com esses filtros.');
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
   };
 
   return (
@@ -399,9 +422,9 @@ export function LeadHarvester() {
 
       {(result?.total_pages || 1) > 1 && (
         <div className="flex items-center justify-center gap-3">
-          <Button variant="outline" size="sm" disabled={page <= 1 || isLoading} onClick={() => runSearch(page - 1)}>Anterior</Button>
+          <Button variant="outline" size="sm" disabled={page <= 1 || isLoading} onClick={() => runSearch(page - 1, true)}>Anterior</Button>
           <span className="text-sm text-muted-foreground">Página {result?.page} de {result?.total_pages}</span>
-          <Button variant="outline" size="sm" disabled={page >= (result?.total_pages || 1) || isLoading} onClick={() => runSearch(page + 1)}>Próxima</Button>
+          <Button variant="outline" size="sm" disabled={page >= (result?.total_pages || 1) || isLoading} onClick={() => runSearch(page + 1, true)}>Próxima</Button>
         </div>
       )}
     </div>

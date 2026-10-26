@@ -1954,7 +1954,6 @@ ensureGlobalClientSupport().catch((error) => {
   console.error('Failed to ensure global admin client support:', error);
 });
 
-/** Propaga a marcação de cliente global para todas as tabelas com `city`. */
 // Tabelas com cidade que não têm client_id: seguem a cidade do registro pai (comentários e
 // históricos das tarefas, comentários de proposta e botões da bio). Sem isso, numa
 // transferência elas ficavam na cidade antiga e sumiam da tela.
@@ -1975,11 +1974,11 @@ async function clientChildCityWhere({ table, fk, parents }, placeholder) {
   for (const parent of parents) {
     const parentColumns = await getExistingColumns(parent).catch(() => new Set());
     if (parentColumns.has('id') && parentColumns.has('client_id')) {
-      selects.push(`SELECT id::text FROM ${parent} WHERE client_id::text = ${placeholder}::text`);
+      selects.push(`SELECT id FROM ${parent} WHERE client_id = ${placeholder}`);
     }
   }
   if (selects.length === 0) return null;
-  return `${fk}::text IN (${selects.join(' UNION ALL ')})`;
+  return `${fk} IN (${selects.join(' UNION ALL ')})`;
 }
 
 /** Leva as linhas filhas (sem client_id) do cliente para a cidade informada (null = global). */
@@ -1988,7 +1987,7 @@ async function cascadeClientCityToChildren(clientId, city) {
     try {
       const where = await clientChildCityWhere(child, '$2');
       if (!where) continue;
-      await pool.query(`UPDATE ${child.table} SET city = $1 WHERE ${where}`, [city, clientId]);
+      await pool.query(`UPDATE ${child.table} SET city = $1 WHERE ${where} AND city IS DISTINCT FROM $1`, [city, clientId]);
     } catch (err) {
       console.warn(`[Client-City] Falha ao mover ${child.table}:`, err?.message || err);
     }
@@ -2019,6 +2018,7 @@ async function canTransferClientCity(user, originCity) {
   }
 }
 
+/** Propaga a marcação de cliente global para todas as tabelas com `city`. */
 async function syncGlobalClientCity(clientId, isGlobal, fallbackCity = 'minacu') {
   const targetCity = isGlobal ? null : assertValidCity(fallbackCity);
   for (const tableName of TABLES_WITH_CITY) {
@@ -2027,12 +2027,16 @@ async function syncGlobalClientCity(clientId, isGlobal, fallbackCity = 'minacu')
       if (!(await tableHasCityColumn(tableName))) continue;
       const existingColumns = await getExistingColumns(tableName);
       if (!existingColumns.has('client_id')) continue;
-      await pool.query(`UPDATE ${tableName} SET city = $1 WHERE client_id = $2`, [targetCity, clientId]);
+      // Só reescreve as linhas que estão em outra cidade: num salvamento comum quase nada muda
+      // (antes cada edição reescrevia todas as linhas do cliente em ~55 tabelas).
+      await pool.query(
+        `UPDATE ${tableName} SET city = $1 WHERE client_id = $2 AND city IS DISTINCT FROM $1`,
+        [targetCity, clientId]
+      );
     } catch (err) {
       console.warn(`[Global-Client] Falha ao sincronizar ${tableName}:`, err?.message || err);
     }
   }
-  await cascadeClientCityToChildren(clientId, targetCity);
 }
 
 /**
@@ -11011,7 +11015,7 @@ app.put('/api/clients/:id', async (req, res) => {
       'company_birthday','client_owners','is_admin_client'
     ];
     const isGlobalRequested = c.is_admin_client === true || c.is_admin_client === 'true';
-    // Só sincroniza as demandas quando a marcação de cliente admin realmente mudou.
+    // A marcação de cliente admin mudou de verdade nesta edição
     const globalChanged = c.is_admin_client !== undefined && isGlobalRequested !== oldIsGlobal;
     const sets = []; const vals = [];
     let idx = 1;
@@ -11114,13 +11118,15 @@ app.put('/api/clients/:id', async (req, res) => {
         await cascadeClientCityToChildren(id, cityToSet);
       }
 
-      // Marcou/desmarcou como admin global: propaga a cidade das demandas.
-      if (globalChanged) {
-        await syncGlobalClientCity(
-          id,
-          isGlobalRequested,
-          cityToSet || normalizedOldCity || activeCity || 'minacu',
-        ).catch(() => {});
+      // Marcou/desmarcou como admin global: propaga a cidade das demandas (só reescreve as
+      // linhas que estão em outra cidade, então um salvamento comum fica barato).
+      if (c.is_admin_client !== undefined) {
+        const syncCity = cityToSet || normalizedOldCity || activeCity || 'minacu';
+        await syncGlobalClientCity(id, isGlobalRequested, syncCity).catch(() => {});
+        // A marcação mudou de verdade: comentários e históricos (sem client_id) acompanham.
+        if (globalChanged) {
+          await cascadeClientCityToChildren(id, isGlobalRequested ? null : assertValidCity(syncCity));
+        }
       }
 
       res.json(await sanitizeClientRowsForUser(rows[0], user));

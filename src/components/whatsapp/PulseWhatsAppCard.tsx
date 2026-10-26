@@ -262,7 +262,7 @@ export default function PulseWhatsAppCard({ onChange }: { onChange?: () => void 
             <Button onClick={() => run(async () => {
               await api(`/whatsapp/connections/${pulse.id}/test`, {
                 method: 'POST',
-                body: JSON.stringify({ number: testNumber, message: 'Teste do PULSE ✅ Este é o número do assistente de IA da agência.' }),
+                body: JSON.stringify({ number: testNumber, message: 'Teste do PULSE ✅ Este é o número do assistente da agência.' }),
               });
               setShowTest(false);
             }, 'Teste na fila: chega em alguns segundos')} disabled={busy || testNumber.replace(/\D/g, '').length < 10}>

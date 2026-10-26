@@ -129,7 +129,7 @@ export function createEngine({ pool, claude, tools, intervalMs = 3000, rateLimit
     } catch (error) {
       console.error('[assistente] Claude:', error.message);
       await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'erro', text, detail: { error: error.message, status: error.status } });
-      await reply(number, row, 'Tive um problema para falar com a IA agora. Tenta de novo daqui a pouco. 🙏');
+      await reply(number, row, 'Tive um problema para responder agora. Tenta de novo daqui a pouco. 🙏');
       return { erro: 'claude' };
     }
     let answer;

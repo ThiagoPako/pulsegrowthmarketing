@@ -1228,7 +1228,7 @@ export default function Scripts() {
       });
       if (fnError) throw new Error(fnError.message || 'Falha ao gerar roteiro');
       const generated = typeof data?.content === 'string' ? data.content.trim() : '';
-      if (!generated) throw new Error('A IA não devolveu o roteiro. Tente de novo.');
+      if (!generated) throw new Error('O roteiro não foi gerado. Tente de novo.');
       // Texto puro da IA vira HTML do editor (escapado antes de montar as tags)
       const escaped = generated
         .replace(/&/g, '&amp;')

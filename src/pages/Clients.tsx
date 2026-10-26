@@ -1732,7 +1732,7 @@ export default function Clients() {
           <div className="p-3 rounded-lg bg-accent/50 border border-accent flex gap-2 items-start">
             <Info size={16} className="text-muted-foreground shrink-0 mt-0.5" />
             <p className="text-xs text-muted-foreground">
-              <strong>Instagram direto:</strong> o cliente entra com o login do Instagram (conta Profissional) e autoriza — não precisa de Página do Facebook. <strong>Via Facebook:</strong> conecta a Página e o Instagram vinculado a ela, permitindo postar nos dois. O robô publica de verdade no perfil conectado.
+              <strong>Instagram direto:</strong> o cliente entra com o login do Instagram (conta Profissional) e autoriza — não precisa de Página do Facebook. <strong>Via Facebook:</strong> conecta a Página e o Instagram vinculado a ela, permitindo postar nos dois. A postagem sai de verdade no perfil conectado.
             </p>
           </div>
         </div>

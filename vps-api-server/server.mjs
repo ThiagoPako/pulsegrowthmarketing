@@ -10336,6 +10336,7 @@ app.post('/api/db/query', async (req, res) => {
           ? { ...data, city: assertValidCity(activeCity) }
           : (data && data.city !== undefined ? { ...data, city: assertValidCity(data.city) } : data);
 
+        let crmResetReminder = false;
         if (safeTable === 'crm_leads' && (scopedData.meeting_date || scopedData.meeting_time || scopedData.status === 'meeting')) {
           const leadId = filters?.find(f => f.column === 'id' && f.op === 'eq')?.value;
           const { rows: currentLead } = await pool.query(`SELECT meeting_date, meeting_time, status FROM crm_leads WHERE id = $1`, [leadId]);
@@ -10347,10 +10348,19 @@ app.post('/api/db/query', async (req, res) => {
           if (status === 'meeting') {
             await validateMeetingConflict(mDate, mTime, leadId);
           }
+
+          // Reunião reagendada: o lembrete de 24h volta a valer para a data/hora nova.
+          if (currentLead[0]) {
+            const dateChanged = scopedData.meeting_date !== undefined
+              && String(scopedData.meeting_date || '').slice(0, 10) !== String(currentLead[0].meeting_date || '').slice(0, 10);
+            const timeChanged = scopedData.meeting_time !== undefined
+              && String(scopedData.meeting_time || '').slice(0, 5) !== String(currentLead[0].meeting_time || '').slice(0, 5);
+            crmResetReminder = dateChanged || timeChanged;
+          }
         }
 
         const existingColumns = await getExistingColumns(safeTable);
-        const entries = Object.entries(scopedData)
+        const entries = Object.entries(crmResetReminder ? { ...scopedData, reminder_sent_24h: false } : scopedData)
           .map(([key, value]) => [sanitizeIdentifier(key), value])
           .filter(([key]) => !existingColumns || existingColumns.has(key));
         if (entries.length === 0) {
@@ -17014,10 +17024,13 @@ app.post('/api/crm/harvest/enrich', async (req, res) => {
 // Cron-like task for CRM meeting reminders
 setInterval(async () => {
   try {
-    // Busca reuniões agendadas para amanhã (24h de antecedência) que ainda não tiveram lembrete enviado
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+    // Busca reuniões agendadas para amanhã (24h de antecedência) que ainda não tiveram lembrete enviado.
+    // "Amanhã" no fuso de Brasília: o toISOString é UTC e, das 21h em diante, já pegava a reunião
+    // de depois de amanhã com o texto "nossa reunião de amanhã". Como o job roda de hora em hora
+    // desde a subida, só envia em horário comercial (9h às 19h59 de Brasília).
+    const nowBrtMinutes = brtMinutesNow();
+    if (nowBrtMinutes < 9 * 60 || nowBrtMinutes >= 20 * 60) return;
+    const tomorrowStr = addDaysToDateString(brtDateString(), 1);
 
     const { rows: pendingReminders } = await pool.query(
       `SELECT id, name, phone, meeting_date, meeting_time, company 

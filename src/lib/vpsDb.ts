@@ -9,7 +9,7 @@ const VPS_API_BASE = 'https://agenciapulse.tech/api';
 const TOKEN_KEY = 'pulse_jwt';
 const CITY_KEY = 'pulse:active_city';
 
-function getActiveCity(): string {
+export function getActiveCity(): string {
   if (typeof window === 'undefined') return 'minacu';
   const inMem = (window as any).__PULSE_ACTIVE_CITY__;
   if (inMem === 'minacu' || inMem === 'uruacu') return inMem;

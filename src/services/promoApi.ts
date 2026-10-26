@@ -4,6 +4,7 @@
  */
 
 import { uploadFileToVps } from '@/services/vpsApi';
+import { getActiveCity } from '@/lib/vpsDb';
 
 const API_BASE = 'https://agenciapulse.tech/api';
 const TOKEN_KEY = 'pulse_jwt';
@@ -103,6 +104,8 @@ async function request<T>(path: string, init?: RequestInit & { auth?: boolean })
   if (init?.auth) {
     const token = localStorage.getItem(TOKEN_KEY);
     if (token) headers.Authorization = `Bearer ${token}`;
+    // A lista e a criação de sorteios seguem a cidade ativa.
+    headers['x-pulse-city'] = getActiveCity();
   }
   const response = await fetch(`${API_BASE}${path}`, { ...init, headers: { ...headers, ...(init?.headers as any) } });
   const payload = await response.json().catch(() => null);

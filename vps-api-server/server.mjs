@@ -14035,10 +14035,12 @@ async function insertCampaignCoupons(db, campaignId, count) {
   for (let round = 0; round < 5 && inserted < count; round += 1) {
     const codes = new Set();
     while (codes.size < count - inserted) codes.add(generateCouponCode());
+    // Sem ON CONFLICT (code): no banco da VPS discount_coupons.code não tem índice único e o
+    // ON CONFLICT falhava ("no unique or exclusion constraint"), impedindo criar campanha.
     const { rowCount } = await db.query(
       `INSERT INTO discount_coupons (campaign_id, code)
-       SELECT $1, unnest($2::text[])
-       ON CONFLICT (code) DO NOTHING`,
+       SELECT $1, x.code FROM unnest($2::text[]) AS x(code)
+        WHERE NOT EXISTS (SELECT 1 FROM discount_coupons d WHERE d.code = x.code)`,
       [campaignId, [...codes]]
     );
     inserted += rowCount || 0;
@@ -14056,6 +14058,35 @@ function maskClaimPhone(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   if (!digits) return phone || null;
   return `•••• ${digits.slice(-4)}`;
+}
+
+/** Telefone só com dígitos, sem o 55 do começo (10 ou 11 dígitos), para comparar resgates. */
+function normalizeClaimPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits.length >= 12 && digits.startsWith('55') ? digits.slice(2) : digits;
+}
+// Mesma normalização no banco (para os telefones já gravados como '(62) 99999-9999').
+const CLAIM_PHONE_SQL = `regexp_replace(regexp_replace(coalesce(claimed_by_phone, ''), '\\D', '', 'g'), '^55(\\d{10,11})$', '\\1')`;
+
+/**
+ * Quem consulta ou baixa cupons de uma loja: a equipe (JWT) ou o cliente logado no portal
+ * (x-portal-token) dessa mesma loja. Antes as duas rotas eram públicas: com o client_id
+ * (listado em /api/discount-clubs) dava para ler os códigos e queimar os cupons.
+ * Sem sessão: no modo 'log' do portal passa (com aviso no log), no 'enforce' responde 401.
+ * Devolve { kind: 'team'|'client'|'anonymous', user? } ou null quando já respondeu.
+ */
+async function resolveDiscountStoreAccess(req, res, clientId, route) {
+  const caller = await resolvePortalCaller(req);
+  if (caller?.kind === 'team') return { kind: 'team', user: caller.user };
+  if (caller?.kind === 'client') {
+    if (String(caller.clientId) !== String(clientId || '')) {
+      res.status(403).json({ error: 'Esta loja não pertence ao seu acesso.', valid: false });
+      return null;
+    }
+    return { kind: 'client' };
+  }
+  if (rejectPortalCallWithoutSession(res, route, 'discount')) return null;
+  return { kind: 'anonymous' };
 }
 
 // List all clients with active discount campaigns (public)
@@ -14083,12 +14114,50 @@ app.get('/api/discount-clubs', async (req, res) => {
   }
 });
 
+// Admin (Clube de Descontos): todas as campanhas dos clientes da cidade ativa, com as
+// contagens, numa consulta só (antes a tela fazia uma chamada por cliente e baixava todos
+// os cupons só para ler as campanhas).
+app.get('/api/discount-campaigns', async (req, res) => {
+  let user;
+  try {
+    ({ user } = await verifyAdmin(req));
+  } catch (authError) {
+    return res.status(discountAuthErrorStatus(authError)).json({ error: authError.message || 'Unauthorized' });
+  }
+  try {
+    const activeCity = await resolveActiveCity(req, user.id, user);
+    const { rows: campaigns } = await pool.query(
+      `SELECT dc.*,
+              COALESCE(cnt.available, 0)::int AS available_coupons,
+              COALESCE(cnt.claimed, 0)::int AS claimed_coupons,
+              COALESCE(cnt.used, 0)::int AS used_coupons
+         FROM discount_campaigns dc
+         JOIN clients c ON c.id = dc.client_id
+         LEFT JOIN LATERAL (
+           SELECT COUNT(*) FILTER (WHERE status = 'available') AS available,
+                  COUNT(*) FILTER (WHERE status = 'claimed') AS claimed,
+                  COUNT(*) FILTER (WHERE status = 'used') AS used
+             FROM discount_coupons WHERE campaign_id = dc.id
+         ) cnt ON true
+        WHERE ${cityVisibilityExpression('c.city', '$1')}
+        ORDER BY dc.created_at DESC`,
+      [activeCity]
+    );
+    res.json({ campaigns });
+  } catch (e) {
+    console.error('GET /api/discount-campaigns (admin) error:', e);
+    res.status(e?.statusCode || 500).json({ error: e.message });
+  }
+});
+
 // Get campaigns for a client (public - no auth)
 app.get('/api/discount-campaigns/:clientId', async (req, res) => {
   try {
     const { clientId } = req.params;
     const { rows: campaigns } = await pool.query(
-      `SELECT dc.*, c.company_name, c.logo_url, c.color
+      `SELECT dc.*, c.company_name, c.logo_url, c.color,
+              (SELECT COUNT(*)::int FROM discount_coupons dcoup
+                WHERE dcoup.campaign_id = dc.id AND dcoup.status = 'available') AS available_coupons
        FROM discount_campaigns dc
        JOIN clients c ON c.id = dc.client_id
        WHERE dc.client_id = $1 AND dc.is_active = true
@@ -14096,14 +14165,6 @@ app.get('/api/discount-campaigns/:clientId', async (req, res) => {
        ORDER BY dc.created_at DESC`,
       [clientId]
     );
-    // For each campaign, get available coupon count
-    for (const camp of campaigns) {
-      const { rows: [countRow] } = await pool.query(
-        `SELECT COUNT(*) as available FROM discount_coupons WHERE campaign_id = $1 AND status = 'available'`,
-        [camp.id]
-      );
-      camp.available_coupons = parseInt(countRow.available);
-    }
     res.json({ campaigns });
   } catch (e) {
     console.error('GET /api/discount-campaigns error:', e);
@@ -14113,23 +14174,55 @@ app.get('/api/discount-campaigns/:clientId', async (req, res) => {
 
 // Claim a coupon (public - mini registration)
 app.post('/api/discount-claim', async (req, res) => {
+  let db = null;
   try {
-    const { campaign_id, name, phone } = req.body;
+    const campaign_id = String(req.body?.campaign_id || '').trim();
+    const name = String(req.body?.name || '').trim().slice(0, 80);
+    const phone = String(req.body?.phone || '').trim().slice(0, 30);
     if (!campaign_id || !name || !phone) {
       return res.status(400).json({ error: 'campaign_id, name e phone são obrigatórios' });
     }
+    if (!PUBLIC_UUID_RE.test(campaign_id)) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const phoneKey = normalizeClaimPhone(phone);
+    if (phoneKey.length < 10 || phoneKey.length > 11) {
+      return res.status(400).json({ error: 'Informe um WhatsApp válido com DDD.' });
+    }
 
-    // Check if this phone already claimed from this campaign
-    const { rows: existing } = await pool.query(
-      `SELECT id FROM discount_coupons WHERE campaign_id = $1 AND claimed_by_phone = $2 AND status != 'available'`,
-      [campaign_id, phone]
+    // Limite por IP e por telefone: cada resgate manda WhatsApp para o número informado.
+    const ip = getClientIp(req);
+    if ((!isLoopbackIp(ip) && promoRateLimited(`discount-claim:${ip}`, 10))
+      || promoRateLimited(`discount-claim-phone:${phoneKey}`, 5, 10 * 60_000)) {
+      return res.status(429).json({ error: 'Muitas tentativas. Aguarde alguns minutos.' });
+    }
+
+    db = await pool.connect();
+    await db.query('BEGIN');
+    // Um resgate por vez por telefone e campanha: a checagem de duplicado e a baixa ficam atômicas.
+    await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`discount-claim:${campaign_id}:${phoneKey}`]);
+
+    // Campanha desativada ou vencida não entrega cupom (antes só a listagem filtrava).
+    const { rows: [campaignRow] } = await db.query(
+      `SELECT id FROM discount_campaigns
+        WHERE id = $1 AND is_active = true AND (expires_at IS NULL OR expires_at > NOW())`,
+      [campaign_id]
+    );
+    if (!campaignRow) {
+      await db.query('ROLLBACK');
+      return res.status(410).json({ error: 'Esta campanha não está mais disponível.' });
+    }
+
+    // Check if this phone already claimed from this campaign (qualquer formato do número)
+    const { rows: existing } = await db.query(
+      `SELECT id FROM discount_coupons WHERE campaign_id = $1 AND status != 'available' AND ${CLAIM_PHONE_SQL} = $2 LIMIT 1`,
+      [campaign_id, phoneKey]
     );
     if (existing.length > 0) {
+      await db.query('ROLLBACK');
       return res.status(409).json({ error: 'Você já resgatou um cupom desta campanha' });
     }
 
     // Find first available coupon and claim it atomically
-    const { rows: claimed } = await pool.query(
+    const { rows: claimed } = await db.query(
       `UPDATE discount_coupons
        SET status = 'claimed', claimed_by_name = $2, claimed_by_phone = $3, claimed_at = NOW()
        WHERE id = (
@@ -14144,14 +14237,18 @@ app.post('/api/discount-claim', async (req, res) => {
     );
 
     if (claimed.length === 0) {
+      await db.query('ROLLBACK');
       return res.status(410).json({ error: 'Todos os cupons desta campanha já foram resgatados' });
     }
 
     // Update campaign claimed count
-    await pool.query(
+    await db.query(
       `UPDATE discount_campaigns SET coupons_claimed = coupons_claimed + 1, updated_at = NOW() WHERE id = $1`,
       [campaign_id]
     );
+    await db.query('COMMIT');
+    db.release();
+    db = null;
 
     // Get campaign + client info for WhatsApp message
     const { rows: [campInfo] } = await pool.query(
@@ -14177,68 +14274,74 @@ app.post('/api/discount-claim', async (req, res) => {
 
     res.json({ coupon: claimed[0], store_name: campInfo.company_name });
   } catch (e) {
+    if (db) await db.query('ROLLBACK').catch(() => {});
     console.error('POST /api/discount-claim error:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Não foi possível resgatar o cupom agora. Tente de novo.' });
+  } finally {
+    db?.release();
   }
 });
 
 // Verify/redeem coupon (portal - client validates at checkout)
 app.post('/api/discount-verify', async (req, res) => {
   try {
-    const { code, client_id, sale_value } = req.body;
-    if (!code || !client_id) {
+    const { sale_value } = req.body || {};
+    const code = String(req.body?.code || '').trim().toUpperCase();
+    if (!code || !req.body?.client_id) {
       return res.status(400).json({ error: 'code e client_id são obrigatórios' });
     }
+    const access = await resolveDiscountStoreAccess(req, res, req.body.client_id, '/api/discount-verify');
+    if (!access) return;
+    const client_id = String(req.body.client_id);
 
-    const { rows: coupons } = await pool.query(
-      `SELECT dc2.*, dcamp.title as campaign_title, dcamp.discount_type, dcamp.discount_value, dcamp.client_id
-       FROM discount_coupons dc2
-       JOIN discount_campaigns dcamp ON dcamp.id = dc2.campaign_id
-       WHERE dc2.code = $1`,
-      [code.toUpperCase()]
+    const ip = getClientIp(req);
+    if (promoRateLimited(`discount-verify:${client_id}:${isLoopbackIp(ip) ? 'local' : ip}`, 30)) {
+      return res.status(429).json({ error: 'Muitas tentativas. Aguarde um instante.', valid: false });
+    }
+
+    // Baixa atômica: só um cupom resgatado desta loja vira 'usado' (antes era SELECT e depois
+    // UPDATE, e dois caixas podiam validar o mesmo cupom).
+    const { rows: [usedCoupon] } = await pool.query(
+      `UPDATE discount_coupons dc2
+          SET status = 'used', used_at = NOW(), sale_value = $3
+         FROM discount_campaigns dcamp
+        WHERE dcamp.id = dc2.campaign_id AND dcamp.client_id::text = $2 AND dc2.code = $1 AND dc2.status = 'claimed'
+        RETURNING dc2.*, dcamp.title as campaign_title, dcamp.discount_type, dcamp.discount_value, dcamp.client_id`,
+      [code, client_id, Number(sale_value) || 0]
     );
 
-    if (coupons.length === 0) {
-      return res.status(404).json({ error: 'Cupom não encontrado', valid: false });
-    }
-
-    const coupon = coupons[0];
-
-    if (coupon.client_id !== client_id) {
-      return res.status(403).json({ error: 'Este cupom não pertence a esta loja', valid: false });
-    }
-
-    if (coupon.status === 'used') {
-      return res.status(409).json({ error: 'Este cupom já foi utilizado', valid: false, coupon });
-    }
-
-    if (coupon.status === 'available') {
+    if (!usedCoupon) {
+      const { rows: [current] } = await pool.query(
+        `SELECT dc2.status FROM discount_coupons dc2
+           JOIN discount_campaigns dcamp ON dcamp.id = dc2.campaign_id
+          WHERE dc2.code = $1 AND dcamp.client_id::text = $2`,
+        [code, client_id]
+      );
+      // Cupom de outra loja responde igual a inexistente (não confirma que o código existe).
+      if (!current) return res.status(404).json({ error: 'Cupom não encontrado', valid: false });
+      if (current.status === 'used') return res.status(409).json({ error: 'Este cupom já foi utilizado', valid: false });
       return res.status(400).json({ error: 'Este cupom ainda não foi resgatado', valid: false });
     }
 
-    // Mark as used
-    await pool.query(
-      `UPDATE discount_coupons SET status = 'used', used_at = NOW(), sale_value = $2 WHERE id = $1`,
-      [coupon.id, sale_value || 0]
-    );
-
-    res.json({ valid: true, coupon: { ...coupon, status: 'used', used_at: new Date().toISOString() } });
+    const coupon = access.kind === 'anonymous'
+      ? { ...usedCoupon, claimed_by_phone: maskClaimPhone(usedCoupon.claimed_by_phone) }
+      : usedCoupon;
+    res.json({ valid: true, coupon });
   } catch (e) {
     console.error('POST /api/discount-verify error:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Não foi possível validar o cupom agora.', valid: false });
   }
 });
 
 // Get discount stats for portal
-// Equipe (admin/social_media, com Bearer) vê tudo; sem login (portal do cliente)
-// o telefone de quem pegou o cupom sai mascarado — o client_id é público.
+// Só a equipe (Bearer) ou o cliente logado no portal desta loja (x-portal-token).
+// Telefone completo: admin/social_media e o dono da loja; o resto vê mascarado.
 app.get('/api/discount-stats/:clientId', async (req, res) => {
   try {
     const { clientId } = req.params;
-    let isTeamAdmin = false;
-    if (req.headers.authorization?.startsWith('Bearer ')) {
-      isTeamAdmin = await verifyAdmin(req).then(() => true).catch(() => false);
-    }
+    const access = await resolveDiscountStoreAccess(req, res, clientId, '/api/discount-stats');
+    if (!access) return;
+    const showFullPhone = access.kind === 'client' || (access.kind === 'team' && await isAdminUser(access.user));
     const { rows: campaigns } = await pool.query(
       `SELECT * FROM discount_campaigns WHERE client_id = $1 ORDER BY created_at DESC`,
       [clientId]
@@ -14266,7 +14369,7 @@ app.get('/api/discount-stats/:clientId', async (req, res) => {
 
     res.json({
       campaigns,
-      coupons: isTeamAdmin
+      coupons: showFullPhone
         ? coupons
         : coupons.map((c) => ({ ...c, claimed_by_phone: maskClaimPhone(c.claimed_by_phone) })),
       stats: {

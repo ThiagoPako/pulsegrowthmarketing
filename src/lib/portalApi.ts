@@ -47,7 +47,8 @@ export function hasPortalSession(): boolean {
   return !!readStorage('session', 'portal_client_id') && !!getPortalToken();
 }
 
-function portalHeaders(): Record<string, string> {
+/** Cabeçalhos de sessão do portal (cliente: x-portal-token; equipe: Bearer) para rotas fora do portal-actions. */
+export function portalHeaders(): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const teamToken = readStorage('local', TEAM_TOKEN_KEY);
   if (teamToken) headers['Authorization'] = `Bearer ${teamToken}`;

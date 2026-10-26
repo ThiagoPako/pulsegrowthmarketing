@@ -1048,7 +1048,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         `UPDATE content_tasks SET
             assigned_to = $2,
             edited_by = $2,
-            editing_started_at = CASE WHEN kanban_column = 'alteracao' OR editing_started_at IS NULL THEN now() ELSE editing_started_at END,
+            -- card livre começa o timer agora (o valor antigo podia vir de quando o card só entrou na fila)
+            editing_started_at = CASE WHEN kanban_column = 'alteracao' OR assigned_to IS NULL OR editing_started_at IS NULL THEN now() ELSE editing_started_at END,
             editing_paused_at = NULL,
             agent_step = 'iniciado',
             agent_heartbeat_at = now(),
@@ -1227,7 +1228,11 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         agent_step: null, agent_heartbeat_at: null,
       };
       if (column === 'edicao') {
-        set.editing_started_at = now.toISOString();
+        // Volta para a fila sem dono: o timer só começa quando alguém pegar (claim/Iniciar).
+        // Antes gravava now() e o card aparecia como "editando" na Bancada sem ninguém nele.
+        set.editing_started_at = null;
+        set.editing_paused_at = null;
+        set.editing_paused_seconds = 0;
         set.editing_deadline = deadline('editing_deadline_hours', 'editing_deadline_enabled', 48);
         set.assigned_to = null;
       }

@@ -530,6 +530,11 @@ export default function EditorKanban() {
       if (task.kanban_column === 'envio') {
         return 'Cards concluídos são gerenciados pela Social Media ou Administrador.';
       }
+      // Análise: entrega de agente esperando a checagem dos revisores. Pular direto para a
+      // Revisão tirava essa etapa.
+      if (task.kanban_column === 'pre_revisao') {
+        return 'A Análise é conferida pelos agentes revisores e pela revisão interna. Editores não podem mover cards da Análise.';
+      }
       // Editor can only move TO revisao (from edicao or alteracao)
       if (targetColumn !== 'revisao' && targetColumn !== 'edicao' && targetColumn !== 'alteracao') {
         return 'Editores só podem enviar para Revisão ou mover entre Edição e Alteração.';
@@ -574,26 +579,39 @@ export default function EditorKanban() {
     }
 
     const updateData: any = { kanban_column: targetColumn, updated_at: new Date().toISOString() };
-    if (targetColumn === 'edicao' && !draggedTask.editing_started_at) {
+    // Auto-claim só para editor/videomaker levando o card para "Para Editar". Antes valia para
+    // qualquer papel e destino: o admin que arrastava virava responsável e o card sumia da fila
+    // dos editores e dos agentes.
+    const shouldAutoClaim = isEditorRole && targetColumn === 'edicao' && !draggedTask.assigned_to && !!user;
+    if (shouldAutoClaim) {
+      updateData.assigned_to = user!.id;
+    }
+    // Quem leva o card para Edição e fica com ele começa a editar agora (timer). Sem dono, o
+    // card entra na fila (o sync grava editing_started_at = null).
+    const startsEditing = targetColumn === 'edicao' && (shouldAutoClaim || profileOwnsUserId(profile, draggedTask.assigned_to));
+    if (startsEditing && !draggedTask.editing_started_at) {
       updateData.editing_started_at = new Date().toISOString();
       if (user) updateData.edited_by = user.id;
     }
     // Always ensure edited_by is set when an editor interacts with a task
-    if (!draggedTask.edited_by && user) {
+    if (isEditorRole && !draggedTask.edited_by && user) {
       updateData.edited_by = user.id;
     }
-    // Auto-assign to current editor if not yet assigned (atomic guard below)
-    const shouldAutoClaim = !draggedTask.assigned_to && !!user;
-    if (shouldAutoClaim) {
-      updateData.assigned_to = user!.id;
-    }
+    // Guarda atômica: card que estava livre só muda se ainda estiver livre (ninguém pegou no meio)
+    const guardUnassigned = isEditorRole && !draggedTask.assigned_to;
     let query = supabase.from('content_tasks').update(updateData).eq('id', draggedTask.id);
-    if (shouldAutoClaim) {
+    if (guardUnassigned) {
       // Only update if still unassigned — prevents two people claiming the same video
       query = (query as any).is('assigned_to', null);
     }
     const { data: updatedRows, error } = await (query as any).select('id');
-    if (!error && shouldAutoClaim && (!updatedRows || updatedRows.length === 0)) {
+    if (!error && (!updatedRows || updatedRows.length === 0)) {
+      if (!guardUnassigned) {
+        toast.error('Este card não está na cidade ativa (ou foi removido). Nada foi alterado.');
+        setDraggedTask(null);
+        fetchTasks();
+        return;
+      }
       toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
       setDraggedTask(null);
       fetchTasks();
@@ -608,6 +626,7 @@ export default function EditorKanban() {
         userId: user?.id,
         clientName: client?.companyName,
         clientWhatsapp: (client as any)?.whatsapp,
+        startEditing: startsEditing,
       });
       await syncContentTaskColumnChange(targetColumn, ctx);
       toast.success(`Movido para ${EDITOR_COLUMNS.find(c => c.id === targetColumn)?.label}`);

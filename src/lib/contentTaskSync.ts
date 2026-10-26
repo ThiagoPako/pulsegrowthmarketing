@@ -21,6 +21,8 @@ interface SyncContext {
   editedBy?: string | null;
   editedVideoLink: string | null;
   immediateAlteration?: boolean;
+  /** Quem move para Edição está pegando o card agora (o timer começa). Sem isso o card entra na fila. */
+  startEditing?: boolean;
   approvedAt?: string | null;
   userId?: string | null;
   clientName?: string;
@@ -109,7 +111,9 @@ export async function syncContentTaskColumnChange(
 
   // 1. Set editing_started_at and editing_deadline when entering edicao
   if (newColumn === 'edicao') {
-    updates.editing_started_at = new Date().toISOString();
+    // O timer só começa quando alguém pega o card. Antes toda entrada em Edição gravava agora:
+    // o card da fila aparecia como "editando" na Bancada e o tempo de edição vinha inflado.
+    updates.editing_started_at = ctx.startEditing ? new Date().toISOString() : null;
     if (deadlineEnabled.editing) {
       const editingDeadline = addBusinessHours(new Date(), deadlineHours.editing, workDays);
       updates.editing_deadline = editingDeadline.toISOString();
@@ -475,7 +479,7 @@ export function claimGuardFilter(identityIds: Array<string | null | undefined>):
  */
 export function buildSyncContext(
   task: { id: string; client_id: string; title: string; content_type: string; description: string | null; script_id: string | null; recording_id: string | null; assigned_to: string | null; edited_by?: string | null; edited_video_link: string | null; immediate_alteration?: boolean; approved_at?: string | null },
-  opts?: { userId?: string; clientName?: string; clientWhatsapp?: string }
+  opts?: { userId?: string; clientName?: string; clientWhatsapp?: string; startEditing?: boolean }
 ): SyncContext {
   return {
     taskId: task.id,
@@ -489,6 +493,7 @@ export function buildSyncContext(
     editedBy: task.edited_by ?? null,
     editedVideoLink: task.edited_video_link,
     immediateAlteration: task.immediate_alteration,
+    startEditing: opts?.startEditing,
     approvedAt: task.approved_at,
     userId: opts?.userId,
     clientName: opts?.clientName,

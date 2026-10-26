@@ -15477,9 +15477,93 @@ app.get('/api/public/bio/:slug', async (req, res) => {
 // SORTEIOS DE PRÊMIOS (roleta / raspadinha com QR Code descartável)
 // ═══════════════════════════════════════════════════════════════
 let promoTablesPromise = null;
+// Colunas de promo_campaigns que vieram depois da criação da tabela (nicho de atuação:
+// o módulo atende postos, lojas, restaurantes, clínicas etc.).
+const PROMO_CAMPAIGN_EXTRA_COLUMNS = {
+  business_segment: "TEXT DEFAULT 'generico'",
+  earn_ticket_text: 'TEXT',
+  redeem_instruction_text: 'TEXT',
+  operator_label: 'TEXT',
+};
+const PROMO_INDEXES = {
+  idx_promo_prizes_campaign: 'CREATE INDEX IF NOT EXISTS idx_promo_prizes_campaign ON promo_prizes(campaign_id)',
+  idx_promo_tickets_token: 'CREATE INDEX IF NOT EXISTS idx_promo_tickets_token ON promo_tickets(token)',
+  idx_promo_tickets_campaign: 'CREATE INDEX IF NOT EXISTS idx_promo_tickets_campaign ON promo_tickets(campaign_id)',
+  idx_promo_tickets_code: 'CREATE INDEX IF NOT EXISTS idx_promo_tickets_code ON promo_tickets(redemption_code)',
+  idx_promo_tickets_batch: 'CREATE INDEX IF NOT EXISTS idx_promo_tickets_batch ON promo_tickets(campaign_id, batch_label)',
+};
+// Colunas que promo_campaigns tem de fato (o salvamento só grava as que existem).
+let promoCampaignColumns = new Set();
+
+function isPgOwnershipError(error) {
+  return error?.code === '42501' || /must be owner|permission denied/i.test(error?.message || '');
+}
+
+/**
+ * Tabelas do sorteio. Na produção elas foram criadas por outro usuário do Postgres, e
+ * CREATE INDEX / ALTER TABLE exigem ser dono da tabela mesmo com IF NOT EXISTS: antes o
+ * bloco inteiro falhava ("must be owner of table promo_prizes") a cada subida e a cada
+ * pedido, e as colunas novas nunca entravam. Agora confere o que existe e só tenta o que
+ * falta; sem ser dono, avisa uma vez e o sorteio segue com as colunas que já existem.
+ */
 async function ensurePromoTables() {
   if (promoTablesPromise) return promoTablesPromise;
-  promoTablesPromise = pool.query(`
+  promoTablesPromise = (async () => {
+    const { rows: [existing] } = await pool.query(
+      `SELECT to_regclass('public.promo_campaigns') IS NOT NULL AS campaigns,
+              to_regclass('public.promo_prizes') IS NOT NULL AS prizes,
+              to_regclass('public.promo_tickets') IS NOT NULL AS tickets,
+              current_user AS db_user`
+    );
+    if (!existing.campaigns || !existing.prizes || !existing.tickets) {
+      await pool.query(PROMO_TABLES_DDL);
+    }
+
+    const { rows: indexRows } = await pool.query(
+      `SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND indexname = ANY($1::text[])`,
+      [Object.keys(PROMO_INDEXES)]
+    );
+    const haveIndexes = new Set(indexRows.map((row) => row.indexname));
+    for (const [name, statement] of Object.entries(PROMO_INDEXES)) {
+      if (haveIndexes.has(name)) continue;
+      await pool.query(statement).catch((error) => {
+        if (!isPgOwnershipError(error)) throw error;
+        console.warn(`[promo] índice ${name} não criado (o usuário ${existing.db_user} não é dono da tabela).`);
+      });
+    }
+
+    tableColumnsPromiseCache.delete('promo_campaigns');
+    let columns = await getExistingColumns('promo_campaigns');
+    const missing = Object.keys(PROMO_CAMPAIGN_EXTRA_COLUMNS).filter((name) => !columns.has(name));
+    if (missing.length > 0) {
+      const clauses = missing.map((name) => `ADD COLUMN IF NOT EXISTS ${name} ${PROMO_CAMPAIGN_EXTRA_COLUMNS[name]}`);
+      const added = await pool.query(`ALTER TABLE promo_campaigns ${clauses.join(', ')}`)
+        .then(() => true)
+        .catch((error) => {
+          if (!isPgOwnershipError(error)) throw error;
+          console.warn(
+            `[promo] promo_campaigns sem as colunas ${missing.join(', ')}: o usuário ${existing.db_user} não é dono da tabela. ` +
+            `O sorteio funciona sem elas (nicho e textos personalizados não são gravados). Para corrigir, o dono roda: ` +
+            `ALTER TABLE promo_campaigns OWNER TO ${existing.db_user}; ALTER TABLE promo_prizes OWNER TO ${existing.db_user}; ` +
+            `ALTER TABLE promo_tickets OWNER TO ${existing.db_user};`
+          );
+          return false;
+        });
+      if (added) {
+        tableColumnsPromiseCache.delete('promo_campaigns');
+        columns = await getExistingColumns('promo_campaigns');
+      }
+    }
+    promoCampaignColumns = columns;
+  })().catch((error) => {
+    console.error('ensurePromoTables error:', error);
+    promoTablesPromise = null;
+  });
+  return promoTablesPromise;
+}
+
+// Só as tabelas (base nova); índices e colunas novas entram pelo ensurePromoTables.
+const PROMO_TABLES_DDL = `
     CREATE TABLE IF NOT EXISTS promo_campaigns (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       title TEXT NOT NULL,
@@ -15511,7 +15595,6 @@ async function ensurePromoTables() {
       is_active BOOLEAN NOT NULL DEFAULT true,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
-    CREATE INDEX IF NOT EXISTS idx_promo_prizes_campaign ON promo_prizes(campaign_id);
 
     CREATE TABLE IF NOT EXISTS promo_tickets (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -15533,22 +15616,7 @@ async function ensurePromoTables() {
       redeemed_by TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
-    CREATE INDEX IF NOT EXISTS idx_promo_tickets_token ON promo_tickets(token);
-    CREATE INDEX IF NOT EXISTS idx_promo_tickets_campaign ON promo_tickets(campaign_id);
-    CREATE INDEX IF NOT EXISTS idx_promo_tickets_code ON promo_tickets(redemption_code);
-    CREATE INDEX IF NOT EXISTS idx_promo_tickets_batch ON promo_tickets(campaign_id, batch_label);
-
-    -- Nicho de atuação: o módulo atende postos, lojas, restaurantes, clínicas etc.
-    ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS business_segment TEXT DEFAULT 'generico';
-    ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS earn_ticket_text TEXT;
-    ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS redeem_instruction_text TEXT;
-    ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS operator_label TEXT;
-  `).catch((error) => {
-    console.error('ensurePromoTables error:', error);
-    promoTablesPromise = null;
-  });
-  return promoTablesPromise;
-}
+`;
 ensurePromoTables();
 
 const PROMO_TOKEN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -15954,33 +16022,38 @@ app.post('/api/promo/campaigns', async (req, res) => {
     const slug = String(b.slug || '').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     if (!b.title || !slug) return res.status(400).json({ error: 'Informe título e slug' });
 
+    // Colunas novas só entram se existirem na tabela (sem ser dono, o ALTER não roda).
+    const values = {
+      title: b.title, slug, rules_text: b.rules_text || '', require_lead_capture: !!b.require_lead_capture,
+      require_document: !!b.require_document, lgpd_terms_text: b.lgpd_terms_text || '',
+      banner_url: b.banner_url || null, logo_url: b.logo_url || null, accent_color: b.accent_color || '#E11D48',
+      code_prefix: b.code_prefix || 'A3P', validation_pin: String(b.validation_pin || '1234'), is_active: b.is_active !== false,
+    };
+    const extras = {
+      business_segment: b.business_segment || 'generico', earn_ticket_text: b.earn_ticket_text || '',
+      redeem_instruction_text: b.redeem_instruction_text || '', operator_label: b.operator_label || '',
+    };
+    for (const [column, value] of Object.entries(extras)) {
+      if (promoCampaignColumns.has(column)) values[column] = value;
+    }
+    const columns = Object.keys(values);
+    const params = Object.values(values);
+
     if (b.id) {
       const { rows } = await pool.query(
         `UPDATE promo_campaigns SET
-            title = $2, slug = $3, rules_text = $4, require_lead_capture = $5, require_document = $6,
-            lgpd_terms_text = $7, banner_url = $8, logo_url = $9, accent_color = $10,
-            code_prefix = $11, validation_pin = $12, is_active = $13,
-            business_segment = $14, earn_ticket_text = $15, redeem_instruction_text = $16, operator_label = $17,
+            ${columns.map((column, index) => `${column} = $${index + 2}`).join(', ')},
             updated_at = now()
           WHERE id = $1 RETURNING *`,
-        [b.id, b.title, slug, b.rules_text || '', !!b.require_lead_capture, !!b.require_document,
-         b.lgpd_terms_text || '', b.banner_url || null, b.logo_url || null, b.accent_color || '#E11D48',
-         b.code_prefix || 'A3P', String(b.validation_pin || '1234'), b.is_active !== false,
-         b.business_segment || 'generico', b.earn_ticket_text || '', b.redeem_instruction_text || '', b.operator_label || '']
+        [b.id, ...params]
       );
       return res.json({ campaign: rows[0] });
     }
 
     const { rows } = await pool.query(
-      `INSERT INTO promo_campaigns
-         (title, slug, rules_text, require_lead_capture, require_document, lgpd_terms_text,
-          banner_url, logo_url, accent_color, code_prefix, validation_pin, is_active,
-          business_segment, earn_ticket_text, redeem_instruction_text, operator_label)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
-      [b.title, slug, b.rules_text || '', !!b.require_lead_capture, !!b.require_document,
-       b.lgpd_terms_text || '', b.banner_url || null, b.logo_url || null, b.accent_color || '#E11D48',
-       b.code_prefix || 'A3P', String(b.validation_pin || '1234'), b.is_active !== false,
-       b.business_segment || 'generico', b.earn_ticket_text || '', b.redeem_instruction_text || '', b.operator_label || '']
+      `INSERT INTO promo_campaigns (${columns.join(', ')})
+       VALUES (${columns.map((_, index) => `$${index + 1}`).join(', ')}) RETURNING *`,
+      params
     );
     res.json({ campaign: rows[0] });
   } catch (error) {

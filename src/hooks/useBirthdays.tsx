@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/vpsDb';
-import { differenceInDays, isSameDay, setYear, addDays, format } from 'date-fns';
+import { differenceInCalendarDays, setYear, addDays, format, startOfDay } from 'date-fns';
 import type { AppRole } from '@/hooks/useAuth';
 
 export interface BirthdayMember {
@@ -35,7 +35,23 @@ export function useBirthdays() {
     fetch();
   }, []);
 
-  const today = useMemo(() => new Date(), []);
+  // Dia de hoje à meia-noite: com a hora junto, a véspera dava 0 dias ("HOJE!" um dia antes).
+  // Atualiza quando vira o dia com a tela aberta (TV, sessão longa).
+  const [today, setToday] = useState(() => startOfDay(new Date()));
+  useEffect(() => {
+    const refresh = () => {
+      const now = startOfDay(new Date());
+      setToday(prev => (prev.getTime() === now.getTime() ? prev : now));
+    };
+    const timer = window.setInterval(refresh, 60_000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, []);
   const todayStr = format(today, 'yyyy-MM-dd');
 
   const upcoming = useMemo(() => {
@@ -44,10 +60,10 @@ export function useBirthdays() {
         const bday = new Date(m.birthday + 'T00:00:00');
         let birthdayThisYear = setYear(bday, today.getFullYear());
         // If birthday already passed this year, look at next year
-        if (birthdayThisYear < today && !isSameDay(birthdayThisYear, today)) {
+        if (birthdayThisYear < today) {
           birthdayThisYear = setYear(bday, today.getFullYear() + 1);
         }
-        const daysUntil = differenceInDays(birthdayThisYear, today);
+        const daysUntil = differenceInCalendarDays(birthdayThisYear, today);
         return { ...m, daysUntil, birthdayThisYear } as UpcomingBirthday;
       })
       .filter(m => m.daysUntil >= 0 && m.daysUntil <= 7)

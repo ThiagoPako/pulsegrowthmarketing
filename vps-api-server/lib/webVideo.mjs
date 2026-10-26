@@ -282,6 +282,12 @@ function findExecutable(name) {
   return null;
 }
 
+/** ffmpeg/ffprobe ausente ou sem permissão para subir: não é falha do vídeo, tenta de novo depois. */
+function toolUnavailable(error) {
+  return String(error?.syscall || '').startsWith('spawn') || error?.exitCode === 126 || error?.exitCode === 127
+    || /spawn \S+ (ENOENT|EACCES)/.test(String(error?.message || ''));
+}
+
 function runProcess(cmd, args, { timeoutMs }) {
   return new Promise((resolve, reject) => {
     let child;
@@ -307,7 +313,7 @@ function runProcess(cmd, args, { timeoutMs }) {
     child.on('close', (code) => {
       clearTimeout(timer);
       if (timedOut) return reject(new Error(`tempo esgotado (${Math.round(timeoutMs / 1000)} s)`));
-      if (code !== 0) return reject(new Error(err.trim().split('\n').slice(-3).join(' | ') || `saiu com código ${code}`));
+      if (code !== 0) return reject(Object.assign(new Error(err.trim().split('\n').slice(-3).join(' | ') || `saiu com código ${code}`), { exitCode: code }));
       resolve({ out, err });
     });
   });
@@ -384,7 +390,8 @@ export function createWebVideo({ pool, uploadRoots, runSlot = (task) => task(), 
   function loadFailures() {
     try {
       const data = JSON.parse(fs.readFileSync(failuresFile, 'utf8'));
-      return new Map(Object.entries(data || {}));
+      // Falha por ffmpeg/ffprobe ausente não é do vídeo: volta para a fila
+      return new Map(Object.entries(data || {}).filter(([, v]) => !/spawn \S+ (ENOENT|EACCES)/.test(String(v?.error || ''))));
     } catch {
       return new Map();
     }
@@ -574,6 +581,10 @@ export function createWebVideo({ pool, uploadRoots, runSlot = (task) => task(), 
     try {
       info = await probe(localPath, stat.size);
     } catch (error) {
+      if (toolUnavailable(error)) {
+        warn(`ffprobe indisponível (${error.message}): ${relative} fica para depois`);
+        return false;
+      }
       markFailed(key, relative, new Error(`ffprobe: ${error.message}`));
       return false;
     }
@@ -621,7 +632,10 @@ export function createWebVideo({ pool, uploadRoots, runSlot = (task) => task(), 
     } catch (error) {
       try { fs.rmSync(tmp, { force: true }); } catch {}
       if (error?.quiet) log(`descartado: ${relative} (${error.message})`);
-      else markFailed(key, relative, error);
+      else if (toolUnavailable(error)) {
+        if (tools) tools.hasZscale = null;
+        warn(`ffmpeg indisponível (${error.message}): ${relative} fica para depois`);
+      } else markFailed(key, relative, error);
     }
     return true;
   }

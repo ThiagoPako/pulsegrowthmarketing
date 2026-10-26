@@ -1,6 +1,8 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+// Aplica o tema salvo (claro/escuro) já no boot, antes do primeiro render: a Layout virou lazy
+import "./hooks/useTheme";
 import { initAutoTranslate } from "./lib/i18n";
 import { listenForStaleChunks } from "./lib/staleChunks";
 

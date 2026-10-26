@@ -33,6 +33,12 @@ function parseBirthday(value?: string | null): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+/** Chave do dia no fuso local (toISOString é UTC: depois das 21h já seria o dia seguinte). */
+function localDayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function startOfToday(): Date {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
@@ -116,7 +122,7 @@ export default function ClientAnniversaryAlert() {
 
   useEffect(() => {
     if (!user || items.length === 0) return;
-    const todayKey = new Date().toISOString().slice(0, 10);
+    const todayKey = localDayKey();
     const storageKey = `${STORAGE_PREFIX}:${user.id}:${todayKey}`;
     try {
       if (localStorage.getItem(storageKey)) return;
@@ -129,7 +135,7 @@ export default function ClientAnniversaryAlert() {
   const dismiss = () => {
     setOpen(false);
     if (!user) return;
-    const todayKey = new Date().toISOString().slice(0, 10);
+    const todayKey = localDayKey();
     try {
       localStorage.setItem(`${STORAGE_PREFIX}:${user.id}:${todayKey}`, '1');
     } catch {

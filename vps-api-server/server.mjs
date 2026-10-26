@@ -10730,6 +10730,8 @@ const TABLES_WITH_CITY = new Set([
   'plans',
   'story_editing_sessions','script_requests','manual_video_tasks','client_bio_links','client_bio_buttons',
   'short_links','short_link_clicks','regulations',
+  // campanhas: a cidade vem do cliente (trg_global_client_city); sem a coluna, nada muda
+  'campaigns',
 ]);
 
 // Cache de quais tabelas realmente possuem a coluna `city` no schema atual.
@@ -16153,6 +16155,9 @@ async function promoRequireAuth(req, res) {
 app.get('/api/promo/campaigns', async (req, res) => {
   if (!(await promoRequireAuth(req, res))) return;
   try {
+    // Cidade ativa: sorteios antigos sem cidade continuam visíveis nas duas.
+    const { user } = req.promoUser;
+    const activeCity = await resolveActiveCity(req, user.id, user);
     const { rows } = await pool.query(`
       SELECT c.*,
              (SELECT count(*) FROM promo_tickets t WHERE t.campaign_id = c.id) AS tickets_total,
@@ -16161,8 +16166,9 @@ app.get('/api/promo/campaigns', async (req, res) => {
              (SELECT count(*) FROM promo_tickets t WHERE t.campaign_id = c.id AND t.status = 'redeemed') AS prizes_redeemed,
              (SELECT count(*) FROM promo_tickets t WHERE t.campaign_id = c.id AND t.participant_phone IS NOT NULL) AS leads_total
         FROM promo_campaigns c
+       WHERE ${cityVisibilityExpression('c.city', '$1')}
        ORDER BY c.created_at DESC
-    `);
+    `, [activeCity]);
     res.json({ campaigns: rows });
   } catch (error) {
     console.error('[promo/campaigns] error:', error);
@@ -16205,10 +16211,13 @@ app.post('/api/promo/campaigns', async (req, res) => {
       return res.json({ campaign: rows[0] });
     }
 
+    // Sorteio novo nasce na cidade ativa de quem cria.
+    const { user } = req.promoUser;
+    const city = await resolveActiveCity(req, user.id, user);
     const { rows } = await pool.query(
-      `INSERT INTO promo_campaigns (${columns.join(', ')})
-       VALUES (${columns.map((_, index) => `$${index + 1}`).join(', ')}) RETURNING *`,
-      params
+      `INSERT INTO promo_campaigns (${[...columns, 'city'].join(', ')})
+       VALUES (${[...columns, 'city'].map((_, index) => `$${index + 1}`).join(', ')}) RETURNING *`,
+      [...params, city]
     );
     res.json({ campaign: rows[0] });
   } catch (error) {

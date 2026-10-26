@@ -28,7 +28,7 @@ import InlineVideoPlayer from '@/components/content/InlineVideoPlayer';
 import ClientLogo from '@/components/ClientLogo';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
+import { syncContentTaskColumnChange, buildSyncContext, insertChildContentTask, finishContentTaskSplit } from '@/lib/contentTaskSync';
 import { sendWhatsAppMessage, getWhatsAppConfig } from '@/services/whatsappService';
 import type { Client, Script } from '@/types';
 import { sanitizeScriptHtml } from '@/lib/highlightQuotes';
@@ -1117,44 +1117,48 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     const typeLabel: Record<OptSlot['type'], string> = {
       story: 'STORY', criativo: 'CRIATIVO', reels: 'REELS',
     };
-    const payloads = filled.map((s, idx) => ({
-      client_id: task.client_id,
-      title: `[OTIMIZAÇÃO · ${typeLabel[s.type]}] ${baseTitle}`,
-      content_type: s.type === 'reels' ? 'reels' : s.type, // 'story' | 'criativo' | 'reels'
-      kanban_column: 'revisao',
-      description: `Conteúdo otimizado a partir do Reels: "${baseTitle}".\n\n${OPT_MARKER}${JSON.stringify([{ id: `parent_${task.id}`, type: s.type, link: s.link, parentOptimization: true, parentTitle: baseTitle }])}`,
-      recording_id: (task as any).recording_id || null,
-      script_id: (task as any).script_id || null,
-      drive_link: task.drive_link || null,
-      edited_video_link: s.link,
-      created_by: user?.id || null,
-      assigned_to: null,
-      edited_by: (task as any).edited_by || user?.id || null,
-      editing_started_at: null,
-      editing_priority: false,
-      immediate_alteration: false,
-      position: idx,
-      parent_task_id: task.id,
-      created_at: now,
-      updated_at: now,
-    }));
+    // Títulos únicos por slot (o portal localiza o conteúdo pelo título)
+    const typeCount: Record<string, number> = {};
+    const payloads = filled.map((s, idx) => {
+      typeCount[s.type] = (typeCount[s.type] || 0) + 1;
+      const slotSuffix = typeCount[s.type] > 1 ? ` #${typeCount[s.type]}` : '';
+      return {
+        client_id: task.client_id,
+        title: `[OTIMIZAÇÃO · ${typeLabel[s.type]}] ${baseTitle}${slotSuffix}`,
+        content_type: s.type === 'reels' ? 'reels' : s.type, // 'story' | 'criativo' | 'reels'
+        kanban_column: 'revisao',
+        description: `Conteúdo otimizado a partir do Reels: "${baseTitle}".\n\n${OPT_MARKER}${JSON.stringify([{ id: `parent_${task.id}`, type: s.type, link: s.link, parentOptimization: true, parentTitle: baseTitle }])}`,
+        recording_id: (task as any).recording_id || null,
+        script_id: (task as any).script_id || null,
+        drive_link: task.drive_link || null,
+        edited_video_link: s.link,
+        created_by: user?.id || null,
+        assigned_to: null,
+        edited_by: (task as any).edited_by || user?.id || null,
+        editing_started_at: null,
+        editing_priority: false,
+        immediate_alteration: false,
+        position: idx,
+        parent_task_id: task.id,
+        created_at: now,
+        updated_at: now,
+      };
+    });
 
+    const childIds: string[] = [];
     for (const payload of payloads) {
-      let { error } = await supabase.from('content_tasks').insert(payload as any);
-      if (error) {
-        // fallback if parent_task_id column missing
-        const { parent_task_id, ...rest } = payload as any;
-        const retry = await supabase.from('content_tasks').insert(rest);
-        if (retry.error) { toast.error('Erro ao criar cards: ' + retry.error.message); return; }
-      }
+      const { id: childId, error: insertError } = await insertChildContentTask(payload);
+      if (insertError || !childId) { toast.error('Erro ao criar cards: ' + (insertError || 'card não criado')); return; }
+      childIds.push(childId);
+      // Cada filho entra em revisão como os outros cards: prazo, Social Media e portal
+      // (antes não chamava sync nenhum e os filhos ficavam sem prazo e fora do Social Media).
+      await syncTask('revisao', { ...payload, id: childId });
     }
 
-    // Remove the original optimization container card
-    await supabase.from('content_tasks').delete().eq('id', task.id);
-    await supabase.from('task_history').insert({
-      task_id: task.id, user_id: user?.id || null,
-      action: `Otimização dividida em ${filled.length} card(s) de revisão`,
-    } as any);
+    // Remove the original optimization container card (o histórico dele passa para os filhos)
+    await finishContentTaskSplit(task.id, childIds, {
+      userId: user?.id, action: `Otimização dividida em ${filled.length} card(s) de revisão`,
+    });
 
     toast.success(`🚀 ${filled.length} card(s) enviados para revisão!`);
     onRefresh();

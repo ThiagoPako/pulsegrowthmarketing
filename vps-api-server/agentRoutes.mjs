@@ -1648,7 +1648,6 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         return res.status(400).json({ error: 'Cada story precisa de um nome diferente' });
       }
       const notes = String(req.body?.notes || '').slice(0, 4000) || null;
-      const now = new Date();
       // a coluna city só existe em alguns bancos (escopo por cidade); copia do card pai quando existir
       const { rowCount: hasCity } = await pool.query(
         `SELECT 1 FROM information_schema.columns WHERE table_name = 'content_tasks' AND column_name = 'city'`
@@ -1662,15 +1661,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         );
         if (!locked.length) throw Object.assign(new Error('O card mudou durante o envio; entrega cancelada'), { status: 409 });
 
-        const { rows: settingsRows } = await db.query('SELECT * FROM company_settings LIMIT 1');
-        const settings = settingsRows[0] || {};
-        if (typeof settings.work_days === 'string') { try { settings.work_days = JSON.parse(settings.work_days); } catch { settings.work_days = null; } }
-        const workDays = Array.isArray(settings.work_days) && settings.work_days.length ? settings.work_days : ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
-        const reviewDeadline = (settings.review_deadline_enabled ?? true)
-          ? addBusinessHours(now, settings.review_deadline_hours ?? 24, workDays).toISOString() : null;
-        const month = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'numeric' }).format(now));
-        const year = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, year: 'numeric' }).format(now));
-
+        // Os stories entram em 'pre_revisao', que de propósito não tem prazo (review_deadline NULL,
+        // como no deliver simples): o prazo de revisão é gravado quando a chefe move para 'revisao'.
         const created = [];
         for (let i = 0; i < files.length; i++) {
           const rel = path.relative(path.resolve(uploadRoot), files[i].path).split(path.sep).join('/');
@@ -1688,6 +1680,13 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
               ...(hasCity ? [task.city || null] : [])]
           );
           const childId = child[0].id;
+          // O histórico do pacote (gravação, quem pegou, alterações) passa para cada story:
+          // o card original é apagado logo abaixo e o histórico dele ficava órfão.
+          await db.query(
+            `INSERT INTO task_history (task_id, user_id, action, details, created_at)
+             SELECT $1, user_id, action, details, created_at FROM task_history WHERE task_id = $2`,
+            [childId, task.id]
+          );
           await db.query(
             `INSERT INTO edit_versions (task_id, version, video_url, notes, created_by) VALUES ($1, 1, $2, $3, $4)`,
             [childId, url, notes, agent.userId]

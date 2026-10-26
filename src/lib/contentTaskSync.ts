@@ -421,6 +421,44 @@ export async function syncContentTaskColumnChange(
 }
 
 /**
+ * Insere um card filho (divisão de otimização ou pacote de stories) e devolve o id criado.
+ * Se a coluna parent_task_id ainda não existir, tenta de novo sem ela.
+ */
+export async function insertChildContentTask(payload: Record<string, any>): Promise<{ id: string | null; error: string | null }> {
+  let { data, error } = await supabase.from('content_tasks').insert(payload as any).select('id').single();
+  if (error) {
+    const { parent_task_id: _parent, ...rest } = payload;
+    ({ data, error } = await supabase.from('content_tasks').insert(rest as any).select('id').single());
+  }
+  if (error) return { id: null, error: error.message || 'erro' };
+  const created = Array.isArray(data) ? data[0] : data;
+  return { id: created?.id ?? null, error: null };
+}
+
+/**
+ * Fecha a divisão de um card em vários: o histórico do card original passa para cada filho
+ * (antes ficava órfão), a entrega dele no Social Media sai e o card original é apagado.
+ */
+export async function finishContentTaskSplit(
+  parentId: string,
+  childIds: string[],
+  log: { userId?: string | null; action: string; details?: string | null }
+) {
+  const { data: history } = await supabase.from('task_history')
+    .select('user_id, action, details, created_at').eq('task_id', parentId);
+  const rows: Record<string, any>[] = [];
+  for (const childId of childIds) {
+    for (const h of (history as any[]) || []) {
+      rows.push({ task_id: childId, user_id: h.user_id ?? null, action: h.action, details: h.details ?? null, created_at: h.created_at });
+    }
+    rows.push({ task_id: childId, user_id: log.userId || null, action: log.action, details: log.details || null });
+  }
+  if (rows.length > 0) await supabase.from('task_history').insert(rows as any);
+  await supabase.from('social_media_deliveries').delete().eq('content_task_id', parentId);
+  await supabase.from('content_tasks').delete().eq('id', parentId);
+}
+
+/**
  * Filtro .or() do "pegar card" (Marcar como Meu / Iniciar): o UPDATE só passa se o card
  * estiver livre ou já for do próprio colaborador (o perfil pode ter vários ids).
  * Use com .select('id'): nenhuma linha de volta = outra pessoa ou um agente pegou antes.

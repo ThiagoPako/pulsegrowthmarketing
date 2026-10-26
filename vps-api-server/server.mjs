@@ -10060,15 +10060,25 @@ app.post('/api/db/query', async (req, res) => {
             : (item && item.city !== undefined ? { ...item, city: assertValidCity(item.city) } : item);
 
           // ─── Regra anti-duplicação: reutiliza placeholder em "ideias" ───
-          // Se está inserindo um content_task para um cliente + tipo que já tem placeholder
-          // (kanban_column='ideias', sem script e sem gravação), reutiliza esse card via UPDATE
-          // ao invés de criar um novo. Evita cópias fantasmas na Zona de Ideias.
+          // Um roteiro novo (card em "ideias" com script_id) ocupa a vaga gerada pela demanda
+          // semanal da Copy (mesmo cliente + tipo, sem script e sem gravação) em vez de criar
+          // outro card. Evita cópias fantasmas na Zona de Ideias.
+          // Só vale para os placeholders automáticos (descrição "🤖 Gerado automaticamente" /
+          // "🎯 Gerado manualmente"). Antes qualquer insert (ideia manual, divisão de otimização,
+          // story, gravação finalizada) sobrescrevia a ideia mais antiga do cliente, e os N
+          // placeholders da Copy viravam 1. Insert com id próprio também não reaproveita:
+          // quem manda o id usa ele logo depois (entregas, portal).
+          const isCopyPlaceholder = (description) => typeof description === 'string'
+            && (description.startsWith('🤖 Gerado automaticamente') || description.startsWith('🎯 Gerado manualmente'));
           if (
             safeTable === 'content_tasks' &&
             itemScoped &&
             itemScoped.client_id &&
             itemScoped.content_type &&
-            (itemScoped.kanban_column || 'ideias') !== 'arquivado'
+            itemScoped.script_id &&
+            !itemScoped.id &&
+            (itemScoped.kanban_column || 'ideias') === 'ideias' &&
+            !isCopyPlaceholder(itemScoped.description)
           ) {
             try {
               const cityClause = scopeCity ? `AND ${cityVisibilityExpression('city', '$3')}` : '';
@@ -10079,6 +10089,7 @@ app.post('/api/db/query', async (req, res) => {
                   AND kanban_column = 'ideias'
                   AND script_id IS NULL
                   AND recording_id IS NULL
+                  AND (description LIKE '🤖 Gerado automaticamente%' OR description LIKE '🎯 Gerado manualmente%')
                   ${cityClause}
                 ORDER BY created_at ASC
                 LIMIT 1

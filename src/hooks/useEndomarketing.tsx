@@ -341,14 +341,19 @@ export async function syncEndoExpenses(): Promise<number> {
 }
 
 
-export function useEndoTasks(partnerId?: string) {
+/** range (opcional, 'yyyy-MM-dd'): só as tarefas do período, para telas que não precisam do histórico todo. */
+export function useEndoTasks(partnerId?: string, range?: { from: string; to: string }) {
   const [tasks, setTasks] = useState<EndoTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const rangeFrom = range?.from;
+  const rangeTo = range?.to;
 
   const fetchTasks = useCallback(async () => {
     try {
       let query = (supabase as any).from('endomarketing_partner_tasks').select('*, clients(company_name, color)').order('date');
       if (partnerId) query = query.eq('partner_id', partnerId);
+      if (rangeFrom) query = query.gte('date', rangeFrom);
+      if (rangeTo) query = query.lte('date', rangeTo);
       const { data } = await query;
       if (data) {
         setTasks(data.map((task: any) => ({
@@ -360,7 +365,7 @@ export function useEndoTasks(partnerId?: string) {
     } finally {
       setLoading(false);
     }
-  }, [partnerId]);
+  }, [partnerId, rangeFrom, rangeTo]);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
 

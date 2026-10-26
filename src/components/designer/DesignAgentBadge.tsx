@@ -3,9 +3,9 @@
  * - "Criando · <agente>" em Executando, "Em correção · <agente>" em Ajustes, enquanto o agente dá sinal
  *   de vida (`pulse arte etapa` grava agent_step/agent_heartbeat_at);
  * - "Parada" quando o agente pegou e sumiu há mais de 30 min (a chefe libera ou atribui);
- * - "Análise IA" na coluna em que o revisor de artes confere a entrega.
+ * - "Pré-análise" na coluna (chave `analise_ia`) em que o revisor de artes confere a entrega.
  */
-import { Bot } from 'lucide-react';
+import { ScanSearch } from 'lucide-react';
 
 interface Props {
   task: {
@@ -40,8 +40,8 @@ export default function DesignAgentBadge({ task, agents, className = '' }: Props
   if (task.kanban_column === 'analise_ia') {
     return (
       <div className={`flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-fuchsia-600 to-violet-600 ${className}`}>
-        <Bot size={11} className="text-white shrink-0" />
-        <span className="text-[9px] font-black text-white uppercase tracking-widest shrink-0">Análise IA</span>
+        <ScanSearch size={11} className="text-white shrink-0" />
+        <span className="text-[9px] font-black text-white uppercase tracking-widest shrink-0">Pré-análise</span>
         <span className="text-[9px] text-white/85 truncate">feita por {firstName(agents, task.designed_by || task.assigned_to)} · aguardando o revisor</span>
       </div>
     );

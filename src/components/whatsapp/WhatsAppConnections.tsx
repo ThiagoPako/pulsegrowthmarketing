@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { AlertTriangle, Bot, Loader2, Pencil, Plug, PlugZap, Plus, QrCode, Send, Smartphone, Trash2, Unplug } from 'lucide-react';
+import { AlertTriangle, MessagesSquare, Loader2, Pencil, Plug, PlugZap, Plus, QrCode, Send, Smartphone, Trash2, Unplug } from 'lucide-react';
 
 interface Connection {
   id: string;
@@ -188,7 +188,7 @@ export default function WhatsAppConnections() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{c.name}</span>
                   {c.purposes.includes('assistente') && (
-                    <Badge className="bg-primary/15 text-primary hover:bg-primary/15 border-primary/30"><Bot size={11} className="mr-1" />PULSE · assistente</Badge>
+                    <Badge className="bg-primary/15 text-primary hover:bg-primary/15 border-primary/30"><MessagesSquare size={11} className="mr-1" />PULSE · assistente</Badge>
                   )}
                   <Badge variant={status.tone}>{waiting && <Loader2 size={11} className="mr-1 animate-spin" />}{status.label}</Badge>
                   {c.phone && <span className="text-xs text-muted-foreground">{formatPhone(c.phone)}{c.push_name ? ` · ${c.push_name}` : ''}</span>}

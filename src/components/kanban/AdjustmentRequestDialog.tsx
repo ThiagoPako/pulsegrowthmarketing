@@ -66,7 +66,7 @@ export default function AdjustmentRequestDialog({ open, title = 'Solicitar Ajust
               autoFocus
             />
             <p className="text-[10px] text-muted-foreground mt-1">
-              Diga o tempo do vídeo (mm:ss) e o que mudar: o editor, humano ou agente, corrige só o que estiver aqui.
+              Diga o tempo do vídeo (mm:ss) e o que mudar.
             </p>
           </div>
           <div className="flex items-center gap-3 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
@@ -79,7 +79,6 @@ export default function AdjustmentRequestDialog({ open, title = 'Solicitar Ajust
             />
             <label htmlFor="adjustment-immediate-check" className="text-sm cursor-pointer">
               <span className="font-semibold text-destructive">🚨 Alteração Imediata</span>
-              <span className="text-xs text-muted-foreground block">O editor será notificado para fazer a correção com prioridade máxima</span>
             </label>
           </div>
         </div>

@@ -188,7 +188,7 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Nova Demanda para Designer</DialogTitle>
           <DialogDescription className="text-xs">
-            Tudo o que o designer (pessoa ou agente de IA) precisa para fazer a arte sem perguntar. Obrigatório: cliente, formato e copy ou descrição.
+            Tudo o que o designer precisa para fazer a arte sem perguntar. Obrigatório: cliente, formato e copy ou descrição.
           </DialogDescription>
         </DialogHeader>
 
@@ -229,7 +229,7 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
                 <div className="flex items-start gap-2 rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-200">
                   <AlertTriangle size={14} className="shrink-0 mt-0.5" />
                   <span>
-                    Este cliente não tem a pasta do Drive cadastrada. A IA busca lá identidade, logos e fotos —
+                    Este cliente não tem a pasta do Drive cadastrada; lá ficam identidade, logos e fotos usados nas artes —
                     preencha em <Link to="/clientes" className="underline font-medium">Clientes</Link>.
                   </span>
                 </div>

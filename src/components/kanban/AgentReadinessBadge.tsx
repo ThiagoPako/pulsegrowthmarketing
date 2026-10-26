@@ -1,7 +1,7 @@
 import { agentReadiness, type AgentCardFields } from '@/lib/agentCardStatus';
 
 /**
- * "Pronto para a IA": aparece só no card que está esperando na fila dos agentes (Edição livre ou
+ * "Pronto p/ fila": aparece só no card que está esperando na fila dos agentes (Edição livre ou
  * alteração de vídeo feito por agente). Verde quando nada falta; âmbar quando falta só o
  * recomendado (roteiro, prazo); vermelho quando o agente não consegue pegar (sem brutos, sem
  * cliente, tipo que agente não edita, alteração sem o que mudar). Mesmas regras da fila na API.
@@ -22,7 +22,7 @@ export default function AgentReadinessBadge({ task, agentIds, detailed }: Props)
       <div className={`px-3 py-2.5 rounded-lg border space-y-1 ${
         readiness.blocked ? 'bg-rose-500/10 border-rose-500/25' : readiness.ready ? 'bg-emerald-500/10 border-emerald-500/25' : 'bg-amber-500/10 border-amber-500/25'
       }`}>
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">🤖 Fila dos agentes de IA</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">Fila de edição</span>
         <p className="text-xs font-semibold text-foreground">
           {readiness.ready ? 'Pronto: um agente já pode pegar este card.'
             : readiness.blocked ? 'Um agente ainda não consegue pegar este card.'
@@ -46,8 +46,8 @@ export default function AgentReadinessBadge({ task, agentIds, detailed }: Props)
       : 'bg-amber-50 text-amber-700 border-amber-200/70 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800';
   const shown = readiness.blocked ? readiness.missing.filter((m) => m.blocking) : readiness.missing;
   const text = readiness.ready
-    ? '🤖 Pronto p/ IA'
-    : `🤖 ${readiness.blocked ? 'IA não pega' : 'IA'}: falta ${shown.map((m) => m.key).join(', ')}`;
+    ? 'Pronto p/ fila'
+    : `Fila: falta ${shown.map((m) => m.key).join(', ')}`;
   return (
     <span
       className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-md border max-w-full truncate ${tone}`}

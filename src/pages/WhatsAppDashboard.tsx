@@ -13,7 +13,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import {
   MessageSquare, Settings, History, Check, Key, Zap, Pencil, ClipboardCheck, Clock,
-  CheckCheck, Ban, Trash2, Bot,
+  CheckCheck, Ban, Trash2, MessagesSquare,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import WhatsAppConnections from '@/components/whatsapp/WhatsAppConnections';
@@ -264,7 +264,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
           <TabsTrigger value="history" className="gap-1"><History size={14} /> Histórico</TabsTrigger>
           <TabsTrigger value="templates" className="gap-1"><Pencil size={14} /> Mensagens</TabsTrigger>
           {isAdmin && <TabsTrigger value="config" className="gap-1"><Settings size={14} /> Conexões</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="pulse" className="gap-1"><Bot size={14} /> <span className="hidden sm:inline">Assistente</span> PULSE</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="pulse" className="gap-1"><MessagesSquare size={14} /> <span className="hidden sm:inline">Assistente</span> PULSE</TabsTrigger>}
         </TabsList>
 
         {/* ── TAB: Assistente PULSE (só admin) ── */}

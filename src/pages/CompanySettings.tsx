@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw, CalendarOff, Plus, Send, Loader2, DollarSign, MessageSquare, Plug, Bot, MonitorPlay, Factory, type LucideIcon } from 'lucide-react';
+import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw, CalendarOff, Plus, Send, Loader2, DollarSign, MessageSquare, Plug, Cpu, MonitorPlay, Factory, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { getLandingPixelId, isValidPixelId, saveLandingPixelId } from '@/services/landingSettings';
 import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
@@ -148,7 +148,7 @@ const SETTINGS_TABS: { key: SettingsTab; label: string; icon: LucideIcon; descri
   { key: 'producao', label: 'Produção', icon: Factory, description: 'Custos de produção e assistente da equipe' },
   { key: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, description: 'Conexões, automações, modelos de mensagem, confirmações e histórico' },
   { key: 'integracoes', label: 'Integrações', icon: Plug, description: 'Meta (Instagram/Facebook) e Pixel da landing page' },
-  { key: 'agentes', label: 'Agentes de IA', icon: Bot, description: 'Chaves dos agentes e computadores onde eles rodam' },
+  { key: 'agentes', label: 'Agentes', icon: Cpu, description: 'Chaves dos agentes e computadores onde eles rodam' },
   { key: 'portal', label: 'Portal do cliente', icon: MonitorPlay, description: 'Manutenção dos conteúdos do portal' },
   { key: 'perigo', label: 'Zona de perigo', icon: AlertTriangle, description: 'Apagar dados do sistema (irreversível)' },
 ];

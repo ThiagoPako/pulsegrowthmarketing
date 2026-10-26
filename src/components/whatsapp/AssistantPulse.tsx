@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { Bot, Loader2, Pencil, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { MessagesSquare, Loader2, Pencil, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,7 +46,7 @@ interface Overview {
 const LOG_KINDS: Record<string, string> = {
   comando: 'Comando', acao: 'Ação feita', acao_proposta: 'Pediu confirmação', negado: 'Permissão negada', ignorado: 'Número não autorizado',
   erro: 'Erro', cancelado: 'Cancelado', expirado: 'Expirou', alerta: 'Aviso de demanda', limite: 'Limite por hora', desligado: 'PULSE desligado',
-  audio_falhou: 'Áudio não entendido', recusa: 'Recusado pela IA', relatorio_entregue: 'Relatório entregue', relatorio_falhou: 'Relatório falhou',
+  audio_falhou: 'Áudio não entendido', recusa: 'Recusado pelo assistente', relatorio_entregue: 'Relatório entregue', relatorio_falhou: 'Relatório falhou',
 };
 const ACTION_STATUS: Record<string, string> = {
   pendente: 'Esperando o sim', executando: 'Executando', executada: 'Feita', cancelada: 'Cancelada', expirada: 'Expirou',
@@ -134,9 +134,9 @@ export default function AssistantPulse() {
   return (
     <div className="space-y-4" data-testid="assistant-pulse">
       <div>
-        <h2 className="text-lg font-semibold flex items-center gap-2"><Bot size={18} /> Assistente PULSE</h2>
+        <h2 className="text-lg font-semibold flex items-center gap-2"><MessagesSquare size={18} /> Assistente PULSE</h2>
         <p className="text-xs text-muted-foreground">
-          Assistente de IA (Claude) que recebe comandos da equipe pelo WhatsApp, em texto ou áudio. Toda ação que muda algo pede "sim" antes.
+          Assistente que recebe comandos da equipe pelo WhatsApp, em texto ou áudio. Toda ação que muda algo pede "sim" antes.
         </p>
       </div>
 
@@ -164,7 +164,7 @@ export default function AssistantPulse() {
               </div>
               <div className="md:col-span-2 flex flex-wrap gap-2 text-xs">
                 <Badge variant={data.claude.configured ? 'default' : 'destructive'}>
-                  {data.claude.configured ? `IA: ${data.claude.model}` : 'Sem chave do Claude (Integrações → APIs)'}
+                  {data.claude.configured ? `Modelo: ${data.claude.model}` : 'Sem chave do Claude (Integrações → APIs)'}
                 </Badge>
                 <Badge variant={data.whisper.available ? 'default' : 'secondary'}>
                   {data.whisper.available ? 'Áudio: Whisper instalado' : 'Áudio: Whisper ainda não instalado (pede por escrito)'}

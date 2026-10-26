@@ -7,16 +7,16 @@ import { toast } from 'sonner';
 // 'analise_ia': entrega de agente de IA conferida pelo revisor de artes antes da equipe (agentDesignRoutes.mjs)
 export type DesignTaskColumn = 'nova_tarefa' | 'executando' | 'fila_baixa_prioridade' | 'analise_ia' | 'em_analise' | 'enviar_cliente' | 'aprovado' | 'ajustes' | 'postado';
 
-export const DESIGN_COLUMNS: { key: DesignTaskColumn; label: string; color: string; hint: string }[] = [
-  { key: 'nova_tarefa', label: 'Nova Tarefa', color: '217 91% 60%', hint: 'Fila: "Iniciar" começa o cronômetro. Agentes de IA pegam daqui.' },
-  { key: 'executando', label: 'Executando', color: '45 93% 47%', hint: 'Em produção. Anexe a arte e envie para análise.' },
-  { key: 'fila_baixa_prioridade', label: 'Fila Baixa Prioridade', color: '240 5% 55%', hint: 'Pausadas para priorizar outra. "Retomar" volta a executar.' },
-  { key: 'ajustes', label: 'Ajustes Solicitados', color: '0 72% 51%', hint: 'Correção pedida. Volta para quem fez a arte (pessoa ou agente).' },
-  { key: 'analise_ia', label: 'Análise IA', color: '292 70% 52%', hint: 'Arte de agente de IA esperando o revisor de artes. A equipe ainda não precisa olhar.' },
-  { key: 'em_analise', label: 'Em Análise (equipe)', color: '262 83% 58%', hint: 'Revisão da equipe: aprovar ou pedir ajustes.' },
-  { key: 'enviar_cliente', label: 'Enviar para Cliente', color: '187 85% 43%', hint: 'Aprovada pela equipe: enviar pelo WhatsApp/Portal e marcar a aprovação.' },
-  { key: 'aprovado', label: 'Aprovadas — Artes para Agendar', color: '142 71% 45%', hint: 'Aprovadas pelo cliente. Baixe, agende e mova para Postadas.' },
-  { key: 'postado', label: 'Artes Postadas', color: '280 65% 60%', hint: 'Publicadas (últimos 21 dias).' },
+export const DESIGN_COLUMNS: { key: DesignTaskColumn; label: string; color: string }[] = [
+  { key: 'nova_tarefa', label: 'Nova Tarefa', color: '217 91% 60%' },
+  { key: 'executando', label: 'Executando', color: '45 93% 47%' },
+  { key: 'fila_baixa_prioridade', label: 'Fila Baixa Prioridade', color: '240 5% 55%' },
+  { key: 'ajustes', label: 'Ajustes Solicitados', color: '0 72% 51%' },
+  { key: 'analise_ia', label: 'Pré-análise', color: '292 70% 52%' },
+  { key: 'em_analise', label: 'Em Análise (equipe)', color: '262 83% 58%' },
+  { key: 'enviar_cliente', label: 'Enviar para Cliente', color: '187 85% 43%' },
+  { key: 'aprovado', label: 'Aprovadas — Artes para Agendar', color: '142 71% 45%' },
+  { key: 'postado', label: 'Artes Postadas', color: '280 65% 60%' },
 ];
 
 export interface DesignTask {

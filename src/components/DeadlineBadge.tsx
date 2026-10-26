@@ -8,6 +8,8 @@ interface DeadlineBadgeProps {
   label?: string;
   startedAt?: string | null;
   totalHours?: number;
+  /** Botão "i" com a auditoria do cálculo do prazo. Os Kanbans de vídeo mostram só o selo (pedido do dono). */
+  showAudit?: boolean;
 }
 
 /**
@@ -186,7 +188,7 @@ export function getDeadlineAudit(startedAt: string | null | undefined, deadline:
   };
 }
 
-export default function DeadlineBadge({ deadline, label, startedAt, totalHours }: DeadlineBadgeProps) {
+export default function DeadlineBadge({ deadline, label, startedAt, totalHours, showAudit = true }: DeadlineBadgeProps) {
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -224,7 +226,7 @@ export default function DeadlineBadge({ deadline, label, startedAt, totalHours }
           {progress > 0 && <span className="ml-0.5">({progress}%)</span>}
           {info.isExpired && <Flame size={10} className="text-orange-500 animate-bounce" />}
         </span>
-        {audit && (
+        {audit && showAudit && (
           <Popover>
             <PopoverTrigger asChild>
               <button

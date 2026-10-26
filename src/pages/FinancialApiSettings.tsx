@@ -96,7 +96,7 @@ const ALL_AI_PROVIDERS = [
   {
     value: 'claude',
     label: 'Anthropic Claude',
-    icon: '🤖',
+    icon: '✳️',
     desc: 'Claude da Anthropic. Excelente em textos longos e análise.',
     keyName: 'ANTHROPIC_API_KEY',
     getKeyUrl: 'https://console.anthropic.com/settings/keys',
@@ -504,7 +504,7 @@ export default function FinancialApiSettings() {
       <div className="glass-card p-5 border border-primary/20">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl">🤖</div>
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl">✨</div>
             <div>
               <h3 className="font-semibold text-sm">Inteligência Artificial</h3>
               <p className="text-[11px] text-muted-foreground">Configure o provedor de IA para roteiros, legendas e chat financeiro</p>

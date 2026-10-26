@@ -100,7 +100,7 @@ export default function TrainingManager() {
       });
 
       if (aiErr || !aiData?.slides) {
-        toast.error('Erro ao gerar slides com IA. Criando apresentação vazia.');
+        toast.error('Erro ao gerar os slides. Criando apresentação vazia.');
         setGenerating(false);
         setShowCreate(false);
         loadPresentations();
@@ -425,7 +425,7 @@ export default function TrainingManager() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Wand2 size={18} className="text-primary" />
-              Nova Apresentação com IA
+              Nova Apresentação
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -443,7 +443,7 @@ export default function TrainingManager() {
             </div>
             <Button onClick={createWithAI} disabled={generating || !newTitle.trim() || !pastedContent.trim()} className="w-full">
               {generating ? <Loader2 className="animate-spin mr-2" size={14} /> : <Sparkles size={14} className="mr-2" />}
-              {generating ? 'Gerando...' : 'Gerar com IA'}
+              {generating ? 'Gerando...' : 'Gerar slides'}
             </Button>
           </div>
         </DialogContent>

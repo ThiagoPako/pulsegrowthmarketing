@@ -73,7 +73,7 @@ const KANBAN_COLUMNS = [
   { id: 'captacao', label: 'Captação', icon: '📹' },
   
   { id: 'edicao', label: 'Edição de Vídeo', icon: '🎬' },
-  { id: 'pre_revisao', label: 'Análise (agentes de IA)', icon: '🤖' },
+  { id: 'pre_revisao', label: 'Análise', icon: '🔍' },
   { id: 'revisao', label: 'Revisão', icon: '👁' },
   { id: 'alteracao', label: 'Alteração', icon: '✏️' },
   { id: 'envio', label: 'Enviado p/ Cliente', icon: '📤' },
@@ -434,9 +434,9 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
       )}
       {currentColumn === 'pre_revisao' && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
-          <span className="text-sm">🤖</span>
+          <ScanEye size={13} className="text-purple-600" />
           <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
-            Em Análise — o revisor IA confere a entrega do agente antes da revisão da equipe
+            Em Análise — a entrega é conferida antes da revisão da equipe
           </span>
         </div>
       )}
@@ -1264,7 +1264,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     // Liberar da Análise fica registrado com o parecer (o mesmo que a chefe grava pelo `pulse mover`)
     const review = agentReviewOf(task);
     await syncTask(targetColumn, undefined, task.kanban_column === 'pre_revisao' && targetColumn === 'revisao'
-      ? `Liberado da Análise por ${profile?.name || 'equipe'}${review ? ` (parecer IA: ${review.verdict})` : ' (sem parecer da IA)'}`
+      ? `Liberado da Análise por ${profile?.name || 'equipe'}${review ? ` (parecer: ${review.verdict})` : ' (sem parecer)'}`
       : null);
     const label = KANBAN_COLUMNS.find(c => c.id === targetColumn)?.label;
     toast.success(`Movido para ${label}`);
@@ -1451,9 +1451,6 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] text-muted-foreground italic pt-1">
-                Ao enviar para <b>Revisão</b>, cada slot preenchido vira um cartão separado com a tag OTIMIZAÇÃO.
-              </p>
             </div>
           </div>
         )}
@@ -1597,7 +1594,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                     <UserAvatar user={{ name: editorUser.name, avatarUrl: editorUser.avatarUrl }} size="sm" />
                     <div className="min-w-0 flex-1">
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-teal-700/70 dark:text-teal-300/70 block">
-                        {task.kanban_column === 'alteracao' ? 'Quem corrige (editou o vídeo)' : 'Editado por'}{agentIds.has(editorUser.id) ? ' · 🤖 agente de IA' : ''}
+                        {task.kanban_column === 'alteracao' ? 'Quem corrige (editou o vídeo)' : 'Editado por'}
                       </span>
                       <span className="text-sm font-bold text-foreground">{editorUser.name}</span>
                     </div>
@@ -1854,7 +1851,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                         {task.kanban_column === 'pre_revisao' && !canLiberate && (
                           <div className="p-3 rounded-lg bg-muted/50 border border-border">
                             <p className="text-xs text-muted-foreground text-center">
-                              🤖 Aguardando o parecer do revisor IA e a liberação da chefe
+                              🔍 Aguardando o parecer e a liberação da chefe
                             </p>
                           </div>
                         )}
@@ -1919,9 +1916,6 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                             <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={handleSendWhatsApp} disabled={sendingWhatsApp}>
                               <MessageSquare size={14} className="text-green-600" /> {sendingWhatsApp ? 'Enviando...' : 'Convidar via WhatsApp'}
                             </Button>
-                            <p className="text-[10px] text-muted-foreground/60 px-1">
-                              💡 A mensagem convida o cliente a visitar a Área do Cliente Pulse para aprovar o vídeo
-                            </p>
                             <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700" onClick={() => setShowAdjustmentForm(true)}>
                               <MessageSquareWarning size={14} /> Solicitar Alteração
                             </Button>

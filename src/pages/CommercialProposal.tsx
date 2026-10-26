@@ -668,18 +668,18 @@ export default function CommercialProposal() {
           }));
           setSystemDeliverables(prev => [...prev, ...newDeliverables]);
         }
-        toast.success(`${newScope.length} módulos gerados pela IA!`);
+        toast.success(`${newScope.length} módulos gerados!`);
       } else {
         toast.error('Não foi possível gerar módulos. Tente novamente.');
       }
     } catch {
-      toast.error('Erro ao conectar com a IA');
+      toast.error('Erro ao conectar com o serviço de geração');
     }
     setGeneratingModules(false);
   };
 
   const generateTimelineWithAI = async () => {
-    if (!cronogramaDesc.trim()) { toast.error('Descreva o projeto para a IA gerar o cronograma'); return; }
+    if (!cronogramaDesc.trim()) { toast.error('Descreva o projeto para gerar o cronograma'); return; }
     setGeneratingTimeline(true);
     try {
       const { invokeVpsFunction } = await import('@/services/vpsEdgeFunctions');
@@ -703,7 +703,7 @@ export default function CommercialProposal() {
         toast.error('Não foi possível gerar o cronograma. Tente novamente.');
       }
     } catch {
-      toast.error('Erro ao conectar com a IA');
+      toast.error('Erro ao conectar com o serviço de geração');
     }
     setGeneratingTimeline(false);
   };
@@ -1020,9 +1020,9 @@ export default function CommercialProposal() {
   const renderSystemForm = () => (
     <>
       <Card>
-        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Funções do Sistema (IA)</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Funções do Sistema</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">Descreva o que o sistema precisa fazer e a IA vai gerar os módulos automaticamente</p>
+          <p className="text-xs text-muted-foreground">Descreva o que o sistema precisa fazer para gerar os módulos automaticamente</p>
           <Textarea
             value={systemFunctionsDesc}
             onChange={e => setSystemFunctionsDesc(e.target.value)}
@@ -1030,7 +1030,7 @@ export default function CommercialProposal() {
             rows={4}
           />
           <Button onClick={generateModulesWithAI} disabled={generatingModules || !systemFunctionsDesc.trim()} className="w-full">
-            {generatingModules ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando módulos...</> : <><Sparkles className="h-4 w-4 mr-2" /> Gerar Módulos com IA</>}
+            {generatingModules ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando módulos...</> : <><Sparkles className="h-4 w-4 mr-2" /> Gerar Módulos</>}
           </Button>
         </CardContent>
       </Card>
@@ -1038,7 +1038,7 @@ export default function CommercialProposal() {
       <Card>
         <CardHeader><CardTitle className="text-base flex items-center gap-2"><Code className="h-4 w-4 text-primary" /> Escopo do Sistema</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">Módulos e funcionalidades (adicione manualmente ou via IA)</p>
+          <p className="text-xs text-muted-foreground">Módulos e funcionalidades (adicione manualmente ou gere acima)</p>
           {systemScope.map(item => (
             <div key={item.id} className="flex items-center justify-between bg-accent/30 rounded-lg p-2">
               <p className="text-sm">{item.description}</p>
@@ -1508,9 +1508,9 @@ export default function CommercialProposal() {
     return (
       <>
         <Card>
-          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Descrição do Projeto (IA)</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Descrição do Projeto</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-xs text-muted-foreground">Descreva o projeto e a IA vai gerar o cronograma completo com entregas, datas, valores e metodologia</p>
+            <p className="text-xs text-muted-foreground">Descreva o projeto para gerar o cronograma completo com entregas, datas, valores e metodologia</p>
             <Textarea
               value={cronogramaDesc}
               onChange={e => setCronogramaDesc(e.target.value)}
@@ -1518,7 +1518,7 @@ export default function CommercialProposal() {
               rows={4}
             />
             <Button onClick={generateTimelineWithAI} disabled={generatingTimeline || !cronogramaDesc.trim()} className="w-full">
-              {generatingTimeline ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando cronograma...</> : <><Sparkles className="h-4 w-4 mr-2" /> Gerar Cronograma com IA</>}
+              {generatingTimeline ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando cronograma...</> : <><Sparkles className="h-4 w-4 mr-2" /> Gerar Cronograma</>}
             </Button>
           </CardContent>
         </Card>

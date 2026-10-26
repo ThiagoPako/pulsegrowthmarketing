@@ -779,7 +779,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               <Badge className={`${cfg.color} border-0 text-xs`}><cfg.icon size={11} className="mr-0.5" /> {cfg.label}</Badge>
               <Badge variant="outline" className="text-xs">
                 {task.kanban_column === 'edicao' ? (isEditing ? 'Editando' : 'Aguardando') :
-                 task.kanban_column === 'pre_revisao' ? '🤖 Análise' :
+                 task.kanban_column === 'pre_revisao' ? 'Análise' :
                  task.kanban_column === 'revisao' ? 'Em Revisão' :
                  task.kanban_column === 'alteracao' ? 'Ajuste' :
                  task.kanban_column === 'envio' ? 'Enviado ao cliente' : 'Finalizado'}
@@ -937,8 +937,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
                   <div>
                     <p className="text-sm font-black text-pink-600 dark:text-pink-300 uppercase tracking-wider">Vários stories neste card</p>
                     <p className="text-[10px] text-muted-foreground">
-                      Opcional. Suba cada story com um nome (ex.: "01 Combustível"). Ao enviar, cada um vira um card próprio e
-                      aparece separado no portal do cliente, para aprovar um a um. Com só um vídeo, use o envio normal abaixo.
+                      Opcional. Suba cada story com um nome (ex.: "01 Combustível"). Com só um vídeo, use o envio normal abaixo.
                     </p>
                   </div>
                   <Badge className="text-[10px] bg-pink-500/20 text-pink-600 dark:text-pink-300 border-pink-500/40">
@@ -1299,7 +1298,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
 
               {/* Com um agente trabalhando, quem entrega é ele (pela fila, passando pela Análise) */}
               {agentBusy && (
-                <p className="text-xs text-muted-foreground self-center">🤖 Um agente de IA está com este card: ele entrega pela fila.</p>
+                <p className="text-xs text-muted-foreground self-center">{(users.find(u => u.id === task.assigned_to)?.name || 'O editor').trim().split(/\s+/)[0]} está com este card e entrega pela fila.</p>
               )}
 
               {/* Finalize: send for approval */}

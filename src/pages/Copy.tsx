@@ -735,7 +735,7 @@ export default function Copy() {
             title: `Novo Roteiro ${fmt.label} — ${c.companyName}`,
             content_type: fmt.key,
             kanban_column: 'ideias',
-            description: `🤖 Gerado automaticamente pela demanda semanal (${fmt.label}) do cliente`,
+            description: `⚙️ Gerado automaticamente pela demanda semanal (${fmt.label}) do cliente`,
             created_by: user?.id ?? null,
           });
         }

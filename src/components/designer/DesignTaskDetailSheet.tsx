@@ -35,7 +35,7 @@ import {
   Play, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History,
   Upload, Image, FileText, Palette, Info, User, Calendar, ArrowRight, X,
   ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, Loader2, Trash2, Pencil, Download, FileDown, MoreVertical,
-  FolderOpen, AlertTriangle, Bot, Layers
+  FolderOpen, AlertTriangle, Layers, ScanSearch
 } from 'lucide-react';
 import { downloadSingleArt, downloadArtsAsPdf } from '@/lib/designerDownload';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -1005,7 +1005,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   {agentReviews.length > 0 && (
                     <div className="rounded-lg border border-fuchsia-400/40 bg-fuchsia-50/40 dark:bg-fuchsia-950/10 p-3 space-y-2">
                       <Label className="text-[10px] text-fuchsia-700 dark:text-fuchsia-300 uppercase tracking-wider flex items-center gap-1.5 font-semibold">
-                        <Bot size={11} /> Análise IA ({agentReviews.length} parecer{agentReviews.length > 1 ? 'es' : ''})
+                        <ScanSearch size={11} /> Pré-análise ({agentReviews.length} parecer{agentReviews.length > 1 ? 'es' : ''})
                       </Label>
                       {agentReviews.map(r => (
                         <div key={r.id} className="rounded-md border border-border bg-background/60 p-2.5 space-y-1">
@@ -1392,22 +1392,6 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         >
                           {currentCol?.label}
                         </motion.p>
-                        <motion.p
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ delay: 0.25 }}
-                          className="text-xs text-muted-foreground"
-                        >
-                          {task.kanban_column === 'nova_tarefa' && 'Aguardando início'}
-                          {task.kanban_column === 'executando' && 'Tarefas que estão atualmente em andamento'}
-                          {task.kanban_column === 'em_analise' && 'Aguardando revisão interna'}
-                          {task.kanban_column === 'enviar_cliente' && 'Pronto para enviar ao cliente'}
-                          {task.kanban_column === 'aprovado' && 'Finalizado e aprovado'}
-                          {task.kanban_column === 'ajustes' && 'Correções pendentes — volta para quem fez a arte'}
-                          {task.kanban_column === 'analise_ia' && 'Arte de agente de IA: o revisor de artes confere antes da equipe'}
-                          {task.kanban_column === 'fila_baixa_prioridade' && 'Pausada para priorizar outra demanda'}
-                          {task.kanban_column === 'postado' && 'Publicada'}
-                        </motion.p>
                       </div>
                     </div>
                   </motion.div>
@@ -1415,10 +1399,9 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
                 {agentWorking && (
                   <div className="rounded-lg border border-violet-400/50 bg-violet-50 dark:bg-violet-950/20 p-3 text-xs text-violet-800 dark:text-violet-200 flex items-start gap-2">
-                    <Bot size={14} className="shrink-0 mt-0.5" />
+                    <Pencil size={14} className="shrink-0 mt-0.5" />
                     <span>
-                      <b>{agentName(task.assigned_to) || 'Um agente de IA'}</b> está com esta arte agora (etapa: {task.agent_step === 'iniciado' ? 'começando' : task.agent_step}).
-                      Evite mexer até ele entregar; se travou, a chefe libera ou passa para outro.
+                      <b>{agentName(task.assigned_to) || 'Um designer'}</b> está com esta arte agora (etapa: {task.agent_step === 'iniciado' ? 'começando' : task.agent_step}).
                     </span>
                   </div>
                 )}
@@ -2073,10 +2056,9 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     </div>
                     <div className="rounded-md px-3 py-1.5 text-xs font-medium text-center text-white" style={{ backgroundColor: `hsl(${currentCol?.color})` }}>
                       {task.profiles?.display_name || task.profiles?.name || agentName(task.assigned_to) || 'Não atribuído'}
-                      {task.assigned_to && agentIds.has(task.assigned_to) && ' · IA'}
                     </div>
                     {task.designed_by && task.designed_by !== task.assigned_to && (
-                      <p className="text-[10px] text-muted-foreground text-center">Arte feita por {agentName(task.designed_by) || 'outro designer'}{agentIds.has(task.designed_by) ? ' (IA)' : ''}</p>
+                      <p className="text-[10px] text-muted-foreground text-center">Arte feita por {agentName(task.designed_by) || 'outro designer'}</p>
                     )}
                   </div>
 

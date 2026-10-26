@@ -47,7 +47,7 @@ const COLUMN_LABELS: Record<string, string> = {
   nova_tarefa: 'Nova tarefa',
   executando: 'Executando',
   fila_baixa_prioridade: 'Fila baixa',
-  analise_ia: 'Análise IA',
+  analise_ia: 'Pré-análise',
   em_analise: 'Em análise',
   enviar_cliente: 'Enviar cliente',
   ajustes: 'Ajustes',

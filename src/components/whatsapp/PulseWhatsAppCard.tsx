@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { Bot, Loader2, PlugZap, QrCode, RefreshCw, Send, Unplug } from 'lucide-react';
+import { MessagesSquare, Loader2, PlugZap, QrCode, RefreshCw, Send, Unplug } from 'lucide-react';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -165,7 +165,7 @@ export default function PulseWhatsAppCard({ onChange }: { onChange?: () => void 
       <CardContent className="p-4 space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-            <Bot size={26} className="text-primary" />
+            <MessagesSquare size={26} className="text-primary" />
           </div>
           <div className="flex-1 min-w-[200px]">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">WhatsApp da PULSE</p>

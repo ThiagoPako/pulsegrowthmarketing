@@ -1584,7 +1584,7 @@ export default function Scripts() {
                       className="gap-1.5 bg-gradient-to-r from-primary to-primary/80"
                     >
                       <Sparkles size={14} className={generating ? 'animate-spin' : ''} />
-                      {generating ? 'Gerando...' : 'Gerar Roteiro com IA'}
+                      {generating ? 'Gerando...' : 'Gerar Roteiro'}
                     </Button>
                   </div>
                   {selectedClient.editorial ? (
@@ -1668,7 +1668,7 @@ export default function Scripts() {
                   placeholder="Legenda com CTA para a postagem..." 
                   rows={4}
                 />
-                <p className="text-[10px] text-muted-foreground">Gerada automaticamente pela IA junto com o roteiro. Você pode editar manualmente.</p>
+                <p className="text-[10px] text-muted-foreground">Gerada automaticamente junto com o roteiro. Você pode editar manualmente.</p>
               </div>
             )}
 

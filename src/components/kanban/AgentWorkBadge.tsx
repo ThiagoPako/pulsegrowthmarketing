@@ -1,8 +1,9 @@
+import { Pencil } from 'lucide-react';
 import { agentWorkState, formatSince, type AgentCardFields } from '@/lib/agentCardStatus';
 
 /**
  * Selo em destaque enquanto um agente de IA está com o card (do `pulse pegar` até o `entregar` ou
- * `liberar`): na Edição "🤖 Editando · Beatriz · cortando", na Alteração "🔧 Em correção · Davi · …"
+ * `liberar`): na Edição "Editando · Beatriz · cortando" (ícone de lápis), na Alteração "🔧 Em correção · Davi · …"
  * (pedido do usuário, 25/10/2026). Sem sinal há 30 min ou mais (o limite do `pulse travados`), vira
  * "⏸ … parada · sem sinal há X" — é o card que a Marcely precisa destravar.
  * Os dados vêm do próprio card: o servidor grava `agent_step`/`agent_heartbeat_at` no pegar e a cada
@@ -47,7 +48,8 @@ export default function AgentWorkBadge({ task, users, agentIds }: Props) {
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
         <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
       </span>
-      <span className="text-[9px] font-black text-white uppercase tracking-widest shrink-0">🤖 Editando · {name}</span>
+      <Pencil size={10} className="text-white shrink-0" aria-hidden />
+      <span className="text-[9px] font-black text-white uppercase tracking-widest shrink-0">Editando · {name}</span>
       <span className="text-[9px] text-white/90 truncate">{work.step}</span>
     </div>
   );

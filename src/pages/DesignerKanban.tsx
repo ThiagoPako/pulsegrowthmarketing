@@ -17,7 +17,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame, Pause, AlertTriangle, Timer, Filter, X, Bot, ArrowRightLeft, FolderOpen, ClipboardList } from 'lucide-react';
+import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame, Pause, AlertTriangle, Timer, Filter, X, ArrowRightLeft, FolderOpen, ClipboardList, ScanSearch, UserCog } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
@@ -170,7 +170,7 @@ const COLUMN_CONFIG: Record<string, { icon: React.ReactNode; gradient: string }>
   enviar_cliente: { icon: <Send size={15} />, gradient: 'from-cyan-500/20 to-teal-500/10 dark:from-cyan-500/30 dark:to-teal-500/10' },
   aprovado: { icon: <CheckCircle2 size={15} />, gradient: 'from-emerald-500/20 to-green-500/10 dark:from-emerald-500/30 dark:to-green-500/10' },
   ajustes: { icon: <RotateCcw size={15} />, gradient: 'from-red-500/20 to-rose-500/10 dark:from-red-500/30 dark:to-rose-500/10' },
-  analise_ia: { icon: <Bot size={15} />, gradient: 'from-fuchsia-500/20 to-violet-500/10 dark:from-fuchsia-500/30 dark:to-violet-500/10' },
+  analise_ia: { icon: <ScanSearch size={15} />, gradient: 'from-fuchsia-500/20 to-violet-500/10 dark:from-fuchsia-500/30 dark:to-violet-500/10' },
   postado: { icon: <Send size={15} />, gradient: 'from-fuchsia-500/20 to-purple-500/10 dark:from-fuchsia-500/30 dark:to-purple-500/10' },
 };
 
@@ -377,7 +377,7 @@ export default function DesignerKanban() {
     if (!isChangingColumn && !isChangingPosition) return;
     // Agente de IA trabalhando na arte agora: confirmar antes de tirar dele
     if (isChangingColumn && isDesignAgentWorking(task)) {
-      const agent = designAgents.find(a => a.user_id === task.assigned_to)?.name || 'Um agente de IA';
+      const agent = designAgents.find(a => a.user_id === task.assigned_to)?.name || 'Um designer';
       if (!window.confirm(`${agent} está trabalhando nesta arte agora (${task.agent_step}). Mover mesmo assim? A entrega dele será recusada.`)) return;
     }
     // Com outra ordenação na tela a posição manual não aparece: reordenar não teria efeito visível.
@@ -469,7 +469,7 @@ export default function DesignerKanban() {
     }
     // Análise IA é para entregas (de agente): sem arte não há o que revisar
     if (isChangingColumn && targetColumn === 'analise_ia' && !task.attachment_url && !(task as any).mockup_url && getTaskArtUrls(task).length === 0) {
-      toast.error('Anexe a arte antes de mandar para a Análise IA');
+      toast.error('Anexe a arte antes de mandar para a Pré-análise');
       return;
     }
 
@@ -751,9 +751,9 @@ export default function DesignerKanban() {
           variant={aiOnly ? 'default' : 'outline'}
           className={`h-8 gap-1 text-xs ${aiOnly ? 'bg-fuchsia-600 hover:bg-fuchsia-700 text-white' : ''}`}
           onClick={() => setAiOnly(v => !v)}
-          title="Só artes de agentes de IA: fazendo, feitas por eles ou na Análise IA"
+          title="Artes com agente: fazendo, feitas por eles ou na Pré-análise"
         >
-          <Bot size={13} /> IA
+          <UserCog size={13} /> Com agente
         </Button>
         <Button
           size="sm"
@@ -878,7 +878,7 @@ export default function DesignerKanban() {
                       <span className="text-foreground/80">
                         {cfg.icon}
                       </span>
-                      <span className="text-xs font-bold uppercase tracking-wider text-foreground/90" title={col.hint}>{col.label}</span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-foreground/90">{col.label}</span>
                       <div
                         className="ml-auto flex items-center gap-1"
                       >
@@ -937,8 +937,6 @@ export default function DesignerKanban() {
                         )}
                       </div>
                     </div>
-                    {/* o que fazer nesta coluna (antes só o nome) */}
-                    <p className="relative z-10 mt-1 text-[10px] leading-snug text-foreground/60 line-clamp-2">{col.hint}</p>
                   </div>
 
                   {/* Cards - scrollable. Sem AnimatePresence/layout — enormes ganhos de perf com muitos cards. */}
@@ -1025,7 +1023,7 @@ export default function DesignerKanban() {
                   <td className="p-3 font-medium">{task.title}</td>
                   <td className="p-3">
                     <Badge variant="outline" className="text-[10px]">{taskFormatLabel(task)}</Badge>
-                    {isAgentDesignTask(task, agentIds) && <Badge className="ml-1 text-[10px] bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">IA</Badge>}
+                    {isAgentDesignTask(task, agentIds) && <Badge className="ml-1 text-[10px] bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">Agente</Badge>}
                   </td>
                   <td className="p-3"><Badge className={`text-[10px] ${PRIORITY_CONFIG[task.priority]?.color}`}>{PRIORITY_CONFIG[task.priority]?.label}</Badge></td>
                   <td className="p-3"><Badge variant="secondary" className="text-[10px]">{DESIGN_COLUMNS.find(c => c.key === task.kanban_column)?.label}</Badge></td>
@@ -1547,8 +1545,8 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
         <Badge variant="outline" className="text-[10px]">{taskFormatLabel(task)}</Badge>
         <Badge className={`text-[10px] ${priorityCfg.color}`}>{priorityCfg.label}</Badge>
         {isAgentTask && (
-          <Badge className="text-[10px] gap-0.5 bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300" title="Arte de agente de IA">
-            <Bot size={10} /> IA
+          <Badge className="text-[10px] gap-0.5 bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300" title="Arte de agente">
+            <UserCog size={10} /> Agente
           </Badge>
         )}
         {briefMissing.length > 0 && (
@@ -1630,7 +1628,7 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
       </div>
 
       {reservedAgent && (
-        <p className="text-[10px] text-fuchsia-700 dark:text-fuchsia-300 flex items-center gap-1"><Bot size={10} /> Reservada para {reservedAgent.trim().split(/\s+/)[0]} (IA)</p>
+        <p className="text-[10px] text-fuchsia-700 dark:text-fuchsia-300 flex items-center gap-1"><UserCog size={10} /> Reservada para {reservedAgent.trim().split(/\s+/)[0]}</p>
       )}
 
       {/* Quick Start button for nova_tarefa e fila_baixa_prioridade */}

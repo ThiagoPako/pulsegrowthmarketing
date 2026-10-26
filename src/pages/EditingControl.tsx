@@ -214,7 +214,7 @@ export default function EditingControl() {
       const agentName = (users.find(u => u.id === task.assigned_to)?.name || 'O agente').trim().split(/\s+/)[0];
       setConfirmAction({
         title: `Tirar o card de ${agentName}?`,
-        description: `${agentName} (agente de IA) está trabalhando neste card agora (etapa: ${work.step}, sinal há ${formatSince(work.minutes ?? 0)}). Se mudar o dono, a entrega dele será recusada.`,
+        description: `${agentName} está trabalhando neste card agora (etapa: ${work.step}, sinal há ${formatSince(work.minutes ?? 0)}). Se mudar o dono, a entrega dele será recusada.`,
         confirmLabel: 'Tirar mesmo assim',
         destructive: true,
         onConfirm: () => performDrop(task, targetEditorId),
@@ -391,9 +391,6 @@ export default function EditingControl() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold">Fila de Edição</p>
-              <p className="text-[10px] text-muted-foreground">
-                Tarefas aguardando editor
-              </p>
             </div>
             <Badge variant="secondary" className="text-[10px] shrink-0 bg-amber-500/20 text-amber-400">
               {queueTasks.length}
@@ -518,10 +515,6 @@ export default function EditingControl() {
             {val.label}
           </span>
         ))}
-        <span className="ml-2 flex items-center gap-1">
-          <GripVertical size={10} /> Arraste para reatribuir
-        </span>
-        <span className="ml-2">🤖 agente de IA trabalhando · ⏸ agente sem sinal há 30 min ou mais</span>
       </div>
 
       <ConfirmActionDialog action={confirmAction} onClose={() => setConfirmAction(null)} />
@@ -615,7 +608,7 @@ function EditingTaskCard({
       {work && (
         <div className={`mt-1.5 text-[9px] font-semibold truncate ${work.state === 'working' ? 'text-indigo-400' : 'text-slate-400'}`}>
           {work.state === 'working'
-            ? `🤖 ${work.step}`
+            ? `✏️ ${work.step}`
             : `⏸ sem sinal${work.minutes !== null ? ` há ${formatSince(work.minutes)}` : ''} · ${work.step}`}
         </div>
       )}

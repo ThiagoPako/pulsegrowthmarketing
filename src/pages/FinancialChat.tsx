@@ -171,7 +171,7 @@ export default function FinancialChat() {
           <RocketMascot isThinking={loading} />
           <div>
             <h1 className="text-2xl font-display font-bold bg-gradient-to-r from-primary to-orange-400 bg-clip-text text-transparent">
-              Foguetinho IA
+              Foguetinho
             </h1>
             <p className="text-sm text-muted-foreground">Pergunte qualquer coisa sobre a agência</p>
           </div>

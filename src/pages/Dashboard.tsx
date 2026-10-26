@@ -910,14 +910,14 @@ export default function Dashboard() {
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5 border-warning/30">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle size={14} className="text-warning" />
-            <h3 className="font-display font-semibold text-xs sm:text-sm">🤖 Datas Sazonais (IA)</h3>
+            <h3 className="font-display font-semibold text-xs sm:text-sm">Datas Sazonais</h3>
             <Badge variant="outline" className="text-[9px] h-4 px-1 border-warning/40 text-warning">{aiSeasonalAlerts.reduce((s, a) => s + a.dates.length, 0)}</Badge>
             <button onClick={() => { clearSeasonalCache(); loadAIAlerts(); }} className="ml-auto text-[9px] text-muted-foreground hover:text-foreground flex items-center gap-1">
               <RefreshCw size={10} className={seasonalLoading ? 'animate-spin' : ''} /> Atualizar
             </button>
           </div>
           {seasonalLoading ? (
-            <div className="text-xs text-muted-foreground text-center py-4">🔄 IA analisando datas sazonais...</div>
+            <div className="text-xs text-muted-foreground text-center py-4">🔄 Analisando datas sazonais...</div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 sm:gap-2">
               {aiSeasonalAlerts.flatMap(a => a.dates.map(d => ({ ...d, clientName: a.clientName, clientId: a.clientId, niche: a.niche }))).sort((a, b) => a.days_until - b.days_until).slice(0, 9).map((alert, i) => (

@@ -98,7 +98,8 @@ describe('Kanban de Edição — consistência e agentes', () => {
     // Agente editando e Análise com quem editou e aguardando parecer
     expect(await screen.findByText(/Editando · Beatriz/)).toBeInTheDocument();
     expect(screen.getByText(/aguardando parecer/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Editado por · 🤖 IA/).length).toBe(2);
+    expect(screen.getAllByText(/Editado por/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryAllByText(/🤖|\bIA\b/)).toHaveLength(0);
 
     // Clique no card de revisão abre o detalhe; "Aprovar e enviar" pede confirmação
     fireEvent.click(screen.getByText('Em revisao'));

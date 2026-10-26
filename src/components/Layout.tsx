@@ -13,7 +13,7 @@ import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
-  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon, Gauge, Flame, Pin, PinOff, Database, Link2, Images
+  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Cpu, MessageCircle, Workflow, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon, Gauge, Flame, Pin, PinOff, Database, Link2, Images
   , Sparkles, type LucideIcon,
 } from 'lucide-react';
 
@@ -92,7 +92,7 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/edicao', label: 'Edição', icon: Scissors, roles: ['admin', 'editor', 'social_media', 'videomaker', 'gestor_projetos'] },
       { path: '/edicao/kanban', label: 'Kanban Edição', icon: Kanban, roles: ['admin', 'editor', 'social_media', 'videomaker', 'gestor_projetos'] },
-      { path: '/agentes', label: 'Agentes IA', icon: Bot, roles: ['admin'] },
+      { path: '/agentes', label: 'Agentes', icon: Cpu, roles: ['admin'] },
       { path: '/videomakers', label: 'Videomakers', icon: Video, roles: ['admin', 'videomaker', 'social_media', 'gestor_projetos'] },
     ],
   },
@@ -189,9 +189,9 @@ const navCategories: NavCategory[] = [
     label: 'Sistema',
     color: 'slate',
     items: [
-      { path: '/financeiro/chat', label: 'Chat IA', icon: Bot, roles: ['admin'] },
+      { path: '/financeiro/chat', label: 'Chat Financeiro', icon: MessageCircle, roles: ['admin'] },
       { path: '/financeiro/apis', label: 'APIs', icon: Plug, roles: ['admin'] },
-      { path: '/automacoes', label: 'Automações', icon: Bot, roles: ['admin', 'social_media', 'gestor_projetos'] },
+      { path: '/automacoes', label: 'Automações', icon: Workflow, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/painel-tv', label: 'Painel TV', icon: Monitor, roles: ['admin'] },
       { path: '/treinamento', label: 'Treinamento', icon: BookOpen, roles: ['admin', 'videomaker', 'social_media', 'editor', 'designer', 'fotografo', 'endomarketing', 'parceiro', 'copywriter', 'gestor_projetos'] },
       { path: '/treinamento-gestao', label: 'Gestão Trein.', icon: Settings, roles: ['admin'] },

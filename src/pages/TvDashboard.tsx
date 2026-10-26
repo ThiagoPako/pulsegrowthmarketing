@@ -164,7 +164,7 @@ const DESIGN_COLUMN_CONFIG: Record<string, { label: string; color: string; icon:
   nova_tarefa: { label: 'Na Fila', color: 'hsl(217 91% 60%)', icon: Sparkles },
   executando: { label: 'AO VIVO', color: 'hsl(330 85% 62%)', icon: Palette },
   fila_baixa_prioridade: { label: 'Pausada', color: 'hsl(240 5% 55%)', icon: Pause },
-  analise_ia: { label: 'Análise IA', color: 'hsl(292 70% 52%)', icon: Eye },
+  analise_ia: { label: 'Pré-análise', color: 'hsl(292 70% 52%)', icon: Eye },
   em_analise: { label: 'Em análise', color: 'hsl(32 95% 58%)', icon: Eye },
   ajustes: { label: 'Ajustes', color: 'hsl(356 84% 62%)', icon: Sparkles },
   em_andamento: { label: 'Criando', color: 'hsl(330 85% 62%)', icon: Palette },

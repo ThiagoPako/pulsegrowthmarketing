@@ -173,11 +173,11 @@ export type OwnerFilter = 'all' | 'ia' | 'equipe' | 'livre' | 'pronto_ia' | 'ia_
 
 export const OWNER_FILTER_OPTIONS: { value: OwnerFilter; label: string }[] = [
   { value: 'all', label: 'Todos os responsáveis' },
-  { value: 'ia', label: '🤖 Com agente de IA' },
+  { value: 'ia', label: '⚙️ Com agente' },
   { value: 'equipe', label: '👤 Com a equipe' },
   { value: 'livre', label: '⏳ Sem responsável' },
-  { value: 'pronto_ia', label: '✅ Prontos para a IA' },
-  { value: 'ia_parada', label: '⏸ Agente sem sinal' },
+  { value: 'pronto_ia', label: '✅ Prontos para a fila' },
+  { value: 'ia_parada', label: '⏸ Parados sem sinal' },
 ];
 
 export function matchesOwnerFilter(

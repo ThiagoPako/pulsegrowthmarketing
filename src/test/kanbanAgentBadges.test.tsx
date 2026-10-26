@@ -43,7 +43,7 @@ describe('AgentReviewBadge', () => {
 
   it('parecer de ajustes mostra o que mudar e quem revisou', () => {
     render(<AgentReviewBadge task={{ kanban_column: 'pre_revisao', agent_review_verdict: 'ajustes', agent_review_notes: '00:08 título antes da fala', agent_review_by: 'uriel' }} users={users} />);
-    expect(screen.getByText(/Parecer IA: ajustes · Uriel/)).toBeInTheDocument();
+    expect(screen.getByText(/Parecer: ajustes · Uriel/)).toBeInTheDocument();
     expect(screen.getByText('00:08 título antes da fala')).toBeInTheDocument();
   });
 
@@ -56,14 +56,14 @@ describe('AgentReviewBadge', () => {
 describe('AgentReadinessBadge', () => {
   const base = { kanban_column: 'edicao', content_type: 'reels', client_id: 'c', drive_link: 'https://d', script_id: 's', editing_deadline: '2026-11-01T00:00:00Z' };
 
-  it('pronto para a IA', () => {
+  it('pronto para a fila', () => {
     render(<AgentReadinessBadge task={base} agentIds={agents} />);
-    expect(screen.getByText('🤖 Pronto p/ IA')).toBeInTheDocument();
+    expect(screen.getByText('Pronto p/ fila')).toBeInTheDocument();
   });
 
   it('bloqueado mostra só o obrigatório', () => {
     render(<AgentReadinessBadge task={{ ...base, drive_link: null, script_id: null }} agentIds={agents} />);
-    expect(screen.getByText('🤖 IA não pega: falta brutos')).toBeInTheDocument();
+    expect(screen.getByText('Fila: falta brutos')).toBeInTheDocument();
   });
 
   it('detalhado lista cada item', () => {

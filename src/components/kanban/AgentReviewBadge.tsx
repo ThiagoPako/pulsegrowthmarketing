@@ -17,7 +17,7 @@ export default function AgentReviewBadge({ task, users }: Props) {
   if (!review) {
     return (
       <div className="flex items-center gap-1.5 px-3 py-1 bg-purple-500/90">
-        <span className="text-[9px] font-bold text-white uppercase tracking-widest">🤖 Análise · aguardando parecer</span>
+        <span className="text-[9px] font-bold text-white uppercase tracking-widest">Análise · aguardando parecer</span>
       </div>
     );
   }
@@ -26,14 +26,14 @@ export default function AgentReviewBadge({ task, users }: Props) {
   if (review.verdict === 'ok') {
     return (
       <div className="px-3 py-1 bg-emerald-600" title={review.notes || undefined}>
-        <span className="text-[9px] font-bold text-white uppercase tracking-widest">✅ Parecer IA: ok{who}</span>
+        <span className="text-[9px] font-bold text-white uppercase tracking-widest">✅ Parecer: ok{who}</span>
         {review.notes && <p className="text-[9px] text-white/90 leading-snug line-clamp-2">{review.notes}</p>}
       </div>
     );
   }
   return (
     <div className="px-3 py-1 bg-amber-600" title={review.notes || undefined}>
-      <span className="text-[9px] font-bold text-white uppercase tracking-widest">⚠ Parecer IA: ajustes{who}</span>
+      <span className="text-[9px] font-bold text-white uppercase tracking-widest">⚠ Parecer: ajustes{who}</span>
       {review.notes && <p className="text-[9px] text-white/95 leading-snug line-clamp-3 whitespace-pre-line">{review.notes}</p>}
     </div>
   );

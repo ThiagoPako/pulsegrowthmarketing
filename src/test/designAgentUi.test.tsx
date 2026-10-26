@@ -24,15 +24,15 @@ describe('selo de agente no card de arte', () => {
     expect(isDesignAgentWorking({ kanban_column: 'ajustes', assigned_to: 'a1', agent_step: 'x', agent_heartbeat_at: old })).toBe(false);
   });
 
-  it('na Análise IA mostra quem fez; sem agente não mostra nada', () => {
+  it('na Pré-análise mostra quem fez; sem agente não mostra nada', () => {
     const { container, rerender } = render(<DesignAgentBadge task={{ kanban_column: 'analise_ia', designed_by: 'a1' }} agents={agents} />);
-    expect(screen.getByText('Análise IA')).toBeInTheDocument();
+    expect(screen.getByText('Pré-análise')).toBeInTheDocument();
     expect(screen.getByText(/feita por Íris/)).toBeInTheDocument();
     rerender(<DesignAgentBadge task={{ kanban_column: 'executando', assigned_to: 'humana' }} agents={agents} />);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('filtro IA: feita por agente, com agente ou na Análise IA', () => {
+  it('filtro "Com agente": feita por agente, com agente ou na Pré-análise', () => {
     const ids = new Set(['a1']);
     expect(isAgentDesignTask({ kanban_column: 'em_analise', designed_by: 'a1', assigned_to: null }, ids)).toBe(true);
     expect(isAgentDesignTask({ kanban_column: 'analise_ia', designed_by: null, assigned_to: null }, ids)).toBe(true);

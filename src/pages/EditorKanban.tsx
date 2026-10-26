@@ -24,7 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
-  Check, Eye, Search, Scissors, Send, Link2, Flag, X, Rocket, Lightbulb, Layers
+  Check, Eye, Search, Scissors, Send, Link2, Flag, X, Rocket, Lightbulb, Layers, ScanEye
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -48,7 +48,7 @@ const CONTENT_TYPES = [
 
 const EDITOR_COLUMNS = [
   { id: 'edicao', label: 'Para Editar', bg: '#3498db', icon: '🎬' },
-  { id: 'pre_revisao', label: 'Análise', bg: '#9b59b6', icon: '🤖' },
+  { id: 'pre_revisao', label: 'Análise', bg: '#9b59b6', icon: '🔍' },
   { id: 'revisao', label: 'Em Revisão', bg: '#1abc9c', icon: '👁' },
   { id: 'alteracao', label: 'Alteração', bg: '#f1c40f', icon: '✏️' },
   // Mesmo nome do Kanban de Conteúdo (antes "Concluído"): estar aqui é ter sido enviado ao cliente
@@ -201,7 +201,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
           )}
           {task.kanban_column === 'pre_revisao' && (
             <Badge className="text-[9px] bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/30 gap-0.5">
-              🤖 Análise
+              <ScanEye size={9} /> Análise
             </Badge>
           )}
           {task.kanban_column === 'revisao' && (
@@ -314,7 +314,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
             <UserAvatar user={{ name: editor.name || 'Editor', avatarUrl: editor.avatarUrl }} size="sm" />
             <div className="min-w-0">
               <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-medium">
-                🎬 Editado por{agentIds.has(editor.id) ? ' · 🤖 IA' : ''}
+                🎬 Editado por
               </p>
               <p className="text-xs font-bold text-foreground truncate">{editor.name || 'Editor'}</p>
             </div>
@@ -323,16 +323,16 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
 
         {/* Deadlines per column */}
         {task.kanban_column === 'edicao' && task.editing_deadline && (
-          <DeadlineBadge deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} totalHours={48} />
+          <DeadlineBadge showAudit={false} deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} totalHours={48} />
         )}
         {task.kanban_column === 'revisao' && task.review_deadline && (
-          <DeadlineBadge deadline={task.review_deadline} label="Revisão" startedAt={task.approval_sent_at} totalHours={24} />
+          <DeadlineBadge showAudit={false} deadline={task.review_deadline} label="Revisão" startedAt={task.approval_sent_at} totalHours={24} />
         )}
         {task.kanban_column === 'alteracao' && task.alteration_deadline && !task.immediate_alteration && (
-          <DeadlineBadge deadline={task.alteration_deadline} label="Alteração" startedAt={task.editing_started_at} totalHours={24} />
+          <DeadlineBadge showAudit={false} deadline={task.alteration_deadline} label="Alteração" startedAt={task.editing_started_at} totalHours={24} />
         )}
         {task.kanban_column === 'envio' && task.approval_deadline && (
-          <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" startedAt={task.approval_sent_at} totalHours={24} />
+          <DeadlineBadge showAudit={false} deadline={task.approval_deadline} label="Aprovação" startedAt={task.approval_sent_at} totalHours={24} />
         )}
 
         {/* Animated editor claim flag */}
@@ -574,7 +574,7 @@ export default function EditorKanban() {
       title: 'Liberar este card?',
       description: task.kanban_column === 'alteracao'
         ? 'A alteração sai das suas mãos e o timer zera. Ela continua sendo sua (editor do vídeo) e volta para a sua fila.'
-        : 'O card volta para a fila de edição, livre para outro editor ou um agente de IA pegar.',
+        : 'O card volta para a fila de edição, livre para outro editor pegar.',
       confirmLabel: 'Liberar card',
       onConfirm: () => doUnclaimTask(task),
     });
@@ -665,7 +665,7 @@ export default function EditorKanban() {
     const work = agentWorkState(draggedTask, { agentIds });
     if (work?.state === 'working') {
       const name = (users.find(u => u.id === draggedTask.assigned_to)?.name || 'Um agente').trim().split(/\s+/)[0];
-      toast.error(`🤖 ${name} está trabalhando neste card (${work.step}). Espere a entrega ou peça à chefe para liberar (pulse liberar).`);
+      toast.error(`${name} está trabalhando neste card (${work.step}). Espere a entrega ou peça à chefe para liberar (pulse liberar).`);
       setDraggedTask(null);
       return;
     }
@@ -1073,17 +1073,7 @@ export default function EditorKanban() {
                   onChange={e => setVideoLinkValue(e.target.value)}
                   className="mt-1"
                 />
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Este link será usado pela equipe de social media para revisar e enviar ao cliente
-                </p>
               </div>
-              {sendToReviewAfterLink && (
-                <div className="p-2 rounded-md bg-primary/10 border border-primary/20">
-                  <p className="text-xs text-primary font-medium">
-                    ✨ Após salvar, o vídeo será enviado automaticamente para revisão
-                  </p>
-                </div>
-              )}
             </div>
           )}
           <DialogFooter>

@@ -1141,7 +1141,7 @@ export default function EditorDashboard() {
                 <motion.div key={task.id} whileTap={{ scale: 0.97 }}
                   onClick={() => {
                     if (work?.state === 'working') {
-                      toast.info(`🤖 ${agentName} está com este card (${work.step}). Ele entrega pela fila; acompanhe pelo Kanban.`);
+                      toast.info(`${agentName} está com este card (${work.step}) e entrega pela fila.`);
                       return;
                     }
                     setActiveEditTask(task); setShowUpload(false); setShowScript(false); setVideoLink(task.edited_video_link || '');
@@ -1155,7 +1155,7 @@ export default function EditorDashboard() {
                       {work && (
                         <span className={`ml-1 text-[9px] font-bold ${work.state === 'working' ? 'text-indigo-600 dark:text-indigo-300' : 'text-slate-500'}`}>
                           {work.state === 'working'
-                            ? `🤖 ${agentName} · ${work.step}`
+                            ? `✏️ ${agentName} · ${work.step}`
                             : `⏸ ${agentName} sem sinal${work.minutes !== null ? ` há ${formatSince(work.minutes)}` : ''}`}
                         </span>
                       )}

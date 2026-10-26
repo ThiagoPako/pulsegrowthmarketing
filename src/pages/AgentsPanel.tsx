@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { Bot, Pause, Play, Loader2, AlertTriangle, KeyRound, Clock, CheckCircle2, Inbox, Camera, Palette, GraduationCap } from 'lucide-react';
+import { Cpu, Pause, Play, Loader2, AlertTriangle, KeyRound, Clock, CheckCircle2, Inbox, Camera, Palette, GraduationCap } from 'lucide-react';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
 import { uploadFileToVps } from '@/services/vpsApi';
 import { Button } from '@/components/ui/button';
@@ -212,8 +212,8 @@ export default function AgentsPanel() {
     <div className="max-w-5xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Bot className="text-primary" />
-          <h1 className="text-2xl font-display font-bold">Agentes de IA</h1>
+          <Cpu className="text-primary" />
+          <h1 className="text-2xl font-display font-bold">Agentes</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" asChild>
@@ -355,11 +355,11 @@ export default function AgentsPanel() {
                       <span className="flex items-center gap-1"><Palette size={12} /> {designInfo.delivered_today} arte(s) entregue(s) hoje</span>
                       <span>{designInfo.delivered_week} nos últimos 7 dias</span>
                       <span>
-                        Análise IA (30 dias): {designInfo.approved_30d} de {designInfo.reviews_30d} aprovadas · {designInfo.errors_30d} erro(s) apontado(s)
+                        Pré-análise (30 dias): {designInfo.approved_30d} de {designInfo.reviews_30d} aprovadas · {designInfo.errors_30d} erro(s) apontado(s)
                       </span>
                     </>
                   )}
-                  {designInfo.role === 'revisor_arte' && <span className="flex items-center gap-1"><Palette size={12} /> Revisa as artes na coluna Análise IA</span>}
+                  {designInfo.role === 'revisor_arte' && <span className="flex items-center gap-1"><Palette size={12} /> Revisa as artes na coluna Pré-análise</span>}
                 </div>
               ) : (
                 <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
@@ -383,7 +383,7 @@ export default function AgentsPanel() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {[
               { label: 'Artes esperando (sem dono)', value: design.queue.waiting },
-              { label: 'Na Análise IA', value: design.queue.analise_ia },
+              { label: 'Na Pré-análise', value: design.queue.analise_ia },
               { label: 'Ajustes de artes dos agentes', value: design.queue.agent_adjustments },
             ].map(({ label, value }) => (
               <div key={label} className="rounded-lg border border-border p-3">
@@ -399,12 +399,12 @@ export default function AgentsPanel() {
             </h3>
             {design.learning.by_category.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                {design.learning.reviews ? `${design.learning.reviews} parecer(es), nenhum erro apontado.` : 'Nenhum parecer da Análise IA ainda.'}
+                {design.learning.reviews ? `${design.learning.reviews} parecer(es), nenhum erro apontado.` : 'Nenhum parecer da Pré-análise ainda.'}
               </p>
             ) : (
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  {design.learning.reviews} parecer(es) da Análise IA: {design.learning.approved} aprovado(s), {design.learning.reviews - design.learning.approved} com ajustes.
+                  {design.learning.reviews} parecer(es) da Pré-análise: {design.learning.approved} aprovado(s), {design.learning.reviews - design.learning.approved} com ajustes.
                 </p>
                 <div className="space-y-1.5">
                   {design.learning.by_category.map((c) => {

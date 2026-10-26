@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Bot, Copy, KeyRound, Loader2, Trash2 } from 'lucide-react';
+import { Copy, Cpu, KeyRound, Loader2, Trash2 } from 'lucide-react';
 
 interface AgentKey {
   id: string;
@@ -123,12 +123,12 @@ export default function AgentKeysCard() {
   return (
     <div className="glass-card p-6 space-y-5">
       <div className="flex items-center gap-2 text-primary">
-        <Bot size={18} />
-        <h2 className="text-base font-semibold">Agentes de IA (edição e design)</h2>
+        <Cpu size={18} />
+        <h2 className="text-base font-semibold">Agentes (edição e design)</h2>
       </div>
       <p className="text-sm text-muted-foreground">
-        Gere uma chave para cada membro que trabalha pelo Claude. Editores pegam vídeos da fila de edição; designers
-        pegam artes do Kanban de Design e entregam na Análise IA; a revisão de artes confere essas entregas. Cada um
+        Gere uma chave para cada membro que trabalha como agente. Editores pegam vídeos da fila de edição; designers
+        pegam artes do Kanban de Design e entregam na Pré-análise; a revisão de artes confere essas entregas. Cada um
         aparece com o próprio nome no histórico e nos relatórios.
       </p>
 

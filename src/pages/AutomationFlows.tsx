@@ -346,7 +346,7 @@ function NodeConfigPanel({
                 >
                   <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">🤖 Automático (menor carga)</SelectItem>
+                    <SelectItem value="auto">⚙️ Automático (menor carga)</SelectItem>
                     <SelectItem value="round_robin">🔄 Rodízio</SelectItem>
                     {teamMembers.map(m => (
                       <SelectItem key={m.id} value={m.id}>{m.name} ({m.role})</SelectItem>

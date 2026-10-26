@@ -103,17 +103,18 @@ describe('Kanban de Conteúdo — ações por coluna e agentes', () => {
     await screen.findByText('Criação de Conteúdo', undefined, { timeout: 10_000 });
     await screen.findByText('Na analise', undefined, { timeout: 10_000 });
 
-    // Edição: livre e pronta para a IA; com agente trabalhando sem setas
-    expect(within(cardOf('free')).getByText('🤖 Pronto p/ IA')).toBeInTheDocument();
+    // Edição: livre e pronta para a fila; com agente trabalhando sem setas
+    expect(within(cardOf('free')).getByText('Pronto p/ fila')).toBeInTheDocument();
     expect(await within(cardOf('agent')).findByText(/Editando · Beatriz/)).toBeInTheDocument();
     expect(within(cardOf('agent')).queryByTitle(/Mover para/)).toBeNull();
     expect(within(cardOf('free')).getByTitle('Mover para Revisão')).toBeInTheDocument();
 
     // Análise: parecer e Liberar/Devolver (admin)
     const analise = cardOf('analise');
-    expect(within(analise).getByText(/Parecer IA: ajustes · Uriel/)).toBeInTheDocument();
+    expect(within(analise).getByText(/Parecer: ajustes · Uriel/)).toBeInTheDocument();
     expect(within(analise).getByText('Liberar p/ Revisão')).toBeInTheDocument();
-    expect(within(analise).getByText(/Editado por · 🤖 IA/)).toBeInTheDocument();
+    expect(within(analise).getByText('Editado por')).toBeInTheDocument();
+    expect(within(analise).queryAllByText(/🤖|\bIA\b/)).toHaveLength(0);
 
     // Revisão: Aprovar e enviar / Ajustes, sem setas (a seta antiga ia para Alteração sem ajuste)
     const revisao = cardOf('revisao');

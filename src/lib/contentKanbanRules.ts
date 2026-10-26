@@ -19,7 +19,7 @@ export function canReleaseAnalysis(profile: Profile | null | undefined): boolean
 }
 
 export const SEND_TO_CLIENT_FORBIDDEN_MSG = 'Só a gestão (admin, social media ou gestor de projetos) manda o vídeo para "Enviado p/ Cliente".';
-export const ANALYSIS_FORBIDDEN_MSG = 'Liberar ou devolver da Análise é do admin e da social media (ou da chefe IA).';
+export const ANALYSIS_FORBIDDEN_MSG = 'Liberar ou devolver da Análise é do admin e da social media (ou da chefe).';
 export const EDITING_NEEDS_FOOTAGE_MSG = 'O card precisa do link dos brutos (Drive) para entrar em Edição.';
 
 /** Para entrar em Edição só o link dos brutos é obrigatório (responsável não): o card entra livre na fila. */

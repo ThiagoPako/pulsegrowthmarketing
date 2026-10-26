@@ -700,7 +700,7 @@ export default function Clients() {
     const driveLink = (form.driveLink || '').trim();
     const driveRequired = !editing || !(editing.driveLink || '').trim();
     if (driveRequired && !driveLink) {
-      toast.error('Informe o link da pasta do Drive do cliente (Acessos e Links). A IA de design busca ali identidade, logos e fotos.');
+      toast.error('Informe o link da pasta do Drive do cliente (Acessos e Links). O design busca ali identidade, logos e fotos.');
       return;
     }
     if (driveLink && !/^https?:\/\//i.test(driveLink)) {
@@ -1307,7 +1307,7 @@ export default function Clients() {
           </Label>
           <Input value={form.driveLink || ''} onChange={e => setForm({ ...form, driveLink: e.target.value })} placeholder="https://drive.google.com/drive/folders/..." />
           <p className="text-[11px] text-muted-foreground">
-            Obrigatória. Os agentes de IA (e a equipe de design) buscam nesta pasta a identidade visual, os logos e as fotos do cliente.
+            Obrigatória. A equipe de design e os agentes buscam nesta pasta a identidade visual, os logos e as fotos do cliente.
             Use a pasta principal do cliente no Drive da Pulse.
           </p>
         </div>
@@ -2676,7 +2676,7 @@ export default function Clients() {
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm text-amber-800 dark:text-amber-200">
             <FolderOpen size={16} className="shrink-0" />
             <span className="flex-1 min-w-[200px]">
-              <b>{withoutDrive.length}</b> cliente{withoutDrive.length > 1 ? 's' : ''} sem a pasta do Drive. A IA de design busca ali identidade, logos e fotos — edite o cliente e cole o link em "Acessos e Links".
+              <b>{withoutDrive.length}</b> cliente{withoutDrive.length > 1 ? 's' : ''} sem a pasta do Drive. O design busca ali identidade, logos e fotos — edite o cliente e cole o link em "Acessos e Links".
             </span>
             <Button size="sm" variant={onlyWithoutDrive ? 'default' : 'outline'} className="h-8 text-xs" onClick={() => setOnlyWithoutDrive(v => !v)}>
               {onlyWithoutDrive ? 'Mostrar todos' : 'Mostrar só esses'}
@@ -2728,7 +2728,7 @@ export default function Clients() {
                     {!(c.driveLink || '').trim() && (
                       <Badge
                         className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 cursor-pointer"
-                        title="Sem pasta do Drive: a IA de design não acha identidade, logos e fotos. Edite o cliente e cole o link."
+                        title="Sem pasta do Drive: o design não acha identidade, logos e fotos. Edite o cliente e cole o link."
                       >
                         📁 Sem pasta do Drive
                       </Badge>

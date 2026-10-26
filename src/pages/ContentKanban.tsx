@@ -1115,7 +1115,7 @@ export default function ContentKanban() {
   const handleReleaseAnalysis = (task: ContentTask) => {
     const review = agentReviewOf(task);
     void handleMoveToColumn(task, 'revisao',
-      `Liberado da Análise por ${profile?.name || 'equipe'}${review ? ` (parecer IA: ${review.verdict})` : ' (sem parecer da IA)'}`);
+      `Liberado da Análise por ${profile?.name || 'equipe'}${review ? ` (parecer: ${review.verdict})` : ' (sem parecer)'}`);
   };
 
   // Card com agente dando sinal (menos de 30 min): não se move pela tela. Parado, pode (destravar).
@@ -1123,7 +1123,7 @@ export default function ContentKanban() {
     const work = agentWorkState(task, { agentIds });
     if (work?.state !== 'working') return null;
     const name = (users.find(u => u.id === task.assigned_to)?.name || 'Um agente').trim().split(/\s+/)[0];
-    return `🤖 ${name} está trabalhando neste card (${work.step}). Espere a entrega ou peça à chefe para liberar (pulse liberar).`;
+    return `${name} está trabalhando neste card (${work.step}). Espere a entrega ou peça à chefe para liberar (pulse liberar).`;
   };
 
   // Seta do card para papéis sem restrição (FLOW_ARROWS). Com um agente trabalhando no card não
@@ -1371,18 +1371,6 @@ export default function ContentKanban() {
                   />
                 </motion.div>
 
-                {/* Motivo / explicação da coluna */}
-                {col.id === 'captacao' && (
-                  <div className="px-3 py-2 bg-orange-500/10 border-b border-orange-500/20 text-[10.5px] text-orange-700 dark:text-orange-300 leading-snug">
-                    🎬 Cards em gravação. Quando concluída sem o link do Drive, o cartão fica destacado em <strong>amarelo pulsante</strong> aguardando o upload.
-                  </div>
-                )}
-                {col.id === 'pre_revisao' && (
-                  <div className="px-3 py-2 bg-purple-500/10 border-b border-purple-500/20 text-[10.5px] text-purple-700 dark:text-purple-300 leading-snug">
-                    🤖 Entregas dos agentes de IA. O revisor IA dá o parecer e a chefe libera para a <strong>Revisão</strong> ou devolve para <strong>Alteração</strong>. A equipe só é avisada quando sai daqui.
-                  </div>
-                )}
-
                 {/* Cards */}
                 <div className="flex-1 px-2 py-2 overflow-y-auto max-h-[calc(100vh-18rem)]">
                   <AnimatePresence mode="popLayout">
@@ -1498,9 +1486,7 @@ export default function ContentKanban() {
                           className="text-center py-10 text-xs text-muted-foreground/50 italic flex flex-col items-center gap-3"
                         >
                           <MiniRocket size={24} />
-                          <span>{col.id === 'alteracao' ? 'Etapa para a alteração do conteúdo' :
-                           col.id === 'revisao' ? 'Etapa para a revisão do conteúdo criado' :
-                           'Arraste cartões para cá'}</span>
+                          <span>Arraste cartões para cá</span>
                         </motion.div>
                       )}
                     </div>
@@ -1949,16 +1935,6 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
                     {recordingStatus ?? 'desconhecido'}
                   </code>
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-snug">
-                  {recordingStatus === 'organizando_material'
-                    ? 'O videomaker finalizou a captação e está organizando o material. Falta anexar o link do Drive para mover automaticamente para Edição.'
-                    : recordingStatus === 'concluida'
-                    ? 'A gravação está marcada como concluída, mas o link do Drive ainda não foi adicionado. Assim que o link for anexado, o card avança para Edição.'
-                    : 'Aguardando o videomaker enviar o material desta gravação. Adicione o link do Drive para liberar a etapa de Edição.'}
-                </p>
-                <p className="text-[10px] text-muted-foreground/80 italic pt-1 border-t border-border/40">
-                  Próximo passo: anexar <strong>link do Drive</strong> → card vai para <strong>Edição</strong>.
-                </p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -2040,16 +2016,16 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
             )}
             {/* Deadline badges */}
             {task.kanban_column === 'edicao' && task.editing_deadline && (
-              <DeadlineBadge deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} totalHours={48} />
+              <DeadlineBadge showAudit={false} deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} totalHours={48} />
             )}
             {task.kanban_column === 'revisao' && task.review_deadline && (
-              <DeadlineBadge deadline={task.review_deadline} label="Revisão" totalHours={24} />
+              <DeadlineBadge showAudit={false} deadline={task.review_deadline} label="Revisão" totalHours={24} />
             )}
             {task.kanban_column === 'alteracao' && task.alteration_deadline && !task.immediate_alteration && (
-              <DeadlineBadge deadline={task.alteration_deadline} label="Alteração" totalHours={24} />
+              <DeadlineBadge showAudit={false} deadline={task.alteration_deadline} label="Alteração" totalHours={24} />
             )}
             {task.kanban_column === 'envio' && task.approval_deadline && (
-              <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" startedAt={task.approval_sent_at} totalHours={24} />
+              <DeadlineBadge showAudit={false} deadline={task.approval_deadline} label="Aprovação" startedAt={task.approval_sent_at} totalHours={24} />
             )}
             {/* Fila dos agentes: pronto para a IA ou o que falta */}
             <AgentReadinessBadge task={task} agentIds={agentIds} />
@@ -2104,7 +2080,7 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
               <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" />
               <div className="min-w-0">
                 <span className="text-[8.5px] font-bold uppercase tracking-wider text-primary/60 block leading-none">
-                  {responsibleLabel}{assignedUser.id && agentIds?.has(assignedUser.id) ? ' · 🤖 IA' : ''}
+                  {responsibleLabel}
                 </span>
                 <span className="text-[10px] text-muted-foreground truncate block">{assignedUser.name}</span>
               </div>
@@ -2158,7 +2134,6 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
               {onApprove && (
                 <motion.button whileTap={{ scale: 0.9 }}
                   onClick={e => { e.stopPropagation(); onApprove(); }}
-                  title="Aprova e envia ao cliente: o vídeo aparece no portal e o cliente é avisado pelo WhatsApp"
                   className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-green-500/10 hover:bg-green-500/20 border border-green-500/25 text-green-600 text-[9px] font-bold">
                   <ThumbsUp size={10} /> Aprovar e enviar
                 </motion.button>
@@ -2179,7 +2154,6 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
               {onReleaseAnalysis && (
                 <motion.button whileTap={{ scale: 0.9 }}
                   onClick={e => { e.stopPropagation(); onReleaseAnalysis(); }}
-                  title="Vai para a Revisão: a equipe é avisada e o vídeo entra no portal em revisão interna"
                   className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/25 text-teal-600 text-[9px] font-bold">
                   <CheckCircle2 size={10} /> Liberar p/ Revisão
                 </motion.button>
@@ -2187,7 +2161,6 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
               {onReturnAnalysis && (
                 <motion.button whileTap={{ scale: 0.9 }}
                   onClick={e => { e.stopPropagation(); onReturnAnalysis(); }}
-                  title="Volta para Alteração do mesmo editor, com o que mudar"
                   className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-600 text-[9px] font-bold">
                   <ArrowLeft size={10} /> Devolver
                 </motion.button>

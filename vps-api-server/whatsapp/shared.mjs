@@ -2,6 +2,9 @@
 // Os dois só conversam pelo banco: a API grava pedidos (conexões, fila de envio) e lê o que chegou;
 // o processo do WhatsApp mantém as conexões abertas, envia a fila e grava as mensagens recebidas.
 
+import os from 'node:os';
+import path from 'node:path';
+
 // Funções que cada conexão pode assumir. Cada envio do sistema pertence a uma delas.
 export const WA_PURPOSES = {
   aprovacao: 'Aprovação de vídeos e artes',
@@ -11,7 +14,15 @@ export const WA_PURPOSES = {
   equipe: 'Equipe e parceiros (tarefas do dia)',
   clube: 'Clube de Descontos',
   geral: 'Mensagens avulsas e o que não tiver conexão própria',
+  // número do PULSE: recebe os comandos dos números autorizados (vps-api-server/assistant/) e responde por ele
+  assistente: 'Assistente PULSE (comandos da equipe)',
 };
+
+// Pasta privada do WhatsApp (fora de /uploads): áudios recebidos pelo número do PULSE até a transcrição.
+// O processo do WhatsApp grava e a API lê, então os dois usam a mesma regra (mesmo usuário na VPS).
+export function waPrivateDir() {
+  return path.resolve(process.env.WA_PRIVATE_DIR || path.join(os.homedir(), 'pulse-wa-private'));
+}
 
 // Envios antigos que não dizem a função: deduz pelo tipo do disparo
 const TRIGGER_PURPOSE = {
@@ -147,6 +158,16 @@ export function ensureWhatsAppSchema(pool) {
       await pool.query(`ALTER TABLE wa_inbound ADD COLUMN IF NOT EXISTS group_jid TEXT`);
       // dois números da agência no mesmo grupo recebem a mesma mensagem: guarda uma vez só
       await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_wa_inbound_grupo ON wa_inbound (group_jid, wa_id) WHERE group_jid IS NOT NULL`);
+      // Assistente PULSE: o privado do número com a função "assistente" é comando da equipe (route = 'assistente'),
+      // tratado só pelo assistente; áudio vem baixado (media_path, pasta privada) e vira texto (transcript).
+      // monitored_at: o monitor de grupos já leu a mensagem (independente do handled_at das respostas).
+      await pool.query(`ALTER TABLE wa_inbound ADD COLUMN IF NOT EXISTS route TEXT`);
+      await pool.query(`ALTER TABLE wa_inbound ADD COLUMN IF NOT EXISTS media_type TEXT`);
+      await pool.query(`ALTER TABLE wa_inbound ADD COLUMN IF NOT EXISTS media_path TEXT`);
+      await pool.query(`ALTER TABLE wa_inbound ADD COLUMN IF NOT EXISTS transcript TEXT`);
+      await pool.query(`ALTER TABLE wa_inbound ADD COLUMN IF NOT EXISTS monitored_at TIMESTAMPTZ`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_wa_inbound_assistente ON wa_inbound (received_at) WHERE route = 'assistente' AND handled_at IS NULL`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_wa_inbound_monitor ON wa_inbound (group_jid, received_at) WHERE group_jid IS NOT NULL AND monitored_at IS NULL`);
       // vídeo mandado no privado (cliente não conseguiu abrir o portal): espera "APROVADO" ou o ajuste
       await pool.query(`
         CREATE TABLE IF NOT EXISTS wa_approval_requests (

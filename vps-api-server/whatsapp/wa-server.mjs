@@ -27,6 +27,7 @@ import makeWASocket, {
   Browsers,
   BufferJSON,
   DisconnectReason,
+  downloadMediaMessage,
   fetchLatestBaileysVersion,
   initAuthCreds,
   isJidBroadcast,
@@ -35,7 +36,8 @@ import makeWASocket, {
   normalizeMessageContent,
   proto,
 } from 'baileys';
-import { ensureWhatsAppSchema, isGroupTarget } from './shared.mjs';
+import fs from 'node:fs/promises';
+import { ensureWhatsAppSchema, isGroupTarget, waPrivateDir } from './shared.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
@@ -68,6 +70,8 @@ const QR_TIMEOUT_MS = 3 * 60 * 1000;
 const MEDIA_MAX_BYTES = 32 * 1024 * 1024;
 const VIDEO_MAX_BYTES = 100 * 1024 * 1024; // vídeo vai por streaming (não carrega o arquivo inteiro na memória)
 const GROUPS_REFRESH_MS = 30 * 60 * 1000;
+const VOICE_MAX_SECONDS = 300; // comando por áudio no número do PULSE: até 5 min
+const VOICE_MAX_BYTES = 8 * 1024 * 1024;
 
 // ── Criptografia da sessão (AES-256-GCM) ───────────────────────
 const secret = process.env.WA_ENCRYPTION_KEY || process.env.JWT_SECRET;
@@ -448,7 +452,10 @@ class Connection {
       const text = content.conversation || content.extendedTextMessage?.text || content.imageMessage?.caption
         || content.videoMessage?.caption || content.buttonsResponseMessage?.selectedDisplayText
         || content.listResponseMessage?.title || content.templateButtonReplyMessage?.selectedDisplayText || '';
-      if (!text) continue;
+      // privado do número do PULSE: comando da equipe (texto ou áudio), tratado só pelo assistente da API
+      const assistantChat = !isGroup && this.purposes.includes('assistente');
+      const voice = assistantChat && !text ? content.audioMessage : null;
+      if (!text && !voice) continue;
       // quem escreveu: no privado é o próprio chat; no grupo é o participante
       const senderJid = isGroup ? (msg.key.participant || '') : jid;
       let phone = null;
@@ -463,12 +470,29 @@ class Connection {
       }
       // mensagem de outro número da própria agência (ex.: aviso no grupo) não é resposta de cliente
       if (phone && [...connections.values()].some((c) => c.phone && c.phone === phone)) continue;
+      // áudio: baixa para a pasta privada (sem caminho = não deu para baixar; o assistente pede por escrito)
+      const mediaPath = voice ? await this.saveVoice(sock, msg, voice).catch((e) => { log(this.name, 'áudio:', e.message); return null; }) : null;
       await pool.query(
-        `INSERT INTO wa_inbound (connection_id, wa_id, from_jid, phone, push_name, text, group_jid) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO wa_inbound (connection_id, wa_id, from_jid, phone, push_name, text, group_jid, route, media_type, media_path)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          ON CONFLICT DO NOTHING`,
-        [this.id, msg.key.id, senderJid || jid, phone, msg.pushName || null, text.slice(0, 4000), isGroup ? jid : null]
+        [this.id, msg.key.id, senderJid || jid, phone, msg.pushName || null, text.slice(0, 4000), isGroup ? jid : null,
+          assistantChat ? 'assistente' : null, voice ? 'audio' : null, mediaPath]
       );
     }
+  }
+
+  // mensagem de voz → arquivo .ogg na pasta privada (fora de /uploads); a API transcreve e apaga
+  async saveVoice(sock, msg, voice) {
+    if (Number(voice.seconds) > VOICE_MAX_SECONDS) throw new Error(`áudio de ${voice.seconds} s (máximo ${VOICE_MAX_SECONDS} s)`);
+    if (Number(voice.fileLength) > VOICE_MAX_BYTES) throw new Error('áudio grande demais');
+    const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: baileysLogger, reuploadRequest: sock.updateMediaMessage });
+    if (!buffer?.length || buffer.length > VOICE_MAX_BYTES) throw new Error('áudio vazio ou grande demais');
+    const dir = path.join(waPrivateDir(), 'audio');
+    await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+    const file = path.join(dir, `${this.id}-${String(msg.key.id).replace(/[^A-Za-z0-9_-]/g, '')}.ogg`);
+    await fs.writeFile(file, buffer, { mode: 0o600 });
+    return file;
   }
 
   // grupos em que este número está → wa_groups (a fila usa para mandar no grupo pelo número que está nele)

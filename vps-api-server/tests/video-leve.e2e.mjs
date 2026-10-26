@@ -296,10 +296,13 @@ ok('entrega do agente (/api/agent/tasks/:id/deliver) gera a versão leve; o banc
 
 // ── 6. Arquivo quebrado: falha uma vez e não tenta de novo ──
 const broken = await upload(src.broken, `content/${ids.client}/upload-quebrado`);
-await waitFor(() => logLines().some((l) => l.includes('falhou') && l.includes(broken.rel)), 'falha do arquivo quebrado');
+// Bytes aleatórios: o ffprobe às vezes recusa (falhou) e às vezes lê como formato sem vídeo (sem conversão).
+// Nos dois casos não há conversão, toca o original e não tenta de novo.
+const brokenDone = (l) => l.includes(broken.rel) && /falhou|sem conversão/.test(l);
+await waitFor(() => logLines().some(brokenDone), 'falha do arquivo quebrado');
 assert.equal((await playback(broken.url)).body.variant, 'original');
 await sleep(1500);
-assert.equal(logLines().filter((l) => l.includes(broken.rel) && /falhou|convertendo|na fila/.test(l) && !l.includes('upload)')).length, 1,
+assert.equal(logLines().filter((l) => l.includes(broken.rel) && /falhou|sem conversão|convertendo|na fila/.test(l) && !l.includes('upload)')).length, 1,
   'o arquivo que falhou não volta para a fila');
 assert.equal(fs.readdirSync(path.join(UPLOAD_ROOT, '.web-tmp')).length, 0, 'sem temporário largado');
 ok('conversão que falha fica registrada no log e não repete');

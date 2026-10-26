@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLang, tr } from '@/lib/i18n';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import {
-  createScheduledPost, fetchScheduledPosts, cancelScheduledPost, publishScheduledPostNow,
+  createScheduledPost, fetchScheduledPosts, cancelScheduledPost, publishScheduledPostNow, PublishDeferredError,
   fetchClientMediaLibrary, SCHEDULED_POST_STATUS_LABELS,
   type ClientMediaAsset, type ConnectedSocialAccount, type PostMediaItem, type ScheduledPost,
   type SocialPlatformTarget, type SocialPublishType,
@@ -226,6 +226,13 @@ export default function PostStudio() {
         try {
           await publishScheduledPostNow(postId);
         } catch (err) {
+          if (err instanceof PublishDeferredError) {
+            toast.info(err.message);
+            lastPostRef.current = null;
+            reset();
+            loadQueue();
+            return;
+          }
           // Timeout do proxy ou erro de rede: a publicação pode ter seguido no servidor.
           const current = (await fetchScheduledPosts({ client_id: clientId }).catch(() => [] as ScheduledPost[]))
             .find(p => p.id === postId);

@@ -33,7 +33,8 @@ import { recordPortalAccess } from './assistant/temperature.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
 import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOption } from './lib/portalSession.mjs';
 import { cleanupOldEditVersions } from './lib/versionCleanup.mjs';
-import { createWebVideo, captureVideoUploads, isWebVariantName, originalNamesForWebVariant, WEB_TMP_DIR } from './lib/webVideo.mjs';
+import { createWebVideo, captureVideoUploads, isDerivedVariantName, originalNamesForVariant, WEB_TMP_DIR } from './lib/webVideo.mjs';
+import { createInstagramVideo } from './lib/instagramVideo.mjs';
 import { buildProposalRevenueSchedule, stripRevenueMark } from './lib/proposalRevenues.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
@@ -1682,8 +1683,8 @@ function removeUploadFile(fileUrl) {
   for (const root of uploadRoots()) {
     const candidate = path.resolve(root, relative);
     if (!candidate.startsWith(`${root}${path.sep}`)) continue;
-    // a versão leve (<nome>.web.mp4) sai junto com o original
-    freed += webVideo.removeWebVariantOf(candidate);
+    // as cópias geradas (<nome>.web.mp4 e <nome>.ig.mp4) saem junto com o original
+    freed += webVideo.removeVariantsOf(candidate);
     try {
       if (!fs.existsSync(candidate)) continue;
       freed += fs.statSync(candidate).size;
@@ -9167,17 +9168,35 @@ async function notifySocialTeam(title, message) {
 // Posts em andamento neste processo (robô e "Publicar agora"): a recuperação não mexe neles.
 const SOCIAL_POSTS_IN_FLIGHT = new Set();
 
-/** Executa um post da fila. Nunca lança — grava resultado/erro na linha. */
-async function runScheduledPost(post) {
+/**
+ * Executa um post da fila. Nunca lança — grava resultado/erro na linha. Devolve { deferred, message }
+ * quando o vídeo ainda está virando a versão Instagram (o post continua 'agendado').
+ * manual: "Publicar agora" (a espera pelo vídeo conta a partir do clique).
+ */
+async function runScheduledPost(post, options = {}) {
   SOCIAL_POSTS_IN_FLIGHT.add(String(post.id));
   try {
-    await runScheduledPostNow(post);
+    return await runScheduledPostNow(post, options);
   } finally {
     SOCIAL_POSTS_IN_FLIGHT.delete(String(post.id));
   }
 }
 
-async function runScheduledPostNow(post) {
+const IG_VIDEO_DEFERRED_MESSAGE = 'Vídeo em preparação para o Instagram. A postagem sai em alguns minutos.';
+
+/** Vídeo ainda virando a .ig.mp4: volta para 'agendado' sem contar tentativa nem erro e sai num próximo ciclo. */
+async function deferScheduledPost(post, choice, { manual = false } = {}) {
+  igVideo.deferPost(post.id);
+  await pool.query(
+    `UPDATE scheduled_posts SET status='agendado', updated_at=now()${manual ? ', scheduled_at=now(), last_error=NULL' : ''}
+      WHERE id=$1 AND status='publicando'`,
+    [post.id]
+  );
+  console.log(`[video-instagram] post ${post.id} adiado: vídeo em preparação (${(choice.pending || []).join(', ')})`);
+  return { deferred: true, message: IG_VIDEO_DEFERRED_MESSAGE };
+}
+
+async function runScheduledPostNow(post, { manual = false } = {}) {
   let cancelReason = null;
   try {
     cancelReason = await getAutoPostCancelReason(post);
@@ -9221,12 +9240,32 @@ async function runScheduledPostNow(post) {
     return;
   }
 
+  // Vídeo no formato que a Meta pede (lib/instagramVideo.mjs): troca só a URL enviada à Meta (a .ig.mp4
+  // quando pronta; o original quando ele cumpre). O banco continua com o original.
+  let publishPost = post;
+  let mediaFallback = null;
+  if (targets.length) {
+    const media = postMediaList(post);
+    const choice = await igVideo.chooseMedia(media.map((m) => m.url), {
+      publishType: post.publish_type, scheduledAt: manual ? null : post.scheduled_at,
+    }).catch((err) => {
+      console.error('[video-instagram] escolha do vídeo falhou:', err?.message || err);
+      return null;
+    });
+    if (choice?.wait) return deferScheduledPost(post, choice, { manual });
+    if (choice?.changed) {
+      publishPost = { ...post, media_url: choice.urls[0], media_items: media.map((m, i) => ({ ...m, url: choice.urls[i] })) };
+    }
+    mediaFallback = choice?.fallback || null;
+    if (mediaFallback) console.warn(`[video-instagram] post ${post.id}: ${mediaFallback}`);
+  }
+
   const results = [];
   const errors = [];
   if (targets.length === 0) errors.push(`Nenhuma conta ${post.platform === 'both' ? '' : post.platform + ' '}conectada para este cliente.`);
   for (const account of targets) {
     try {
-      const r = await publishToClientAccount(account, post);
+      const r = await publishToClientAccount(account, publishPost);
       results.push({ platform: account.platform, account: account.account_name, id: r?.id || r?.post_id || null, raw: r });
       await pool.query(
         `INSERT INTO integration_logs (client_id, platform, action, status, message) VALUES ($1,$2,'auto_publish','success',$3)`,
@@ -9286,18 +9325,20 @@ async function runScheduledPostNow(post) {
     return;
   }
 
-  const retry = attempts < SOCIAL_POST_MAX_ATTEMPTS;
+  // Foi o original porque a versão Instagram não ficou pronta (ou não deu para fazer): erro na hora, com o motivo.
+  const retry = attempts < SOCIAL_POST_MAX_ATTEMPTS && !mediaFallback;
+  const lastError = mediaFallback ? `${mediaFallback} A publicação falhou: ${errors.join(' | ')}` : errors.join(' | ');
   await pool.query(
     `UPDATE scheduled_posts
        SET status=$2, attempts=$3, last_error=$4, result=$5,
            scheduled_at = CASE WHEN $2='agendado' THEN now() + interval '5 minutes' ELSE scheduled_at END,
            updated_at=now()
      WHERE id=$1`,
-    [post.id, retry ? 'agendado' : 'erro', attempts, errors.join(' | ').slice(0, 2000), JSON.stringify(results)]
+    [post.id, retry ? 'agendado' : 'erro', attempts, lastError.slice(0, 2000), JSON.stringify(results)]
   );
   if (!retry) {
     // Avisa a equipe de social media que a postagem falhou (com o nome do cliente, não o id)
-    await notifySocialTeam('⚠️ Postagem automática falhou', `${await getClientDisplayName(post.client_id)}: ${errors[0]}`);
+    await notifySocialTeam('⚠️ Postagem automática falhou', `${await getClientDisplayName(post.client_id)}: ${mediaFallback ? lastError : errors[0]}`);
   }
 }
 
@@ -9332,14 +9373,17 @@ async function processDueScheduledPosts() {
     } catch (err) {
       console.error('[social-posts] recuperação de posts travados falhou:', err.message);
     }
-    // Claim atômico: evita publicar duas vezes se houver mais de uma instância
+    // Claim atômico: evita publicar duas vezes se houver mais de uma instância.
+    // Post adiado pelo vídeo em preparação fica de fora por alguns segundos (não ocupa a vez dos outros).
     const { rows } = await pool.query(
       `UPDATE scheduled_posts SET status='publicando', updated_at=now()
        WHERE id IN (
          SELECT id FROM scheduled_posts
          WHERE status='agendado' AND scheduled_at <= now()
+           AND NOT (id::text = ANY($1::text[]))
          ORDER BY scheduled_at ASC LIMIT 5 FOR UPDATE SKIP LOCKED
-       ) RETURNING *`
+       ) RETURNING *`,
+      [igVideo.deferredPostIds()]
     );
     for (const post of rows) {
       try { await runScheduledPost(post); }
@@ -10087,6 +10131,9 @@ async function prepareScheduledPost(input = {}) {
   if (publish_type === 'carousel' && urls.length < 2) fail('Carrossel precisa de pelo menos 2 mídias.');
   if (publish_type === 'carousel' && urls.length > 10) fail('Carrossel aceita no máximo 10 mídias.');
   if (story_link && !/^https?:\/\//i.test(story_link)) fail('O link do story precisa começar com https://');
+  // Duração que a Meta aceita (ffprobe com cache; vídeos de /uploads): story até 60 s, reels de 3 s a 15 min
+  const durationProblem = await igVideo.durationProblem(urls, publish_type);
+  if (durationProblem) fail(durationProblem);
 
   const when = new Date(scheduled_at);
   if (!scheduled_at || Number.isNaN(when.getTime())) fail('scheduled_at inválido');
@@ -10104,6 +10151,8 @@ async function prepareScheduledPost(input = {}) {
     const detail = duplicated.map(([p, list]) => `${list.length} contas de ${p} (${list.map(a => a.username || a.account_name).join(', ')})`).join(' e ');
     fail(`O cliente tem ${detail}. Desconecte as que não são dele em Conexões Sociais antes de agendar.`);
   }
+  // A versão Instagram do vídeo começa logo depois do agendamento (a tarefa relê os posts em segundos)
+  igVideo.scanSoon();
 
   return {
     client_id, platform, publish_type, items, urls, caption, when,
@@ -10186,8 +10235,9 @@ app.post('/api/social-posts/:id/publish-now', async (req, res) => {
       [req.params.id]
     );
     if (!rows[0]) return res.status(400).json({ error: 'Post não está agendado nem com erro' });
-    await runScheduledPost({ ...rows[0], attempts: SOCIAL_POST_MAX_ATTEMPTS - 1 });
+    const outcome = await runScheduledPost({ ...rows[0], attempts: SOCIAL_POST_MAX_ATTEMPTS - 1 }, { manual: true });
     const { rows: fresh } = await pool.query(`SELECT * FROM scheduled_posts WHERE id=$1`, [req.params.id]);
+    if (outcome?.deferred) return res.json({ success: false, deferred: true, post: fresh[0], error: outcome.message });
     const ok = fresh[0]?.status === 'publicado';
     res.json({ success: ok, post: fresh[0], error: ok ? null : (fresh[0]?.last_error || 'Falha ao publicar') });
 
@@ -18067,9 +18117,9 @@ async function auditOrphanFiles({ minAgeDays = 7 } = {}) {
       }
       const rel = path.relative(root, full).split(path.sep).join('/');
       scanned += 1;
-      // A versão leve (<nome>.web.mp4) nunca é citada no banco: segue o original. Só conta como
-      // sem uso quando o original já não existe.
-      if (isWebVariantName(entry.name) && originalNamesForWebVariant(entry.name).some((n) => fs.existsSync(path.join(dir, n)))) continue;
+      // As cópias geradas (<nome>.web.mp4 e <nome>.ig.mp4) nunca são citadas no banco: seguem o
+      // original. Só contam como sem uso quando o original já não existe.
+      if (isDerivedVariantName(entry.name) && originalNamesForVariant(entry.name).some((n) => fs.existsSync(path.join(dir, n)))) continue;
       // Proteção tripla: caminho relativo, nome do arquivo citado em qualquer
       // lugar do banco e pasta de módulo protegida em qualquer profundidade.
       if (referenced.has(rel)) continue;
@@ -18178,7 +18228,7 @@ app.post('/api/portal-videos/delete-orphans', async (req, res) => {
       try {
         fs.unlinkSync(target.fullPath);
         deletedFiles += 1;
-        freedBytes += target.size + webVideo.removeWebVariantOf(target.fullPath);
+        freedBytes += target.size + webVideo.removeVariantsOf(target.fullPath);
         console.log('[orphan-delete] removido:', target.path);
       } catch (error) {
         console.warn('[orphan-delete] falha ao remover:', target.fullPath, error?.message || error);
@@ -18908,7 +18958,7 @@ app.delete('/api/upload', express.json(), async (req, res) => {
       if (!candidate.startsWith(`${root}${path.sep}`)) continue;
       if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) continue;
       fs.unlinkSync(candidate);
-      webVideo.removeWebVariantOf(candidate);
+      webVideo.removeVariantsOf(candidate);
       removed += 1;
     }
     if (removed === 0) return res.status(404).json({ error: 'Arquivo não encontrado', removed: false });
@@ -18922,16 +18972,24 @@ app.delete('/api/upload', express.json(), async (req, res) => {
 // ─── Versão leve dos vídeos para assistir (lib/webVideo.mjs) ───
 // <nome>.web.mp4 ao lado do original (H.264 ~6 Mbps, faststart). Usa a mesma fila de ffmpeg do 480p
 // do portal. Os players pedem a URL em /api/media/playback; o original segue para baixar e postar.
+const MEDIA_ALLOWED_ORIGINS = [...new Set(['https://agenciapulse.tech', (() => {
+  try { return new URL(process.env.PUBLIC_UPLOADS_URL || 'https://agenciapulse.tech/uploads').origin; } catch { return 'https://agenciapulse.tech'; }
+})()])];
 const webVideo = createWebVideo({
   pool,
   uploadRoots,
   runSlot: (task) => runPortalTranscodeSlot(task),
-  allowedOrigins: [...new Set(['https://agenciapulse.tech', (() => {
-    try { return new URL(process.env.PUBLIC_UPLOADS_URL || 'https://agenciapulse.tech/uploads').origin; } catch { return 'https://agenciapulse.tech'; }
-  })()])],
+  allowedOrigins: MEDIA_ALLOWED_ORIGINS,
 });
 webVideo.registerRoutes(app, { verifyUser, readPortalToken: (token) => portalSession.read(token) });
 webVideo.start();
+
+// ─── Versão Instagram dos vídeos (lib/instagramVideo.mjs) ───
+// <nome>.ig.mp4 ao lado do original, no formato que a Meta pede, só para vídeos de posts agendados
+// (próximas 48 h). Mesma fila da versão leve. Na hora de publicar, o robô troca só a URL enviada à
+// Meta; scheduled_posts.media_url continua o original. igVideo.instagramUrlFor(url) serve às outras telas.
+const igVideo = createInstagramVideo({ pool, webVideo, allowedOrigins: MEDIA_ALLOWED_ORIGINS });
+igVideo.start();
 
 // Busca REAL de empresas via OpenStreetMap (Overpass API) — sem chave de API.
 const OVERPASS_ENDPOINTS = [

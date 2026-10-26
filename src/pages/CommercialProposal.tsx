@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase as vpsDb } from '@/lib/vpsDb';
+import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
-import { format, addDays, addMonths } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import pulseLogo from '@/assets/pulse_logo.png';
 import { Button } from '@/components/ui/button';
@@ -150,6 +151,10 @@ const ADDITIONAL_SERVICES = [
   { id: 'identidade_visual', name: 'Identidade Visual', price: 2000, icon: Palette },
 ];
 
+// Marca antiga das receitas geradas, que o navegador gravava em observations
+// (aparecia para o cliente na proposta e no PDF). Hoje o controle é revenues_generated_at.
+const stripRevenueMark = (text: string) => text.replace(/\n?\[RECEITAS GERADAS[^\]]*\]/g, '').trim();
+
 export default function CommercialProposal() {
   const { user } = useAuth();
   const { users: appUsers } = useApp();
@@ -160,7 +165,7 @@ export default function CommercialProposal() {
   const { data: directProfiles = [] } = useQuery({
     queryKey: ['proposal-direct-profiles'],
     queryFn: async () => {
-      const { data } = await vpsDb.from('profiles').select('*');
+      const { data } = await vpsDb.from('profiles').select('id, name, email, role, avatar_url, display_name, job_title');
       return ((data as any[]) || []).map(p => ({
         id: p.id,
         name: p.name,
@@ -350,7 +355,7 @@ export default function CommercialProposal() {
       setBonusServices(Array.isArray(p.bonus_services) ? p.bonus_services : []);
       setTeamMembers(Array.isArray(p.team_members) ? p.team_members : []);
       setCustomDiscount(Number(p.custom_discount) || 0);
-      setObservations(p.observations || '');
+      setObservations(stripRevenueMark(p.observations || ''));
       setHasContract(p.has_contract !== false);
       setSelectedPlanId(p.plan_id || '');
       // System
@@ -904,105 +909,29 @@ export default function CommercialProposal() {
     copyToClipboard(link).then(() => toast.success('Link copiado!'));
   };
 
-  // Generate revenues for an approved proposal
-  const generateRevenuesForProposal = useCallback(async (proposal: any) => {
+  // Receitas previstas da proposta aceita: o servidor gera no aceite do cliente e,
+  // pelo botão "Gerar Receitas", quando ainda não saíram (uma vez só por proposta).
+  const [generatingRevenuesId, setGeneratingRevenuesId] = useState<string | null>(null);
+  const generateRevenuesForProposal = async (proposal: any) => {
+    setGeneratingRevenuesId(proposal.id);
     try {
-      const pType = proposal.proposal_type || 'marketing';
-      let totalValue = 0;
-      let installments = 1;
-      let description = '';
-
-      if (pType === 'marketing') {
-        const plan = proposal.plan_snapshot || {};
-        const bonus = (proposal.bonus_services || []).reduce((s: number, b: any) => s + (b.value || 0), 0);
-        totalValue = (plan.price || 0) + bonus;
-        const discount = proposal.custom_discount || 0;
-        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
-        installments = 12; // Monthly recurring
-        description = `Contrato Marketing - ${proposal.client_company}`;
-      } else if (pType === 'sistema') {
-        const sys = proposal.system_data || {};
-        totalValue = sys.value || 0;
-        const discount = proposal.custom_discount || 0;
-        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
-        installments = sys.installments || 1;
-        description = `Sistema/Software - ${proposal.client_company}`;
-      } else if (pType === 'endomarketing') {
-        const endo = proposal.endomarketing_data || {};
-        totalValue = endo.monthlyValue || 0;
-        const discount = proposal.custom_discount || 0;
-        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
-        installments = 12;
-        description = `Endomarketing - ${proposal.client_company}`;
-      } else if (pType === 'personalizada') {
-        const custom = proposal.system_data || {};
-        totalValue = custom.monthlyValue || 0;
-        const discount = proposal.custom_discount || 0;
-        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
-        installments = custom.installments || 12;
-        description = `Proposta Única - ${proposal.client_company}`;
-      } else if (pType === 'cronograma') {
-        const crono = proposal.system_data || {};
-        totalValue = crono.totalValue || 0;
-        const discount = proposal.custom_discount || 0;
-        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
-        installments = crono.installments || 1;
-        description = `Cronograma - ${proposal.client_company}`;
-      } else if (pType === 'videos') {
-        const vid = proposal.system_data || {};
-        totalValue = vid.totalValue || ((vid.quantity || 0) * (vid.unitPrice || 0));
-        const discount = proposal.custom_discount || 0;
-        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
-        installments = vid.installments || 1;
-        description = `Vídeos Avulsos - ${proposal.client_company}`;
+      const { data, error } = await invokeVpsFunction(`commercial-proposals/${proposal.id}/generate-revenues`);
+      if (error) {
+        toast.error('Erro ao gerar receitas: ' + (error.message || 'falha desconhecida'));
+        return;
       }
-
-      if (totalValue <= 0) return;
-
-      const installmentValue = totalValue / installments;
-      const startDate = new Date(proposal.client_response_at || new Date());
-      const revenues = [];
-
-      for (let i = 0; i < installments; i++) {
-        const dueDate = addMonths(startDate, i);
-        revenues.push({
-          client_id: null,
-          contract_id: null,
-          reference_month: format(dueDate, 'yyyy-MM-01'),
-          amount: Math.round(installmentValue * 100) / 100,
-          due_date: format(dueDate, 'yyyy-MM-dd'),
-          status: 'prevista',
-          description: `${description} (${i + 1}/${installments})`,
-        });
+      if (data?.created > 0) {
+        toast.success(`${data.created} receita(s) criada(s) para ${proposal.client_company}`);
+      } else if (data?.reason === 'no_value') {
+        toast.error('A proposta não tem valor para gerar receitas.');
+      } else {
+        toast.info('As receitas desta proposta já foram geradas.');
       }
-
-      let inserted = 0;
-      for (const rev of revenues) {
-        const { error } = await vpsDb.from('revenues').insert(rev as any);
-        if (!error) inserted++;
-      }
-
-      if (inserted > 0) {
-        toast.success(`${inserted} receita(s) criada(s) para ${proposal.client_company}`);
-        // Mark proposal as having revenues generated
-        await vpsDb.from('commercial_proposals').update({
-          observations: `${proposal.observations || ''}\n[RECEITAS GERADAS: ${inserted} parcelas de ${fmt(installmentValue)}]`.trim(),
-        } as any).eq('id', proposal.id);
-      }
-    } catch (err) {
-      console.error('[CommercialProposal] generateRevenues error:', err);
-      toast.error('Erro ao gerar receitas');
+      refetchProposals();
+    } finally {
+      setGeneratingRevenuesId(null);
     }
-  }, []);
-
-  // Check for newly approved proposals and generate revenues
-  useEffect(() => {
-    const approved = savedProposals.filter((p: any) =>
-      p.status === 'aceita' &&
-      !(p.observations || '').includes('[RECEITAS GERADAS')
-    );
-    approved.forEach((p: any) => generateRevenuesForProposal(p));
-  }, [savedProposals, generateRevenuesForProposal]);
+  };
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -2946,7 +2875,7 @@ export default function CommercialProposal() {
                     const sys = p.system_data || {};
                     const timeline = sys.timeline || '';
                     const approvedAt = p.client_response_at ? format(new Date(p.client_response_at), 'dd/MM/yyyy') : '—';
-                    const hasRevenues = (p.observations || '').includes('[RECEITAS GERADAS');
+                    const hasRevenues = !!p.revenues_generated_at || (p.observations || '').includes('[RECEITAS GERADAS');
 
                     // Calculate value
                     let totalValue = 0;
@@ -2993,14 +2922,14 @@ export default function CommercialProposal() {
                           )}
                           <div className="flex items-center gap-1 text-muted-foreground">
                             <DollarSign className="h-3 w-3" />
-                            Valor: {fmt(totalValue)}{(pType !== 'sistema' && pType !== 'videos') ? '/mês' : ''}
+                            Valor: {fmt(totalValue)}{(pType === 'marketing' || pType === 'endomarketing' || pType === 'personalizada') ? '/mês' : ''}
                           </div>
                           <div className="flex items-center gap-1">
                             {hasRevenues ? (
                               <span className="text-emerald-600 font-medium">💰 Receitas geradas</span>
                             ) : (
-                              <Button size="sm" variant="outline" className="h-6 text-[10px] border-emerald-300 text-emerald-700" onClick={() => generateRevenuesForProposal(p)}>
-                                <DollarSign className="h-3 w-3 mr-0.5" /> Gerar Receitas
+                              <Button size="sm" variant="outline" className="h-6 text-[10px] border-emerald-300 text-emerald-700" disabled={generatingRevenuesId === p.id} onClick={() => generateRevenuesForProposal(p)}>
+                                <DollarSign className="h-3 w-3 mr-0.5" /> {generatingRevenuesId === p.id ? 'Gerando...' : 'Gerar Receitas'}
                               </Button>
                             )}
                           </div>

@@ -26,6 +26,7 @@ import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
 import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOption } from './lib/portalSession.mjs';
+import { buildProposalRevenueSchedule, stripRevenueMark } from './lib/proposalRevenues.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -567,6 +568,12 @@ async function ensureProposalTables() {
         END IF;
       END $$;
 
+      -- Receitas previstas geradas uma vez só por proposta aceita (ver generateProposalRevenues).
+      ALTER TABLE commercial_proposals ADD COLUMN IF NOT EXISTS revenues_generated_at TIMESTAMPTZ;
+      -- Propostas que já geraram receitas pelo navegador (marca antiga em observations): não gerar de novo.
+      UPDATE commercial_proposals
+         SET revenues_generated_at = COALESCE(client_response_at, now())
+       WHERE revenues_generated_at IS NULL AND observations LIKE '%[RECEITAS GERADAS%';
 
       CREATE TABLE IF NOT EXISTS proposal_comments (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -4919,6 +4926,89 @@ app.get('/api/briefing-versions', async (req, res) => {
     res.status(err?.status || 500).json({ error: err.message || 'Server error' });
   }
 });
+// ─── Receitas previstas da proposta aceita ───
+// Geradas no servidor, uma vez só por proposta: o UPDATE ... WHERE revenues_generated_at IS NULL
+// reserva a proposta dentro da transação, então dois cliques, duas abas ou o aceite repetido
+// não duplicam as receitas. Antes o navegador de quem abrisse /propostas gerava (e duplicava)
+// e gravava a marca em observations, que o cliente via na página pública.
+async function generateProposalRevenues(proposalId) {
+  await ensureProposalTables();
+  await ensureRecurringRevenuesTables();
+  const revenuesHaveCity = await tableHasCityColumn('revenues');
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const { rows } = await db.query(
+      `UPDATE commercial_proposals SET revenues_generated_at = now()
+        WHERE id = $1 AND status = 'aceita' AND revenues_generated_at IS NULL
+          AND COALESCE(observations, '') NOT LIKE '%[RECEITAS GERADAS%'
+        RETURNING *`,
+      [proposalId]
+    );
+    if (!rows.length) {
+      await db.query('ROLLBACK');
+      return { created: 0, reason: 'already_generated_or_not_accepted' };
+    }
+    const proposal = rows[0];
+    const startDate = brtDateString(proposal.client_response_at ? new Date(proposal.client_response_at) : new Date());
+    const schedule = buildProposalRevenueSchedule(proposal, startDate);
+    if (!schedule.length) {
+      // Sem valor: não marca, para dar para gerar depois de corrigir a proposta.
+      await db.query('ROLLBACK');
+      return { created: 0, reason: 'no_value' };
+    }
+    // revenues é separada por cidade: vale a cidade da proposta.
+    const city = assertValidCity(proposal.city || 'minacu');
+    for (const item of schedule) {
+      if (revenuesHaveCity) {
+        await db.query(
+          `INSERT INTO revenues (client_id, contract_id, reference_month, amount, due_date, status, description, city)
+           VALUES (NULL, NULL, $1, $2, $3, 'prevista', $4, $5)`,
+          [item.reference_month, item.amount, item.due_date, item.description, city]
+        );
+      } else {
+        await db.query(
+          `INSERT INTO revenues (client_id, contract_id, reference_month, amount, due_date, status, description)
+           VALUES (NULL, NULL, $1, $2, $3, 'prevista', $4)`,
+          [item.reference_month, item.amount, item.due_date, item.description]
+        );
+      }
+    }
+    await db.query('COMMIT');
+    return {
+      created: schedule.length,
+      total: Math.round(schedule.reduce((sum, item) => sum + item.amount, 0) * 100) / 100,
+      first_amount: schedule[0].amount,
+    };
+  } catch (error) {
+    await db.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    db.release();
+  }
+}
+
+// Botão "Gerar Receitas" da tela de propostas (proposta aceita cujas receitas ainda não saíram).
+// Mesmo nível do lançamento de receitas no /api/db/query (revenues: 'team').
+app.post('/api/commercial-proposals/:id/generate-revenues', async (req, res) => {
+  try {
+    await verifyTeamManager(req);
+  } catch (e) {
+    return res.status(e.message === 'Admin access required' ? 403 : 401).json({ error: e.message });
+  }
+  try {
+    const id = String(req.params.id || '');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return res.status(400).json({ error: 'Proposta inválida' });
+    }
+    const result = await generateProposalRevenues(id);
+    res.json(result);
+  } catch (e) {
+    console.error('[generate-revenues] error:', e);
+    res.status(e?.statusCode || 500).json({ error: e.message || 'Erro ao gerar receitas' });
+  }
+});
+
 app.post('/api/public-proposal', async (req, res) => {
   try {
     await ensureProposalTables();
@@ -4927,7 +5017,13 @@ app.post('/api/public-proposal', async (req, res) => {
     if (action === 'get_proposal') {
       if (!token) return res.status(400).json({ error: 'token required' });
       const { rows } = await pool.query('SELECT * FROM commercial_proposals WHERE token = $1 LIMIT 1', [token]);
-      return res.json({ proposal: rows[0] || null });
+      const proposal = rows[0] || null;
+      if (proposal) {
+        // Controle interno das receitas: o cliente não vê a marca antiga nem a data.
+        proposal.observations = stripRevenueMark(proposal.observations);
+        delete proposal.revenues_generated_at;
+      }
+      return res.json({ proposal });
     }
 
     if (action === 'get_clients') {
@@ -4958,10 +5054,27 @@ app.post('/api/public-proposal', async (req, res) => {
     if (action === 'respond') {
       if (!token || !status) return res.status(400).json({ error: 'token, status required' });
       if (status !== 'aceita' && status !== 'recusada') return res.status(400).json({ error: 'invalid status' });
-      await pool.query(
-        'UPDATE commercial_proposals SET status = $1, client_response_at = NOW(), client_response_note = $2 WHERE token = $3',
+      // Só responde proposta pendente (a página só mostra os botões nesse caso): uma aba antiga
+      // não troca uma resposta já dada.
+      const { rows: updated } = await pool.query(
+        `UPDATE commercial_proposals SET status = $1, client_response_at = NOW(), client_response_note = $2
+          WHERE token = $3 AND status = 'pendente' RETURNING id`,
         [status, response_note || null, token]
       );
+      if (!updated.length) {
+        const { rows: existing } = await pool.query('SELECT status FROM commercial_proposals WHERE token = $1 LIMIT 1', [token]);
+        if (!existing.length) return res.status(404).json({ error: 'Proposta não encontrada' });
+        if (existing[0].status === status) return res.json({ ok: true, already: true });
+        return res.status(409).json({ error: `Esta proposta já foi ${existing[0].status === 'aceita' ? 'aceita' : 'respondida'}.`, status: existing[0].status });
+      }
+      if (status === 'aceita') {
+        // A falha aqui não desfaz o aceite: a equipe gera pelo botão "Gerar Receitas".
+        try {
+          await generateProposalRevenues(updated[0].id);
+        } catch (e) {
+          console.error('[public-proposal] generate revenues failed:', e?.message || e);
+        }
+      }
       return res.json({ ok: true });
     }
 

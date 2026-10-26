@@ -28,7 +28,7 @@ function offsetMinutes(ms) {
 
 /** Data (AAAA-MM-DD) e hora (HH:mm) de Brasília de um instante. */
 export function brtParts(value) {
-  const ms = value instanceof Date ? value.getTime() : Date.parse(value);
+  const ms = value instanceof Date ? value.getTime() : typeof value === 'number' ? value : Date.parse(value);
   if (!Number.isFinite(ms)) return null;
   const p = readParts(ms);
   return { date: `${p.year}-${p.month}-${p.day}`, time: `${String(Number(p.hour) % 24).padStart(2, '0')}:${p.minute}` };

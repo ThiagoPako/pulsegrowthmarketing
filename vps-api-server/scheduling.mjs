@@ -501,7 +501,9 @@ export function registerSchedulingRoutes(app, deps) {
                   OR NEW.scheduled_time IS DISTINCT FROM OLD.scheduled_time) THEN
             v := pulse_posting_local_ts(NEW.posted_at, NEW.scheduled_time);
             IF v IS NOT NULL THEN
-              UPDATE content_tasks SET posting_at = v WHERE id = NEW.content_task_id AND posting_at IS DISTINCT FROM v;
+              UPDATE content_tasks SET posting_at = v
+               WHERE id = NEW.content_task_id AND posting_at IS DISTINCT FROM v
+                 AND kanban_column IN ('agendamentos', 'acompanhamento');
             END IF;
           END IF;
         EXCEPTION WHEN OTHERS THEN
@@ -521,15 +523,18 @@ export function registerSchedulingRoutes(app, deps) {
                   OR OLD.status IS DISTINCT FROM 'agendado') THEN
             IF NEW.content_task_id IS NOT NULL THEN
               UPDATE content_tasks SET posting_at = NEW.scheduled_at
-               WHERE id = NEW.content_task_id AND posting_at IS DISTINCT FROM NEW.scheduled_at;
+               WHERE id = NEW.content_task_id AND posting_at IS DISTINCT FROM NEW.scheduled_at
+                 AND kanban_column IN ('agendamentos', 'acompanhamento');
             END IF;
             IF NEW.design_task_id IS NOT NULL THEN
               UPDATE design_tasks SET posting_at = NEW.scheduled_at
-               WHERE id = NEW.design_task_id AND posting_at IS DISTINCT FROM NEW.scheduled_at;
+               WHERE id = NEW.design_task_id AND posting_at IS DISTINCT FROM NEW.scheduled_at
+                 AND kanban_column = 'aprovado';
             END IF;
             IF NEW.portal_content_id IS NOT NULL THEN
               UPDATE client_portal_contents SET posting_at = NEW.scheduled_at
-               WHERE id = NEW.portal_content_id AND posting_at IS DISTINCT FROM NEW.scheduled_at;
+               WHERE id = NEW.portal_content_id AND posting_at IS DISTINCT FROM NEW.scheduled_at
+                 AND status IN ('aprovado', 'agendado');
             END IF;
           END IF;
         EXCEPTION WHEN OTHERS THEN

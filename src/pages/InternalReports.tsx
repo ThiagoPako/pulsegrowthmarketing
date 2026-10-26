@@ -17,7 +17,6 @@ import UserAvatar from '@/components/UserAvatar';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths, subWeeks, isWithinInterval, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, Cell } from 'recharts';
-import jsPDF from 'jspdf';
 import pulseHeaderImg from '@/assets/pulse_header.png';
 import { VM_SCORE, EDITOR_SCORE, calcVmDeliveryScore, calcWaitPoints, dedupeDeliveryRecords, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate } from '@/lib/scoringSystem';
 import { userHasRole } from '@/lib/userRoles';
@@ -346,6 +345,7 @@ export default function InternalReports() {
 
   // ── PDF Export ──
   const generatePDF = async () => {
+    const { default: jsPDF } = await import('jspdf');
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageW = 210;
     const margin = 15;

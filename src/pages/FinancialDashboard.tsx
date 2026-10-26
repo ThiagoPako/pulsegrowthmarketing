@@ -33,7 +33,8 @@ import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { generateDeliveryReport, resolvePaymentInfo, groupRevenuesByClient, buildBillingBreakdown } from '@/lib/billingReport';
 import BulkBillingConfirmDialog from '@/components/financial/BulkBillingConfirmDialog';
 import ClientLogo from '@/components/ClientLogo';
-import cobrarTodosImg from '@/assets/cobrar_todos.png';
+// Quadrado central (768 px) do original 1376x768 em WebP: 107 kB em vez de 2,1 MB; as telas usam object-cover em caixa quadrada, o recorte é o mesmo que aparecia
+import cobrarTodosImg from '@/assets/cobrar_todos.webp';
 import SalaryRaiseAlert from '@/components/financial/SalaryRaiseAlert';
 import BankStatementImport from '@/components/financial/BankStatementImport';
 import { findImportedStatementLines, BANK_IMPORT_DEFAULT_DESCRIPTION, type BankImportItem, type BankImportResult } from '@/lib/bankImport';

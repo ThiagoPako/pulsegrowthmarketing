@@ -300,6 +300,9 @@ export default function Scripts() {
 
   const printRef = useRef<HTMLDivElement>(null);
 
+  // Busca do cliente por id em cada card e no filtro (antes um clients.find por roteiro a cada render)
+  const clientsById = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
+
   const filteredScripts = useMemo(() => {
     let result = showRecorded ? scripts : scripts.filter(s => !s.recorded);
     if (filterEndo === 'endo') result = result.filter(s => s.isEndomarketing);
@@ -310,17 +313,18 @@ export default function Scripts() {
       const term = searchTerm.toLowerCase();
       result = result.filter(s =>
         s.title.toLowerCase().includes(term) ||
-        clients.find(c => c.id === s.clientId)?.companyName.toLowerCase().includes(term)
+        clientsById.get(s.clientId)?.companyName.toLowerCase().includes(term)
       );
     }
-    return result.sort((a, b) => {
+    // Cópia: sem filtro, result é o próprio array do contexto e o sort mudava a ordem dele para as outras telas
+    return [...result].sort((a, b) => {
       const priorityOrder = { urgent: 0, priority: 1, normal: 2 };
       const pA = priorityOrder[a.priority || 'normal'];
       const pB = priorityOrder[b.priority || 'normal'];
       if (pA !== pB) return pA - pB;
       return b.updatedAt.localeCompare(a.updatedAt);
     });
-  }, [scripts, filterClient, filterType, filterEndo, searchTerm, clients, showRecorded]);
+  }, [scripts, filterClient, filterType, filterEndo, searchTerm, clientsById, showRecorded]);
 
   const handleOpen = (script?: Script) => {
     if (script) {
@@ -1266,11 +1270,11 @@ export default function Scripts() {
       return rec?.prospectName ? `📹 ${rec.prospectName}` : '📹 Avulso';
     }
     if (!id) return '📹 Avulso';
-    return clients.find(c => c.id === id)?.companyName || '—';
+    return clientsById.get(id)?.companyName || '—';
   };
   const getClientColor = (id: string, script?: Script) => {
     if (script?.recordingId) return '200 80% 55%';
-    return clients.find(c => c.id === id)?.color || '220 10% 50%';
+    return clientsById.get(id)?.color || '220 10% 50%';
   };
 
   return (
@@ -1399,7 +1403,7 @@ export default function Scripts() {
                   )}
                   <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    {(() => { const cl = clients.find(c => c.id === script.clientId); return cl ? <ClientLogo client={cl} size="sm" className="w-5 h-5 text-[8px] rounded" /> : script.recordingId ? <Video size={14} className="text-sky-500" /> : null; })()}
+                    {(() => { const cl = clientsById.get(script.clientId); return cl ? <ClientLogo client={cl} size="sm" className="w-5 h-5 text-[8px] rounded" /> : script.recordingId ? <Video size={14} className="text-sky-500" /> : null; })()}
                     {(script.priority === 'urgent') && <AlertTriangle size={13} className="text-destructive shrink-0" />}
                     {(script.priority === 'priority') && <Star size={13} className="text-warning shrink-0" />}
                     <p className="font-medium text-sm truncate">{script.title}</p>

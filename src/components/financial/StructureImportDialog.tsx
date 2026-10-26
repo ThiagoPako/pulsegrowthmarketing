@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import * as XLSX from 'xlsx';
+// xlsx (~370 kB) só baixa quando a planilha é escolhida, não junto com a tela de Despesas
+type XlsxModule = typeof import('xlsx');
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,7 +53,7 @@ function parseAmount(value: unknown): number | null {
 }
 
 /** Converte datas em texto (dd/mm/aaaa) ou serial do Excel para YYYY-MM-DD. */
-function parseDate(value: unknown): string | null {
+function parseDate(value: unknown, XLSX: XlsxModule): string | null {
   if (value === null || value === undefined || value === '') return null;
   if (typeof value === 'number') {
     const parsed = XLSX.SSF.parse_date_code(value);
@@ -108,6 +109,7 @@ export default function StructureImportDialog({
 
   const handleFile = async (file: File) => {
     try {
+      const XLSX = await import('xlsx');
       const buffer = await file.arrayBuffer();
       const book = XLSX.read(buffer, { type: 'array' });
       const sheet = book.Sheets[book.SheetNames[0]];
@@ -149,7 +151,7 @@ export default function StructureImportDialog({
         if (IGNORE_PATTERNS.test(rawDate) || IGNORE_PATTERNS.test(description)) continue;
         if (!description && !category) continue;
 
-        const date = parseDate(line[col.date]) ?? parseDate(rawDate);
+        const date = parseDate(line[col.date], XLSX) ?? parseDate(rawDate, XLSX);
         const effectiveDate = date ?? fallbackDate;
         const storedDescription = `${STRUCTURE_TAG} ${description || category}`.trim();
         const key = buildKey(effectiveDate, storedDescription, amount);

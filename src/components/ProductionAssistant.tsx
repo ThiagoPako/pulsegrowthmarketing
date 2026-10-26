@@ -5,6 +5,7 @@ import { supabase } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import ReactMarkdown from 'react-markdown';
+import { ASSISTANT_KEY } from '@/lib/assistantKey';
 
 /* ─── Rocket Mascot SVG ─── */
 function RocketMascot({ talking }: { talking?: boolean }) {
@@ -87,7 +88,6 @@ interface AssistantMessage {
   type: 'deadline' | 'motivation' | 'friday' | 'general';
 }
 
-const ASSISTANT_KEY = 'pulse_assistant_enabled';
 // Intervalo mínimo entre mensagens da IA (vale entre abas e recargas da página)
 const ASSISTANT_MIN_INTERVAL_MS = 60 * 60 * 1000;
 // Balão fechado pela pessoa: não reabre sozinho com o mesmo tipo de mensagem por 3 h

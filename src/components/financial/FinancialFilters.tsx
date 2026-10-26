@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Search, Filter, X, Download, FileText, Calendar as CalendarIcon, ChevronDown, Columns3 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays } from 'date-fns';
-import jsPDF from 'jspdf';
 
 export interface FilterOption {
   value: string;
@@ -217,8 +216,9 @@ const FinancialFilters = <T,>({
     URL.revokeObjectURL(url);
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!exportRows || !exportColumns || exportRows.length === 0 || visibleColumns.length === 0) return;
+    const { default: jsPDF } = await import('jspdf');
     const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const pageW = pdf.internal.pageSize.getWidth();
 

@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw, CalendarOff, Plus, Send, Loader2, DollarSign, MessageSquare, Plug, Cpu, MonitorPlay, Factory, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { getLandingPixelId, isValidPixelId, saveLandingPixelId } from '@/services/landingSettings';
-import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
+import { ASSISTANT_KEY } from '@/lib/assistantKey';
 import { getHolidays, createHoliday, deleteHoliday, sendHolidayNotifications, holidayNextOccurrence, holidayNotifiedFor, getWhatsAppConfig, updateWhatsAppConfig, type Holiday } from '@/services/whatsappService';
 import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 import MetaIntegrationCard from '@/components/settings/MetaIntegrationCard';

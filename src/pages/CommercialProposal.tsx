@@ -27,8 +27,6 @@ import {
   Sparkles, Loader2, UserPlus, DollarSign, Target, CalendarDays, ListChecks, Layers, Pencil
 } from 'lucide-react';
 import { toast } from 'sonner';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import ScopeDescription from '@/components/ScopeDescription';
 
 type ProposalType = 'marketing' | 'sistema' | 'endomarketing' | 'personalizada' | 'cronograma' | 'videos';
@@ -724,6 +722,8 @@ export default function CommercialProposal() {
       });
     }
     try {
+      // html2canvas e jsPDF (~600 kB) só baixam ao gerar o PDF
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')]);
       const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
       const imgData = canvas.toDataURL('image/png');
       const pdfWidthMM = 210;

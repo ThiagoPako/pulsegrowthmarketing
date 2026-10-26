@@ -782,50 +782,68 @@ async function generateCollaboratorBirthdayTasks() {
   try {
     await ensureClientDatabaseTables();
 
-    // Colaboradores ativos cujo aniversário cai exatamente daqui a 15 dias.
+    // Colaboradores ativos com o próximo aniversário entre hoje e daqui a 15 dias. A janela
+    // (em vez do dia exato) não perde aniversário se a API ficar fora no dia; o auto_ref
+    // (com o ano do aniversário) evita tarefa repetida. 29/02 vira 28/02 em ano não bissexto.
     const { rows } = await pool.query(
-      `SELECT col.id, col.name, col.job_role, col.birthday, col.client_id,
-              c.company_name, c.city
-         FROM client_collaborators col
-         JOIN clients c ON c.id = col.client_id
-        WHERE col.active = true
-          AND col.birthday IS NOT NULL
-          AND c.birthday_arts_enabled = true
-          AND to_char(col.birthday, 'MM-DD')
-              = to_char((CURRENT_DATE + ($1 || ' days')::interval), 'MM-DD')`,
-      [String(BIRTHDAY_ART_LEAD_DAYS)],
+      `WITH base AS (
+         SELECT col.id, col.name, col.job_role, col.birthday, col.client_id,
+                c.company_name, c.city,
+                EXTRACT(MONTH FROM col.birthday)::int AS bm,
+                EXTRACT(DAY FROM col.birthday)::int AS bd
+           FROM client_collaborators col
+           JOIN clients c ON c.id = col.client_id
+          WHERE col.active = true
+            AND col.birthday IS NOT NULL
+            AND c.birthday_arts_enabled = true
+       ), occ AS (
+         SELECT base.*,
+                make_date(y.yr, base.bm,
+                  CASE WHEN base.bm = 2 AND base.bd = 29
+                        AND NOT (y.yr % 4 = 0 AND (y.yr % 100 <> 0 OR y.yr % 400 = 0))
+                       THEN 28 ELSE base.bd END) AS next_bday
+           FROM base
+          CROSS JOIN LATERAL (VALUES (EXTRACT(YEAR FROM CURRENT_DATE)::int),
+                                     (EXTRACT(YEAR FROM CURRENT_DATE)::int + 1)) AS y(yr)
+       )
+       SELECT id, name, job_role, birthday, client_id, company_name, city, next_bday::text AS next_bday
+         FROM occ
+        WHERE next_bday BETWEEN CURRENT_DATE AND CURRENT_DATE + $1::int`,
+      [BIRTHDAY_ART_LEAD_DAYS],
     );
 
+    let created = 0;
     for (const row of rows) {
-      const targetYear = new Date().getFullYear();
-      const autoRef = `birthday:${row.id}:${targetYear}`;
-      const dueDate = new Date(Date.now() + BIRTHDAY_ART_LEAD_DAYS * 86400000)
-        .toISOString()
-        .slice(0, 10);
+      const nextBirthday = String(row.next_bday).slice(0, 10);
+      const autoRef = `birthday:${row.id}:${nextBirthday.slice(0, 4)}`;
       const dayLabel = String(row.birthday).slice(0, 10).split('-').reverse().slice(0, 2).join('/');
 
-      await pool.query(
+      // O índice único de auto_ref é parcial: o ON CONFLICT precisa do mesmo WHERE, senão o
+      // Postgres não acha o índice e o INSERT falha sempre (nenhuma tarefa era criada).
+      const result = await pool.query(
         `INSERT INTO design_tasks
            (client_id, title, description, format_type, kanban_column, priority,
             due_date, city, collaborator_id, auto_ref)
          VALUES ($1, $2, $3, 'feed', 'nova_tarefa', 'media', $4, $5, $6, $7)
-         ON CONFLICT (auto_ref) DO NOTHING`,
+         ON CONFLICT (auto_ref) WHERE auto_ref IS NOT NULL DO NOTHING`,
         [
           row.client_id,
           `Aniversário — ${row.name}`,
           `Arte de aniversário do colaborador ${row.name}${row.job_role ? ` (${row.job_role})` : ''} — ${row.company_name}. Data do aniversário: ${dayLabel}. Dados e fotos disponíveis no Banco de Dados do cliente.`,
-          dueDate,
+          nextBirthday,
           row.city || null,
           row.id,
           autoRef,
         ],
       ).catch((error) => {
         console.warn('birthday art task insert failed:', error?.message || error);
+        return null;
       });
+      created += result?.rowCount || 0;
     }
 
-    if (rows.length) {
-      console.log(`[birthday-arts] ${rows.length} colaborador(es) processado(s).`);
+    if (created) {
+      console.log(`[birthday-arts] ${created} tarefa(s) de aniversário criada(s) (${rows.length} aniversário(s) na janela).`);
     }
   } catch (error) {
     console.error('generateCollaboratorBirthdayTasks error:', error?.message || error);

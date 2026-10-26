@@ -7689,12 +7689,20 @@ function fbPagePictureUrl(pageId) {
   return pageId ? `${META_API_BASE}/${pageId}/picture?type=normal` : null;
 }
 
+// Contas cuja foto já tentamos buscar (id → quando): perfil sem foto ou token vencido não
+// é consultado de novo a cada abertura de Conexões Sociais.
+const PROFILE_REFRESH_TRIED = new Map();
+const PROFILE_REFRESH_RETRY_MS = 6 * 60 * 60 * 1000;
+
 /** Busca @usuário e foto do perfil na Meta e atualiza a linha (melhor esforço). */
 async function refreshAccountProfile(a) {
   try {
     const base = a.api_base === 'instagram' ? IG_API_BASE : META_API_BASE;
     if (a.platform === 'instagram' && a.instagram_business_id) {
-      const r = await fetch(`${base}/${a.instagram_business_id}?fields=username,profile_picture_url&access_token=${a.access_token}`);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const r = await fetch(`${base}/${a.instagram_business_id}?fields=username,profile_picture_url&access_token=${a.access_token}`, { signal: controller.signal })
+        .finally(() => clearTimeout(timer));
       const d = await r.json().catch(() => ({}));
       if (!d.error && (d.username || d.profile_picture_url)) {
         await pool.query(`UPDATE social_accounts SET username = COALESCE($2, username), profile_picture_url = COALESCE($3, profile_picture_url) WHERE id = $1`,
@@ -8032,8 +8040,13 @@ app.get('/api/social-posts/accounts-overview', async (req, res) => {
        FROM social_accounts WHERE status = 'connected'`
     );
     // Preenche @usuário/foto de contas conectadas antes dessa melhoria (melhor esforço, sem travar a lista)
-    const missing = accounts.filter(a => !a.profile_picture_url);
-    await Promise.all(missing.slice(0, 20).map(a => refreshAccountProfile(a)));
+    // Sem segurar a resposta (a foto aparece na próxima carga) e sem repetir a mesma conta por 6 h
+    const now = Date.now();
+    const missing = accounts
+      .filter(a => !a.profile_picture_url && now - (PROFILE_REFRESH_TRIED.get(a.id) || 0) > PROFILE_REFRESH_RETRY_MS)
+      .slice(0, 20);
+    for (const a of missing) PROFILE_REFRESH_TRIED.set(a.id, now);
+    if (missing.length) Promise.all(missing.map(a => refreshAccountProfile({ ...a }))).catch(() => {});
     const byClient = new Map();
     for (const a of accounts) {
       if (!byClient.has(a.client_id)) byClient.set(a.client_id, []);

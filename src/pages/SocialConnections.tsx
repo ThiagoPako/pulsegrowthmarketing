@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLang, tr } from '@/lib/i18n';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { setPortalInsightsEnabled, diagnoseClientConnection, type ConnectedSocialAccount, type DiagnosticCheck } from '@/services/socialPostsApi';
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, Share2, Copy, Stethoscope, XCircle } from 'lucide-react';
 
@@ -31,7 +32,10 @@ export default function SocialConnections() {
 
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState<string | null>(null);
-  const [inviteLink, setInviteLink] = useState<{ name: string; url: string; expires: string } | null>(null);
+  const [inviteLink, setInviteLink] = useState<{ client: ClientConnection; url: string; expires: string; reused: boolean } | null>(null);
+  const [confirmDisconnect, setConfirmDisconnect] = useState<{ client: ClientConnection; account: ConnectedSocialAccount } | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const lastLoadRef = useRef(0);
   const [diagBusy, setDiagBusy] = useState<string | null>(null);
   const [diag, setDiag] = useState<{ name: string; checks: DiagnosticCheck[] } | null>(null);
 
@@ -49,12 +53,16 @@ export default function SocialConnections() {
   };
 
 
-  /** Cria o link público para o cliente autorizar sozinho as próprias contas. */
-  const generateInviteLink = async (client: ClientConnection) => {
+  /**
+   * Link público para o cliente autorizar sozinho as próprias contas.
+   * Primeiro reaproveita o link que ainda vale (o cliente pode já ter recebido);
+   * "Gerar novo" troca o link e o anterior para de funcionar.
+   */
+  const generateInviteLink = async (client: ClientConnection, forceNew = false) => {
     setLinkBusy(client.id);
     try {
       const { data, error } = await invokeVpsFunction('social-connect-links', {
-        body: { client_id: client.id },
+        body: { client_id: client.id, reuse: !forceNew },
       });
       if (error || data?.error || !data?.path) {
         throw new Error(data?.error || error?.message || 'Não foi possível gerar o link.');
@@ -62,16 +70,18 @@ export default function SocialConnections() {
       // O link precisa abrir no domínio de produção: o retorno do login da Meta
       // está cadastrado como https://agenciapulse.tech/ e só funciona lá.
       const url = `https://agenciapulse.tech${data.path}`;
+      const reused = !!data.reused;
       setInviteLink({
-        name: client.name,
+        client,
         url,
         expires: new Date(data.expires_at).toLocaleDateString('pt-BR'),
+        reused,
       });
       try {
         await navigator.clipboard.writeText(url);
-        toast.success('Link gerado e copiado.');
+        toast.success(reused ? 'Link atual copiado.' : 'Link gerado e copiado.');
       } catch {
-        toast.success('Link gerado.');
+        toast.success(reused ? 'Link atual aberto.' : 'Link gerado.');
       }
     } catch (err) {
       toast.error((err as Error).message);
@@ -97,16 +107,18 @@ export default function SocialConnections() {
   };
 
 
-  const load = async () => {
-    setLoading(true);
+  /** silent: atualiza mantendo a lista na tela (volta à aba), sem "Carregando…" nem perder a rolagem. */
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
+    lastLoadRef.current = Date.now();
     try {
       const { data, error } = await invokeVpsFunction('social-posts/accounts-overview', { method: 'GET' });
       if (error) throw new Error(error.message);
       setClients((data?.clients ?? []) as ClientConnection[]);
     } catch (err) {
-      toast.error('Erro ao carregar conexões: ' + (err as Error).message);
+      if (!silent) toast.error('Erro ao carregar conexões: ' + (err as Error).message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -114,11 +126,15 @@ export default function SocialConnections() {
 
   // Após autorizar na Meta (outra aba/janela), atualiza a lista sozinho ao voltar.
   useEffect(() => {
-    const refresh = () => { if (document.visibilityState === 'visible') load(); };
+    // Ao voltar para a aba: atualiza em silêncio e no máximo a cada 60 s
+    // (o aviso 'pulse-social-connected' já cobre a autorização feita na mesma máquina).
+    const refresh = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastLoadRef.current > 60_000) load(true);
+    };
     const onMessage = (e: MessageEvent) => {
       if (e.data?.type === 'pulse-social-connected') {
         toast.success(tr('Conta do Instagram conectada com sucesso.', 'Instagram Business account connected successfully via Meta API.'));
-        load();
+        load(true);
       }
     };
     document.addEventListener('visibilitychange', refresh);
@@ -154,18 +170,28 @@ export default function SocialConnections() {
 
 
 
-  const disconnect = async (client: ClientConnection, plat: Platform) => {
+  const disconnect = async (client: ClientConnection, account: ConnectedSocialAccount) => {
+    setDisconnecting(true);
     try {
       const { error } = await invokeVpsFunction('social-accounts/disconnect', {
-        body: { client_id: client.id, platform: plat },
+        body: { client_id: client.id, platform: account.platform, account_id: account.id },
       });
       if (error) throw new Error(error.message);
       toast.success(tr('Conta desconectada', 'Account disconnected'));
-      await load();
+      setConfirmDisconnect(null);
+      await load(true);
     } catch (err) {
       toast.error((err as Error).message);
+    } finally {
+      setDisconnecting(false);
     }
   };
+
+  const accountLabel = (account: ConnectedSocialAccount) => (
+    account.platform === 'instagram' && account.username
+      ? `@${account.username.replace(/^@/, '')}`
+      : account.account_name
+  );
 
   return (
     <div className="p-4 md:p-6 space-y-5">
@@ -174,7 +200,7 @@ export default function SocialConnections() {
           <h1 className="text-2xl font-bold">{t('Conexões Sociais', 'Social Connections')}</h1>
           <p className="text-sm text-muted-foreground">{t('Conecte Instagram e Facebook de todos os clientes para postagem automática.', 'Connect Instagram Professional and Facebook accounts for automatic publishing.')}</p>
         </div>
-        <Button variant="outline" onClick={load} className="gap-2">
+        <Button variant="outline" onClick={() => load()} className="gap-2">
           <RefreshCw size={16} /> {t('Atualizar', 'Refresh')}
         </Button>
       </header>
@@ -220,7 +246,11 @@ export default function SocialConnections() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {filtered.map(client => {
             const ig = client.accounts.find(a => a.platform === 'instagram');
-            const fb = client.accounts.find(a => a.platform === 'facebook');
+            const rows = (['instagram', 'facebook'] as Platform[]).flatMap(plat => {
+              const list = client.accounts.filter(a => a.platform === plat);
+              return list.length ? list.map(account => ({ plat, account, duplicated: list.length > 1 })) : [{ plat, account: undefined, duplicated: false }];
+            });
+            const duplicatedPlatforms = (['instagram', 'facebook'] as Platform[]).filter(plat => client.accounts.filter(a => a.platform === plat).length > 1);
             return (
               <Card key={client.id}>
                 <CardHeader className="pb-2">
@@ -230,11 +260,20 @@ export default function SocialConnections() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {[
-                    { plat: 'instagram' as Platform, icon: Instagram, label: 'Instagram', account: ig },
-                    { plat: 'facebook' as Platform, icon: Facebook, label: 'Facebook', account: fb },
-                  ].map(({ plat, icon: Icon, label, account }) => (
-                    <div key={plat} className="flex items-center justify-between gap-2 rounded-lg border p-3">
+                  {duplicatedPlatforms.length > 0 && (
+                    <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
+                      <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                      <span>
+                        Mais de uma conta de {duplicatedPlatforms.join(' e ')} ligada a este cliente. A postagem automática fica parada
+                        até sobrar só a dele: desconecte as que são de outros clientes.
+                      </span>
+                    </div>
+                  )}
+                  {rows.map(({ plat, account, duplicated }) => {
+                    const Icon = plat === 'instagram' ? Instagram : Facebook;
+                    const label = plat === 'instagram' ? 'Instagram' : 'Facebook';
+                    return (
+                    <div key={account?.id || plat} className={`flex items-center justify-between gap-2 rounded-lg border p-3 ${duplicated ? 'border-destructive/40' : ''}`}>
                       <div className="flex items-center gap-2 min-w-0">
                         {account?.profile_picture_url ? (
                           <img
@@ -254,9 +293,7 @@ export default function SocialConnections() {
                           {account ? (
                             <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
                               <CheckCircle2 size={12} className="text-primary shrink-0" />
-                              {plat === 'instagram' && account.username
-                                ? `@${account.username.replace(/^@/, '')}`
-                                : account.account_name}
+                              {accountLabel(account)}
                               {account.expiring_soon && (
                                 <span className="text-destructive flex items-center gap-1"><AlertTriangle size={12} /> token expirando</span>
                               )}
@@ -267,14 +304,15 @@ export default function SocialConnections() {
                         </div>
                       </div>
                       {account && (
-                        <Button size="sm" variant="ghost" className="shrink-0" title="Desconectar" onClick={() => disconnect(client, plat)}>
+                        <Button size="sm" variant="ghost" className="shrink-0" title="Desconectar" onClick={() => setConfirmDisconnect({ client, account })}>
                           <Unlink size={14} />
                         </Button>
                       )}
 
 
                     </div>
-                  ))}
+                    );
+                  })}
 
                   <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
                     <div className="min-w-0">
@@ -347,8 +385,8 @@ export default function SocialConnections() {
           <DialogHeader>
             <DialogTitle>Link de autorização</DialogTitle>
             <DialogDescription>
-              Envie este link para {inviteLink?.name}. O cliente entra na conta dele na Meta e autoriza a agência.
-              Válido até {inviteLink?.expires}.
+              {inviteLink?.reused ? 'Este é o link atual de ' : 'Envie este link para '}{inviteLink?.client.name}. O cliente entra na conta dele
+              na Meta e autoriza a agência. Válido até {inviteLink?.expires} (depois de usado, vale por mais 24 h).
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-2">
@@ -369,11 +407,51 @@ export default function SocialConnections() {
               <Copy size={14} /> Copiar
             </Button>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2">
+            {inviteLink?.reused && (
+              <Button
+                variant="outline"
+                disabled={linkBusy === inviteLink.client.id}
+                onClick={() => {
+                  if (!inviteLink) return;
+                  if (!window.confirm('Gerar um novo link? O link enviado antes para o cliente deixa de funcionar.')) return;
+                  generateInviteLink(inviteLink.client, true);
+                }}
+              >
+                Gerar novo link
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setInviteLink(null)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!confirmDisconnect} onOpenChange={o => { if (!o && !disconnecting) setConfirmDisconnect(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Desconectar {confirmDisconnect ? accountLabel(confirmDisconnect.account) : ''} de {confirmDisconnect?.client.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              As postagens automáticas agendadas nessa conta vão falhar até o cliente autorizar de novo pelo link.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={disconnecting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={disconnecting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                if (confirmDisconnect) disconnect(confirmDisconnect.client, confirmDisconnect.account);
+              }}
+            >
+              {disconnecting && <Loader2 size={14} className="animate-spin mr-1" />}
+              Desconectar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={!!diag} onOpenChange={o => !o && setDiag(null)}>
         <DialogContent>

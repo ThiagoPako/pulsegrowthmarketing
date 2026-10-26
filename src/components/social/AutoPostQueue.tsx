@@ -12,6 +12,7 @@ import {
   fetchScheduledPosts,
   cancelScheduledPost,
   publishScheduledPostNow,
+  PublishDeferredError,
   SCHEDULED_POST_STATUS_LABELS,
   type ScheduledPost,
   type ScheduledPostStatus,
@@ -72,7 +73,10 @@ export function AutoPostQueue({ className }: AutoPostQueueProps) {
     if (!confirm('Publicar agora no perfil do cliente?')) return;
     setBusyId(id);
     try { await publishScheduledPostNow(id); toast.success('Publicado com sucesso'); }
-    catch (err) { toast.error(err instanceof Error ? err.message : 'Falha ao publicar'); }
+    catch (err) {
+      if (err instanceof PublishDeferredError) toast.info(err.message);
+      else toast.error(err instanceof Error ? err.message : 'Falha ao publicar');
+    }
     finally { setBusyId(null); await load(); }
   };
 

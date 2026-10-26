@@ -123,10 +123,16 @@ export async function cancelScheduledPost(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/** Vídeo ainda em preparação para o Instagram: o post segue agendado e sai sozinho em seguida. */
+export class PublishDeferredError extends Error {
+  readonly deferred = true;
+}
+
 export async function publishScheduledPostNow(id: string): Promise<ScheduledPost> {
   const { data, error } = await invokeVpsFunction(`social-posts/${id}/publish-now`, { body: {} });
   if (error) throw new Error(error.message);
-  if (!data?.success) throw new Error(data?.post?.last_error || 'Falha ao publicar');
+  if (data?.deferred) throw new PublishDeferredError(data.error || 'Vídeo em preparação para o Instagram.');
+  if (!data?.success) throw new Error(data?.error || data?.post?.last_error || 'Falha ao publicar');
   return data.post as ScheduledPost;
 }
 

@@ -148,12 +148,12 @@ export default function PulseWhatsAppCard({ onChange }: { onChange?: () => void 
   }
 
   // estado em linguagem simples
-  const tone = connected ? 'ok' : waiting ? 'wait' : 'off';
+  const tone = connected ? 'ok' : waiting || adoptable ? 'wait' : 'off';
   const toneClass = tone === 'ok'
     ? 'border-emerald-500/60 bg-emerald-500/5'
     : tone === 'wait' ? 'border-amber-500/60 bg-amber-500/5' : 'border-red-500/50 bg-red-500/5';
   const headline = !pulse
-    ? 'Não conectado'
+    ? adoptable ? 'Conexão da PULSE encontrada' : 'Não conectado'
     : connected ? 'Conectado'
       : pulse.status === 'qr' ? 'Aguardando leitura do QR'
         : pulse.status === 'codigo' ? 'Aguardando o código de pareamento'
@@ -169,7 +169,7 @@ export default function PulseWhatsAppCard({ onChange }: { onChange?: () => void 
           </div>
           <div className="flex-1 min-w-[200px]">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">WhatsApp da PULSE</p>
-            <p className={`text-xl font-semibold flex items-center gap-2 ${tone === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'wait' ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
+            <p className={`text-xl font-semibold ${tone === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'wait' ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
               <span aria-hidden>{tone === 'ok' ? '🟢' : tone === 'wait' ? '🟡' : '🔴'}</span> {headline}
             </p>
             {connected && pulse && (
@@ -181,14 +181,14 @@ export default function PulseWhatsAppCard({ onChange }: { onChange?: () => void 
             {!connected && pulse?.last_error && !waiting && <p className="text-sm text-red-600 dark:text-red-400">{pulse.last_error}</p>}
             {!pulse && !adoptable && <p className="text-sm text-muted-foreground">Conecte um número só para o PULSE: a equipe manda os comandos (texto ou áudio) para ele.</p>}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             {!pulse && !adoptable && (
-              <Button size="lg" onClick={() => createAndConnect(false)} disabled={busy}>
+              <Button size="lg" className="w-full sm:w-auto whitespace-normal h-auto min-h-11 py-2" onClick={() => createAndConnect(false)} disabled={busy}>
                 {busy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <PlugZap size={16} className="mr-2" />} Conectar WhatsApp da PULSE
               </Button>
             )}
             {!pulse && adoptable && (
-              <Button size="lg" onClick={adopt} disabled={busy}>
+              <Button size="lg" className="w-full sm:w-auto whitespace-normal h-auto min-h-11 py-2" onClick={adopt} disabled={busy}>
                 {busy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <PlugZap size={16} className="mr-2" />} Usar esta conexão para a PULSE
               </Button>
             )}
@@ -204,7 +204,7 @@ export default function PulseWhatsAppCard({ onChange }: { onChange?: () => void 
               <Button variant="ghost" onClick={() => run(() => api(`/whatsapp/connections/${pulse.id}/disconnect`, { method: 'POST' }), 'Cancelado')} disabled={busy}>Cancelar</Button>
             )}
             {pulse && !connected && !waiting && (
-              <Button size="lg" onClick={() => reconnect(false)} disabled={busy}>
+              <Button size="lg" className="w-full sm:w-auto whitespace-normal h-auto min-h-11 py-2" onClick={() => reconnect(false)} disabled={busy}>
                 {busy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <RefreshCw size={16} className="mr-2" />} {pulse.status === 'nova' ? 'Conectar' : 'Reconectar'}
               </Button>
             )}

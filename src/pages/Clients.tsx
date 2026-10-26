@@ -1260,8 +1260,26 @@ export default function Clients() {
             <Input value={form.clientLogin || ''} onChange={e => setForm({ ...form, clientLogin: e.target.value })} placeholder="login@email.com" />
           </div>
           <div className="space-y-1">
-            <Label>Senha</Label>
-            <Input value={form.clientPassword || ''} onChange={e => setForm({ ...form, clientPassword: e.target.value })} placeholder="••••••••" />
+            <Label>Senha do portal</Label>
+            {/* A senha não é definida aqui (o campo antigo nunca era salvo): o cliente cria a
+                dele no link de registro do portal. */}
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              O cliente cria a própria senha no link de registro do portal{editing ? '.' : ' (disponível depois de salvar).'}
+            </p>
+            {editing && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1 text-xs"
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/portal-registro/${editing.id}`);
+                  toast.success('Link de registro do portal copiado!');
+                }}
+              >
+                <Copy size={12} /> Copiar link de registro
+              </Button>
+            )}
           </div>
         </div>
         <div className="space-y-1">

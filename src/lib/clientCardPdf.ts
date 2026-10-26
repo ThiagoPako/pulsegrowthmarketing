@@ -95,7 +95,8 @@ export async function generateClientCardPdf(client: Client, videomakerName: stri
   // === ACESSOS ===
   addSection('ACESSOS E LINKS');
   addField('Login', client.clientLogin || '');
-  addField('Senha', client.clientPassword || '');
+  // A senha do portal não fica na ficha: o cliente cria a dele no link de registro
+  addField('Senha do portal', 'criada pelo cliente no registro');
 
   // Drive button (clickable)
   if (client.driveLink) {

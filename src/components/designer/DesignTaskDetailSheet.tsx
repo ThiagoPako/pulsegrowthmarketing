@@ -569,7 +569,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
         <SheetTitle className="sr-only">{task.title}</SheetTitle>
         {/* Header */}
         <div className="border-b border-border px-5 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-3 min-w-0">
               <ClientLogo client={{ companyName: task.clients?.company_name || task.prospect_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="md" />
               <div className="min-w-0">
@@ -577,7 +577,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                 <p className="text-xs text-muted-foreground truncate">{task.title}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 md:shrink-0">
               {task.profiles && (
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <User size={13} />
@@ -748,11 +748,11 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           </div>
         </div>
 
-        {/* Body: 3-column layout like reference */}
-        <div className="flex flex-1 overflow-hidden">
+        {/* Body: 3-column layout like reference (no celular: uma coluna só, ações primeiro, com scroll único) */}
+        <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
 
           {/* LEFT COLUMN (~40%): Briefing / Formulário */}
-          <div className="flex-[4] min-w-0 overflow-hidden flex flex-col border-r border-border">
+          <div className="md:flex-[4] min-w-0 md:overflow-hidden flex flex-col border-b md:border-b-0 md:border-r border-border">
             <Tabs defaultValue="briefing" className="flex-1 flex flex-col overflow-hidden">
               <TabsList className="h-10 rounded-none border-b border-border bg-transparent px-4 justify-start gap-0">
                 <TabsTrigger value="briefing" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs gap-1.5">
@@ -1228,7 +1228,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           </div>
 
           {/* CENTER COLUMN (~40%): Etapa atual + Arquivos + Colaboração */}
-          <div className="flex-[4] min-w-0 overflow-hidden flex flex-col border-r border-border">
+          <div className="md:flex-[4] min-w-0 md:overflow-hidden flex flex-col border-b md:border-b-0 md:border-r border-border">
             <ScrollArea className="flex-1">
               <div className="px-6 py-5 space-y-5">
                 {/* Etapa Atual header */}
@@ -1919,7 +1919,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           </div>
 
           {/* RIGHT COLUMN (~20%): Mover Para + Informações */}
-          <div className="flex-[2] min-w-0 flex flex-col overflow-hidden">
+          <div className="order-first md:order-none md:flex-[2] min-w-0 flex flex-col md:overflow-hidden border-b md:border-b-0 border-border">
             <ScrollArea className="flex-1">
               <div className="p-4 space-y-5 overflow-hidden">
                 {/* Move actions */}

@@ -205,7 +205,7 @@ export default function ScheduleDialog({ item, presetDate, clientId, accounts, o
   const askCancel = () => setConfirm({
     title: 'Cancelar agendamento?',
     description: `${item.title}${item.when ? ` · ${formatDayLabel(item.when.date)}${item.when.time ? ` às ${item.when.time}` : ''}` : ''}`,
-    confirmLabel: 'Cancelar agendamento',
+    confirmLabel: 'Sim, cancelar agendamento',
     destructive: true,
     onConfirm: async () => {
       setSaving(true);

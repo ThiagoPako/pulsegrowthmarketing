@@ -97,6 +97,19 @@ export async function findPortalContentForTask(
   return data?.length ? { id: data[0].id, linked: false } : null;
 }
 
+// Prazos e dias úteis mudam raramente: guarda por 60 s em vez de buscar a cada movimentação
+const DEADLINE_SETTINGS_TTL_MS = 60_000;
+let deadlineSettingsCache: { value: any; at: number } | null = null;
+async function getDeadlineSettings(): Promise<any> {
+  if (deadlineSettingsCache && Date.now() - deadlineSettingsCache.at < DEADLINE_SETTINGS_TTL_MS) {
+    return deadlineSettingsCache.value;
+  }
+  const { data, error } = await supabase.from('company_settings').select('editing_deadline_hours, review_deadline_hours, alteration_deadline_hours, approval_deadline_hours, work_days, editing_deadline_enabled, review_deadline_enabled, alteration_deadline_enabled, approval_deadline_enabled').limit(1).single();
+  // Só guarda leitura que deu certo (falha cai nos padrões só desta vez)
+  if (!error && data) deadlineSettingsCache = { value: data, at: Date.now() };
+  return data;
+}
+
 export async function syncContentTaskColumnChange(
   newColumn: string,
   ctx: SyncContext
@@ -123,8 +136,8 @@ export async function syncContentTaskColumnChange(
     approval_deadline: null,
   };
 
-  // Fetch deadline settings + work_days + enabled flags
-  const { data: settingsRow } = await supabase.from('company_settings').select('editing_deadline_hours, review_deadline_hours, alteration_deadline_hours, approval_deadline_hours, work_days, editing_deadline_enabled, review_deadline_enabled, alteration_deadline_enabled, approval_deadline_enabled').limit(1).single();
+  // Fetch deadline settings + work_days + enabled flags (cache curto: uma chamada a menos por movimentação)
+  const settingsRow = await getDeadlineSettings();
   const deadlineHours = {
     editing: settingsRow?.editing_deadline_hours ?? 48,
     review: settingsRow?.review_deadline_hours ?? 24,

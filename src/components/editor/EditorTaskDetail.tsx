@@ -1,8 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/contexts/AppContext';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, profileHasRole } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
+import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
+import AgentReviewBadge from '@/components/kanban/AgentReviewBadge';
+import AgentReadinessBadge from '@/components/kanban/AgentReadinessBadge';
+import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
+import { useAgentIds } from '@/hooks/useAgentIds';
+import { agentWorkState, type AgentCardFields } from '@/lib/agentCardStatus';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -63,7 +69,8 @@ function getStageIndex(column: string): number {
     case 'ideias': return 0;
     case 'captacao': return 1;
     case 'edicao': case 'alteracao': return 2;
-    case 'revisao': return 3;
+    // Análise: entrega de agente conferida antes da revisão humana
+    case 'pre_revisao': case 'revisao': return 3;
     case 'envio': case 'concluido': return 4;
     default: return 0;
   }
@@ -216,6 +223,11 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const [fetchedScript, setFetchedScript] = useState<any>(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationPoints, setCelebrationPoints] = useState(0);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const agentIds = useAgentIds();
+  // Mandar ao cliente (Revisão → Enviado) é da revisão: admin e social media
+  const canApprove = profileHasRole(profile, 'admin', 'social_media');
+  const agentBusy = !!agentWorkState(task as AgentCardFields, { agentIds });
 
   const client = clients.find(c => c.id === task.client_id);
   const contextScript = task.script_id ? scripts.find(s => s.id === task.script_id) : null;
@@ -766,14 +778,23 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               <Badge className={`${cfg.color} border-0 text-xs`}><cfg.icon size={11} className="mr-0.5" /> {cfg.label}</Badge>
               <Badge variant="outline" className="text-xs">
                 {task.kanban_column === 'edicao' ? (isEditing ? 'Editando' : 'Aguardando') :
+                 task.kanban_column === 'pre_revisao' ? '🤖 Análise' :
                  task.kanban_column === 'revisao' ? 'Em Revisão' :
-                 task.kanban_column === 'alteracao' ? 'Ajuste' : 'Finalizado'}
+                 task.kanban_column === 'alteracao' ? 'Ajuste' :
+                 task.kanban_column === 'envio' ? 'Enviado ao cliente' : 'Finalizado'}
               </Badge>
               {/* Points badge */}
               <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-600 border-amber-500/30">
                 <Star size={10} className="mr-0.5" /> {getTypeConfig(task.content_type).points} pts
               </Badge>
             </div>
+
+            {/* Agente de IA com o card, parecer da Análise e prontidão para a fila dos agentes */}
+            <div className="rounded-lg overflow-hidden empty:hidden">
+              <AgentWorkBadge task={task as AgentCardFields} users={users} agentIds={agentIds} />
+              <AgentReviewBadge task={task as AgentCardFields} users={users} />
+            </div>
+            <AgentReadinessBadge task={task as AgentCardFields} agentIds={agentIds} detailed />
 
             {/* ─── EDITING TIMER HERO ─────────────────────────── */}
             {isEditing && task.editing_started_at && task.kanban_column === 'edicao' && (
@@ -1275,8 +1296,13 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
                 </motion.div>
               )}
 
+              {/* Com um agente trabalhando, quem entrega é ele (pela fila, passando pela Análise) */}
+              {agentBusy && (
+                <p className="text-xs text-muted-foreground self-center">🤖 Um agente de IA está com este card: ele entrega pela fila.</p>
+              )}
+
               {/* Finalize: send for approval */}
-              {(task.kanban_column === 'edicao' && isEditing) || task.kanban_column === 'alteracao' ? (
+              {!agentBusy && ((task.kanban_column === 'edicao' && isEditing) || task.kanban_column === 'alteracao') ? (
                 <motion.div whileTap={{ scale: 0.92 }}>
                   <Button onClick={sendForApproval}
                     disabled={saving || !hasAnyVideo}
@@ -1293,18 +1319,30 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               )}
 
 
-              {task.kanban_column === 'revisao' && (
+              {/* Revisão → Enviado: só quem revisa, e com confirmação (o cliente é avisado).
+                  Antes qualquer um que abrisse o card via "Marcar como Finalizado" mandava ao cliente. */}
+              {task.kanban_column === 'revisao' && canApprove && (
                 <motion.div whileTap={{ scale: 0.92 }}>
-                  <Button onClick={markAsFinished} disabled={saving}
+                  <Button onClick={() => setConfirmAction({
+                    title: 'Aprovar e enviar ao cliente?',
+                    description: 'O vídeo fica visível no portal do cliente e ele recebe o aviso pelo WhatsApp. Não dá para desfazer o aviso.',
+                    confirmLabel: 'Aprovar e enviar',
+                    onConfirm: markAsFinished,
+                  })} disabled={saving}
                     className="gap-1.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-md">
-                    <Check size={14} /> Marcar como Finalizado
+                    <Check size={14} /> Aprovar e enviar ao cliente
                   </Button>
                 </motion.div>
+              )}
+              {task.kanban_column === 'revisao' && !canApprove && (
+                <p className="text-xs text-muted-foreground self-center">👁 Aguardando a revisão (Social Media ou Administrador)</p>
               )}
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmActionDialog action={confirmAction} onClose={() => setConfirmAction(null)} />
 
       {/* ── FORMATOS DE OTIMIZAÇÃO ── */}
       <Dialog open={formatsOpen} onOpenChange={setFormatsOpen}>

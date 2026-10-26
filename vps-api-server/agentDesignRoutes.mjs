@@ -17,6 +17,7 @@
 //   POST /api/agent/design/tasks/:id/release      { reason } devolve a arte
 //   GET  /api/agent/design/review-queue           (revisor_arte, chefe) artes em Análise IA
 //   POST /api/agent/design/tasks/:id/review       (revisor_arte, chefe) { verdict: aprovado|ajustes, notes, errors: [{category, description}] }
+//   POST /api/agent/design/tasks/:id/references-archived  (designer, chefe) { link } referências guardadas no Drive do cliente
 //   GET  /api/agent/design/learning?designer=&days=   erros por categoria (designer vê só os próprios)
 //   GET  /api/agent/design/stale?minutes=&hours=  (chefe) artes paradas
 //   POST /api/agent/design/tasks/:id/assign       (chefe) { to, reason } passa para um designer-agente
@@ -312,6 +313,8 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
           designed_by: 'UUID', // quem fez a arte entregue (ajuste volta para ele)
           agent_step: 'TEXT',
           agent_heartbeat_at: 'TIMESTAMPTZ',
+          references_drive_link: 'TEXT', // pasta "Referências/<data> <título>" no Drive do cliente, onde o designer arquivou
+          references_archived_at: 'TIMESTAMPTZ',
         };
         const missing = Object.entries(wanted).filter(([c]) => !have.has(c));
         if (missing.length) {
@@ -566,7 +569,12 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
       materials_link: t.materials_link || null,
       references: {
         links: (Array.isArray(t.references_links) ? t.references_links : []).filter(Boolean),
+        // arquivos enviados pela equipe (imagens, PDF, vídeo curto) ficam em reference_images
+        files: (Array.isArray(t.reference_images) ? t.reference_images : []).filter(Boolean),
         images: (Array.isArray(t.reference_images) ? t.reference_images : []).filter(Boolean),
+        archived_drive_link: t.references_drive_link || null,
+        archived_at: t.references_archived_at || null,
+        archive_folder_name: `Referências/${new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())} ${String(t.title || '').trim().replace(/[\\/:*?"<>|]+/g, '-').slice(0, 80)}`,
       },
       adjustments: history
         .filter((h) => /ajuste/i.test(h.action || '') && h.details)
@@ -777,6 +785,30 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
       if (!rows.length) return res.status(409).json({ error: 'Nada a liberar (a arte não está com você)' });
       await addHistory(pool, taskId, agent.userId, 'Arte devolvida pelo agente', reason);
       res.json({ ok: true, column: rows[0].kanban_column });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Referências baixadas e entendidas → o designer sobe para o Drive do cliente
+  // (Referências/<AAAA-MM-DD> <título>) pelo conector do Google Drive e registra aqui o link.
+  app.post('/api/agent/design/tasks/:id/references-archived', async (req, res) => {
+    try {
+      const agent = await designAgent(req, ['designer', 'chefe']);
+      const link = String(req.body?.link || '').trim().slice(0, 1000);
+      if (!/^https:\/\/(drive|docs)\.google\.com\//i.test(link)) {
+        return res.status(400).json({ error: 'Mande o link da pasta no Google Drive (https://drive.google.com/...)' });
+      }
+      const taskId = await resolveTaskId(req.params.id);
+      const { rows } = await pool.query(
+        `UPDATE design_tasks SET references_drive_link = $2, references_archived_at = now()
+          WHERE id = $1 AND ($3 OR assigned_to = $4 OR designed_by = $4)
+          RETURNING id, references_archived_at`,
+        [taskId, link, agent.role === 'chefe', agent.userId]
+      );
+      if (!rows.length) return res.status(409).json({ error: 'Só quem está com a arte (ou a chefe) registra as referências' });
+      await addHistory(pool, taskId, agent.userId, 'Referências guardadas no Drive do cliente', link);
+      res.json({ ok: true, link, archived_at: rows[0].references_archived_at });
     } catch (error) {
       sendError(res, error);
     }

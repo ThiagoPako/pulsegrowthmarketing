@@ -11843,7 +11843,8 @@ app.get('/api/design-tasks/fast', async (req, res) => {
     // detalhe da tarefa; só entram se a coluna existir, para o feed não cair por falta dela.
     const dtColumns = await getExistingColumns('design_tasks').catch(() => null);
     // Brief estruturado, formato/dimensão, materiais e agentes de design (agentDesignRoutes.mjs)
-    const AGENT_DESIGN_COLUMNS = ['copy_brief', 'dimensions', 'materials_link', 'designed_by', 'agent_step', 'agent_heartbeat_at'];
+    const AGENT_DESIGN_COLUMNS = ['copy_brief', 'dimensions', 'materials_link', 'designed_by', 'agent_step', 'agent_heartbeat_at',
+      'references_drive_link', 'references_archived_at'];
     const extraSelect = [
       dtColumns?.has('checklist') ? 'dt.checklist' : null,
       dtColumns?.has('collaborator_id') ? 'dt.collaborator_id' : null,
@@ -11945,6 +11946,8 @@ app.get('/api/design-tasks/fast', async (req, res) => {
       designed_by: row.designed_by ?? null,
       agent_step: row.agent_step ?? null,
       agent_heartbeat_at: row.agent_heartbeat_at ?? null,
+      references_drive_link: row.references_drive_link ?? null,
+      references_archived_at: row.references_archived_at ?? null,
       clients: row.clients_company_name ? {
         company_name: row.clients_company_name,
         color: row.clients_color || '217 91% 60%',

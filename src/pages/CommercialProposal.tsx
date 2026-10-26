@@ -737,7 +737,9 @@ export default function CommercialProposal() {
     }
   }, [clientCompany, proposalType, cronogramaPricingMode]);
 
-  const saveAndShareProposal = useCallback(async () => {
+  // Sem useCallback: a lista de dependências deixava de fora vários campos (vídeos, cidade,
+  // cronograma, descontos, 6+6) e o salvamento usava valores velhos do formulário.
+  const saveAndShareProposal = async () => {
     if (!clientCompany) { toast.error('Preencha o nome da empresa'); return; }
     if (proposalType === 'marketing' && !selectedPlan) { toast.error('Selecione um plano'); return; }
     if (proposalType === 'sistema' && !systemValue) { toast.error('Preencha o valor do sistema'); return; }
@@ -885,7 +887,8 @@ export default function CommercialProposal() {
       
       // Auto-copy and ensure visibility
       await copyToClipboard(link);
-      toast.success(editingProposalId ? `Link para ${targetCity === 'minacu' ? 'Minaçu' : 'Uruaçu'} atualizado!` : `Proposta salva! Link para ${targetCity === 'minacu' ? 'Minaçu' : 'Uruaçu'} copiado.`);
+      const cityLabel = targetCity === 'minacu' ? ' para Minaçu' : targetCity === 'uruacu' ? ' para Uruaçu' : '';
+      toast.success(editingProposalId ? `Link${cityLabel} atualizado!` : `Proposta salva! Link${cityLabel} copiado.`);
 
 
       localStorage.removeItem(DRAFT_KEY);
@@ -895,7 +898,7 @@ export default function CommercialProposal() {
       toast.error('Erro ao salvar proposta: ' + message);
     }
     setSavingProposal(false);
-  }, [editingProposalId, clientName, clientCompany, selectedPlanId, selectedPlan, bonusServices, teamMembers, users, hasContract, customDiscount, observations, validityDate, whatsappNumber, user, proposalType, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaProjectName, cronogramaMethodology, cronogramaDeliverables, cronogramaPhases, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, copyToClipboard, refetchProposals]);
+  };
 
   const handleCopyLink = (link: string) => {
     copyToClipboard(link).then(() => toast.success('Link copiado!'));

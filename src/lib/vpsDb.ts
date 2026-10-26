@@ -626,9 +626,17 @@ async function invokeFunction(functionName: string, options?: { body?: any }): P
       });
     }
 
-    const data = await response.json();
+    // Rota inexistente volta o 404 em HTML do Express: antes o response.json() quebrava com
+    // "Unexpected token '<'". Agora a mensagem diz que a função não existe no servidor.
+    const text = await response.text();
+    let data: any = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      return { data: null, error: { message: `Função "${functionName}" indisponível no servidor (HTTP ${response.status}).` } };
+    }
     if (!response.ok) {
-      return { data: null, error: data.error || { message: `HTTP ${response.status}` } };
+      return { data: null, error: data?.error || { message: `HTTP ${response.status}` } };
     }
     return { data, error: null };
   } catch (error: any) {

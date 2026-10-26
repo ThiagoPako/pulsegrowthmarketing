@@ -5,6 +5,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { ROLE_LABELS } from '@/types';
 import { useMyPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
+import { useModuleAccess } from '@/hooks/useModuleAccess';
 import { useIsMobile } from '@/hooks/use-mobile';
 import pulseLogo from '@/assets/pulse_logo.png';
 import { Input } from '@/components/ui/input';
@@ -14,7 +15,7 @@ import ProfileDialog from '@/components/ProfileDialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
   LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Cpu, MessageCircle, Workflow, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon, Gauge, Flame, Pin, PinOff, Database, Link2, Images
-  , Sparkles, type LucideIcon,
+  , Sparkles, CalendarClock, type LucideIcon,
 } from 'lucide-react';
 
 import { useTheme } from '@/hooks/useTheme';
@@ -40,7 +41,8 @@ type NavCategory = {
   speedometer?: boolean;
   featured?: boolean;
   highlight?: boolean;
-  items: { path: string; label: string; icon: LucideIcon; roles: string[]; highlight?: boolean }[];
+  /** module: módulo oculto, só aparece para quem está na lista do servidor (module_access) */
+  items: { path: string; label: string; icon: LucideIcon; roles: string[]; highlight?: boolean; module?: string }[];
 };
 
 
@@ -63,6 +65,7 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/conexoes-sociais', label: 'Conexões Sociais', icon: Plug, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
       { path: '/estudio-postagem', label: 'Estúdio de Postagem', icon: Images, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
+      { path: '/agendamentos', label: 'Agendamentos', icon: CalendarClock, roles: ['admin'], module: 'agendamentos' },
       { path: '/desempenho-social', label: 'Desempenho Social', icon: TrendingUp, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
     ],
   },
@@ -240,6 +243,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, [sidebarPinned]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { hasModuleAccess } = useMyPermissions();
+  const hiddenModules = useModuleAccess();
   const isMobile = useIsMobile();
   const { theme, toggleTheme } = useTheme();
 
@@ -282,6 +286,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       ...cat,
       items: cat.items.filter(item => {
         if (!currentUser) return false;
+        if (item.module && !hiddenModules.has(item.module)) return false;
         
         // Check role(s) — considera função principal + adicionais
         const userRoles = currentUser.roles && currentUser.roles.length ? currentUser.roles : [currentUser.role];

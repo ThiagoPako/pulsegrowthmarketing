@@ -42,6 +42,8 @@ const SocialConnectInvite = lazy(() => import("@/pages/SocialConnectInvite"));
 
 const SocialInsights = lazy(() => import("@/pages/SocialInsights"));
 const PostStudio = lazy(() => import("@/pages/PostStudio"));
+const Scheduling = lazy(() => import("@/pages/Scheduling"));
+const RequireModuleAccess = lazy(() => import("@/components/scheduling/RequireModuleAccess"));
 const ContentKanban = lazy(() => import("@/pages/ContentKanban"));
 const EditorDashboard = lazy(() => import("@/pages/EditorDashboard"));
 const EditorKanban = lazy(() => import("@/pages/EditorKanban"));
@@ -291,6 +293,7 @@ function AppRoutes() {
         <Route path="/conexoes-sociais" element={<ProtectedRoute><SocialConnections /></ProtectedRoute>} />
         <Route path="/conectar-social/:token" element={<SocialConnectInvite />} />
         <Route path="/estudio-postagem" element={<ProtectedRoute><PostStudio /></ProtectedRoute>} />
+        <Route path="/agendamentos" element={<ProtectedRoute><RequireModuleAccess module="agendamentos"><Scheduling /></RequireModuleAccess></ProtectedRoute>} />
 
 
         <Route path="/desempenho-social" element={<ProtectedRoute><SocialInsights /></ProtectedRoute>} />

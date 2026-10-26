@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/vpsDb';
 import { Switch } from '@/components/ui/switch';
@@ -10,14 +10,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Building2, Cake, Check, Copy, Link2, Loader2, MapPin, Pencil, Plus, Search, Stethoscope, Trash2, Users, FolderOpen, Share2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Building2, Cake, Check, Copy, Link2, Link2Off, Loader2, MapPin, Pencil, Plus, Search, Stethoscope, Trash2, Users, FolderOpen, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
 import MediaLibrary, { type MediaOwner } from '@/components/clientdb/MediaLibrary';
 import ProfessionalDialog from '@/components/clientdb/ProfessionalDialog';
 import UnitDialog, { UNIT_TYPES } from '@/components/clientdb/UnitDialog';
 import CollaboratorDialog from '@/components/clientdb/CollaboratorDialog';
-import { useClientDatabase, type ClientCollaborator, type ClientProfessional, type ClientUnit } from '@/hooks/useClientDatabase';
+import { useClientDatabase, type ClientCollaborator, type ClientDatabaseTable, type ClientProfessional, type ClientUnit } from '@/hooks/useClientDatabase';
 
 /**
  * Banco de Dados de Clientes Pulse.
@@ -37,6 +38,15 @@ export default function ClientDatabase() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  // Exclusão só depois de confirmar: um toque na lixeira apagava o cadastro e as mídias
+  const [pendingDelete, setPendingDelete] = useState<{ table: ClientDatabaseTable; id: string; name: string } | null>(null);
+
+  // Trocar de cliente limpa o link mostrado (antes dava para copiar o link do cliente anterior)
+  useEffect(() => {
+    setShareUrl(null);
+    setCopied(false);
+  }, [clientId]);
 
   const { professionals, units, collaborators, saveRecord, deleteRecord } = useClientDatabase(clientId || undefined);
   const queryClient = useQueryClient();
@@ -95,6 +105,14 @@ export default function ClientDatabase() {
       photos: pro.photos,
       videos: pro.videos,
     })),
+    ...filteredCollabs.map((collab) => ({
+      id: collab.id,
+      label: collab.name,
+      sublabel: [collab.job_role, collab.department].filter(Boolean).join(' · ') || null,
+      kind: 'collaborator' as const,
+      photos: collab.photos,
+      videos: collab.videos,
+    })),
     ...filteredUnits.map((unit) => ({
       id: unit.id,
       label: unit.unit_name,
@@ -103,7 +121,7 @@ export default function ClientDatabase() {
       photos: unit.photos,
       videos: unit.videos,
     })),
-  ], [filteredPros, filteredUnits]);
+  ], [filteredPros, filteredCollabs, filteredUnits]);
 
   /** Gera (ou reaproveita) o link público de compartilhamento do cliente. */
   const handleShare = async () => {
@@ -130,6 +148,25 @@ export default function ClientDatabase() {
       toast.error(error instanceof Error ? error.message : 'Erro ao gerar link público');
     } finally {
       setSharing(false);
+    }
+  };
+
+  /** Desativa o link público do cliente; o próximo "Gerar link" cria um token novo. */
+  const handleRevoke = async () => {
+    if (!clientId) return;
+    if (!confirm('Revogar o link público? Quem tiver o link atual perde o acesso e não consegue mais enviar arquivos.')) return;
+    setRevoking(true);
+    try {
+      const response = await vpsAuthedFetch(`/api/client-database/share/${clientId}`, { method: 'DELETE' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error || 'Falha ao revogar link');
+      setShareUrl(null);
+      setCopied(false);
+      toast.success('Link público revogado.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao revogar link público');
+    } finally {
+      setRevoking(false);
     }
   };
 
@@ -235,7 +272,7 @@ export default function ClientDatabase() {
                           size="icon"
                           variant="ghost"
                           aria-label="Remover"
-                          onClick={() => deleteRecord.mutate({ table: 'client_professionals', id: pro.id })}
+                          onClick={() => setPendingDelete({ table: 'client_professionals', id: pro.id, name: pro.name })}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -293,7 +330,7 @@ export default function ClientDatabase() {
                           size="icon"
                           variant="ghost"
                           aria-label="Remover"
-                          onClick={() => deleteRecord.mutate({ table: 'client_units', id: unit.id })}
+                          onClick={() => setPendingDelete({ table: 'client_units', id: unit.id, name: unit.unit_name })}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -374,7 +411,7 @@ export default function ClientDatabase() {
                           size="icon"
                           variant="ghost"
                           aria-label="Remover"
-                          onClick={() => deleteRecord.mutate({ table: 'client_collaborators', id: collab.id })}
+                          onClick={() => setPendingDelete({ table: 'client_collaborators', id: collab.id, name: collab.name })}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -418,11 +455,21 @@ export default function ClientDatabase() {
                   >
                     {copied ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 shrink-0 text-xs text-destructive"
+                    onClick={handleRevoke}
+                    disabled={revoking}
+                  >
+                    {revoking ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Link2Off className="mr-1 h-3.5 w-3.5" />}
+                    Revogar
+                  </Button>
                 </div>
               )}
             </Card>
 
-            {professionals.isLoading || units.isLoading ? (
+            {professionals.isLoading || units.isLoading || collaborators.isLoading ? (
               <div className="flex justify-center p-10"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
             ) : (
               <MediaLibrary owners={mediaOwners} />
@@ -452,6 +499,29 @@ export default function ClientDatabase() {
           saveRecord.mutate({ table: 'client_collaborators', payload }, { onSuccess: () => setCollabDialogOpen(false) })
         }
       />
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover {pendingDelete?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O cadastro é apagado e as fotos e vídeos vinculados deixam de aparecer no acervo. Não dá para desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (pendingDelete) deleteRecord.mutate({ table: pendingDelete.table, id: pendingDelete.id });
+                setPendingDelete(null);
+              }}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <UnitDialog
         open={unitDialogOpen}

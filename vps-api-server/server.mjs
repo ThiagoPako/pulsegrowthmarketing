@@ -1183,20 +1183,22 @@ app.get('/api/public/client-database/:token', async (req, res) => {
     const clientId = share.rows[0].client_id;
     pool.query('UPDATE client_database_shares SET views = views + 1 WHERE token = $1', [token]).catch(() => {});
 
+    // Link sem login: só o que a página pública mostra (nome, cargo e mídia). Aniversários,
+    // observações, conselho, agenda e endereços ficam só para a equipe.
     const [client, professionals, units, collaborators] = await Promise.all([
       pool.query('SELECT id, company_name, logo_url FROM clients WHERE id = $1 LIMIT 1', [clientId]),
       pool.query(
-        `SELECT id, name, specialty, council_type, council_number, rqe, bio, schedule_notes, photos, videos, active
+        `SELECT id, name, specialty, photos, videos
          FROM client_professionals WHERE client_id = $1 ORDER BY name ASC`,
         [clientId],
       ),
       pool.query(
-        `SELECT id, unit_name, unit_type, city_name, state, address, notes, photos, videos
+        `SELECT id, unit_name, city_name, state, photos, videos
          FROM client_units WHERE client_id = $1 ORDER BY city_name ASC`,
         [clientId],
       ),
       pool.query(
-        `SELECT id, name, job_role, department, birthday, notes, photos, videos, active
+        `SELECT id, name, job_role, department, photos, videos
          FROM client_collaborators WHERE client_id = $1 ORDER BY name ASC`,
         [clientId],
       ).catch(() => ({ rows: [] })),

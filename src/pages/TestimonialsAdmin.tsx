@@ -48,26 +48,30 @@ export default function TestimonialsAdmin() {
     setCreating(false);
   };
 
+  // Só confirma quando o servidor gravou (gravar depoimento é só de admin/social media).
   const approve = async (id: string) => {
-    await supabase
+    const { error } = await supabase
       .from('client_testimonials')
       .update({ status: 'approved', approved_at: new Date().toISOString() })
       .eq('id', id);
+    if (error) { toast.error('Erro ao aprovar: ' + (error.message || 'falha desconhecida')); return; }
     toast.success('Depoimento aprovado e visível na landing page!');
     fetchAll();
   };
 
   const reject = async (id: string) => {
-    await supabase
+    const { error } = await supabase
       .from('client_testimonials')
       .update({ status: 'rejected' })
       .eq('id', id);
+    if (error) { toast.error('Erro ao rejeitar: ' + (error.message || 'falha desconhecida')); return; }
     toast.info('Depoimento rejeitado');
     fetchAll();
   };
 
   const remove = async (id: string) => {
-    await supabase.from('client_testimonials').delete().eq('id', id);
+    const { error } = await supabase.from('client_testimonials').delete().eq('id', id);
+    if (error) { toast.error('Erro ao remover: ' + (error.message || 'falha desconhecida')); return; }
     toast.success('Removido');
     fetchAll();
   };

@@ -10142,6 +10142,12 @@ app.post('/api/db/query', async (req, res) => {
       await ensurePlanPromotionsTable();
     }
 
+    if (safeTable === 'client_testimonials') {
+      await ensureTestimonialsTable().catch((error) => {
+        console.warn('Could not ensure client_testimonials table:', error?.message || error);
+      });
+    }
+
     if (safeTable === 'scheduled_recordings') {
 
       await ensureScheduledRecordingsTable();
@@ -11657,6 +11663,198 @@ app.put('/api/landing-settings/facebook-pixel', async (req, res) => {
     );
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Landing pública: depoimentos aprovados, vídeos dos planos e logos de clientes ───
+// A landing é anônima e lia essas tabelas pelo /api/db/query (exige login): os depoimentos
+// aprovados nunca apareciam (no lugar entravam 3 depoimentos inventados) e os vídeos e logos
+// não carregavam. O link de depoimento (/feedback) também gravava pelo /api/db/query.
+let testimonialsTableReady = null;
+function ensureTestimonialsTable() {
+  if (!testimonialsTableReady) {
+    testimonialsTableReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS client_testimonials (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_name TEXT NOT NULL DEFAULT '',
+        client_role TEXT NOT NULL DEFAULT '',
+        message TEXT NOT NULL DEFAULT '',
+        rating INTEGER NOT NULL DEFAULT 5,
+        token TEXT NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'),
+        status TEXT NOT NULL DEFAULT 'pending',
+        approved_at TIMESTAMPTZ,
+        city TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      ALTER TABLE client_testimonials ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+      CREATE INDEX IF NOT EXISTS idx_client_testimonials_token ON client_testimonials (token);
+    `).catch((error) => {
+      testimonialsTableReady = null;
+      throw error;
+    });
+  }
+  return testimonialsTableReady;
+}
+
+// Planos que têm vídeo na landing (mesmos nomes da seção de planos).
+const LANDING_PLAN_VIDEO_NAMES = ['Starter', 'Boost', 'Premium', 'Elite', 'Endomarketing'];
+let planVideosTableReady = null;
+function ensurePlanVideosTable() {
+  if (!planVideosTableReady) {
+    planVideosTableReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS plan_videos (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        plan_name TEXT NOT NULL UNIQUE,
+        video_url TEXT,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `).catch((error) => {
+      planVideosTableReady = null;
+      throw error;
+    });
+  }
+  return planVideosTableReady;
+}
+
+let publicLandingCache = null; // { at, data } — cache curto, a landing é aberta por qualquer visitante
+const PUBLIC_LANDING_CACHE_MS = 60_000;
+
+app.get('/api/public/landing', async (_req, res) => {
+  try {
+    if (publicLandingCache && Date.now() - publicLandingCache.at < PUBLIC_LANDING_CACHE_MS) {
+      return res.json(publicLandingCache.data);
+    }
+    await Promise.all([
+      ensureTestimonialsTable().catch((e) => console.warn('ensureTestimonialsTable:', e?.message || e)),
+      ensurePlanVideosTable().catch((e) => console.warn('ensurePlanVideosTable:', e?.message || e)),
+    ]);
+    // Depoimentos das duas cidades: a landing é da agência inteira.
+    const [testimonials, planVideos, clientLogos] = await Promise.all([
+      pool.query(
+        `SELECT client_name, client_role, message, rating FROM client_testimonials
+          WHERE status = 'approved' AND btrim(message) <> '' AND btrim(client_name) <> ''
+          ORDER BY approved_at DESC NULLS LAST LIMIT 6`
+      ).then((r) => r.rows).catch(() => []),
+      pool.query(
+        `SELECT plan_name, video_url FROM plan_videos WHERE video_url IS NOT NULL AND btrim(video_url) <> ''`
+      ).then((r) => r.rows).catch(() => []),
+      // Mesma vitrine da proposta pública: clientes ativos com logo.
+      pool.query(
+        `SELECT company_name, logo_url, color FROM clients
+          WHERE status = 'ativo' AND logo_url IS NOT NULL AND btrim(logo_url) <> ''
+          ORDER BY company_name`
+      ).then((r) => r.rows).catch(() => []),
+    ]);
+    const data = { testimonials, plan_videos: planVideos, client_logos: clientLogos };
+    publicLandingCache = { at: Date.now(), data };
+    res.json(data);
+  } catch (e) {
+    console.error('[public landing] error:', e?.message || e);
+    res.status(500).json({ error: 'Erro ao carregar a landing' });
+  }
+});
+
+function cleanFeedbackToken(value) {
+  return String(value || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 128);
+}
+
+// Link de depoimento (/feedback?token=): confere se ainda está pendente.
+app.get('/api/public/testimonials/:token', async (req, res) => {
+  try {
+    const token = cleanFeedbackToken(req.params.token);
+    if (!token) return res.json({ valid: false });
+    await ensureTestimonialsTable();
+    const { rows } = await pool.query('SELECT status FROM client_testimonials WHERE token = $1 LIMIT 1', [token]);
+    res.json({ valid: rows[0]?.status === 'pending' });
+  } catch (e) {
+    console.error('[public testimonials] check error:', e?.message || e);
+    res.status(500).json({ error: 'Erro ao conferir o link' });
+  }
+});
+
+// Envio do depoimento: só pending -> submitted, uma vez; o admin aprova em /depoimentos.
+app.post('/api/public/testimonials/:token', async (req, res) => {
+  try {
+    const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || 'unknown';
+    if (promoRateLimited(`testimonial:${ip}`, 10)) {
+      return res.status(429).json({ error: 'Muitas tentativas. Aguarde um instante.' });
+    }
+    const token = cleanFeedbackToken(req.params.token);
+    const name = String(req.body?.client_name ?? '').trim();
+    const role = String(req.body?.client_role ?? '').trim();
+    const message = String(req.body?.message ?? '').trim();
+    const rating = Number(req.body?.rating);
+    if (!token) return res.status(400).json({ error: 'Link inválido' });
+    if (!name || !message) return res.status(400).json({ error: 'Preencha seu nome e depoimento' });
+    if (name.length > 120 || role.length > 120) return res.status(400).json({ error: 'Nome ou cargo muito longo' });
+    if (message.length > 2000) return res.status(400).json({ error: 'Depoimento muito longo (máx. 2000 caracteres)' });
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ error: 'Nota inválida' });
+    await ensureTestimonialsTable();
+    const { rows } = await pool.query(
+      `UPDATE client_testimonials
+          SET client_name = $2, client_role = $3, message = $4, rating = $5, status = 'submitted', updated_at = now()
+        WHERE token = $1 AND status = 'pending'
+        RETURNING id`,
+      [token, name, role, message, rating]
+    );
+    if (!rows.length) return res.status(409).json({ error: 'Link inválido ou já utilizado' });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[public testimonials] submit error:', e?.message || e);
+    res.status(500).json({ error: 'Erro ao enviar o depoimento' });
+  }
+});
+
+function cleanLandingVideoUrl(value) {
+  const url = String(value ?? '').trim();
+  if (!url) return null;
+  if (url.length > 2000 || !/^https?:\/\//i.test(url)) {
+    throw Object.assign(new Error('Endereço do vídeo inválido'), { statusCode: 400 });
+  }
+  return url;
+}
+
+// Admin da landing: vídeo/título/descrição do "Quem somos".
+app.put('/api/landing-settings/quem-somos', async (req, res) => {
+  if (!(await requireAdminRoute(req, res))) return;
+  try {
+    const videoUrl = cleanLandingVideoUrl(req.body?.video_url);
+    const title = String(req.body?.title ?? '').slice(0, 300);
+    const description = String(req.body?.description ?? '').slice(0, 3000);
+    await ensureLandingSettingsTable();
+    const { rows } = await pool.query(
+      `INSERT INTO landing_page_settings (section, video_url, title, description, updated_at)
+       VALUES ('quem_somos', $1, $2, $3, now())
+       ON CONFLICT (section) DO UPDATE SET video_url = EXCLUDED.video_url, title = EXCLUDED.title,
+         description = EXCLUDED.description, updated_at = now()
+       RETURNING section, video_url, title, description, updated_at`,
+      [videoUrl, title, description]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(e?.statusCode || 500).json({ error: e.message });
+  }
+});
+
+// Admin da landing: vídeo de explicação de cada plano.
+app.put('/api/landing-settings/plan-video', async (req, res) => {
+  if (!(await requireAdminRoute(req, res))) return;
+  try {
+    const planName = String(req.body?.plan_name ?? '');
+    if (!LANDING_PLAN_VIDEO_NAMES.includes(planName)) return res.status(400).json({ error: 'Plano inválido' });
+    const videoUrl = cleanLandingVideoUrl(req.body?.video_url);
+    await ensurePlanVideosTable();
+    const { rows } = await pool.query(
+      `INSERT INTO plan_videos (plan_name, video_url, updated_at) VALUES ($1, $2, now())
+       ON CONFLICT (plan_name) DO UPDATE SET video_url = EXCLUDED.video_url, updated_at = now()
+       RETURNING plan_name, video_url`,
+      [planName, videoUrl]
+    );
+    publicLandingCache = null;
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(e?.statusCode || 500).json({ error: e.message });
+  }
 });
 
 // ─── Company Settings ───────────────────────────────────────

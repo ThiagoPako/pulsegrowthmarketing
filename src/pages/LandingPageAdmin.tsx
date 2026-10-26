@@ -8,6 +8,10 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Video, Save, Upload, Trash2, ExternalLink, Rocket, Play, Film } from 'lucide-react';
 import TeamMembersAdmin from '@/components/landing/TeamMembersAdmin';
+import { getLandingSection, getPublicLanding, saveQuemSomos, savePlanVideo } from '@/services/landingSettings';
+
+// Planos com vídeo na landing (os mesmos que o servidor aceita).
+const PLAN_VIDEO_NAMES = ['Starter', 'Boost', 'Premium', 'Elite', 'Endomarketing'];
 
 interface PlanVideo {
   id: string;
@@ -22,7 +26,6 @@ export default function LandingPageAdmin() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [recordId, setRecordId] = useState<string | null>(null);
   const [planVideos, setPlanVideos] = useState<PlanVideo[]>([]);
   const [planUploading, setPlanUploading] = useState<string | null>(null);
 
@@ -31,17 +34,12 @@ export default function LandingPageAdmin() {
     loadPlanVideos();
   }, []);
 
+  // landing_page_settings e plan_videos não passam pelo /api/db/query: leitura pela rota
+  // pública da landing e gravação pelas rotas de admin.
   async function loadSettings() {
     try {
-      const { data, error } = await supabase
-        .from('landing_page_settings')
-        .select('*')
-        .eq('section', 'quem_somos')
-        .maybeSingle();
-
-      if (error) throw error;
+      const data = await getLandingSection('quem_somos');
       if (data) {
-        setRecordId(data.id);
         setVideoUrl(data.video_url || '');
         setTitle(data.title || '');
         setDescription(data.description || '');
@@ -54,11 +52,12 @@ export default function LandingPageAdmin() {
   }
 
   async function loadPlanVideos() {
-    const { data } = await supabase
-      .from('plan_videos')
-      .select('*')
-      .order('plan_name');
-    if (data) setPlanVideos(data as PlanVideo[]);
+    const { plan_videos } = await getPublicLanding({ fresh: true });
+    setPlanVideos(PLAN_VIDEO_NAMES.map((name) => ({
+      id: name,
+      plan_name: name,
+      video_url: plan_videos.find((v) => v.plan_name === name)?.video_url || null,
+    })));
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -96,8 +95,7 @@ export default function LandingPageAdmin() {
       const { error: upErr } = await supabase.storage.from('client-content').upload(path, file, { upsert: true });
       if (upErr) throw upErr;
       const { data: urlData } = supabase.storage.from('client-content').getPublicUrl(path);
-      await updatePlanVideoUrl(planName, urlData.publicUrl);
-      toast.success(`Vídeo do plano ${planName} enviado!`);
+      if (await updatePlanVideoUrl(planName, urlData.publicUrl)) toast.success(`Vídeo do plano ${planName} enviado!`);
     } catch (err: any) {
       toast.error('Erro ao enviar: ' + err.message);
     } finally {
@@ -105,31 +103,22 @@ export default function LandingPageAdmin() {
     }
   }
 
-  async function updatePlanVideoUrl(planName: string, url: string | null) {
-    await supabase
-      .from('plan_videos')
-      .update({ video_url: url, updated_at: new Date().toISOString() })
-      .eq('plan_name', planName);
+  /** true quando o servidor gravou (antes mostrava 'Salvo!' mesmo com erro). */
+  async function updatePlanVideoUrl(planName: string, url: string | null): Promise<boolean> {
+    const { error } = await savePlanVideo(planName, url ? url.trim() : null);
+    if (error) {
+      toast.error('Erro ao salvar o vídeo: ' + error);
+      return false;
+    }
     setPlanVideos(prev => prev.map(p => p.plan_name === planName ? { ...p, video_url: url } : p));
+    return true;
   }
 
   async function handleSave() {
     setSaving(true);
     try {
-      const payload = {
-        video_url: videoUrl || null,
-        title,
-        description,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (recordId) {
-        const { error } = await supabase.from('landing_page_settings').update(payload).eq('id', recordId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('landing_page_settings').insert({ ...payload, section: 'quem_somos' });
-        if (error) throw error;
-      }
+      const { error } = await saveQuemSomos({ video_url: videoUrl.trim() || null, title, description });
+      if (error) throw new Error(error);
 
       toast.success('Configurações salvas!');
     } catch (err: any) {
@@ -266,7 +255,7 @@ export default function LandingPageAdmin() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => updatePlanVideoUrl(pv.plan_name, pv.video_url).then(() => toast.success('Salvo!'))}
+                  onClick={() => updatePlanVideoUrl(pv.plan_name, pv.video_url).then((ok) => { if (ok) toast.success('Salvo!'); })}
                   className="gap-1"
                 >
                   <Save size={14} />
@@ -299,7 +288,7 @@ export default function LandingPageAdmin() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => updatePlanVideoUrl(pv.plan_name, null).then(() => toast.success('Removido!'))}
+                    onClick={() => updatePlanVideoUrl(pv.plan_name, null).then((ok) => { if (ok) toast.success('Removido!'); })}
                     className="text-destructive hover:text-destructive gap-1"
                   >
                     <Trash2 size={14} /> Remover

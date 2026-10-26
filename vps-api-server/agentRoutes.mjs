@@ -1295,6 +1295,11 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       if (column === 'revisao' && !task.edited_video_link) {
         throw Object.assign(new Error('Não dá para mandar para revisão sem vídeo editado no card'), { status: 409 });
       }
+      // Para entrar em Edição só os brutos são obrigatórios (decisão do dono, 26/10/2026): o card
+      // entra livre na fila (assigned_to = NULL logo abaixo), para humanos e agentes pegarem
+      if (column === 'edicao' && task.kanban_column !== 'edicao' && !String(task.drive_link || '').trim()) {
+        throw Object.assign(new Error('Para entrar em Edição o card precisa do link dos brutos (drive_link)'), { status: 409 });
+      }
       if (column === 'alteracao' && !notes && !task.adjustment_notes) {
         throw Object.assign(new Error('Informe os ajustes pedidos (adjustment_notes) ao mandar para alteração'), { status: 400 });
       }

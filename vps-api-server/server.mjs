@@ -11139,6 +11139,16 @@ async function enforceDbQueryRules({ safeTable, operation, data, filters, user, 
     }
   }
 
+  // Mandar o vídeo para "Enviado p/ Cliente" (o cliente vê no portal e recebe o WhatsApp) é da gestão:
+  // admin, social_media e gestor_projetos (decisão do dono, 26/10/2026). Vale para toda tela que grava
+  // content_tasks.kanban_column = 'envio' pelo genérico (Kanbans, detalhes do card, Social Media).
+  if (safeTable === 'content_tasks' && (operation === 'update' || operation === 'insert' || operation === 'upsert')) {
+    const items = Array.isArray(data) ? data : [data];
+    if (items.some((item) => String(dbQueryRowValue(item, 'kanban_column') ?? '') === 'envio') && !(await isTeamManagerUser(user))) {
+      throw forbidden('Só a gestão (admin, social media ou gestor de projetos) manda o vídeo para "Enviado p/ Cliente".');
+    }
+  }
+
   return { data, filters };
 }
 
@@ -13715,8 +13725,12 @@ app.post('/api/fix-content-task', async (req, res) => {
         if (!['ideias', 'captacao', 'edicao'].includes(task.kanban_column)) {
           return res.status(409).json({ error: `O card "${task.title}" está em "${task.kanban_column}" e não volta para Edição por aqui.`, task: { id: task.id, title: task.title, kanban_column: task.kanban_column } });
         }
+        // Vindo de Ideias/Captação o card entra livre na fila de Edição (decisão do dono, 26/10/2026):
+        // o responsável que sobrou da captação não pode prender o card longe dos editores e agentes
         await pool.query(
-          `UPDATE content_tasks SET drive_link = $1, kanban_column = 'edicao', updated_at = NOW() WHERE id = $2`,
+          `UPDATE content_tasks SET drive_link = $1, kanban_column = 'edicao',
+                  assigned_to = CASE WHEN kanban_column IN ('ideias', 'captacao') THEN NULL ELSE assigned_to END,
+                  updated_at = NOW() WHERE id = $2`,
           [drive_link, task.id]
         );
       }

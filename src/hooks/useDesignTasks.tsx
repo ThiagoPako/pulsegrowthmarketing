@@ -66,6 +66,8 @@ export interface DesignTask {
   /** pasta "Referências/<data> <título>" no Drive do cliente, quando o designer arquivou */
   references_drive_link?: string | null;
   references_archived_at?: string | null;
+  /** Data e hora de postagem (módulo Agendamentos) */
+  posting_at?: string | null;
   clients?: { company_name: string; color: string; logo_url: string | null; whatsapp: string; responsible_person: string; drive_link?: string | null };
   profiles?: { name: string; display_name: string | null; avatar_url: string | null } | null;
 }

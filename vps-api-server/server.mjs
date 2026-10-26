@@ -25,6 +25,7 @@ import compression from 'compression';
 import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
+import { registerSchedulingRoutes } from './scheduling.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
 import { registerAssistant } from './assistant/index.mjs';
 import { recordPortalAccess } from './assistant/temperature.mjs';
@@ -8968,6 +8969,20 @@ async function getAutoPostCancelReason(post) {
     // "Postado!" manual (entrega postada e card arquivado): publicar agora duplicaria o post.
     if (deliveryStatus === 'postado' && column === 'arquivado') return 'o conteúdo já foi marcado como postado manualmente';
   }
+  // Arte e conteúdo avulso do portal agendados pelo módulo de Agendamentos (scheduling.mjs)
+  if (post.design_task_id) {
+    const { rows } = await pool.query('SELECT kanban_column FROM design_tasks WHERE id = $1', [post.design_task_id]);
+    if (!rows.length) return 'a arte foi excluída';
+    // 'postado' aqui só pode ser marcação manual (o robô move depois de publicar): sair de novo duplicaria.
+    if (rows[0].kanban_column === 'postado') return 'a arte já foi marcada como postada';
+    if (rows[0].kanban_column !== 'aprovado') return `a arte saiu de Aprovado (está em "${rows[0].kanban_column}")`;
+  }
+  if (post.portal_content_id) {
+    const { rows } = await pool.query('SELECT status FROM client_portal_contents WHERE id = $1', [post.portal_content_id]);
+    if (!rows.length) return 'o conteúdo foi excluído do portal';
+    if (rows[0].status === 'publicado') return 'o conteúdo já foi marcado como publicado';
+    if (!['aprovado', 'agendado'].includes(rows[0].status)) return `o conteúdo saiu de Aprovado no portal (está em "${rows[0].status}")`;
+  }
   return null;
 }
 
@@ -9092,6 +9107,18 @@ async function runScheduledPostNow(post) {
         `UPDATE content_tasks SET kanban_column='arquivado', updated_at=now()
           WHERE id=$1 AND kanban_column IN ('agendamentos','acompanhamento','postado')`,
         [post.content_task_id]
+      ).catch(() => {});
+    }
+    if (post.design_task_id) {
+      await pool.query(
+        `UPDATE design_tasks SET kanban_column='postado', updated_at=now() WHERE id=$1 AND kanban_column='aprovado'`,
+        [post.design_task_id]
+      ).catch(() => {});
+    }
+    if (post.portal_content_id) {
+      await pool.query(
+        `UPDATE client_portal_contents SET status='publicado', updated_at=now() WHERE id=$1 AND status IN ('aprovado','agendado')`,
+        [post.portal_content_id]
       ).catch(() => {});
     }
     await pool.query(
@@ -9877,50 +9904,67 @@ app.get('/api/social-posts', async (req, res) => {
   }
 });
 
+/**
+ * Confere um pedido de postagem automática: mídias, formato, horário, legenda e a conta do cliente
+ * (uma só por rede). Usado pelo POST /api/social-posts e pelo módulo de Agendamentos (scheduling.mjs),
+ * para as duas telas seguirem as mesmas regras. Lança erro com statusCode 400 e a mensagem da tela;
+ * devolve os campos prontos para gravar em scheduled_posts.
+ */
+async function prepareScheduledPost(input = {}) {
+  const fail = (message) => { throw Object.assign(new Error(message), { statusCode: 400 }); };
+  const {
+    client_id, platform = 'instagram', publish_type = 'reels',
+    media_url, media_items, caption = '', scheduled_at, story_link, story_link_text,
+  } = input;
+
+  if (!client_id) fail('client_id é obrigatório');
+  if (!['instagram', 'facebook', 'both'].includes(platform)) fail('platform inválida');
+  if (!['reels', 'feed', 'stories', 'carousel'].includes(publish_type)) fail('publish_type inválido');
+
+  const items = Array.isArray(media_items)
+    ? media_items.map(i => (typeof i === 'string' ? { url: i } : i)).filter(i => i && typeof i.url === 'string')
+    : [];
+  const urls = items.length ? items.map(i => i.url) : (media_url ? [media_url] : []);
+  if (!urls.length) fail('Envie pelo menos uma mídia com link público (https://...)');
+  for (const u of urls) {
+    if (!/^https?:\/\//i.test(u)) fail('Todas as mídias precisam ser links públicos (https://...)');
+    if (/drive\.google\.com|dropbox\.com\/s\//i.test(u) && !/uc\?export=download|dl=1/i.test(u)) {
+      fail('Links de pasta/visualização do Drive/Dropbox não funcionam. Use o link direto do arquivo.');
+    }
+  }
+  if (publish_type === 'carousel' && urls.length < 2) fail('Carrossel precisa de pelo menos 2 mídias.');
+  if (publish_type === 'carousel' && urls.length > 10) fail('Carrossel aceita no máximo 10 mídias.');
+  if (story_link && !/^https?:\/\//i.test(story_link)) fail('O link do story precisa começar com https://');
+
+  const when = new Date(scheduled_at);
+  if (!scheduled_at || Number.isNaN(when.getTime())) fail('scheduled_at inválido');
+  // Data no passado publicaria na hora (o robô pega tudo que já venceu). Folga de 5 min para relógio atrasado.
+  if (when.getTime() < Date.now() - 5 * 60_000) fail('O horário escolhido já passou. Escolha um horário futuro.');
+  if (caption.length > 2200) fail('Legenda acima de 2200 caracteres (limite do Instagram)');
+
+  const accounts = await getConnectedAccounts(client_id);
+  const needed = platform === 'both' ? ['instagram', 'facebook'] : [platform];
+  const missing = needed.filter(p => !accounts.some(a => a.platform === p && a.access_token));
+  if (missing.length) fail(`Cliente sem conta conectada: ${missing.join(', ')}. Conecte em Clientes → editar → Redes Sociais.`);
+  // Várias contas da mesma rede: o robô não publicaria (não sabe qual é a do cliente). Avisa já no agendamento.
+  const duplicated = duplicatedPlatformAccounts(accounts.filter(a => needed.includes(a.platform)));
+  if (duplicated.length) {
+    const detail = duplicated.map(([p, list]) => `${list.length} contas de ${p} (${list.map(a => a.username || a.account_name).join(', ')})`).join(' e ');
+    fail(`O cliente tem ${detail}. Desconecte as que não são dele em Conexões Sociais antes de agendar.`);
+  }
+
+  return {
+    client_id, platform, publish_type, items, urls, caption, when,
+    story_link: story_link || null, story_link_text: story_link_text || null,
+  };
+}
+
 app.post('/api/social-posts', async (req, res) => {
   try {
     const { user } = await verifySocialManager(req);
     await ensureSocialPostsSchema();
-    const {
-      client_id, delivery_id, content_task_id, platform = 'instagram', publish_type = 'reels',
-      media_url, media_items, caption = '', scheduled_at, story_link, story_link_text,
-    } = req.body || {};
-
-    if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
-    if (!['instagram', 'facebook', 'both'].includes(platform)) return res.status(400).json({ error: 'platform inválida' });
-    if (!['reels', 'feed', 'stories', 'carousel'].includes(publish_type)) return res.status(400).json({ error: 'publish_type inválido' });
-
-    const items = Array.isArray(media_items)
-      ? media_items.map(i => (typeof i === 'string' ? { url: i } : i)).filter(i => i && typeof i.url === 'string')
-      : [];
-    const urls = items.length ? items.map(i => i.url) : (media_url ? [media_url] : []);
-    if (!urls.length) return res.status(400).json({ error: 'Envie pelo menos uma mídia com link público (https://...)' });
-    for (const u of urls) {
-      if (!/^https?:\/\//i.test(u)) return res.status(400).json({ error: 'Todas as mídias precisam ser links públicos (https://...)' });
-      if (/drive\.google\.com|dropbox\.com\/s\//i.test(u) && !/uc\?export=download|dl=1/i.test(u)) {
-        return res.status(400).json({ error: 'Links de pasta/visualização do Drive/Dropbox não funcionam. Use o link direto do arquivo.' });
-      }
-    }
-    if (publish_type === 'carousel' && urls.length < 2) return res.status(400).json({ error: 'Carrossel precisa de pelo menos 2 mídias.' });
-    if (publish_type === 'carousel' && urls.length > 10) return res.status(400).json({ error: 'Carrossel aceita no máximo 10 mídias.' });
-    if (story_link && !/^https?:\/\//i.test(story_link)) return res.status(400).json({ error: 'O link do story precisa começar com https://' });
-
-    const when = new Date(scheduled_at);
-    if (!scheduled_at || Number.isNaN(when.getTime())) return res.status(400).json({ error: 'scheduled_at inválido' });
-    // Data no passado publicaria na hora (o robô pega tudo que já venceu). Folga de 5 min para relógio atrasado.
-    if (when.getTime() < Date.now() - 5 * 60_000) return res.status(400).json({ error: 'O horário escolhido já passou. Escolha um horário futuro.' });
-    if (caption.length > 2200) return res.status(400).json({ error: 'Legenda acima de 2200 caracteres (limite do Instagram)' });
-
-    const accounts = await getConnectedAccounts(client_id);
-    const needed = platform === 'both' ? ['instagram', 'facebook'] : [platform];
-    const missing = needed.filter(p => !accounts.some(a => a.platform === p && a.access_token));
-    if (missing.length) return res.status(400).json({ error: `Cliente sem conta conectada: ${missing.join(', ')}. Conecte em Clientes → editar → Redes Sociais.` });
-    // Várias contas da mesma rede: o robô não publicaria (não sabe qual é a do cliente). Avisa já no agendamento.
-    const duplicated = duplicatedPlatformAccounts(accounts.filter(a => needed.includes(a.platform)));
-    if (duplicated.length) {
-      const detail = duplicated.map(([p, list]) => `${list.length} contas de ${p} (${list.map(a => a.username || a.account_name).join(', ')})`).join(' e ');
-      return res.status(400).json({ error: `O cliente tem ${detail}. Desconecte as que não são dele em Conexões Sociais antes de agendar.` });
-    }
+    const { delivery_id, content_task_id } = req.body || {};
+    const post = await prepareScheduledPost(req.body || {});
 
     // Evita duplicar a mesma entrega na fila (o post com erro também sai, senão "Publicar agora" nele duplicaria)
     if (delivery_id) {
@@ -9930,9 +9974,9 @@ app.post('/api/social-posts', async (req, res) => {
       `INSERT INTO scheduled_posts (client_id, delivery_id, content_task_id, platform, publish_type, media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [
-        client_id, delivery_id || null, content_task_id || null, platform, publish_type,
-        urls[0], items.length ? JSON.stringify(items) : null, caption, when.toISOString(), user?.id || null,
-        story_link || null, story_link_text || null,
+        post.client_id, delivery_id || null, content_task_id || null, post.platform, post.publish_type,
+        post.urls[0], post.items.length ? JSON.stringify(post.items) : null, post.caption, post.when.toISOString(), user?.id || null,
+        post.story_link, post.story_link_text,
       ]
     );
     res.json({ success: true, post: rows[0] });
@@ -12264,6 +12308,7 @@ app.get('/api/design-tasks/fast', async (req, res) => {
     const extraSelect = [
       dtColumns?.has('checklist') ? 'dt.checklist' : null,
       dtColumns?.has('collaborator_id') ? 'dt.collaborator_id' : null,
+      dtColumns?.has('posting_at') ? 'dt.posting_at' : null, // data de postagem (módulo Agendamentos)
       ...AGENT_DESIGN_COLUMNS.map((col) => (dtColumns?.has(col) ? `dt.${col}` : null)),
       'c.drive_link AS clients_drive_link',
     ].filter(Boolean).map((col) => `\n          ${col},`).join('');
@@ -12364,6 +12409,7 @@ app.get('/api/design-tasks/fast', async (req, res) => {
       agent_heartbeat_at: row.agent_heartbeat_at ?? null,
       references_drive_link: row.references_drive_link ?? null,
       references_archived_at: row.references_archived_at ?? null,
+      posting_at: row.posting_at ?? null,
       clients: row.clients_company_name ? {
         company_name: row.clients_company_name,
         color: row.clients_color || '217 91% 60%',
@@ -19894,6 +19940,26 @@ registerAgentDesignRoutes(app, {
   publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
   agentApi,
   // colunas novas em design_tasks: o /api/db/query relê as colunas (senão grava sem elas por até 1 h)
+  onSchemaChange: (tables) => tables.forEach((table) => {
+    tableColumnsPromiseCache.delete(table);
+    tableJsonColumnsPromiseCache.delete(table);
+  }),
+});
+
+// ─── Agendamentos (calendário de postagem por cliente; acesso pela lista module_access) ──
+registerSchedulingRoutes(app, {
+  pool,
+  verifyUser,
+  getLinkedUserIds,
+  resolveActiveCity,
+  cityVisibilityExpression,
+  ensureSocialPostsSchema,
+  getConnectedAccounts,
+  sanitizeAccount,
+  duplicatedPlatformAccounts,
+  prepareScheduledPost,
+  publicAppUrl: process.env.PUBLIC_APP_URL,
+  // posting_at novo: o /api/db/query relê as colunas (senão grava sem elas por até 1 h)
   onSchemaChange: (tables) => tables.forEach((table) => {
     tableColumnsPromiseCache.delete(table);
     tableJsonColumnsPromiseCache.delete(table);

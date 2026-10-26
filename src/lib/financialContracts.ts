@@ -38,6 +38,7 @@ export async function syncFinancialContract(input: SyncFinancialContractInput) {
     contract_start_date: contractStartDate,
     due_day: dueDay,
     payment_method: input.payment_method || 'pix',
+    // Sem status explícito, mantém o do contrato existente (definido abaixo)
     status: input.status || 'ativo',
   };
 
@@ -53,6 +54,12 @@ export async function syncFinancialContract(input: SyncFinancialContractInput) {
     const existingByClient = await supabase.from('financial_contracts').select('*').eq('client_id', input.client_id).maybeSingle();
     if (existingByClient.error) throw new Error(existingByClient.error.message || 'Erro ao localizar contrato financeiro do cliente');
     existingContract = existingByClient.data || null;
+  }
+
+  // Editar os dados do cliente não reativa um contrato cancelado/pausado: quem não
+  // manda status preserva o atual; só contrato novo nasce 'ativo'.
+  if (!input.status && existingContract?.status) {
+    payload.status = existingContract.status;
   }
 
   const saveResult = existingContract

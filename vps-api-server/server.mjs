@@ -8723,6 +8723,20 @@ app.post('/api/billing-automation', async (req, res) => {
   }
 });
 
+/** Tira da lista os contratos de clientes com status 'cancelado' (defesa da cobrança automática). */
+async function withoutCancelledClients(contracts) {
+  if (!Array.isArray(contracts) || contracts.length === 0) return contracts || [];
+  const clientIds = [...new Set(contracts.map((c) => c.client_id).filter(Boolean))];
+  if (clientIds.length === 0) return contracts;
+  const { rows } = await pool.query(
+    `SELECT id FROM clients WHERE id = ANY($1::uuid[]) AND status = 'cancelado'`,
+    [clientIds],
+  );
+  if (!rows.length) return contracts;
+  const cancelled = new Set(rows.map((r) => String(r.id)));
+  return contracts.filter((c) => !cancelled.has(String(c.client_id)));
+}
+
 async function runBillingAutomation() {
   {
     const admin = getAdminClient();
@@ -8756,7 +8770,9 @@ async function runBillingAutomation() {
     };
     const isReceived = (r) => r?.status === 'recebida' || r?.status === 'pago';
 
-    const { data: contracts } = await admin.from('financial_contracts').select('*').eq('status', 'ativo');
+    const { data: activeContracts } = await admin.from('financial_contracts').select('*').eq('status', 'ativo');
+    // Cliente cancelado não é cobrado, mesmo que o contrato tenha ficado 'ativo' por engano
+    const contracts = await withoutCancelledClients(activeContracts);
     if (!contracts?.length) return { message: 'No active contracts', processed: 0 };
     // PIX/templates por cidade: cada contrato usa a config da sua cidade; sem config
     // própria, cai na primeira cadastrada (comportamento anterior).
@@ -9101,7 +9117,9 @@ app.post('/api/generate-monthly-revenues', async (req, res) => {
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
     const refMonth = `${year}-${String(month).padStart(2, '0')}-01`;
-    const { data: contracts } = await admin.from('financial_contracts').select('*').eq('status', 'ativo');
+    const { data: activeContracts } = await admin.from('financial_contracts').select('*').eq('status', 'ativo');
+    // Cliente cancelado não ganha mensalidade nova, mesmo com o contrato 'ativo'
+    const contracts = await withoutCancelledClients(activeContracts);
     if (!contracts?.length) return res.json({ message: 'No active contracts', generated: 0 });
     const { data: existing } = await admin.from('revenues').select('client_id').eq('reference_month', refMonth);
     const existingClientIds = new Set((existing || []).map(r => r.client_id));

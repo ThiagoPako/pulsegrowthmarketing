@@ -10562,11 +10562,15 @@ app.all('/api/client-onboarding', async (req, res) => {
 // the page is sent to clients before they have portal access.
 app.get('/api/public-team-presentation', async (_req, res) => {
   try {
+    const { rows: [{ t: agentKeysTable } = {}] } = await pool.query(`SELECT to_regclass('public.agent_keys') AS t`);
     const { rows } = await pool.query(
       `SELECT id, name, display_name, role, avatar_url, bio, job_title
        FROM profiles
        WHERE name IS NOT NULL
          AND role IN ('admin','gestor_projetos','copywriter','social_media','designer','videomaker','editor','fotografo','endomarketing','parceiro')
+         -- Agentes (conta que já teve chave de agente) não entram: a página vai para clientes
+         -- e não pode apresentar um agente como pessoa da equipe.
+         ${agentKeysTable ? 'AND NOT EXISTS (SELECT 1 FROM agent_keys k WHERE k.user_id::text = profiles.id::text)' : ''}
        ORDER BY CASE
          WHEN lower(coalesce(display_name, name)) LIKE '%thiago%' THEN 1
          WHEN lower(coalesce(display_name, name)) LIKE '%naay%' THEN 2

@@ -8269,6 +8269,25 @@ async function fetchMediaMetric(base, mediaId, token, metric) {
 
 const sumSeries = (series) => series.reduce((acc, i) => acc + (i.value || 0), 0);
 
+/** Roda fn em todos os itens com no máximo `limit` ao mesmo tempo (mantém a ordem do resultado). */
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+// Métricas por publicação. 'plays', 'total_watch_time' e 'avg_watch_time' saíram da API
+// da Meta (só davam erro e log); para reels valem os nomes ig_reels_*.
+const IG_MEDIA_METRICS = ['reach', 'saved', 'total_interactions', 'shares', 'views'];
+const IG_REELS_EXTRA_METRICS = ['ig_reels_video_view_total_time', 'ig_reels_avg_watch_time'];
+
 /**
  * Reúne todas as métricas do período para uma conta do Instagram.
  * Cada bloco é tolerante a falha: se a Meta negar uma métrica, ela vem como null.
@@ -8288,25 +8307,29 @@ async function fetchInstagramInsights(account, since, until) {
   }
   const windows = insightWindows(startMs, endMs);
 
-  let profile = {};
-  try {
-    profile = await metaGetJson(`${base}/${igId}?fields=username,followers_count,media_count&access_token=${token}`);
-  } catch (err) {
-    console.warn('[insights] perfil indisponível:', err.message);
-  }
-
-  const reachSeries = await fetchDailyMetric(base, igId, token, 'reach', windows);
-  const followerSeries = await fetchDailyMetric(base, igId, token, 'follower_count', windows);
-  const profileViews = await fetchTotalMetric(base, igId, token, 'profile_views', windows);
-  const websiteClicks = await fetchTotalMetric(base, igId, token, 'website_clicks', windows);
-  const accountsEngaged = await fetchTotalMetric(base, igId, token, 'accounts_engaged', windows);
-  const impressions = await fetchTotalMetric(base, igId, token, 'views', windows);
-  const totalInteractions = await fetchTotalMetric(base, igId, token, 'total_interactions', windows);
-  const likes = await fetchTotalMetric(base, igId, token, 'likes', windows);
-  const comments = await fetchTotalMetric(base, igId, token, 'comments', windows);
-  const saves = await fetchTotalMetric(base, igId, token, 'saves', windows);
-  const shares = await fetchTotalMetric(base, igId, token, 'shares', windows);
-  const replies = await fetchTotalMetric(base, igId, token, 'replies', windows);
+  // Perfil e métricas da conta ao mesmo tempo (antes eram 13 chamadas uma depois da outra).
+  // Cada métrica continua separada para que uma negada pela Meta não esconda as outras.
+  const [
+    profile, reachSeries, followerSeries, profileViews, websiteClicks, accountsEngaged,
+    impressions, totalInteractions, likes, comments, saves, shares, replies,
+  ] = await Promise.all([
+    metaGetJson(`${base}/${igId}?fields=username,followers_count,media_count&access_token=${token}`).catch((err) => {
+      console.warn('[insights] perfil indisponível:', err.message);
+      return {};
+    }),
+    fetchDailyMetric(base, igId, token, 'reach', windows),
+    fetchDailyMetric(base, igId, token, 'follower_count', windows),
+    fetchTotalMetric(base, igId, token, 'profile_views', windows),
+    fetchTotalMetric(base, igId, token, 'website_clicks', windows),
+    fetchTotalMetric(base, igId, token, 'accounts_engaged', windows),
+    fetchTotalMetric(base, igId, token, 'views', windows),
+    fetchTotalMetric(base, igId, token, 'total_interactions', windows),
+    fetchTotalMetric(base, igId, token, 'likes', windows),
+    fetchTotalMetric(base, igId, token, 'comments', windows),
+    fetchTotalMetric(base, igId, token, 'saves', windows),
+    fetchTotalMetric(base, igId, token, 'shares', windows),
+    fetchTotalMetric(base, igId, token, 'replies', windows),
+  ]);
 
   // Publicações do período com desempenho individual
   const posts = [];
@@ -8317,39 +8340,51 @@ async function fetchInstagramInsights(account, since, until) {
     ].join(',');
     let url = `${base}/${igId}/media?fields=${encodeURIComponent(fields)}&limit=50&access_token=${token}`;
     let pages = 0;
-    while (url && pages < 6) {
-      const page = await metaGetJson(url);
-      for (const m of page.data || []) {
-        const ts = m.timestamp ? new Date(m.timestamp).getTime() : 0;
-        if (!ts || ts < startMs || ts > endMs + DAY_SECONDS * 1000) continue;
-        const metricNames = m.media_product_type === 'REELS'
-          ? ['reach', 'saved', 'total_interactions', 'shares', 'views', 'plays', 'total_watch_time', 'avg_watch_time']
-          : ['reach', 'saved', 'total_interactions', 'shares', 'views'];
-        const values = await Promise.all(metricNames.map(name => fetchMediaMetric(base, m.id, token, name)));
-        const ins = Object.fromEntries(metricNames.map((name, index) => [name, values[index]]));
-        posts.push({
-          id: m.id,
-          caption: (m.caption || '').slice(0, 220),
-          media_type: m.media_product_type === 'REELS' ? 'REELS' : (m.media_type || 'IMAGE'),
-          thumbnail: m.thumbnail_url || m.media_url || null,
-          permalink: m.permalink || null,
-          timestamp: m.timestamp || null,
-          likes: m.like_count ?? 0,
-          comments: m.comments_count ?? 0,
-          reach: ins.reach ?? null,
-          saved: ins.saved ?? null,
-          interactions: ins.total_interactions ?? null,
-          shares: ins.shares ?? null,
-          views: ins.views ?? null,
-          plays: ins.plays ?? null,
-          total_watch_time: ins.total_watch_time ?? null,
-          avg_watch_time: ins.avg_watch_time ?? null,
-        });
+    const inPeriod = [];
+    try {
+      while (url && pages < 6) {
+        const page = await metaGetJson(url);
+        for (const m of page.data || []) {
+          const ts = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+          if (!ts || ts < startMs || ts > endMs + DAY_SECONDS * 1000) continue;
+          inPeriod.push(m);
+        }
+        const oldest = (page.data || []).slice(-1)[0]?.timestamp;
+        if (oldest && new Date(oldest).getTime() < startMs) break;
+        url = page.paging?.next || null;
+        pages += 1;
       }
-      const oldest = (page.data || []).slice(-1)[0]?.timestamp;
-      if (oldest && new Date(oldest).getTime() < startMs) break;
-      url = page.paging?.next || null;
-      pages += 1;
+    } catch (err) {
+      // Página seguinte falhou: segue com as publicações já listadas (como antes)
+      console.warn('[insights] lista de publicações incompleta:', err.message);
+    }
+    // Até 4 publicações ao mesmo tempo (antes uma de cada vez), sem estourar o limite da Meta
+    const withMetrics = await mapWithConcurrency(inPeriod, 4, async (m) => {
+      const metricNames = m.media_product_type === 'REELS'
+        ? [...IG_MEDIA_METRICS, ...IG_REELS_EXTRA_METRICS]
+        : IG_MEDIA_METRICS;
+      const values = await Promise.all(metricNames.map(name => fetchMediaMetric(base, m.id, token, name)));
+      return { m, ins: Object.fromEntries(metricNames.map((name, index) => [name, values[index]])) };
+    });
+    for (const { m, ins } of withMetrics) {
+      posts.push({
+        id: m.id,
+        caption: (m.caption || '').slice(0, 220),
+        media_type: m.media_product_type === 'REELS' ? 'REELS' : (m.media_type || 'IMAGE'),
+        thumbnail: m.thumbnail_url || m.media_url || null,
+        permalink: m.permalink || null,
+        timestamp: m.timestamp || null,
+        likes: m.like_count ?? 0,
+        comments: m.comments_count ?? 0,
+        reach: ins.reach ?? null,
+        saved: ins.saved ?? null,
+        interactions: ins.total_interactions ?? null,
+        shares: ins.shares ?? null,
+        views: ins.views ?? null,
+        plays: null,
+        total_watch_time: ins.ig_reels_video_view_total_time ?? null,
+        avg_watch_time: ins.ig_reels_avg_watch_time ?? null,
+      });
     }
   } catch (err) {
     console.warn('[insights] publicações indisponíveis:', err.message);

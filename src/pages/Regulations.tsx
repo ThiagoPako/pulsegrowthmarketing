@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/vpsDb";
+import { isSafeRedirectUrl } from "@/lib/safeUrl";
 import { useAuth } from "@/hooks/useAuth";
 import { useCity } from "@/contexts/CityContext";
 import { Button } from "@/components/ui/button";
@@ -56,10 +57,11 @@ export default function Regulations() {
 
   async function load() {
     setLoading(true);
-    const { data: regs } = await supabase
+    const { data: regs, error: regsError } = await supabase
       .from("regulations")
       .select("*")
       .order("created_at", { ascending: false });
+    if (regsError) toast.error(`Erro ao carregar regulamentos: ${regsError.message}`);
     const { data: cs } = await supabase
       .from("regulation_clicks")
       .select("regulation_id");
@@ -105,8 +107,9 @@ export default function Regulations() {
       toast.error("Informe o conteúdo do regulamento ou uma URL externa");
       return;
     }
-    if (externalUrl.trim()) {
-      try { new URL(externalUrl); } catch { toast.error("URL externa inválida (inclua https://)"); return; }
+    if (externalUrl.trim() && !isSafeRedirectUrl(externalUrl)) {
+      toast.error("URL externa inválida (comece com https:// ou http://)");
+      return;
     }
     const slug = (customSlug.trim() || randomSlug()).toLowerCase().replace(/[^a-z0-9-]/g, "");
     if (!slug) { toast.error("Slug inválido"); return; }

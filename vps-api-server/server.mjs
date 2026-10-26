@@ -872,6 +872,125 @@ async function ensureShortLinksTables() {
 }
 ensureShortLinksTables();
 
+/** Destino de redirecionamento aceito: só http(s) (um 'javascript:' rodaria no domínio do sistema). */
+function isSafeRedirectUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function publicSlugParam(value) {
+  return String(value || '').trim().toLowerCase().slice(0, 120);
+}
+
+// Link curto /r/:slug é público: antes a página lia short_links pelo /api/db/query, que exige
+// login, e o visitante via "Link inválido". Aqui busca o link ativo, conta o clique e devolve
+// só o destino.
+app.post('/api/public/short-links/:slug', async (req, res) => {
+  try {
+    await ensureShortLinksTables();
+    const slug = publicSlugParam(req.params.slug);
+    if (!slug) return res.status(404).json({ error: 'Link não encontrado' });
+    const { rows } = await pool.query(
+      'SELECT id, original_url, city FROM short_links WHERE lower(slug) = $1 AND active IS NOT FALSE LIMIT 1',
+      [slug]
+    );
+    const link = rows[0];
+    if (!link || !isSafeRedirectUrl(link.original_url)) return res.status(404).json({ error: 'Link não encontrado' });
+    pool.query(
+      'INSERT INTO short_link_clicks (short_link_id, user_agent, referrer, city) VALUES ($1, $2, $3, $4)',
+      [
+        link.id,
+        String(req.headers['user-agent'] || '').slice(0, 500) || null,
+        String(req.body?.referrer || '').slice(0, 1000) || null,
+        link.city || null,
+      ]
+    ).catch((error) => console.error('[short-links] falha ao contar clique:', error?.message || error));
+    res.json({ original_url: link.original_url });
+  } catch (error) {
+    console.error('[short-links] public error:', error?.message || error);
+    res.status(500).json({ error: 'Falha ao abrir o link' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// REGULAMENTOS (/regulamentos e página pública /regulamento/:slug)
+// ═══════════════════════════════════════════════════════════════
+// As tabelas só existiam na migração do Supabase; na VPS a tela dava "tabela não liberada".
+// created_by sem FK: a VPS não tem o schema auth.
+let regulationsTablesPromise = null;
+async function ensureRegulationsTables() {
+  if (regulationsTablesPromise) return regulationsTablesPromise;
+  regulationsTablesPromise = (async () => {
+    const { rows: [existing] } = await pool.query(
+      `SELECT to_regclass('public.regulations') IS NOT NULL AS regulations,
+              to_regclass('public.regulation_clicks') IS NOT NULL AS clicks`
+    );
+    if (existing.regulations && existing.clicks) return;
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS regulations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        slug TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        client_name TEXT NOT NULL,
+        content TEXT,
+        external_url TEXT,
+        city TEXT NOT NULL DEFAULT 'minacu',
+        active BOOLEAN NOT NULL DEFAULT true,
+        created_by UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS idx_regulations_city ON regulations(city);
+
+      CREATE TABLE IF NOT EXISTS regulation_clicks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        regulation_id UUID NOT NULL REFERENCES regulations(id) ON DELETE CASCADE,
+        user_agent TEXT,
+        referrer TEXT,
+        clicked_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS idx_regulation_clicks_reg ON regulation_clicks(regulation_id);
+    `);
+  })().catch((error) => {
+    regulationsTablesPromise = null;
+    throw error;
+  });
+  return regulationsTablesPromise;
+}
+ensureRegulationsTables().catch((error) => console.error('ensureRegulationsTables error:', error?.message || error));
+
+// Regulamento público: só os campos da página, de regulamento ativo, e conta o acesso.
+app.post('/api/public/regulations/:slug', async (req, res) => {
+  try {
+    await ensureRegulationsTables();
+    const slug = publicSlugParam(req.params.slug);
+    if (!slug) return res.status(404).json({ error: 'Regulamento não encontrado' });
+    const { rows } = await pool.query(
+      `SELECT id, slug, title, client_name, content, external_url, active
+         FROM regulations WHERE lower(slug) = $1 LIMIT 1`,
+      [slug]
+    );
+    const row = rows[0];
+    // inactive: a página não mostra nem o modelo fixo de um regulamento desativado.
+    if (!row || !row.active) return res.json({ regulation: null, inactive: !!row });
+    const { active, ...regulation } = row;
+    pool.query(
+      'INSERT INTO regulation_clicks (regulation_id, user_agent, referrer) VALUES ($1, $2, $3)',
+      [regulation.id, String(req.headers['user-agent'] || '').slice(0, 500) || null, String(req.body?.referrer || '').slice(0, 1000) || null]
+    ).catch((error) => console.error('[regulations] falha ao contar acesso:', error?.message || error));
+    const { id, ...publicFields } = regulation;
+    if (publicFields.external_url && !isSafeRedirectUrl(publicFields.external_url)) publicFields.external_url = null;
+    res.json({ regulation: publicFields });
+  } catch (error) {
+    console.error('[regulations] public error:', error?.message || error);
+    res.status(500).json({ error: 'Falha ao carregar o regulamento' });
+  }
+});
+
 
 // BANCO DE DADOS DE CLIENTES (Profissionais + Unidades/Rede)
 // ═══════════════════════════════════════════════════════════════
@@ -10564,6 +10683,7 @@ const ALLOWED_TABLES = [
   'campaigns','campaign_slots',
   'story_editing_sessions','script_requests','manual_video_tasks','plan_promotions',
   'client_professionals','client_units','client_collaborators','short_links','client_bio_links','client_bio_buttons',
+  'short_link_clicks','regulations','regulation_clicks',
   'warehouse_items','warehouse_movements','structure_investments','recurring_revenues',
   'salary_bonuses',
 
@@ -10601,6 +10721,7 @@ const TABLES_WITH_CITY = new Set([
   'crm_leads','crm_notes',
   'plans',
   'story_editing_sessions','script_requests','manual_video_tasks','client_bio_links','client_bio_buttons',
+  'short_links','short_link_clicks','regulations',
 ]);
 
 // Cache de quais tabelas realmente possuem a coluna `city` no schema atual.
@@ -11011,7 +11132,15 @@ const DB_QUERY_TABLE_RULES = {
   // bônus de salário (Financeiro → Salários); o banner do colaborador usa /api/me/salary-bonuses
   salary_bonuses: { read: 'team', write: 'team' },
   expense_categories: { read: DB_QUERY_ENDO_ROLES, write: DB_QUERY_ENDO_ROLES },
+  // Encurtador e Regulamentos (menu de admin e social_media); o clique entra pela rota pública
+  short_links: { write: 'admin' },
+  short_link_clicks: { read: 'admin', write: 'admin' },
+  regulations: { write: 'admin' },
+  regulation_clicks: { read: 'admin', write: 'admin' },
 };
+
+// Colunas de destino de redirecionamento: só http(s) — um 'javascript:' rodaria no domínio do sistema.
+const DB_QUERY_REDIRECT_URL_COLUMNS = { short_links: 'original_url', regulations: 'external_url' };
 
 // Artes: excluir um card (e o histórico dele) é de admin/social_media, como no detalhe da
 // tarefa. Apagar em massa — filtro que não é o id de um card, como o "Limpar Banco de Dados"
@@ -11137,6 +11266,16 @@ async function enforceDbQueryRules({ safeTable, operation, data, filters, user, 
     if (!bySingleCard && !(await isStrictAdminUser(user))) {
       throw forbidden('Só um administrador pode apagar várias artes de uma vez.');
     }
+  }
+
+  if (DB_QUERY_REDIRECT_URL_COLUMNS[safeTable] && (operation === 'insert' || operation === 'update' || operation === 'upsert')) {
+    const column = DB_QUERY_REDIRECT_URL_COLUMNS[safeTable];
+    const items = Array.isArray(data) ? data : [data];
+    const badUrl = items.some((item) => {
+      const value = dbQueryRowValue(item, column);
+      return value !== undefined && value !== null && String(value).trim() !== '' && !isSafeRedirectUrl(value);
+    });
+    if (badUrl) throw dbQueryError('Use um endereço que comece com http:// ou https://.', 400);
   }
 
   // Token de publicação só entra pelas rotas da Meta (que validam a conta); pelo genérico
@@ -11352,6 +11491,10 @@ app.post('/api/db/query', async (req, res) => {
 
     if (safeTable === 'short_links' || safeTable === 'short_link_clicks') {
       await ensureShortLinksTables();
+    }
+
+    if (safeTable === 'regulations' || safeTable === 'regulation_clicks') {
+      await ensureRegulationsTables();
     }
 
     if (safeTable === 'salary_bonuses') {

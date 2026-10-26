@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { supabase } from "@/lib/vpsDb";
+import { isSafeRedirectUrl } from "@/lib/safeUrl";
 const pulseLogo = { url: "/pulse-logo.png" };
+const API_BASE = "https://agenciapulse.tech";
 
 export default function ShortLinkRedirect() {
   const { slug } = useParams<{ slug: string }>();
@@ -11,28 +12,29 @@ export default function ShortLinkRedirect() {
     let cancelled = false;
     async function go() {
       if (!slug) return;
-      const { data } = await supabase
-        .from("short_links")
-        .select("id, original_url, active")
-        .eq("slug", slug)
-        .maybeSingle();
+      // Rota pública (sem login): devolve o destino do link ativo e conta o clique.
+      let originalUrl: string | null = null;
+      try {
+        const response = await fetch(`${API_BASE}/api/public/short-links/${encodeURIComponent(slug)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ referrer: document.referrer || null }),
+        });
+        const payload = response.ok ? await response.json().catch(() => null) : null;
+        originalUrl = payload?.original_url ?? null;
+      } catch {
+        originalUrl = null;
+      }
 
       if (cancelled) return;
-      if (!data || !data.active) {
+      if (!isSafeRedirectUrl(originalUrl)) {
         setStatus("notfound");
         return;
       }
 
-      // Log click (fire-and-forget)
-      supabase.from("short_link_clicks").insert({
-        short_link_id: data.id,
-        user_agent: navigator.userAgent,
-        referrer: document.referrer || null,
-      }).then(() => {});
-
       // Show splash, then redirect
       setTimeout(() => {
-        window.location.replace(data.original_url);
+        window.location.replace(originalUrl as string);
       }, 1400);
     }
     go();
@@ -51,7 +53,7 @@ export default function ShortLinkRedirect() {
         {status === "loading" ? (
           <div className="w-8 h-8 border-4 border-white/20 border-t-primary rounded-full animate-spin" />
         ) : (
-          <p className="text-base text-destructive font-medium">Link inválido ou expirado. nao quero que expire o link corrija esse encurtador</p>
+          <p className="text-base text-destructive font-medium">Link não encontrado ou desativado.</p>
         )}
       </div>
     </div>

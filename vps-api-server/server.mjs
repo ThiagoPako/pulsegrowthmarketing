@@ -9750,6 +9750,11 @@ const DB_QUERY_TABLE_RULES = {
   expense_categories: { read: DB_QUERY_ENDO_ROLES, write: DB_QUERY_ENDO_ROLES },
 };
 
+// Artes: excluir um card (e o histórico dele) é de admin/social_media, como no detalhe da
+// tarefa. Apagar em massa — filtro que não é o id de um card, como o "Limpar Banco de Dados"
+// do cliente, que apaga por client_id — só um administrador. Coluna que identifica o card:
+const DB_QUERY_DESIGN_DELETE_KEY = { design_tasks: 'id', design_task_history: 'task_id' };
+
 // Tabelas de papel e perfil: upsert (ninguém usa no front) só para admin, porque
 // o ON CONFLICT DO UPDATE passaria por cima das regras de update abaixo.
 const DB_QUERY_STRICT_UPSERT_TABLES = new Set(['user_roles', 'profiles', 'user_permissions']);
@@ -9856,6 +9861,19 @@ async function enforceDbQueryRules({ safeTable, operation, data, filters, user, 
 
   if (operation === 'upsert' && DB_QUERY_STRICT_UPSERT_TABLES.has(safeTable) && !(await isStrictAdminUser(user))) {
     throw forbidden();
+  }
+
+  if (operation === 'delete' && DB_QUERY_DESIGN_DELETE_KEY[safeTable]) {
+    if (!(await isAdminUser(user))) throw forbidden('Apenas admin ou social_media podem excluir artes.');
+    const keyColumn = DB_QUERY_DESIGN_DELETE_KEY[safeTable];
+    const bySingleCard = (Array.isArray(filters) ? filters : []).some((filter) =>
+      sanitizeIdentifier(String(filter?.column || '')).toLowerCase() === keyColumn
+      && filter?.op === 'eq'
+      && filter?.value !== undefined && filter?.value !== null && String(filter.value) !== ''
+    );
+    if (!bySingleCard && !(await isStrictAdminUser(user))) {
+      throw forbidden('Só um administrador pode apagar várias artes de uma vez.');
+    }
   }
 
   if (safeTable === 'user_roles' && isWrite && !(await isStrictAdminUser(user))) {

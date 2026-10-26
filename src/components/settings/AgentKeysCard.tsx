@@ -29,6 +29,9 @@ const ROLE_LABELS: Record<string, string> = {
   editor: 'Editor',
   revisor: 'Revisão',
   chefe: 'Chefe',
+  // agentes de design (Kanban de Design): criam artes / revisam artes na coluna Análise IA
+  designer: 'Designer',
+  revisor_arte: 'Revisão de artes',
 };
 
 function formatDate(value: string | null) {
@@ -121,11 +124,12 @@ export default function AgentKeysCard() {
     <div className="glass-card p-6 space-y-5">
       <div className="flex items-center gap-2 text-primary">
         <Bot size={18} />
-        <h2 className="text-base font-semibold">Agentes de edição</h2>
+        <h2 className="text-base font-semibold">Agentes de IA (edição e design)</h2>
       </div>
       <p className="text-sm text-muted-foreground">
-        Gere uma chave para cada membro que trabalha pelo Claude. Ele pega cards da fila de edição, entrega o vídeo
-        direto no card e aparece com o próprio nome no histórico e nos relatórios.
+        Gere uma chave para cada membro que trabalha pelo Claude. Editores pegam vídeos da fila de edição; designers
+        pegam artes do Kanban de Design e entregam na Análise IA; a revisão de artes confere essas entregas. Cada um
+        aparece com o próprio nome no histórico e nos relatórios.
       </p>
 
       {newKey && (
@@ -144,7 +148,7 @@ export default function AgentKeysCard() {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-[1fr_140px_auto] sm:items-end">
+      <div className="grid gap-3 sm:grid-cols-[1fr_170px_auto] sm:items-end">
         <div className="space-y-1.5">
           <Label>Membro da equipe</Label>
           <Select value={memberId} onValueChange={setMemberId}>

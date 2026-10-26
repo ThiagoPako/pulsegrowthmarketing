@@ -1,133 +1,166 @@
-import { useState, useRef } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useDesignTasks } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import ClientLogo from '@/components/ClientLogo';
 import { supabase } from '@/lib/vpsDb';
-import { uploadFileToVps } from '@/services/vpsApi';
 import { toast } from 'sonner';
-import { Upload, Link2, X, Image, Loader2, Plus, Calendar } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, FolderOpen, Layers } from 'lucide-react';
+import DesignFormatPicker from '@/components/designer/DesignFormatPicker';
+import DesignCopyFields from '@/components/designer/DesignCopyFields';
+import DesignReferenceUploader from '@/components/designer/DesignReferenceUploader';
+import {
+  DESIGN_FORMAT_PRESETS,
+  DesignCopyBrief,
+  DesignDimensions,
+  DesignFormatPresetKey,
+  assembleCopyText,
+  describeDesignFormat,
+  describeMissingForForm,
+  dimensionsFromPreset,
+  formatTypeForDimensions,
+  getDesignBriefMissing,
+  isCopyBriefEmpty,
+  normalizeCopyBrief,
+} from '@/lib/designBrief';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-const FORMAT_OPTIONS = [
-  { key: 'feed', label: '📐 Feed', description: 'Post quadrado/retangular' },
-  { key: 'story', label: '📱 Story', description: 'Formato vertical 9:16' },
-  { key: 'logomarca', label: '🎨 Logomarca', description: 'Identidade visual' },
-  { key: 'midia_fisica', label: '🖨 Mídia Física', description: 'Cartão, banner, etc' },
-  { key: 'carrossel', label: '🎠 Carrossel', description: 'Múltiplos slides' },
-  { key: 'capa', label: '🖼 Capa', description: 'Capa de destaque/rede' },
-  { key: 'thumbnail', label: '▶️ Thumbnail', description: 'Miniatura de vídeo' },
-];
+const newTaskId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+  ? crypto.randomUUID()
+  : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => Math.floor(Math.random() * 16).toString(16)));
 
+/**
+ * Nova demanda de arte: tudo o que o designer (pessoa ou agente de IA) precisa — cliente (com a pasta
+ * do Drive), formato/dimensão, copy em campos, Drive dos materiais, referências (arquivos e links),
+ * prazo e prioridade. Sem o mínimo (cliente, formato e copy ou descrição) a tela explica o que falta.
+ */
 export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
   const { clients } = useApp();
   const { user } = useAuth();
-  const { createTask, addHistory } = useDesignTasks();
-  const [clientId, setClientId] = useState<string | null>('');
+  const queryClient = useQueryClient();
+  const [taskId, setTaskId] = useState(newTaskId);
+  const [clientId, setClientId] = useState<string>('');
   const [prospectName, setProspectName] = useState('');
   const [isUnregistered, setIsUnregistered] = useState(false);
   const [title, setTitle] = useState('');
-  const [selectedFormats, setSelectedFormats] = useState<string[]>(['feed']);
+  const [dimensions, setDimensions] = useState<DesignDimensions | null>(dimensionsFromPreset('feed'));
+  const [extraFormats, setExtraFormats] = useState<DesignFormatPresetKey[]>([]);
   const [priority, setPriority] = useState('media');
-  const [copyText, setCopyText] = useState('');
-  const [referencesLinks, setReferencesLinks] = useState('');
+  const [copyBrief, setCopyBrief] = useState<DesignCopyBrief>({});
   const [description, setDescription] = useState('');
+  const [materialsLink, setMaterialsLink] = useState('');
+  const [referenceFiles, setReferenceFiles] = useState<string[]>([]);
+  const [referenceLinks, setReferenceLinks] = useState<string[]>([]);
+  const [uploadingRefs, setUploadingRefs] = useState(false);
   const [dueDate, setDueDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showMissing, setShowMissing] = useState(false);
 
-  // Reference images state
-  const [referenceImages, setReferenceImages] = useState<string[]>([]);
-  const [refLinkInput, setRefLinkInput] = useState('');
-  const [uploadingRef, setUploadingRef] = useState(false);
-  const refFileRef = useRef<HTMLInputElement>(null);
-
-  const toggleFormat = (format: string) => {
-    setSelectedFormats(prev => {
-      if (prev.includes(format)) {
-        if (prev.length === 1) return prev; // at least one
-        return prev.filter(f => f !== format);
-      }
-      return [...prev, format];
-    });
+  const reset = () => {
+    setTaskId(newTaskId());
+    setClientId('');
+    setProspectName('');
+    setIsUnregistered(false);
+    setTitle('');
+    setDimensions(dimensionsFromPreset('feed'));
+    setExtraFormats([]);
+    setPriority('media');
+    setCopyBrief({});
+    setDescription('');
+    setMaterialsLink('');
+    setReferenceFiles([]);
+    setReferenceLinks([]);
+    setDueDate('');
+    setShowMissing(false);
   };
 
-  const handleAddRefLink = () => {
-    if (!refLinkInput.trim()) return;
-    setReferenceImages(prev => [...prev, refLinkInput.trim()]);
-    setRefLinkInput('');
-  };
+  // cada abertura do formulário é uma demanda nova (pasta de referências própria)
+  useEffect(() => {
+    if (open) setTaskId(newTaskId());
+  }, [open]);
 
-  const handleUploadRef = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingRef(true);
-    try {
-      const publicUrl = await uploadFileToVps(file, `design/referencias/${clientId || 'geral'}`);
-      setReferenceImages(prev => [...prev, publicUrl]);
-      toast.success('Referência enviada!');
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao enviar');
-    } finally {
-      setUploadingRef(false);
-    }
-  };
+  const selectedClient = clients.find((c) => c.id === clientId);
+  const clientDrive = (selectedClient?.driveLink || '').trim();
+  const brief = normalizeCopyBrief(copyBrief);
+  const missing = useMemo(() => getDesignBriefMissing({
+    client_id: isUnregistered ? null : clientId || null,
+    prospect_name: isUnregistered ? prospectName : null,
+    dimensions,
+    copy_brief: brief,
+    description,
+  }), [isUnregistered, clientId, prospectName, dimensions, brief, description]);
+  const formatInfo = dimensions ? describeDesignFormat(dimensions) : null;
 
-  const removeRefImage = (index: number) => {
-    setReferenceImages(prev => prev.filter((_, i) => i !== index));
+  const toggleExtra = (key: DesignFormatPresetKey) => {
+    setExtraFormats((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   };
 
   const handleSubmit = async () => {
-    if ((!clientId && !isUnregistered) || (!title)) return;
-    if (isUnregistered && !prospectName.trim()) {
-      toast.error('Informe o nome do cliente');
+    if (missing.length > 0) {
+      setShowMissing(true);
+      toast.error('Faltam informações para o designer conseguir fazer a arte');
       return;
     }
-
+    if (uploadingRefs) {
+      toast.error('Espere as referências terminarem de enviar');
+      return;
+    }
+    if (materialsLink.trim() && !/^https?:\/\//i.test(materialsLink.trim())) {
+      toast.error('O link dos materiais precisa começar com https://');
+      return;
+    }
     setSubmitting(true);
     try {
-      const links = referencesLinks.split('\n').map(l => l.trim()).filter(Boolean);
-      const primaryFormat = selectedFormats[0] || 'feed';
-      const formatDesc = selectedFormats.length > 1
-        ? `Formatos: ${selectedFormats.map(f => FORMAT_OPTIONS.find(o => o.key === f)?.label || f).join(', ')}`
-        : '';
-      const fullDescription = [description, formatDesc].filter(Boolean).join('\n\n');
+      const copyText = isCopyBriefEmpty(brief) ? null : assembleCopyText(brief);
+      const baseTitle = title.trim() || brief.headline || description.trim().split('\n')[0].slice(0, 80) || `Arte ${formatInfo?.name || ''}`.trim();
+      const formats = [dimensions!, ...extraFormats.map((k) => dimensionsFromPreset(k))];
+      const created: string[] = [];
+      for (let i = 0; i < formats.length; i++) {
+        const dims = formats[i];
+        const info = describeDesignFormat(dims);
+        const row = {
+          ...(i === 0 ? { id: taskId } : {}),
+          client_id: isUnregistered ? null : clientId,
+          prospect_name: isUnregistered ? prospectName.trim() : null,
+          title: formats.length > 1 ? `${baseTitle} — ${info?.name || dims.preset}` : baseTitle,
+          format_type: formatTypeForDimensions(dims),
+          dimensions: dims,
+          copy_brief: isCopyBriefEmpty(brief) ? null : brief,
+          copy_text: copyText,
+          references_links: referenceLinks,
+          reference_images: referenceFiles,
+          materials_link: materialsLink.trim() || null,
+          priority,
+          description: description.trim() || null,
+          due_date: dueDate || null,
+          created_by: user?.id || null,
+          kanban_column: 'nova_tarefa',
+          position: 0, // Posicionamento inicial seguro no topo
+        };
+        const { data, error } = await supabase.from('design_tasks').insert(row as any).select('id').single();
+        if (error) throw new Error(error.message || 'Erro ao criar a tarefa');
+        created.push((data as any)?.id || '');
+      }
 
-      await createTask.mutateAsync({
-        client_id: isUnregistered ? null : clientId,
-        prospect_name: isUnregistered ? prospectName : null,
-        title,
-        format_type: primaryFormat,
-        priority,
-        copy_text: copyText || null,
-        references_links: links,
-        reference_images: referenceImages,
-        description: fullDescription || null,
-        due_date: dueDate || null,
-        created_by: user?.id || null,
-        kanban_column: 'nova_tarefa',
-        position: 0, // Posicionamento inicial seguro no topo
-      } as any);
-
-      // Notify designers: o painel de design atende os cargos 'designer' e 'fotografo'
-      // (antes só o 'fotografo' era avisado). Falha no aviso não desfaz a demanda criada.
+      // Avisa o painel de design ('designer' e 'fotografo'). Falha no aviso não desfaz a demanda.
       for (const role of ['designer', 'fotografo']) {
         try {
           await supabase.rpc('notify_role', {
             _role: role,
             _title: 'Nova tarefa de design',
-            _message: `Nova tarefa: ${title}`,
+            _message: `Nova tarefa: ${baseTitle}${formats.length > 1 ? ` (${formats.length} formatos)` : ''}`,
             _type: 'design',
             _link: '/designer',
           });
@@ -135,207 +168,172 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
           console.warn('[design] falha ao avisar o cargo', role, err);
         }
       }
-
-      setClientId('');
-      setProspectName('');
-      setIsUnregistered(false);
-      setTitle('');
-      setSelectedFormats(['feed']);
-      setPriority('media');
-      setCopyText('');
-      setReferencesLinks('');
-      setDescription('');
-      setDueDate('');
-      setReferenceImages([]);
+      await queryClient.invalidateQueries({ queryKey: ['design-tasks'] });
+      toast.success(created.length > 1 ? `${created.length} tarefas de design criadas (uma por formato)` : 'Tarefa de design criada!');
+      reset();
       onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao criar a tarefa');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const selectedClient = clients.find(c => c.id === clientId);
+  const section = 'rounded-xl border border-border p-3 space-y-2.5';
+  const sectionTitle = 'text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl w-[calc(100vw-1rem)] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Nova Demanda para Designer</DialogTitle>
+          <DialogDescription className="text-xs">
+            Tudo o que o designer (pessoa ou agente de IA) precisa para fazer a arte sem perguntar. Obrigatório: cliente, formato e copy ou descrição.
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label>Cliente *</Label>
+        <div className="space-y-3">
+          {/* Cliente */}
+          <div className={section}>
+            <div className="flex items-center justify-between gap-2">
+              <Label className={sectionTitle}>1 · Cliente *</Label>
               <div className="flex items-center gap-2">
-                <Checkbox 
-                  id="isUnregistered" 
-                  checked={isUnregistered} 
-                  onCheckedChange={(checked) => setIsUnregistered(checked === true)} 
-                />
+                <Checkbox id="isUnregistered" checked={isUnregistered} onCheckedChange={(checked) => setIsUnregistered(checked === true)} />
                 <label htmlFor="isUnregistered" className="text-xs font-medium cursor-pointer">Cliente não cadastrado</label>
               </div>
             </div>
-            
             {!isUnregistered ? (
-              <Select value={clientId || ''} onValueChange={setClientId}>
+              <Select value={clientId} onValueChange={setClientId}>
                 <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                 <SelectContent>
-                  {clients.map(c => (
+                  {clients.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       <div className="flex items-center gap-2">
                         <ClientLogo client={{ companyName: c.companyName, color: c.color, logoUrl: c.logoUrl }} size="sm" />
                         {c.companyName}
+                        {!(c.driveLink || '').trim() && <span className="text-[10px] text-amber-600">· sem Drive</span>}
                       </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             ) : (
-              <Input 
-                value={prospectName} 
-                onChange={e => setProspectName(e.target.value)} 
-                placeholder="Nome da empresa/cliente" 
-              />
+              <Input value={prospectName} onChange={(e) => setProspectName(e.target.value)} placeholder="Nome da empresa/cliente" />
             )}
-
+            {selectedClient && !isUnregistered && (
+              clientDrive ? (
+                <a href={clientDrive} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-primary hover:underline">
+                  <FolderOpen size={13} /> Pasta do Drive do cliente (identidade, logos e fotos)
+                </a>
+              ) : (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-200">
+                  <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                  <span>
+                    Este cliente não tem a pasta do Drive cadastrada. A IA busca lá identidade, logos e fotos —
+                    preencha em <Link to="/clientes" className="underline font-medium">Clientes</Link>.
+                  </span>
+                </div>
+              )
+            )}
+            {selectedClient?.niche && (
+              <p className="text-[11px] text-muted-foreground">📅 Nicho: {selectedClient.niche} — confira as datas sazonais ao criar a arte.</p>
+            )}
           </div>
 
-          {selectedClient?.niche && (
-            <div className="p-2 rounded-lg bg-accent border border-border text-xs">
-              <p className="font-medium text-foreground">📅 Datas sazonais do nicho: {selectedClient.niche}</p>
-              <p className="text-muted-foreground mt-1">Verifique as datas importantes do nicho ao criar a arte.</p>
+          {/* Formato */}
+          <div className={section}>
+            <Label className={sectionTitle}><Layers size={12} /> 2 · Formato e dimensão *</Label>
+            <DesignFormatPicker value={dimensions} onChange={setDimensions} />
+            <details className="text-xs">
+              <summary className="cursor-pointer text-primary font-medium">Criar também em outros formatos (um card por formato)</summary>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {DESIGN_FORMAT_PRESETS.filter((p) => p.key !== 'personalizado' && p.key !== 'logomarca' && p.key !== dimensions?.preset).map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => toggleExtra(p.key)}
+                    className={`px-2 py-1 rounded-md border text-[11px] ${extraFormats.includes(p.key) ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}
+                  >
+                    {p.emoji} {p.label}
+                  </button>
+                ))}
+              </div>
+              {extraFormats.length > 0 && <p className="text-[10px] text-muted-foreground mt-1">{extraFormats.length + 1} cards serão criados com a mesma copy e as mesmas referências.</p>}
+            </details>
+          </div>
+
+          {/* Copy */}
+          <div className={section}>
+            <Label className={sectionTitle}>3 · Copy da arte (texto que vai na arte)</Label>
+            <DesignCopyFields value={copyBrief} onChange={setCopyBrief} />
+            <div className="space-y-1">
+              <Label className="text-xs">Descrição / o que a arte precisa transmitir</Label>
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex.: Post de Dia das Crianças com a equipe, tom alegre, usar fotos da pasta 'Equipe'." rows={2} />
+            </div>
+          </div>
+
+          {/* Materiais e referências */}
+          <div className={section}>
+            <Label className={sectionTitle}><FolderOpen size={12} /> 4 · Materiais e referências</Label>
+            <div className="space-y-1">
+              <Label className="text-xs">Link do Drive com os materiais desta arte</Label>
+              <Input value={materialsLink} onChange={(e) => setMaterialsLink(e.target.value)} placeholder="https://drive.google.com/drive/folders/..." className="text-sm" />
+              <p className="text-[10px] text-muted-foreground">Fotos e arquivos só desta arte. Identidade e logos ficam na pasta do cliente.</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Referências (arquivos e links)</Label>
+              <DesignReferenceUploader
+                files={referenceFiles}
+                onFilesChange={setReferenceFiles}
+                links={referenceLinks}
+                onLinksChange={setReferenceLinks}
+                folder={`design-refs/${(isUnregistered ? '' : clientId) || 'avulso'}/${taskId}`}
+                onUploadingChange={setUploadingRefs}
+              />
+            </div>
+          </div>
+
+          {/* Prazo, prioridade, título */}
+          <div className={`${section} grid gap-3 sm:grid-cols-3 space-y-0`}>
+            <div className="space-y-1 sm:col-span-3">
+              <Label className="text-xs">Título do card</Label>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Se ficar vazio, usa o título da copy" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Prioridade</Label>
+              <Select value={priority} onValueChange={setPriority}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="baixa">🌿 Baixa</SelectItem>
+                  <SelectItem value="media">💜 Média</SelectItem>
+                  <SelectItem value="alta">⚡ Alta</SelectItem>
+                  <SelectItem value="urgente">🔥 Urgente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label className="text-xs">Prazo</Label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="pl-9" />
+              </div>
+            </div>
+          </div>
+
+          {showMissing && missing.length > 0 && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs space-y-1" role="alert">
+              <p className="font-semibold text-destructive flex items-center gap-1.5"><AlertTriangle size={13} /> Falta para criar a demanda:</p>
+              <ul className="list-disc list-inside text-destructive/90 space-y-0.5">
+                {describeMissingForForm(missing).map((m) => <li key={m}>{m}</li>)}
+              </ul>
             </div>
           )}
+          {missing.length === 0 && (
+            <p className="text-[11px] text-emerald-600 flex items-center gap-1"><CheckCircle2 size={12} /> Brief completo{formatInfo ? `: ${formatInfo.label}` : ''}</p>
+          )}
 
-          <div>
-            <Label>Título *</Label>
-            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Arte para Black Friday" />
-          </div>
-
-          {/* Format selection - multi-select buttons */}
-          <div>
-            <Label className="mb-2 block">Formatos da Arte *</Label>
-            <div className="flex flex-wrap gap-2">
-              {FORMAT_OPTIONS.map(fmt => {
-                const selected = selectedFormats.includes(fmt.key);
-                return (
-                  <button
-                    key={fmt.key}
-                    type="button"
-                    onClick={() => toggleFormat(fmt.key)}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border-2 transition-all ${
-                      selected
-                        ? 'border-primary bg-primary/10 text-primary shadow-sm'
-                        : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-muted/30'
-                    }`}
-                  >
-                    <span>{fmt.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {selectedFormats.length > 1 && (
-              <p className="text-[10px] text-muted-foreground mt-1">{selectedFormats.length} formatos selecionados</p>
-            )}
-          </div>
-
-          <div>
-            <Label>Prioridade</Label>
-            <Select value={priority} onValueChange={setPriority}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="baixa">🌿 Baixa</SelectItem>
-                <SelectItem value="media">💜 Média</SelectItem>
-                <SelectItem value="alta">⚡ Alta</SelectItem>
-                <SelectItem value="urgente">🔥 Urgente</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label>Data de Vencimento</Label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="date"
-                value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-          </div>
-
-          <div>
-            <Label>Copy (texto para a arte)</Label>
-            <Textarea value={copyText} onChange={e => setCopyText(e.target.value)} placeholder="Texto que será usado na arte..." rows={3} />
-          </div>
-
-          {/* Reference images/links section */}
-          <div>
-            <Label className="mb-2 block">Referências Visuais</Label>
-            
-            {/* Uploaded/added references preview */}
-            {referenceImages.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
-                {referenceImages.map((img, i) => {
-                  const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(img);
-                  return (
-                    <div key={i} className="relative group">
-                      {isImage ? (
-                        <div className="w-20 h-20 rounded-lg border border-border overflow-hidden">
-                          <img src={img} alt={`Ref ${i + 1}`} className="w-full h-full object-cover" />
-                        </div>
-                      ) : (
-                        <div className="w-20 h-20 rounded-lg border border-border flex items-center justify-center bg-muted/30">
-                          <Link2 size={16} className="text-muted-foreground" />
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => removeRefImage(i)}
-                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X size={10} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Add reference inputs */}
-            <div className="flex items-center gap-2">
-              <Input
-                value={refLinkInput}
-                onChange={e => setRefLinkInput(e.target.value)}
-                placeholder="Cole um link de referência..."
-                className="text-xs h-9 flex-1"
-                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddRefLink())}
-              />
-              <Button type="button" size="sm" variant="secondary" className="h-9 text-xs gap-1" onClick={handleAddRefLink} disabled={!refLinkInput.trim()}>
-                <Plus size={12} /> Link
-              </Button>
-              <input ref={refFileRef} type="file" accept="image/*" className="hidden" onChange={handleUploadRef} />
-              <Button type="button" size="sm" variant="secondary" className="h-9 text-xs gap-1" onClick={() => refFileRef.current?.click()} disabled={uploadingRef}>
-                {uploadingRef ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                Imagem
-              </Button>
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1">Adicione links do Pinterest, Instagram ou envie imagens de referência</p>
-          </div>
-
-          <div>
-            <Label>Referências (links — um por linha)</Label>
-            <Textarea value={referencesLinks} onChange={e => setReferencesLinks(e.target.value)} placeholder="https://pinterest.com/pin/...\nhttps://instagram.com/p/..." rows={3} />
-          </div>
-
-          <div>
-            <Label>Descrição / Observações</Label>
-            <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Detalhes adicionais..." rows={2} />
-          </div>
-
-          <Button onClick={handleSubmit} disabled={(!clientId && !isUnregistered) || !title || submitting} className="w-full">
-            {submitting ? 'Criando...' : 'Criar Demanda'}
+          <Button onClick={handleSubmit} disabled={submitting || uploadingRefs} className="w-full">
+            {submitting ? 'Criando...' : uploadingRefs ? 'Enviando referências…' : extraFormats.length ? `Criar ${extraFormats.length + 1} demandas` : 'Criar Demanda'}
           </Button>
         </div>
       </DialogContent>

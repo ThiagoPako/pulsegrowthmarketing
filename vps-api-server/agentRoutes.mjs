@@ -57,7 +57,9 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import multer from 'multer';
 
-const AGENT_ROLES = new Set(['editor', 'revisor', 'chefe']);
+// designer e revisor_arte: agentes de design (rotas em agentDesignRoutes.mjs)
+const AGENT_ROLES = new Set(['editor', 'revisor', 'chefe', 'designer', 'revisor_arte']);
+const DESIGN_ONLY_ROLES = new Set(['designer', 'revisor_arte']);
 const TZ = 'America/Sao_Paulo';
 const WEEKDAY_TO_KEY = { Sun: 'domingo', Mon: 'segunda', Tue: 'terca', Wed: 'quarta', Thu: 'quinta', Fri: 'sexta', Sat: 'sabado' };
 
@@ -1016,6 +1018,10 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
   app.get('/api/agent/queue', async (req, res) => {
     try {
       const agent = await verifyAgent(req);
+      // agente de design não edita vídeo: a fila dele é a de artes (pulse arte fila)
+      if (DESIGN_ONLY_ROLES.has(agent.role)) {
+        return res.json({ agent: { id: agent.userId, name: agent.name, role: agent.role }, pause: await pauseStateFor(agent.userId), tasks: [] });
+      }
       const { rows } = await pool.query(
         `SELECT ${TASK_FIELDS}
            FROM content_tasks t
@@ -1045,6 +1051,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
   app.post('/api/agent/tasks/:id/claim', async (req, res) => {
     try {
       const agent = await verifyAgent(req);
+      if (DESIGN_ONLY_ROLES.has(agent.role)) return res.status(403).json({ error: 'Agente de design não pega vídeo: use pulse arte fila / pulse arte pegar' });
       const pause = await pauseStateFor(agent.userId);
       if (pause.paused) {
         return res.status(423).json({ error: `Agentes pausados pelo sistema${pause.all ? '' : ` (${agent.name})`}. Não pegue cards novos.`, pause });
@@ -1764,4 +1771,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       }
     });
   });
+
+  // usado pelas rotas de design (agentDesignRoutes.mjs): mesma chave, pausa e esquema
+  return { verifyAgent, pauseStateFor, ensureAgentSchema, agentSlug };
 }

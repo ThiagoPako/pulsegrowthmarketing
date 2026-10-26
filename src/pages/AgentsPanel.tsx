@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { Bot, Pause, Play, Loader2, AlertTriangle, KeyRound, Clock, CheckCircle2, Inbox, Camera } from 'lucide-react';
+import { Bot, Pause, Play, Loader2, AlertTriangle, KeyRound, Clock, CheckCircle2, Inbox, Camera, Palette, GraduationCap } from 'lucide-react';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
 import { uploadFileToVps } from '@/services/vpsApi';
 import { Button } from '@/components/ui/button';
@@ -47,7 +47,34 @@ interface Overview {
   activity: { created_at: string; action: string; details: string | null; agent_name: string; title: string | null }[];
 }
 
-const ROLE_LABELS: Record<string, string> = { editor: 'Editor', revisor: 'Revisão', chefe: 'Chefe' };
+const ROLE_LABELS: Record<string, string> = { editor: 'Editor', revisor: 'Revisão', chefe: 'Chefe', designer: 'Designer', revisor_arte: 'Revisão de artes' };
+
+// Agentes de design (GET /api/agents/design-overview, agentDesignRoutes.mjs)
+interface DesignCurrent {
+  id: string;
+  title: string;
+  kanban_column: string;
+  assigned_to: string;
+  agent_step: string | null;
+  agent_heartbeat_at: string | null;
+  client_name: string | null;
+}
+interface DesignOverview {
+  queue: { waiting: number; analise_ia: number; agent_adjustments: number };
+  designers: {
+    user_id: string; name: string; role: string; current: DesignCurrent[];
+    delivered_today: number; delivered_week: number; reviews_30d: number; approved_30d: number; errors_30d: number;
+  }[];
+  current: DesignCurrent[];
+  learning: {
+    days: number;
+    reviews: number;
+    approved: number;
+    by_category: { category: string; label: string; count: number }[];
+    by_designer: { designer_id: string; name: string; category: string; label: string; count: number }[];
+    recent: { category: string; label: string; description: string; at: string; task: string | null; client: string | null; designer: string | null }[];
+  };
+}
 const STALE_MINUTES = 30;
 
 function ago(value: string | null) {
@@ -66,6 +93,7 @@ function errorMessage(error: unknown) {
  */
 export default function AgentsPanel() {
   const [data, setData] = useState<Overview | null>(null);
+  const [design, setDesign] = useState<DesignOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   // Falha ao carregar: aviso fixo na página (antes saía um toast novo a cada 15 s)
@@ -86,6 +114,13 @@ export default function AgentsPanel() {
       if (!response.ok) throw new Error(body.error || 'Falha ao carregar os agentes');
       setData(body);
       setLoadError(null);
+      // Artes: falha aqui não derruba o painel de vídeo
+      try {
+        const designResponse = await vpsAuthedFetch('/agents/design-overview');
+        if (designResponse.ok) setDesign(await designResponse.json());
+      } catch {
+        /* sem o resumo de artes nesta rodada */
+      }
     } catch (error) {
       const message = errorMessage(error);
       setLoadError(message);
@@ -178,7 +213,7 @@ export default function AgentsPanel() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Bot className="text-primary" />
-          <h1 className="text-2xl font-display font-bold">Agentes de edição</h1>
+          <h1 className="text-2xl font-display font-bold">Agentes de IA</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" asChild>
@@ -237,7 +272,9 @@ export default function AgentsPanel() {
         {(data?.agents || []).map((agent) => {
           const label = agent.name?.trim() || agent.email || 'Agente';
           const paused = pausedAll || !!agent.paused;
-          const task = agent.current[0];
+          const designInfo = design?.designers.find((d) => d.user_id === agent.user_id);
+          const art = design?.current.find((t) => t.assigned_to === agent.user_id);
+          const task = agent.current[0] || (art ? { ...art, editing_started_at: null } : undefined);
           const stale = task && (!task.agent_heartbeat_at
             || Date.now() - new Date(task.agent_heartbeat_at).getTime() > STALE_MINUTES * 60 * 1000);
           return (
@@ -296,7 +333,9 @@ export default function AgentsPanel() {
 
               {task ? (
                 <p className="mt-2 text-sm">
-                  {task.kanban_column === 'alteracao' ? 'Alteração' : 'Editando'}: <strong>{task.title}</strong>
+                  {art && !agent.current[0]
+                    ? (task.kanban_column === 'ajustes' ? 'Ajuste de arte' : 'Criando arte')
+                    : task.kanban_column === 'alteracao' ? 'Alteração' : 'Editando'}: <strong>{task.title}</strong>
                   {task.client_name ? ` · ${task.client_name.trim()}` : ''}
                   <span className="text-muted-foreground"> — etapa: {task.agent_step || '—'}, sinal {ago(task.agent_heartbeat_at)}</span>
                 </p>
@@ -309,15 +348,106 @@ export default function AgentsPanel() {
                 <p className="mt-2 text-sm text-muted-foreground">Sem tarefa no momento.</p>
               )}
 
-              <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><CheckCircle2 size={12} /> {agent.delivered_today} entregue(s) hoje</span>
-                <span>{agent.delivered_week} nos últimos 7 dias</span>
-                <span>{agent.alterations_week} alteração(ões) refeita(s) em 7 dias</span>
-              </div>
+              {designInfo ? (
+                <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                  {designInfo.role === 'designer' && (
+                    <>
+                      <span className="flex items-center gap-1"><Palette size={12} /> {designInfo.delivered_today} arte(s) entregue(s) hoje</span>
+                      <span>{designInfo.delivered_week} nos últimos 7 dias</span>
+                      <span>
+                        Análise IA (30 dias): {designInfo.approved_30d} de {designInfo.reviews_30d} aprovadas · {designInfo.errors_30d} erro(s) apontado(s)
+                      </span>
+                    </>
+                  )}
+                  {designInfo.role === 'revisor_arte' && <span className="flex items-center gap-1"><Palette size={12} /> Revisa as artes na coluna Análise IA</span>}
+                </div>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><CheckCircle2 size={12} /> {agent.delivered_today} entregue(s) hoje</span>
+                  <span>{agent.delivered_week} nos últimos 7 dias</span>
+                  <span>{agent.alterations_week} alteração(ões) refeita(s) em 7 dias</span>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
+
+      {design && (
+        <div className="glass-card p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <Palette size={16} className="text-primary" />
+            <h2 className="text-sm font-semibold">Artes (agentes de design)</h2>
+            <Link to="/designer" className="ml-auto text-xs text-primary underline">Abrir o Kanban de Design</Link>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {[
+              { label: 'Artes esperando (sem dono)', value: design.queue.waiting },
+              { label: 'Na Análise IA', value: design.queue.analise_ia },
+              { label: 'Ajustes de artes dos agentes', value: design.queue.agent_adjustments },
+            ].map(({ label, value }) => (
+              <div key={label} className="rounded-lg border border-border p-3">
+                <div className="text-xs text-muted-foreground">{label}</div>
+                <div className="mt-1 text-2xl font-bold">{Number(value || 0)}</div>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <GraduationCap size={13} /> Aprendizado — erros apontados pelo revisor de artes ({design.learning.days} dias)
+            </h3>
+            {design.learning.by_category.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {design.learning.reviews ? `${design.learning.reviews} parecer(es), nenhum erro apontado.` : 'Nenhum parecer da Análise IA ainda.'}
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  {design.learning.reviews} parecer(es) da Análise IA: {design.learning.approved} aprovado(s), {design.learning.reviews - design.learning.approved} com ajustes.
+                </p>
+                <div className="space-y-1.5">
+                  {design.learning.by_category.map((c) => {
+                    const max = Math.max(...design.learning.by_category.map((x) => x.count));
+                    return (
+                      <div key={c.category} className="flex items-center gap-2 text-xs">
+                        <span className="w-48 shrink-0 truncate">{c.label}</span>
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full bg-primary" style={{ width: `${(c.count / max) * 100}%` }} />
+                        </div>
+                        <span className="w-8 text-right font-semibold">{c.count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {design.learning.by_designer.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {Array.from(new Set(design.learning.by_designer.map((d) => d.designer_id))).map((id) => {
+                      const rows = design.learning.by_designer.filter((d) => d.designer_id === id);
+                      return (
+                        <div key={id} className="rounded-lg border border-border px-3 py-2 text-xs">
+                          <div className="font-semibold">{rows[0].name || 'Designer'}</div>
+                          <div className="text-muted-foreground">{rows.slice(0, 3).map((r) => `${r.label} (${r.count})`).join(' · ')}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <ul className="space-y-1 text-xs">
+                  {design.learning.recent.slice(0, 8).map((e, i) => (
+                    <li key={i} className="flex flex-wrap gap-x-2">
+                      <span className="text-muted-foreground">{ago(e.at)}</span>
+                      <Badge variant="outline" className="text-[10px]">{e.label}</Badge>
+                      <span>{e.description}</span>
+                      {(e.task || e.designer) && <span className="text-muted-foreground">· {[e.task, e.client, e.designer].filter(Boolean).join(' · ')}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="glass-card p-4">
         <h2 className="mb-3 text-sm font-semibold">Atividade recente</h2>

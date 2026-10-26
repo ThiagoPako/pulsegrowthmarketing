@@ -47,6 +47,7 @@ const COLUMN_LABELS: Record<string, string> = {
   nova_tarefa: 'Nova tarefa',
   executando: 'Executando',
   fila_baixa_prioridade: 'Fila baixa',
+  analise_ia: 'Análise IA',
   em_analise: 'Em análise',
   enviar_cliente: 'Enviar cliente',
   ajustes: 'Ajustes',
@@ -54,7 +55,7 @@ const COLUMN_LABELS: Record<string, string> = {
   postado: 'Postada',
 };
 
-const PENDING_COLUMNS = ['nova_tarefa', 'executando', 'fila_baixa_prioridade', 'em_analise', 'enviar_cliente', 'ajustes'];
+const PENDING_COLUMNS = ['nova_tarefa', 'executando', 'fila_baixa_prioridade', 'analise_ia', 'em_analise', 'enviar_cliente', 'ajustes'];
 
 type StatusKey = 'aprovado' | 'postado' | 'pendente' | 'mes' | 'all';
 
@@ -380,7 +381,7 @@ function PendingList({ arts, brand }: { arts: ArtRow[]; brand: string }) {
     return map;
   }, [arts]);
 
-  const order = ['executando', 'em_analise', 'enviar_cliente', 'ajustes', 'nova_tarefa', 'fila_baixa_prioridade'];
+  const order = ['executando', 'analise_ia', 'em_analise', 'enviar_cliente', 'ajustes', 'nova_tarefa', 'fila_baixa_prioridade'];
 
   return (
     <div className="space-y-6">

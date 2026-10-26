@@ -6,7 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BookOpen } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/vpsDb';
-import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn, stopTimerFields, hasOpenTimer, getConflictingExecutingTasks, parseDueDate, formatDueDate, getTaskArtUrls, collectArtDownloadItems } from '@/hooks/useDesignTasks';
+import { useDesignTasks, useDesignAgents, isAgentDesignTask, DESIGN_COLUMNS, DesignTask, DesignTaskColumn, stopTimerFields, hasOpenTimer, getConflictingExecutingTasks, parseDueDate, formatDueDate, getTaskArtUrls, collectArtDownloadItems } from '@/hooks/useDesignTasks';
+import DesignAgentBadge, { isDesignAgentWorking } from '@/components/designer/DesignAgentBadge';
+import { describeDesignFormat, getDesignBriefMissing, normalizeCopyBrief, describeMissingForForm } from '@/lib/designBrief';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -15,7 +17,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame, Pause, AlertTriangle, Timer, Filter, X } from 'lucide-react';
+import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame, Pause, AlertTriangle, Timer, Filter, X, Bot, ArrowRightLeft, FolderOpen, ClipboardList } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
@@ -39,7 +41,12 @@ const FORMAT_LABELS: Record<string, string> = {
 };
 
 // Colunas que encerram o ciclo da arte — não contam como atrasadas mesmo com prazo vencido.
-const OVERDUE_EXCLUDED_COLS: DesignTaskColumn[] = ['em_analise', 'enviar_cliente', 'aprovado', 'postado'];
+const OVERDUE_EXCLUDED_COLS: DesignTaskColumn[] = ['analise_ia', 'em_analise', 'enviar_cliente', 'aprovado', 'postado'];
+
+/** Formato curto para o card ("Feed 1080×1350", "Panfleto A5 · impressão"); tarefas antigas caem no format_type. */
+function taskFormatLabel(task: Pick<DesignTask, 'dimensions' | 'format_type'>): string {
+  return describeDesignFormat(task.dimensions, task.format_type)?.short || FORMAT_LABELS[task.format_type] || task.format_type;
+}
 
 // Atrasada = tem prazo anterior a hoje e ainda não saiu do fluxo de produção.
 export function isDesignTaskOverdue(task: { due_date?: string | null; kanban_column: string }): boolean {
@@ -163,6 +170,7 @@ const COLUMN_CONFIG: Record<string, { icon: React.ReactNode; gradient: string }>
   enviar_cliente: { icon: <Send size={15} />, gradient: 'from-cyan-500/20 to-teal-500/10 dark:from-cyan-500/30 dark:to-teal-500/10' },
   aprovado: { icon: <CheckCircle2 size={15} />, gradient: 'from-emerald-500/20 to-green-500/10 dark:from-emerald-500/30 dark:to-green-500/10' },
   ajustes: { icon: <RotateCcw size={15} />, gradient: 'from-red-500/20 to-rose-500/10 dark:from-red-500/30 dark:to-rose-500/10' },
+  analise_ia: { icon: <Bot size={15} />, gradient: 'from-fuchsia-500/20 to-violet-500/10 dark:from-fuchsia-500/30 dark:to-violet-500/10' },
   postado: { icon: <Send size={15} />, gradient: 'from-fuchsia-500/20 to-purple-500/10 dark:from-fuchsia-500/30 dark:to-purple-500/10' },
 };
 
@@ -207,6 +215,8 @@ function DragScrollContainer({ children, className }: { children: React.ReactNod
 
 export default function DesignerKanban() {
   const { tasksQuery, updateTask, addHistory, deleteTask } = useDesignTasks();
+  const { data: designAgents = [] } = useDesignAgents();
+  const agentIds = useMemo(() => new Set(designAgents.map(a => a.user_id)), [designAgents]);
   const { currentUser, clients } = useApp();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -223,6 +233,12 @@ export default function DesignerKanban() {
   const [dueFrom, setDueFrom] = useState<string>('');
   const [dueTo, setDueTo] = useState<string>('');
   const [overdueOnly, setOverdueOnly] = useState<boolean>(false);
+  // Filtro "IA": só artes de agentes de IA (fazendo, feitas ou na Análise IA); e brief incompleto
+  const [aiOnly, setAiOnly] = useState<boolean>(false);
+  const [incompleteOnly, setIncompleteOnly] = useState<boolean>(false);
+  // Celular: filtros recolhidos e atalho para a coluna
+  const [showFilters, setShowFilters] = useState<boolean>(false);
+  const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
   // Ordenação dos cards: quais aparecem primeiro em todas as visões.
   const [sortMode, setSortMode] = useState<TaskSortMode>('default');
   // Paginação padrão em TODAS as colunas — evita renderizar 100+ cards de uma vez.
@@ -231,6 +247,7 @@ export default function DesignerKanban() {
     executando: 15,
     fila_baixa_prioridade: 10,
     ajustes: 10,
+    analise_ia: 15,
     em_analise: 15,
     enviar_cliente: 15,
     aprovado: 10,
@@ -269,7 +286,9 @@ export default function DesignerKanban() {
     return Array.from(map.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name));
   }, [tasks, clients]);
 
-  const hasDateFilters = !!(createdFrom || createdTo || dueFrom || dueTo || overdueOnly);
+  const clientsWithoutDrive = useMemo(() => new Set(clients.filter(c => !(c.driveLink || '').trim()).map(c => c.id)), [clients]);
+
+  const hasDateFilters = !!(createdFrom || createdTo || dueFrom || dueTo || overdueOnly || aiOnly || incompleteOnly);
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
@@ -285,9 +304,11 @@ export default function DesignerKanban() {
       if (dueTo && due > dueTo) return false;
       // Somente atrasadas
       if (overdueOnly && !isDesignTaskOverdue(t)) return false;
+      if (aiOnly && !isAgentDesignTask(t, agentIds)) return false;
+      if (incompleteOnly && (['aprovado', 'postado'].includes(t.kanban_column) || getDesignBriefMissing(t).length === 0)) return false;
       return true;
     });
-  }, [tasks, filterClient, createdFrom, createdTo, dueFrom, dueTo, overdueOnly]);
+  }, [tasks, filterClient, createdFrom, createdTo, dueFrom, dueTo, overdueOnly, aiOnly, incompleteOnly, agentIds]);
 
   const clearDateFilters = () => {
     setCreatedFrom('');
@@ -295,6 +316,8 @@ export default function DesignerKanban() {
     setDueFrom('');
     setDueTo('');
     setOverdueOnly(false);
+    setAiOnly(false);
+    setIncompleteOnly(false);
   };
 
   // Ordena conforme o modo escolhido (usado no kanban, lista e agendamentos).
@@ -338,8 +361,12 @@ export default function DesignerKanban() {
     e.preventDefault();
     setDragOverColumn(null);
     setDraggingTaskId(null);
-
     const taskId = e.dataTransfer.getData('text/plain');
+    await moveTaskRef.current(taskId, targetColumn, overTaskId);
+  }, []);
+
+  // Mover (arrastar ou menu "Mover para"): mesmas regras de cronômetro, anexo, aprovação e posição
+  const moveTask = useCallback(async (taskId: string, targetColumn: DesignTaskColumn, overTaskId?: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
@@ -348,6 +375,11 @@ export default function DesignerKanban() {
     const isChangingPosition = !!overTaskId && overTaskId !== taskId;
 
     if (!isChangingColumn && !isChangingPosition) return;
+    // Agente de IA trabalhando na arte agora: confirmar antes de tirar dele
+    if (isChangingColumn && isDesignAgentWorking(task)) {
+      const agent = designAgents.find(a => a.user_id === task.assigned_to)?.name || 'Um agente de IA';
+      if (!window.confirm(`${agent} está trabalhando nesta arte agora (${task.agent_step}). Mover mesmo assim? A entrega dele será recusada.`)) return;
+    }
     // Com outra ordenação na tela a posição manual não aparece: reordenar não teria efeito visível.
     if (!isChangingColumn && sortMode !== 'default') {
       toast.info('Para reordenar, use "Aparecem primeiro: Padrão (ordem manual)".');
@@ -358,6 +390,11 @@ export default function DesignerKanban() {
 
     const targetLabel = DESIGN_COLUMNS.find(c => c.key === targetColumn)?.label || targetColumn;
     const extraFields: Record<string, any> = {};
+    // Saiu da mão do agente (a equipe moveu): o selo "Criando/Em correção" some
+    if (isChangingColumn && task.agent_step) {
+      extraFields.agent_step = null;
+      extraFields.agent_heartbeat_at = null;
+    }
 
     // Calculate new position (safe within bigint range)
     const MAX_SAFE_POS = 1e15;
@@ -403,6 +440,11 @@ export default function DesignerKanban() {
     if (isStarting) {
       if (!task.started_at) extraFields.started_at = new Date().toISOString();
       if (!task.assigned_to && user?.id) extraFields.assigned_to = user.id;
+      // Card reservado para um agente de IA (que não está nele agora): quem iniciou assume, senão a arte
+      // ficaria em Executando no nome do agente sem ninguém fazendo.
+      if (task.assigned_to && agentIds.has(task.assigned_to) && !isDesignAgentWorking(task) && user?.id) {
+        extraFields.assigned_to = user.id;
+      }
       // Cronômetro já rodando (ex.: vindo de Ajustes) segue a mesma sessão.
       if (!(task.timer_running && task.timer_started_at)) {
         extraFields.timer_running = true;
@@ -424,6 +466,11 @@ export default function DesignerKanban() {
         return;
       }
       extraFields.due_date = null;
+    }
+    // Análise IA é para entregas (de agente): sem arte não há o que revisar
+    if (isChangingColumn && targetColumn === 'analise_ia' && !task.attachment_url && !(task as any).mockup_url && getTaskArtUrls(task).length === 0) {
+      toast.error('Anexe a arte antes de mandar para a Análise IA');
+      return;
     }
 
     if (isChangingColumn && targetColumn === 'aprovado') {
@@ -519,7 +566,9 @@ export default function DesignerKanban() {
     } catch (err: any) {
       toast.error(err.message || 'Erro ao mover tarefa');
     }
-  }, [tasks, user, updateTask, addHistory, tasksByColumn, sortMode, queryClient, activeCity]);
+  }, [tasks, user, updateTask, addHistory, tasksByColumn, sortMode, queryClient, activeCity, designAgents, agentIds]);
+  const moveTaskRef = useRef(moveTask);
+  moveTaskRef.current = moveTask;
 
   const handleDragEnd = useCallback(() => {
     setDraggingTaskId(null);
@@ -651,7 +700,7 @@ export default function DesignerKanban() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-display font-bold">Designer</h1>
           <p className="text-sm text-muted-foreground">Gerenciamento de tarefas de design</p>
@@ -691,10 +740,31 @@ export default function DesignerKanban() {
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <Badge variant="outline" className="gap-1 h-7 text-xs shrink-0">
+        <Badge variant="outline" className="gap-1 h-7 text-xs shrink-0 hidden sm:inline-flex">
           <Filter size={12} /> Filtros
         </Badge>
-        <div className="flex items-center gap-1 flex-wrap">
+        <Button size="sm" variant="outline" className="h-8 gap-1 text-xs sm:hidden" onClick={() => setShowFilters(v => !v)}>
+          <Filter size={13} /> {showFilters ? 'Esconder filtros' : 'Filtros e ordem'}
+        </Button>
+        <Button
+          size="sm"
+          variant={aiOnly ? 'default' : 'outline'}
+          className={`h-8 gap-1 text-xs ${aiOnly ? 'bg-fuchsia-600 hover:bg-fuchsia-700 text-white' : ''}`}
+          onClick={() => setAiOnly(v => !v)}
+          title="Só artes de agentes de IA: fazendo, feitas por eles ou na Análise IA"
+        >
+          <Bot size={13} /> IA
+        </Button>
+        <Button
+          size="sm"
+          variant={incompleteOnly ? 'default' : 'outline'}
+          className={`h-8 gap-1 text-xs ${incompleteOnly ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}`}
+          onClick={() => setIncompleteOnly(v => !v)}
+          title="Cards sem formato, sem copy/descrição ou sem cliente"
+        >
+          <ClipboardList size={13} /> Brief incompleto
+        </Button>
+        <div className={`${showFilters ? 'flex' : 'hidden'} sm:flex items-center gap-1 flex-wrap`}>
           <span className="text-xs text-muted-foreground shrink-0">Criação:</span>
           <Input
             type="date"
@@ -712,7 +782,7 @@ export default function DesignerKanban() {
             aria-label="Criada até"
           />
         </div>
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className={`${showFilters ? 'flex' : 'hidden'} sm:flex items-center gap-1 flex-wrap`}>
           <span className="text-xs text-muted-foreground shrink-0">Prazo:</span>
           <Input
             type="date"
@@ -730,7 +800,7 @@ export default function DesignerKanban() {
             aria-label="Prazo até"
           />
         </div>
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className={`${showFilters ? 'flex' : 'hidden'} sm:flex items-center gap-1 flex-wrap`}>
           <span className="text-xs text-muted-foreground shrink-0">Aparecem primeiro:</span>
           <Select value={sortMode} onValueChange={v => setSortMode(v as TaskSortMode)}>
             <SelectTrigger className="h-8 w-[200px] text-xs" aria-label="Ordenação dos cards">
@@ -765,9 +835,22 @@ export default function DesignerKanban() {
         </div>
       )}
 
+      {view === 'kanban' && (
+        <div className="sm:hidden">
+          <Select onValueChange={(key) => columnRefs.current[key]?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })}>
+            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Ir para a coluna…" /></SelectTrigger>
+            <SelectContent>
+              {DESIGN_COLUMNS.map(c => (
+                <SelectItem key={c.key} value={c.key} className="text-xs">{c.label} ({(tasksByColumn[c.key] || []).length})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {view === 'kanban' ? (
-        <DragScrollContainer className="pb-4">
-          <div className="flex gap-3 min-w-max" style={{ height: 'calc(100vh - 180px)' }}>
+        <DragScrollContainer className="pb-4 snap-x snap-mandatory sm:snap-none">
+          <div className="flex gap-3 min-w-max h-[calc(100dvh-230px)] sm:h-[calc(100vh-180px)]">
             {DESIGN_COLUMNS.map((col, colIdx) => {
               const cfg = COLUMN_CONFIG[col.key];
               const allColTasks = tasksByColumn[col.key] || [];
@@ -779,7 +862,8 @@ export default function DesignerKanban() {
               return (
                 <div
                   key={col.key}
-                  className={`min-w-[270px] w-[270px] flex-shrink-0 rounded-xl transition-all duration-200 flex flex-col ${
+                  ref={el => { columnRefs.current[col.key] = el; }}
+                  className={`min-w-[85vw] w-[85vw] sm:min-w-[270px] sm:w-[270px] snap-start flex-shrink-0 rounded-xl transition-all duration-200 flex flex-col ${
                     dragOverColumn === col.key ? 'ring-2 ring-primary/40 bg-primary/5' : ''
                   }`}
                   onDragOver={e => handleDragOver(e, col.key)}
@@ -794,7 +878,7 @@ export default function DesignerKanban() {
                       <span className="text-foreground/80">
                         {cfg.icon}
                       </span>
-                      <span className="text-xs font-bold uppercase tracking-wider text-foreground/90">{col.label}</span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-foreground/90" title={col.hint}>{col.label}</span>
                       <div
                         className="ml-auto flex items-center gap-1"
                       >
@@ -853,6 +937,8 @@ export default function DesignerKanban() {
                         )}
                       </div>
                     </div>
+                    {/* o que fazer nesta coluna (antes só o nome) */}
+                    <p className="relative z-10 mt-1 text-[10px] leading-snug text-foreground/60 line-clamp-2">{col.hint}</p>
                   </div>
 
                   {/* Cards - scrollable. Sem AnimatePresence/layout — enormes ganhos de perf com muitos cards. */}
@@ -876,7 +962,11 @@ export default function DesignerKanban() {
                             }
                           }}
                           canDelete={canDelete}
-                          onQuickStart={(col.key === 'nova_tarefa' || col.key === 'fila_baixa_prioridade') ? () => handleQuickStart(task) : undefined}
+                          agents={designAgents}
+                          isAgentTask={isAgentDesignTask(task, agentIds)}
+                          clientWithoutDrive={!!task.client_id && clientsWithoutDrive.has(task.client_id)}
+                          onMove={(target) => moveTask(task.id, target)}
+                          onQuickStart={(col.key === 'nova_tarefa' || col.key === 'fila_baixa_prioridade') && !(task.assigned_to && agentIds.has(task.assigned_to)) ? () => handleQuickStart(task) : undefined}
                           onReturnToQueue={col.key === 'executando' ? () => handleReturnToQueue(task) : undefined}
                           onPause={col.key === 'executando' && task.timer_running ? () => handlePauseTask(task) : undefined}
                           onResume={col.key === 'executando' && !task.timer_running ? () => handleResumeTask(task) : undefined}
@@ -910,8 +1000,8 @@ export default function DesignerKanban() {
       ) : view === 'agendamentos' ? (
         <AgendamentosView tasks={sortedTasks} onOpen={id => setSelectedTaskId(id)} />
       ) : (
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="border rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="bg-muted/50 text-muted-foreground text-xs">
                 <th className="text-left p-3">Cliente</th>
@@ -933,7 +1023,10 @@ export default function DesignerKanban() {
                     </div>
                   </td>
                   <td className="p-3 font-medium">{task.title}</td>
-                  <td className="p-3"><Badge variant="outline" className="text-[10px]">{FORMAT_LABELS[task.format_type] || task.format_type}</Badge></td>
+                  <td className="p-3">
+                    <Badge variant="outline" className="text-[10px]">{taskFormatLabel(task)}</Badge>
+                    {isAgentDesignTask(task, agentIds) && <Badge className="ml-1 text-[10px] bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">IA</Badge>}
+                  </td>
                   <td className="p-3"><Badge className={`text-[10px] ${PRIORITY_CONFIG[task.priority]?.color}`}>{PRIORITY_CONFIG[task.priority]?.label}</Badge></td>
                   <td className="p-3"><Badge variant="secondary" className="text-[10px]">{DESIGN_COLUMNS.find(c => c.key === task.kanban_column)?.label}</Badge></td>
                   <td className="p-3 text-xs text-muted-foreground">{new Date(task.created_at).toLocaleDateString('pt-BR')}</td>
@@ -1097,7 +1190,7 @@ export default function DesignerKanban() {
 
 /* ── Agendamentos View: tasks grouped by due_date ── */
 function AgendamentosView({ tasks, onOpen }: { tasks: DesignTask[]; onOpen: (id: string) => void }) {
-  const COMPLETED_COLS = ['em_analise', 'enviar_cliente', 'aprovado', 'postado'];
+  const COMPLETED_COLS = ['analise_ia', 'em_analise', 'enviar_cliente', 'aprovado', 'postado'];
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
   const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7);
@@ -1147,7 +1240,7 @@ function AgendamentosView({ tasks, onOpen }: { tasks: DesignTask[]; onOpen: (id:
                 <ClientLogo client={{ companyName: t.clients?.company_name || '', color: t.clients?.color || '217 91% 60%', logoUrl: t.clients?.logo_url }} size="sm" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{t.title}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">{t.clients?.company_name} • {FORMAT_LABELS[t.format_type] || t.format_type}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{t.clients?.company_name} • {taskFormatLabel(t)}</p>
                 </div>
                 <Badge variant="outline" className="text-[10px] shrink-0">
                   <Calendar size={10} className="mr-1" /> {formatDueDate(t.due_date)}
@@ -1174,7 +1267,7 @@ function AgendamentosView({ tasks, onOpen }: { tasks: DesignTask[]; onOpen: (id:
                 <ClientLogo client={{ companyName: t.clients?.company_name || '', color: t.clients?.color || '217 91% 60%', logoUrl: t.clients?.logo_url }} size="sm" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{t.title}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">{t.clients?.company_name} • {FORMAT_LABELS[t.format_type] || t.format_type}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{t.clients?.company_name} • {taskFormatLabel(t)}</p>
                 </div>
                 <Badge className={`text-[10px] shrink-0 ${PRIORITY_CONFIG[t.priority]?.color}`}>{PRIORITY_CONFIG[t.priority]?.label}</Badge>
                 <Badge variant="secondary" className="text-[10px] shrink-0">{DESIGN_COLUMNS.find(c => c.key === t.kanban_column)?.label}</Badge>
@@ -1207,13 +1300,37 @@ function CopyPreviewDialog({ task, onClose, onOpenFull }: { task: DesignTask; on
           <ClientLogo client={{ companyName: task.clients?.company_name || '', color, logoUrl: task.clients?.logo_url }} size="md" />
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm truncate">{task.title}</p>
-            <p className="text-xs text-muted-foreground">{task.clients?.company_name} • {FORMAT_LABELS[task.format_type] || task.format_type}</p>
+            <p className="text-xs text-muted-foreground">{task.clients?.company_name || task.prospect_name} • {taskFormatLabel(task)}</p>
           </div>
           <Badge className={`text-[10px] ${PRIORITY_CONFIG[task.priority]?.color}`}>{PRIORITY_CONFIG[task.priority]?.label}</Badge>
         </div>
 
         {/* Copy text */}
-        <div className="p-4 space-y-3 max-h-[50vh] overflow-y-auto">
+        <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
+          {(() => {
+            const info = describeDesignFormat(task.dimensions, task.format_type);
+            const missing = getDesignBriefMissing(task);
+            return (
+              <div className="rounded-lg border border-border p-3 space-y-1.5">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">📐 Formato</p>
+                <p className="text-sm font-medium">{info?.label || 'Medida não informada'}</p>
+                {info?.print && info.pixelsWithBleed && (
+                  <p className="text-[11px] text-muted-foreground">Impressão: PDF com {info.pixelsWithBleed.width}×{info.pixelsWithBleed.height} px (com sangria)</p>
+                )}
+                {task.materials_link && (
+                  <a href={task.materials_link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1"><FolderOpen size={11} /> Materiais desta arte (Drive)</a>
+                )}
+                {task.clients?.drive_link && (
+                  <a href={task.clients.drive_link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1"><FolderOpen size={11} /> Pasta do cliente (identidade, logos, fotos)</a>
+                )}
+                {missing.length > 0 && (
+                  <ul className="text-[11px] text-amber-700 dark:text-amber-300 list-disc list-inside">
+                    {describeMissingForForm(missing).map(m => <li key={m}>{m}</li>)}
+                  </ul>
+                )}
+              </div>
+            );
+          })()}
           {task.copy_text ? (
             <div className="rounded-lg bg-accent/30 border border-accent p-3">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1.5">📝 Copy da Arte</p>
@@ -1304,6 +1421,13 @@ interface TaskCardProps {
   onResume?: () => void;
   onDragStart: (e: DragEvent<HTMLDivElement>) => void;
   onDragEnd: () => void;
+  /** agentes de IA (nome no selo) */
+  agents: { user_id: string; name?: string | null }[];
+  /** arte de agente de IA (fazendo, feita ou na Análise IA) */
+  isAgentTask: boolean;
+  clientWithoutDrive: boolean;
+  /** "Mover para" (funciona no celular, onde arrastar não funciona) */
+  onMove: (target: DesignTaskColumn) => void;
 }
 
 function LiveTimer({ startedAt, baseSeconds, running }: { startedAt: string | null; baseSeconds: number; running: boolean }) {
@@ -1326,10 +1450,14 @@ function LiveTimer({ startedAt, baseSeconds, running }: { startedAt: string | nu
   );
 }
 
-function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDetail, onDelete, canDelete, onQuickStart, onReturnToQueue, onPause, onResume, onDragStart, onDragEnd }: TaskCardProps) {
+function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDetail, onDelete, canDelete, onQuickStart, onReturnToQueue, onPause, onResume, onDragStart, onDragEnd, agents, isAgentTask, clientWithoutDrive, onMove }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
-  
-  const COMPLETED_COLS = ['em_analise', 'enviar_cliente', 'aprovado', 'postado'];
+  const briefMissing = ['aprovado', 'postado'].includes(task.kanban_column) ? [] : getDesignBriefMissing(task);
+  const headline = normalizeCopyBrief(task.copy_brief).headline;
+  const reservedAgent = task.kanban_column === 'nova_tarefa' && task.assigned_to
+    ? agents.find(a => a.user_id === task.assigned_to)?.name : null;
+
+  const COMPLETED_COLS = ['analise_ia', 'em_analise', 'enviar_cliente', 'aprovado', 'postado'];
   // Mesma regra do filtro "Atrasados": só depois do dia do prazo (comparando datas, não horários)
   const isOverdue = isDesignTaskOverdue(task);
   const formattedDueDate = task.due_date && !COMPLETED_COLS.includes(task.kanban_column) ? formatDueDate(task.due_date) || null : null;
@@ -1347,6 +1475,9 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
         isNext ? 'ring-2 ring-amber-400/70 shadow-lg shadow-amber-500/10' : ''
       }`}
     >
+      {/* Agente de IA: criando / em correção / parada / Análise IA */}
+      <DesignAgentBadge task={task} agents={agents} className="-mx-3 !-mt-3 mb-1 rounded-t-xl" />
+
       {/* Queue order badge */}
       {queueIndex != null && (
         <div
@@ -1361,7 +1492,7 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
         </div>
       )}
       {/* Quick action buttons - positioned away from top-right close area */}
-      <div className="absolute top-2 left-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+      <div className="absolute top-2 right-2 flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
         <button
           onClick={(e) => { e.stopPropagation(); onOpenDetail(); }}
           className="w-6 h-6 flex items-center justify-center rounded-md bg-muted/80 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
@@ -1369,6 +1500,24 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
         >
           <Pencil size={12} />
         </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              onClick={(e) => e.stopPropagation()}
+              className="w-6 h-6 flex items-center justify-center rounded-md bg-muted/80 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+              title="Mover para…"
+            >
+              <ArrowRightLeft size={12} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
+            {DESIGN_COLUMNS.filter(c => c.key !== task.kanban_column).map(c => (
+              <DropdownMenuItem key={c.key} className="text-xs" onClick={(e) => { e.stopPropagation(); onMove(c.key); }}>
+                <span className="w-2 h-2 rounded-full mr-2 shrink-0" style={{ background: `hsl(${c.color})` }} /> {c.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         {canDelete && (
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -1385,18 +1534,33 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
         <ClientLogo client={{ companyName: task.clients?.company_name || task.prospect_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
         <span className="text-[11px] text-muted-foreground truncate">{task.clients?.company_name || task.prospect_name}</span>
       </div>
-      <p className="text-sm font-medium line-clamp-2 group-hover:text-primary/90 transition-colors">{task.title}</p>
-      
+      <p className="text-sm font-medium line-clamp-2 group-hover:text-primary/90 transition-colors pr-14 sm:pr-0">{task.title}</p>
+
       {/* Copy preview snippet */}
-      {task.copy_text && (
+      {(headline || task.copy_text) && (
         <p className="text-[10px] text-muted-foreground line-clamp-2 italic bg-muted/30 rounded px-2 py-1">
-          📝 {task.copy_text}
+          📝 {headline || task.copy_text}
         </p>
       )}
 
       <div className="flex items-center gap-1.5 flex-wrap">
-        <Badge variant="outline" className="text-[10px]">{FORMAT_LABELS[task.format_type] || task.format_type}</Badge>
+        <Badge variant="outline" className="text-[10px]">{taskFormatLabel(task)}</Badge>
         <Badge className={`text-[10px] ${priorityCfg.color}`}>{priorityCfg.label}</Badge>
+        {isAgentTask && (
+          <Badge className="text-[10px] gap-0.5 bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300" title="Arte de agente de IA">
+            <Bot size={10} /> IA
+          </Badge>
+        )}
+        {briefMissing.length > 0 && (
+          <Badge className="text-[10px] gap-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" title={`Falta: ${briefMissing.join(', ')}`}>
+            <ClipboardList size={10} /> Brief incompleto
+          </Badge>
+        )}
+        {clientWithoutDrive && !['aprovado', 'postado'].includes(task.kanban_column) && (
+          <Badge variant="outline" className="text-[10px] gap-0.5 border-amber-400/60 text-amber-700 dark:text-amber-300" title="O cliente não tem a pasta do Drive cadastrada (identidade, logos e fotos)">
+            <FolderOpen size={10} /> Sem Drive
+          </Badge>
+        )}
         {formattedDueDate && (
           <Badge variant="outline" className={`text-[10px] gap-1 ${isOverdue ? 'border-red-500 text-red-600 bg-red-50 dark:bg-red-950/30' : ''}`}>
             <Calendar size={10} /> {formattedDueDate}
@@ -1464,6 +1628,10 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
           </Badge>
         )}
       </div>
+
+      {reservedAgent && (
+        <p className="text-[10px] text-fuchsia-700 dark:text-fuchsia-300 flex items-center gap-1"><Bot size={10} /> Reservada para {reservedAgent.trim().split(/\s+/)[0]} (IA)</p>
+      )}
 
       {/* Quick Start button for nova_tarefa e fila_baixa_prioridade */}
       {onQuickStart && (

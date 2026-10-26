@@ -23,6 +23,7 @@ import cors from 'cors';
 import compression from 'compression';
 import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
+import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
 import { registerAssistant } from './assistant/index.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
@@ -6207,9 +6208,18 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'get_design_tasks') {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
       const { rows: tasks } = await pool.query(
-        `SELECT id, title, description, format_type, priority, kanban_column, attachment_url, mockup_url,
-                created_at, completed_at, client_approved_at, observations
-         FROM design_tasks WHERE client_id = $1
+        // Arte em "Análise IA" (entrega de agente) ainda não passou pela equipe: para o cliente é
+        // "Em Produção" e sem arquivo. Os pareceres internos (observations) também não aparecem.
+        // Ajuste pedido pela Análise IA também é interno (o cliente não viu essa versão).
+        `SELECT id, title, description, format_type, priority,
+                CASE WHEN internal_ai THEN 'executando' ELSE kanban_column END AS kanban_column,
+                CASE WHEN internal_ai THEN NULL ELSE attachment_url END AS attachment_url,
+                CASE WHEN internal_ai THEN NULL ELSE mockup_url END AS mockup_url,
+                created_at, completed_at, client_approved_at,
+                CASE WHEN internal_ai THEN NULL ELSE observations END AS observations
+         FROM (SELECT dt.*, (dt.kanban_column = 'analise_ia'
+                 OR (dt.kanban_column = 'ajustes' AND COALESCE(dt.observations, '') LIKE '🤖 Análise IA%')) AS internal_ai
+                 FROM design_tasks dt WHERE dt.client_id = $1) x
          ORDER BY created_at DESC`,
         [client_id]
       );
@@ -11860,9 +11870,14 @@ app.get('/api/design-tasks/fast', async (req, res) => {
     // Checklist (Reformulação do onboarding) e colaborador (arte de aniversário) aparecem no
     // detalhe da tarefa; só entram se a coluna existir, para o feed não cair por falta dela.
     const dtColumns = await getExistingColumns('design_tasks').catch(() => null);
+    // Brief estruturado, formato/dimensão, materiais e agentes de design (agentDesignRoutes.mjs)
+    const AGENT_DESIGN_COLUMNS = ['copy_brief', 'dimensions', 'materials_link', 'designed_by', 'agent_step', 'agent_heartbeat_at',
+      'references_drive_link', 'references_archived_at'];
     const extraSelect = [
       dtColumns?.has('checklist') ? 'dt.checklist' : null,
       dtColumns?.has('collaborator_id') ? 'dt.collaborator_id' : null,
+      ...AGENT_DESIGN_COLUMNS.map((col) => (dtColumns?.has(col) ? `dt.${col}` : null)),
+      'c.drive_link AS clients_drive_link',
     ].filter(Boolean).map((col) => `\n          ${col},`).join('');
 
     const { rows } = await pool.query(
@@ -11879,7 +11894,8 @@ app.get('/api/design-tasks/fast', async (req, res) => {
           COALESCE(dt.references_links, ARRAY[]::text[]) AS references_links,
           COALESCE(dt.reference_images, ARRAY[]::text[]) AS reference_images,
           dt.attachment_url,
-          COALESCE(dt.attachment_urls, ARRAY[]::text[]) AS attachment_urls,
+          -- JSONB na produção (text[] em bancos antigos): to_jsonb serve para os dois
+          COALESCE(to_jsonb(dt.attachment_urls), '[]'::jsonb) AS attachment_urls,
           dt.editable_file_url,
           dt.observations,
           dt.created_by,
@@ -11952,12 +11968,21 @@ app.get('/api/design-tasks/fast', async (req, res) => {
       updated_at: row.updated_at,
       checklist: parseDesignChecklist(row.checklist),
       collaborator_id: row.collaborator_id ?? null,
+      copy_brief: row.copy_brief ?? null,
+      dimensions: row.dimensions ?? null,
+      materials_link: row.materials_link ?? null,
+      designed_by: row.designed_by ?? null,
+      agent_step: row.agent_step ?? null,
+      agent_heartbeat_at: row.agent_heartbeat_at ?? null,
+      references_drive_link: row.references_drive_link ?? null,
+      references_archived_at: row.references_archived_at ?? null,
       clients: row.clients_company_name ? {
         company_name: row.clients_company_name,
         color: row.clients_color || '217 91% 60%',
         logo_url: row.clients_logo_url,
         whatsapp: row.clients_whatsapp || '',
         responsible_person: row.clients_responsible_person || '',
+        drive_link: row.clients_drive_link || null,
       } : null,
       profiles: row.profiles_name ? {
         name: row.profiles_name,
@@ -18936,7 +18961,7 @@ app.post('/api/public/client-database/:token/media', async (req, res) => {
 // ─── Agentes de edição (chaves próprias, fila, entrega) ─────
 registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, verifyTeamManager, handleWhatsAppReply, runBillingAutomation, runConfirmationCron });
 
-registerAgentRoutes(app, {
+const agentApi = registerAgentRoutes(app, {
   pool,
   uploadRoot: UPLOAD_ROOT,
   verifyUser,
@@ -18954,6 +18979,21 @@ registerAssistant(app, {
   uploadRoot: UPLOAD_ROOT,
   publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
   getClientInsights,
+});
+
+// ─── Agentes de design (artes, Análise IA, aprendizado) ─────
+registerAgentDesignRoutes(app, {
+  pool,
+  uploadRoot: UPLOAD_ROOT,
+  verifyUser,
+  isStrictAdmin: (user) => (user?.role === 'admin' ? true : userHasAssignedRole(user, 'admin')),
+  publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
+  agentApi,
+  // colunas novas em design_tasks: o /api/db/query relê as colunas (senão grava sem elas por até 1 h)
+  onSchemaChange: (tables) => tables.forEach((table) => {
+    tableColumnsPromiseCache.delete(table);
+    tableJsonColumnsPromiseCache.delete(table);
+  }),
 });
 
 // ─── Start ──────────────────────────────────────────────────

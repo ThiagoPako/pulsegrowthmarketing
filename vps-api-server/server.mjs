@@ -14035,8 +14035,9 @@ async function insertCampaignCoupons(db, campaignId, count) {
   for (let round = 0; round < 5 && inserted < count; round += 1) {
     const codes = new Set();
     while (codes.size < count - inserted) codes.add(generateCouponCode());
-    // Sem ON CONFLICT (code): no banco da VPS discount_coupons.code não tem índice único e o
-    // ON CONFLICT falhava ("no unique or exclusion constraint"), impedindo criar campanha.
+    // Sem ON CONFLICT (code): num banco sem índice único em discount_coupons.code (como o de
+    // teste com o esquema da VPS) o ON CONFLICT falha ("no unique or exclusion constraint") e
+    // nenhuma campanha é criada. O NOT EXISTS funciona com ou sem o índice.
     const { rowCount } = await db.query(
       `INSERT INTO discount_coupons (campaign_id, code)
        SELECT $1, x.code FROM unnest($2::text[]) AS x(code)

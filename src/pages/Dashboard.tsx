@@ -1135,9 +1135,11 @@ export default function Dashboard() {
               <h3 className="section-title">Pontuação do Mês</h3>
               <p className="section-subtitle">Ranking de produtividade</p>
             </div>
-            <button onClick={() => navigate('/desempenho')} className="action-link">
-              VER DETALHES →
-            </button>
+            {userHasRole(currentUser, 'admin', 'social_media', 'gestor_projetos') && (
+              <button onClick={() => navigate('/desempenho')} className="action-link">
+                VER DETALHES →
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
             <ResponsiveContainer width="100%" height={isMobile ? 160 : 200}>

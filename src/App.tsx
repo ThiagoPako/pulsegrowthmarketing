@@ -177,14 +177,20 @@ function isMetaReviewerPath(pathname: string) {
   return META_REVIEWER_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'));
 }
 
+// Relatórios, Desempenho e Cancelamentos: os mesmos papéis do menu (custos e salários da equipe)
+const REPORT_ROLES = ['admin', 'social_media', 'gestor_projetos'];
+
 function ProtectedRoute({
   children,
   noLayout = false,
   requireProfile = true,
+  allowedRoles,
 }: {
   children: React.ReactNode;
   noLayout?: boolean;
   requireProfile?: boolean;
+  /** Papéis (principal ou adicional) que abrem a tela; digitar o endereço não passa por cima do menu. */
+  allowedRoles?: string[];
 }) {
   const { user, loading } = useAuth();
   const { currentUser } = useApp();
@@ -216,6 +222,9 @@ function ProtectedRoute({
 
   // Área só de admin no menu (financeiro, agentes...): digitar o endereço não abre a tela.
   if (currentUser && !roles.includes('admin') && isAdminOnlyPath(location.pathname)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  if (currentUser && allowedRoles && !allowedRoles.some(r => (roles as string[]).includes(r))) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -281,9 +290,9 @@ function AppRoutes() {
         <Route path="/endomarketing/agenda" element={<Navigate to="/endomarketing/tarefas" replace />} />
         <Route path="/planos" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
         <Route path="/entregas" element={<ProtectedRoute><DeliveryRecords /></ProtectedRoute>} />
-        <Route path="/relatorios" element={<ProtectedRoute><ReportsHub /></ProtectedRoute>} />
-        <Route path="/relatorios/geral" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-        <Route path="/desempenho" element={<ProtectedRoute><InternalReports /></ProtectedRoute>} />
+        <Route path="/relatorios" element={<ProtectedRoute allowedRoles={REPORT_ROLES}><ReportsHub /></ProtectedRoute>} />
+        <Route path="/relatorios/geral" element={<ProtectedRoute allowedRoles={REPORT_ROLES}><Reports /></ProtectedRoute>} />
+        <Route path="/desempenho" element={<ProtectedRoute allowedRoles={REPORT_ROLES}><InternalReports /></ProtectedRoute>} />
         <Route path="/relatorios/custo-conteudo" element={<ProtectedRoute><CostByContentType /></ProtectedRoute>} />
         <Route path="/custo-conteudo" element={<ProtectedRoute><CostByContentType /></ProtectedRoute>} />
 
@@ -357,7 +366,7 @@ function AppRoutes() {
         <Route path="/clube/:clientId" element={<DiscountClub />} />
         <Route path="/clube-descontos" element={<ProtectedRoute><DiscountAdmin /></ProtectedRoute>} />
         <Route path="/painel-tv" element={<ProtectedRoute><TvPanelControl /></ProtectedRoute>} />
-        <Route path="/cancelamentos" element={<ProtectedRoute><CancellationReports /></ProtectedRoute>} />
+        <Route path="/cancelamentos" element={<ProtectedRoute allowedRoles={REPORT_ROLES}><CancellationReports /></ProtectedRoute>} />
         <Route path="/treinamento-gestao" element={<ProtectedRoute><TrainingManager /></ProtectedRoute>} />
         <Route path="/treinamento" element={<ProtectedRoute noLayout><Training /></ProtectedRoute>} />
         <Route path="/treinamento/otimizacao-conteudo" element={<ProtectedRoute><OptimizationFormatsGuide /></ProtectedRoute>} />

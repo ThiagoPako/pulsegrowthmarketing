@@ -8638,21 +8638,27 @@ app.post('/api/delete-user', async (req, res) => {
 // ─── 14. Client Onboarding ──────────────────────────────────
 // Videomakers oferecidos no onboarding público: papel videomaker (user_roles ou o legado
 // profiles.role) que atende a cidade do cliente. Cliente global (sem cidade): todos.
+// Se ninguém estiver cadastrado na cidade, mostra todos (como antes) para o link não travar.
 async function listOnboardingVideomakers(city) {
-  const params = [];
-  let cityClause = '';
-  if (city) {
-    await ensureUserCitiesTable().catch(() => {});
-    params.push(city);
-    cityClause = ` AND ${userServesCitySql('p.id', '$1')}`;
-  }
-  const { rows } = await pool.query(
-    `SELECT p.id, p.name, p.display_name, p.avatar_url, p.bio, p.job_title
-       FROM profiles p
-      WHERE (p.role::text = 'videomaker'
-             OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id::text = p.id::text AND ur.role::text = 'videomaker'))${cityClause}`,
-    params
-  );
+  const query = async (cityFilter) => {
+    const params = [];
+    let cityClause = '';
+    if (cityFilter) {
+      await ensureUserCitiesTable().catch(() => {});
+      params.push(cityFilter);
+      cityClause = ` AND ${userServesCitySql('p.id', '$1')}`;
+    }
+    const { rows } = await pool.query(
+      `SELECT p.id, p.name, p.display_name, p.avatar_url, p.bio, p.job_title
+         FROM profiles p
+        WHERE (p.role::text = 'videomaker'
+               OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id::text = p.id::text AND ur.role::text = 'videomaker'))${cityClause}`,
+      params
+    );
+    return rows;
+  };
+  const rows = await query(city);
+  if (city && rows.length === 0) return query(null);
   return rows;
 }
 

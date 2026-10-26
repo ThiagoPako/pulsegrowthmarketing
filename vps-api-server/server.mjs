@@ -6937,6 +6937,13 @@ function socialAuthErrorStatus(error) {
   return error?.message === 'Admin access required' ? 403 : 401;
 }
 
+/** Status das rotas sociais que também têm erros internos: 401 sem login, 403 sem o papel, 500 o resto. */
+function socialRouteErrorStatus(error) {
+  if (error?.message === 'Unauthorized') return 401;
+  if (error?.message === 'Admin access required') return 403;
+  return 500;
+}
+
 // Link de conexão: vale até expires_at e, depois do primeiro uso, só por mais 24 h
 // (dá para conectar Instagram e depois Facebook na mesma visita, mas o link enviado
 // pelo WhatsApp não fica valendo para sempre).
@@ -6960,7 +6967,7 @@ function socialConnectLinkProblem(link) {
  */
 async function resolveMetaOAuthClientId(req) {
   if (req.headers.authorization?.startsWith('Bearer ')) {
-    const isTeam = await verifyUser(req).then(() => true).catch(() => false);
+    const isTeam = await verifySocialManager(req).then(() => true).catch(() => false);
     if (isTeam) return req.body?.client_id || null;
   }
   const inviteToken = String(req.body?.invite_token || '').trim();
@@ -8119,19 +8126,19 @@ setTimeout(refreshInstagramDirectTokens, 30_000);
 // Status de conexão do cliente (sem expor tokens)
 app.get('/api/social-posts/accounts/:clientId', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     await ensureSocialPostsSchema();
     const accounts = await getConnectedAccounts(req.params.clientId);
     res.json({ accounts: accounts.map(sanitizeAccount) });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
 // Visão geral de conexões de TODOS os clientes (sem expor tokens)
 app.get('/api/social-posts/accounts-overview', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     await ensureSocialPostsSchema();
     await ensureSocialInsightsSchema();
     const { rows: clients } = await pool.query(
@@ -8159,7 +8166,7 @@ app.get('/api/social-posts/accounts-overview', async (req, res) => {
       clients: clients.map(c => ({ ...c, accounts: byClient.get(c.id) || [] })),
     });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -8464,7 +8471,7 @@ async function getClientInsights(clientId, since, until, { maxAgeMinutes = 180 }
 // Métricas de um cliente (equipe)
 app.get('/api/social-posts/insights', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     const clientId = String(req.query.client_id || '').trim();
     const since = String(req.query.since || '').trim();
     const until = String(req.query.until || '').trim();
@@ -8475,21 +8482,21 @@ app.get('/api/social-posts/insights', async (req, res) => {
     const insights = await getClientInsights(clientId, since, until, { maxAgeMinutes: refresh ? 0 : 180 });
     res.json({ insights });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
 // Liga/desliga a exibição das métricas no portal do cliente
 app.post('/api/social-posts/portal-insights', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     await ensureSocialInsightsSchema();
     const { client_id, enabled } = req.body || {};
     if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
     await pool.query(`UPDATE clients SET portal_insights_enabled = $2 WHERE id = $1`, [client_id, !!enabled]);
     res.json({ success: true, enabled: !!enabled });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -8498,7 +8505,7 @@ app.post('/api/social-posts/portal-insights', async (req, res) => {
 // Biblioteca de mídias já existentes no sistema para um cliente (artes e vídeos)
 app.get('/api/social-posts/media-library', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     const clientId = String(req.query.client_id || '').trim();
     if (!clientId) return res.status(400).json({ error: 'client_id é obrigatório' });
 
@@ -8543,14 +8550,14 @@ app.get('/api/social-posts/media-library', async (req, res) => {
 
     res.json({ items });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
 // Desconectar conta social de um cliente
 app.post('/api/social-accounts/disconnect', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     const { client_id, platform, account_id } = req.body || {};
     if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
     if (account_id) {
@@ -8563,7 +8570,7 @@ app.post('/api/social-accounts/disconnect', async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -8682,7 +8689,7 @@ app.get('/api/meta/deletion-status/:code', async (req, res) => {
 
 app.get('/api/social-posts', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     await ensureSocialPostsSchema();
     const { client_id, status, limit, delivery_ids } = req.query;
     const params = [];
@@ -8705,13 +8712,13 @@ app.get('/api/social-posts', async (req, res) => {
     );
     res.json({ posts: rows });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
 app.post('/api/social-posts', async (req, res) => {
   try {
-    const { user } = await verifyUser(req);
+    const { user } = await verifySocialManager(req);
     await ensureSocialPostsSchema();
     const {
       client_id, delivery_id, content_task_id, platform = 'instagram', publish_type = 'reels',
@@ -8769,18 +8776,18 @@ app.post('/api/social-posts', async (req, res) => {
     );
     res.json({ success: true, post: rows[0] });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
 app.post('/api/social-posts/:id/cancel', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     const { rowCount } = await pool.query(`UPDATE scheduled_posts SET status='cancelado', updated_at=now() WHERE id=$1 AND status IN ('agendado','erro')`, [req.params.id]);
     if (!rowCount) return res.status(400).json({ error: 'Só é possível cancelar posts agendados ou com erro' });
     res.json({ success: true });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -8816,7 +8823,7 @@ app.post('/api/social-posts/cancel-linked', async (req, res) => {
 
 app.post('/api/social-posts/:id/publish-now', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     const { rows } = await pool.query(
       `UPDATE scheduled_posts SET status='publicando', updated_at=now() WHERE id=$1 AND status IN ('agendado','erro') RETURNING *`,
       [req.params.id]
@@ -8828,7 +8835,7 @@ app.post('/api/social-posts/:id/publish-now', async (req, res) => {
     res.json({ success: ok, post: fresh[0], error: ok ? null : (fresh[0]?.last_error || 'Falha ao publicar') });
 
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -8839,7 +8846,7 @@ app.post('/api/social-posts/:id/publish-now', async (req, res) => {
  */
 app.post('/api/social-posts/diagnose', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     await ensureSocialPostsSchema();
     const { client_id, media_url } = req.body || {};
     if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
@@ -8903,7 +8910,7 @@ app.post('/api/social-posts/diagnose', async (req, res) => {
 
     res.json({ checks, ok: checks.every(c => c.ok) });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 

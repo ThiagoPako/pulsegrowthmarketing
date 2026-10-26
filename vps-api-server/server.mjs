@@ -3656,8 +3656,14 @@ app.get('/api/auth/me', async (req, res) => {
           WHERE p.id = $1
           LIMIT 1`
       : null;
+    // $3 (e-mail do token) só entra na consulta quando profiles não tem e-mail: mandar um
+    // parâmetro a mais fazia o Postgres recusar ("bind message supplies 3 parameters") e o
+    // /auth/me falhava para todos desde jun/2026 (o front caía no caminho alternativo).
+    const profileParams = profileColumns.has('email')
+      ? [user.id, user.role || 'editor']
+      : [user.id, user.role || 'editor', user.email || ''];
     const { rows } = profileSelect
-      ? await pool.query(profileSelect, [user.id, user.role || 'editor', user.email || ''])
+      ? await pool.query(profileSelect, profileParams)
       : { rows: [] };
 
     if (rows.length === 0) {

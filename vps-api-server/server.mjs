@@ -4595,6 +4595,20 @@ async function syncPortalAdjustmentToKanban(content, note, teamUser = null) {
     `${teamUser ? 'Equipe' : 'Cliente'} solicitou ajuste em "${content.title}": ${shortNote}`, 'adjustment', '/entregas-social');
 }
 
+// Histórico de arte gravado pelo portal: herda a cidade do próprio card. Sem isso ficava
+// no DEFAULT 'minacu' e o histórico de um cliente de Uruaçu sumia da tela de Uruaçu.
+async function insertDesignTaskHistoryFromPortal(taskId, action, details = null) {
+  if (await tableHasCityColumn('design_task_history')) {
+    await pool.query(
+      `INSERT INTO design_task_history (task_id, action, details, city)
+       SELECT $1, $2, $3, dt.city FROM design_tasks dt WHERE dt.id = $1`,
+      [taskId, action, details]
+    );
+    return;
+  }
+  await pool.query(`INSERT INTO design_task_history (task_id, action, details) VALUES ($1, $2, $3)`, [taskId, action, details]);
+}
+
 // Ensure client_portal_users table exists (multi-user per company)
 (async () => {
   try {
@@ -5472,18 +5486,23 @@ app.post('/api/portal-actions', async (req, res) => {
         }
       }
 
+      // O card vai para a cidade do cliente (antes caía sempre no DEFAULT 'minacu' e a
+      // designer de Uruaçu não via o pedido). Cliente global (sem cidade) fica no DEFAULT.
+      const clientCity = await getPortalClientCity(client_id).catch(() => null);
+      const withCity = !!clientCity && await tableHasCityColumn('design_tasks');
       const { rows: [task] } = await pool.query(
-        `INSERT INTO design_tasks (client_id, title, description, format_type, priority, kanban_column, references_links)
-         VALUES ($1, $2, $3, $4, 'media', 'nova_tarefa', $5) RETURNING id`,
-        [client_id, title, description || null, format_type || 'feed', references_links || null]
+        withCity
+          ? `INSERT INTO design_tasks (client_id, title, description, format_type, priority, kanban_column, references_links, city)
+             VALUES ($1, $2, $3, $4, 'media', 'nova_tarefa', $5, $6) RETURNING id`
+          : `INSERT INTO design_tasks (client_id, title, description, format_type, priority, kanban_column, references_links)
+             VALUES ($1, $2, $3, $4, 'media', 'nova_tarefa', $5) RETURNING id`,
+        withCity
+          ? [client_id, title, description || null, format_type || 'feed', references_links || null, clientCity]
+          : [client_id, title, description || null, format_type || 'feed', references_links || null]
       );
 
       // Add history
-      await pool.query(
-        `INSERT INTO design_task_history (task_id, action, details)
-         VALUES ($1, $2, $3)`,
-        [task.id, '📩 Solicitação criada pelo cliente via Pulse Club', description || null]
-      );
+      await insertDesignTaskHistoryFromPortal(task.id, '📩 Solicitação criada pelo cliente via Pulse Club', description || null);
 
       // Notify designers (fotografo + designer roles)
       await notifyPortalTeam(client_id, ['admin', 'fotografo', 'designer'], '🎨 Nova solicitação de arte do cliente', `${clientInfo?.company_name || 'Cliente'} solicitou: "${title}"`, 'design', '/designer');
@@ -5509,10 +5528,7 @@ app.post('/api/portal-actions', async (req, res) => {
         if (currentDesign.kanban_column === 'aprovado') return res.json({ success: true, already_approved: true });
         return res.status(409).json({ error: 'Esta arte não está aguardando aprovação' });
       }
-      await pool.query(
-        `INSERT INTO design_task_history (task_id, action) VALUES ($1, $2)`,
-        [task_id, '✅ Aprovado pelo cliente via Pulse Club']
-      );
+      await insertDesignTaskHistoryFromPortal(task_id, '✅ Aprovado pelo cliente via Pulse Club');
       // Notify designers
       const { rows: [taskInfo] } = await pool.query('SELECT title, client_id FROM design_tasks WHERE id = $1', [task_id]);
       await notifyPortalTeam(taskInfo?.client_id || client_id, ['admin', 'fotografo', 'designer'], '✅ Arte aprovada pelo cliente', `"${taskInfo?.title || 'Arte'}" foi aprovada no Pulse Club`, 'design', '/designer');
@@ -5537,10 +5553,7 @@ app.post('/api/portal-actions', async (req, res) => {
         if (currentDesign.kanban_column === 'ajustes') return res.json({ success: true, already_requested: true });
         return res.status(409).json({ error: 'Esta arte não está aguardando aprovação' });
       }
-      await pool.query(
-        `INSERT INTO design_task_history (task_id, action, details) VALUES ($1, $2, $3)`,
-        [task_id, '🔧 Ajuste solicitado pelo cliente via Pulse Club', note]
-      );
+      await insertDesignTaskHistoryFromPortal(task_id, '🔧 Ajuste solicitado pelo cliente via Pulse Club', note);
       // Notify designers
       const { rows: [taskInfo] } = await pool.query('SELECT title, assigned_to, client_id FROM design_tasks WHERE id = $1', [task_id]);
       await notifyPortalTeam(taskInfo?.client_id || client_id, ['admin', 'fotografo', 'designer'], '🔧 Ajuste solicitado na arte', `Cliente pediu ajuste em "${taskInfo?.title || 'Arte'}": ${(note || '').substring(0, 80)}`, 'design', '/designer');

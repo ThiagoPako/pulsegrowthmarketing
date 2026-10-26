@@ -11922,14 +11922,24 @@ Gere uma mensagem curta e divertida para este momento.`;
 // ─── Repair missing content_tasks for completed recordings ──
 app.post('/api/repair-content-tasks', async (req, res) => {
   try {
-    await verifyUser(req);
+    // Ferramenta de manutenção (nenhuma tela usa): só admin, e só na cidade ativa.
+    if (!(await requireAdminRoute(req, res))) return;
     const { recording_id } = req.body;
     const contentTasksClientIdNullable = await hasNullableClientIdOnContentTasks();
+    const { user } = await verifyUser(req);
+    const activeCity = await resolveActiveCity(req, user.id, user);
+    const recordingsScoped = await tableHasCityColumn('recordings');
+    // Card criado aqui fica na cidade ativa (antes caía no DEFAULT 'minacu')
+    const taskCity = (await tableHasCityColumn('content_tasks')) ? activeCity : null;
+    const recordingCityClause = (placeholder) => (recordingsScoped ? ` AND ${cityVisibilityExpression('r.city', placeholder)}` : '');
 
     // Find recording
     let recordings;
     if (recording_id) {
-      const { rows } = await pool.query('SELECT * FROM recordings WHERE id = $1', [recording_id]);
+      const { rows } = await pool.query(
+        `SELECT r.* FROM recordings r WHERE r.id = $1${recordingCityClause('$2')}`,
+        recordingsScoped ? [recording_id, activeCity] : [recording_id]
+      );
       recordings = rows;
     } else {
       // Find all completed recordings that have scripts without content_tasks
@@ -11943,9 +11953,9 @@ app.post('/api/repair-content-tasks', async (req, res) => {
           AND NOT EXISTS (
             SELECT 1 FROM content_tasks ct WHERE ct.script_id = s.id
           )
-        )
+        )${recordingCityClause('$1')}
         ORDER BY r.date DESC LIMIT 20
-      `);
+      `, recordingsScoped ? [activeCity] : []);
       recordings = rows;
     }
 
@@ -11955,13 +11965,14 @@ app.post('/api/repair-content-tasks', async (req, res) => {
       const isAvulso = !clientId;
       if (isAvulso && !contentTasksClientIdNullable) continue;
 
-      // Find recorded scripts linked to this recording
+      // Find recorded scripts linked to this recording (só desta gravação: o "OR client_id"
+      // recriava em Edição cards de outras gravações e os que foram excluídos de propósito)
       const { rows: recScripts } = await pool.query(
         `SELECT s.* FROM scripts s
-         WHERE (s.recording_id = $1 OR s.client_id = $2)
+         WHERE s.recording_id = $1
          AND s.recorded = true
          AND NOT EXISTS (SELECT 1 FROM content_tasks ct WHERE ct.script_id = s.id)`,
-        [rec.id, clientId]
+        [rec.id]
       );
 
       for (const script of recScripts) {
@@ -11971,8 +11982,8 @@ app.post('/api/repair-content-tasks', async (req, res) => {
           ? `📹 VÍDEO AVULSO${rec.prospect_name ? ` — Prospect: ${rec.prospect_name}` : ''}\n\nRoteiro gravado pelo videomaker. Reparado automaticamente.`
           : `Roteiro gravado pelo videomaker. Reparado automaticamente.`;
         const { rows: inserted } = await pool.query(
-          `INSERT INTO content_tasks (client_id, title, content_type, kanban_column, description, script_id, recording_id, drive_link, editing_deadline, created_by)
-           VALUES ($1, $2, $3, 'edicao', $4, $5, $6, $7, $8, $9) RETURNING id, title`,
+          `INSERT INTO content_tasks (client_id, title, content_type, kanban_column, description, script_id, recording_id, drive_link, editing_deadline, created_by${taskCity ? ', city' : ''})
+           VALUES ($1, $2, $3, 'edicao', $4, $5, $6, $7, $8, $9${taskCity ? ', $10' : ''}) RETURNING id, title`,
           [
             clientId,
             script.title,
@@ -11983,6 +11994,7 @@ app.post('/api/repair-content-tasks', async (req, res) => {
             script.drive_link || null,
             deadline.toISOString(),
             rec.videomaker_id || null,
+            ...(taskCity ? [taskCity] : []),
           ]
         );
         if (inserted[0]) created.push(inserted[0]);
@@ -11999,9 +12011,22 @@ app.post('/api/repair-content-tasks', async (req, res) => {
 // ─── Find and fix specific content task by title ──
 app.post('/api/fix-content-task', async (req, res) => {
   try {
-    await verifyUser(req);
-    const { title_search, drive_link } = req.body;
+    // Ferramenta de manutenção (nenhuma tela usa): só admin, só na cidade ativa e com uma busca
+    // específica. Antes qualquer usuário logado, com title_search vazio ('%%'), levava um card
+    // qualquer (de qualquer cidade, até arquivado) de volta para Edição.
+    if (!(await requireAdminRoute(req, res))) return;
+    const title_search = String(req.body?.title_search || '').trim();
+    const drive_link = req.body?.drive_link ? String(req.body.drive_link).trim() : null;
+    if (title_search.length < 5) {
+      return res.status(400).json({ error: 'Informe title_search com pelo menos 5 caracteres.' });
+    }
     const contentTasksClientIdNullable = await hasNullableClientIdOnContentTasks();
+    const { user } = await verifyUser(req);
+    const activeCity = await resolveActiveCity(req, user.id, user);
+    const recordingsScoped = await tableHasCityColumn('recordings');
+    const scriptsScoped = await tableHasCityColumn('scripts');
+    const tasksScoped = await tableHasCityColumn('content_tasks');
+    const taskCity = tasksScoped ? activeCity : null;
 
     // Find recording by searching for matching scripts or client names
     const { rows: matchingRecordings } = await pool.query(`
@@ -12009,27 +12034,35 @@ app.post('/api/fix-content-task', async (req, res) => {
       LEFT JOIN clients c ON c.id = r.client_id
       WHERE r.status = 'concluida'
       AND r.date >= CURRENT_DATE - INTERVAL '7 days'
+      ${recordingsScoped ? `AND ${cityVisibilityExpression('r.city', '$1')}` : ''}
       ORDER BY r.date DESC
-    `);
+    `, recordingsScoped ? [activeCity] : []);
 
     // Find scripts matching the title
     const { rows: matchingScripts } = await pool.query(
        `SELECT s.*, r.client_id as rec_client_id, r.id as rec_id, r.prospect_name FROM scripts s
        LEFT JOIN recordings r ON r.id = s.recording_id
-       WHERE s.title ILIKE $1 AND s.recorded = true`,
-      [`%${title_search}%`]
+       WHERE s.title ILIKE $1 AND s.recorded = true
+       ${scriptsScoped ? `AND ${cityVisibilityExpression('s.city', '$2')}` : ''}`,
+      scriptsScoped ? [`%${title_search}%`, activeCity] : [`%${title_search}%`]
     );
 
-    // Check if content_task already exists
+    // Check if content_task already exists (na cidade ativa)
     const { rows: existingTasks } = await pool.query(
-      `SELECT * FROM content_tasks WHERE title ILIKE $1`,
-      [`%${title_search}%`]
+      `SELECT * FROM content_tasks WHERE title ILIKE $1
+       ${tasksScoped ? `AND ${cityVisibilityExpression('city', '$2')}` : ''}
+       ORDER BY updated_at DESC`,
+      tasksScoped ? [`%${title_search}%`, activeCity] : [`%${title_search}%`]
     );
 
     if (existingTasks.length > 0) {
-      // Task exists — update it to edicao if needed
+      // Task exists — update it to edicao if needed (só card que ainda não passou da edição:
+      // revisão, envio, agendado ou arquivado não volta para trás por aqui)
       const task = existingTasks[0];
       if (drive_link) {
+        if (!['ideias', 'captacao', 'edicao'].includes(task.kanban_column)) {
+          return res.status(409).json({ error: `O card "${task.title}" está em "${task.kanban_column}" e não volta para Edição por aqui.`, task: { id: task.id, title: task.title, kanban_column: task.kanban_column } });
+        }
         await pool.query(
           `UPDATE content_tasks SET drive_link = $1, kanban_column = 'edicao', updated_at = NOW() WHERE id = $2`,
           [drive_link, task.id]
@@ -12052,8 +12085,8 @@ app.post('/api/fix-content-task', async (req, res) => {
         ? `Reparado manualmente. Link dos materiais: ${drive_link || 'N/A'}`
         : `📹 VÍDEO AVULSO${script.prospect_name ? ` — Prospect: ${script.prospect_name}` : ''}\n\nReparado manualmente. Link dos materiais: ${drive_link || 'N/A'}`;
       const { rows: inserted } = await pool.query(
-        `INSERT INTO content_tasks (client_id, title, content_type, kanban_column, description, script_id, recording_id, drive_link, editing_deadline)
-         VALUES ($1, $2, $3, 'edicao', $4, $5, $6, $7, $8) RETURNING *`,
+        `INSERT INTO content_tasks (client_id, title, content_type, kanban_column, description, script_id, recording_id, drive_link, editing_deadline${taskCity ? ', city' : ''})
+         VALUES ($1, $2, $3, 'edicao', $4, $5, $6, $7, $8${taskCity ? ', $9' : ''}) RETURNING *`,
         [
           clientId,
           script.title,
@@ -12063,6 +12096,7 @@ app.post('/api/fix-content-task', async (req, res) => {
           script.rec_id || script.recording_id || null,
           drive_link || null,
           deadline.toISOString(),
+          ...(taskCity ? [taskCity] : []),
         ]
       );
       return res.json({ status: 'created', task: inserted[0] });
@@ -12074,8 +12108,8 @@ app.post('/api/fix-content-task', async (req, res) => {
         const deadline = new Date();
         deadline.setHours(deadline.getHours() + 48);
         const { rows: inserted } = await pool.query(
-          `INSERT INTO content_tasks (client_id, title, content_type, kanban_column, description, drive_link, recording_id, editing_deadline)
-           VALUES ($1, $2, 'reels', 'edicao', $3, $4, $5, $6) RETURNING *`,
+          `INSERT INTO content_tasks (client_id, title, content_type, kanban_column, description, drive_link, recording_id, editing_deadline${taskCity ? ', city' : ''})
+           VALUES ($1, $2, 'reels', 'edicao', $3, $4, $5, $6${taskCity ? ', $7' : ''}) RETURNING *`,
           [
             rec.client_id,
             title_search,
@@ -12083,6 +12117,7 @@ app.post('/api/fix-content-task', async (req, res) => {
             drive_link || null,
             rec.id,
             deadline.toISOString(),
+            ...(taskCity ? [taskCity] : []),
           ]
         );
         return res.json({ status: 'created', task: inserted[0] });

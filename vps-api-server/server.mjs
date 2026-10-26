@@ -6819,6 +6819,109 @@ app.post('/api/meta-oauth-diagnose', async (req, res) => {
 });
 
 /**
+ * Linha da integração Meta que o servidor usa (a mesma escolhida no OAuth), sem filtro
+ * de cidade: a integração é uma só para a agência. Sem linha ativa, a mais recente.
+ */
+async function findMetaIntegrationRow() {
+  const loaded = await loadMetaOAuthConfig(getAdminClient());
+  if (loaded.metaIntegration) {
+    return { id: loaded.metaIntegration.id, status: 'ativo', config: loaded.metaIntegration.config || {}, activeRows: loaded.rows.length };
+  }
+  const { rows } = await pool.query(
+    `SELECT id, status, config FROM api_integrations WHERE provider = 'meta_ads' ORDER BY updated_at DESC NULLS LAST LIMIT 1`
+  );
+  return rows[0] ? { id: rows[0].id, status: rows[0].status, config: rows[0].config || {}, activeRows: 0 } : null;
+}
+
+/**
+ * Card "Integração Meta" (Configurações): lê e grava pela API, e não pelo /api/db/query,
+ * que filtra api_integrations pela cidade — em Uruaçu o card não achava a linha de
+ * Minaçu, mostrava "Pendente" e salvar criava uma segunda integração ativa.
+ * Os secrets nunca voltam: só os 4 últimos caracteres.
+ */
+app.get('/api/meta-integration', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+    const row = await findMetaIntegrationRow();
+    const config = row?.config || {};
+    res.json({
+      id: row?.id || null,
+      status: row?.status || null,
+      configured: row?.status === 'ativo' && !!config.meta_app_id,
+      meta_app_id: config.meta_app_id || '',
+      instagram_app_id: config.instagram_app_id || '',
+      meta_secret: config.meta_app_secret_encrypted ? secretSuffix(config.meta_app_secret_encrypted) : null,
+      instagram_secret: config.instagram_app_secret_encrypted ? secretSuffix(config.instagram_app_secret_encrypted) : null,
+      active_rows: row?.activeRows || 0,
+    });
+  } catch (error) {
+    const denied = /access required|unauthorized|token/i.test(error.message || '');
+    res.status(denied ? 403 : 500).json({ error: error.message });
+  }
+});
+
+app.post('/api/meta-integration', async (req, res) => {
+  try {
+    const { user, admin } = await verifyAdmin(req);
+    const b = req.body || {};
+    const clean = (v) => (typeof v === 'string' ? v.replace(/\s+/g, '') : '');
+    const metaAppId = clean(b.meta_app_id);
+    const instagramAppId = clean(b.instagram_app_id);
+    const metaAppSecret = clean(b.meta_app_secret);
+    const instagramAppSecret = clean(b.instagram_app_secret);
+    if (!metaAppId) return res.status(400).json({ error: 'Preencha o App ID da Meta.' });
+    // Valida ANTES de gravar qualquer coisa (antes a linha era gravada e só depois o secret recusado).
+    // App Secrets são 32 caracteres hexadecimais; tokens (EAA..., IGAA...) não servem aqui.
+    const isHexSecret = (v) => /^[a-f0-9]{32}$/i.test(v);
+    for (const [label, val] of [['Meta App Secret', metaAppSecret], ['Instagram App Secret', instagramAppSecret]]) {
+      if (val && !isHexSecret(val)) {
+        return res.status(400).json({ error: `${label} inválido: deve ter 32 caracteres (letras a-f e números). O valor colado parece um token de acesso, não a "Chave secreta do app".` });
+      }
+    }
+
+    const row = await findMetaIntegrationRow();
+    const config = { ...(row?.config || {}), meta_app_id: metaAppId, credentials_updated_at: new Date().toISOString() };
+    // Campo vazio = usa o App ID da Meta também no Login do Instagram (como antes)
+    if (instagramAppId) config.instagram_app_id = instagramAppId; else delete config.instagram_app_id;
+    if (metaAppSecret) { config.meta_app_secret_encrypted = metaAppSecret; config.meta_app_secret = '••••' + metaAppSecret.slice(-4); }
+    if (instagramAppSecret) { config.instagram_app_secret_encrypted = instagramAppSecret; config.instagram_app_secret = '••••' + instagramAppSecret.slice(-4); }
+
+    let integrationId = row?.id || null;
+    if (integrationId) {
+      await pool.query(
+        `UPDATE api_integrations SET config = $2::jsonb, status = 'ativo', updated_at = now() WHERE id = $1`,
+        [integrationId, JSON.stringify(config)]
+      );
+    } else {
+      const { rows } = await pool.query(
+        `INSERT INTO api_integrations (name, provider, api_type, endpoint_url, config, status, updated_at)
+         VALUES ('Meta (Postagens Automáticas)', 'meta_ads', 'rest', $1, $2::jsonb, 'ativo', now()) RETURNING id`,
+        [META_API_BASE, JSON.stringify(config)]
+      );
+      integrationId = rows[0]?.id || null;
+    }
+    try {
+      await admin.from('api_integration_logs').insert({
+        integration_id: integrationId, action: 'credenciais atualizadas (Configurações → Integração Meta)', status: 'success',
+        details: { fields_updated: ['app_id', instagramAppId && 'instagram_app_id', metaAppSecret && 'app_secret', instagramAppSecret && 'instagram_app_secret'].filter(Boolean) },
+        performed_by: user.id,
+      });
+    } catch { /* log é secundário */ }
+    res.json({
+      success: true,
+      id: integrationId,
+      configured: true,
+      meta_secret: config.meta_app_secret_encrypted ? secretSuffix(config.meta_app_secret_encrypted) : null,
+      instagram_secret: config.instagram_app_secret_encrypted ? secretSuffix(config.instagram_app_secret_encrypted) : null,
+    });
+  } catch (error) {
+    const denied = /access required|unauthorized|token/i.test(error.message || '');
+    console.error('meta-integration save error:', error);
+    res.status(denied ? 403 : 500).json({ error: error.message });
+  }
+});
+
+/**
  * Quem pode mexer nas conexões sociais dos clientes: os mesmos papéis do menu
  * Conexões Sociais (admin, social_media, gestor_projetos, revisor_meta).
  */
@@ -7036,11 +7139,11 @@ app.post('/api/meta-oauth', async (req, res) => {
   }
 });
 
+// Mesma linha do OAuth (loadMetaOAuthConfig): antes era LIMIT 1 sem ordem e, com duas
+// linhas ativas, o token manual podia pegar a que não tem secret.
 async function getMetaConfigFromDb() {
-  const { rows } = await pool.query(
-    "SELECT config FROM api_integrations WHERE provider = 'meta_ads' AND status = 'ativo' LIMIT 1"
-  );
-  return rows[0]?.config || {};
+  const loaded = await loadMetaOAuthConfig(getAdminClient());
+  return loaded.config || {};
 }
 
 /**
@@ -8501,13 +8604,13 @@ function parseMetaSignedRequest(signedRequest, appSecret) {
   return data;
 }
 
-/** Lê o App Secret da integração Meta ativa. */
-async function getMetaAppSecret() {
-  const { rows } = await pool.query(
-    `SELECT config FROM api_integrations WHERE provider = 'meta_ads' AND status = 'ativo' ORDER BY created_at DESC LIMIT 1`
-  );
-  const config = rows[0]?.config || {};
-  return config.meta_app_secret_encrypted || config.instagram_app_secret_encrypted || null;
+/**
+ * App Secrets da integração Meta (a mesma linha do OAuth). O callback pode vir assinado
+ * pelo app da Meta ou pelo app do Instagram (quando são apps separados): os dois são testados.
+ */
+async function getMetaAppSecrets() {
+  const { config } = await loadMetaOAuthConfig(getAdminClient());
+  return [...new Set([config.meta_app_secret_encrypted, config.instagram_app_secret_encrypted].filter(Boolean))];
 }
 
 /** Remove todas as contas sociais vinculadas a um usuário Meta/Instagram. */
@@ -8527,11 +8630,11 @@ async function purgeMetaUserData(metaUserId) {
 async function handleMetaComplianceRequest(req, res, kind) {
   try {
     await ensureMetaDeletionSchema();
-    const appSecret = await getMetaAppSecret();
-    if (!appSecret) return res.status(503).json({ error: 'Meta integration not configured' });
+    const appSecrets = await getMetaAppSecrets();
+    if (!appSecrets.length) return res.status(503).json({ error: 'Meta integration not configured' });
 
     const signedRequest = req.body?.signed_request || req.query?.signed_request;
-    const parsed = parseMetaSignedRequest(signedRequest, appSecret);
+    const parsed = appSecrets.map(secret => parseMetaSignedRequest(signedRequest, secret)).find(Boolean) || null;
     if (!parsed) return res.status(400).json({ error: 'Invalid signed_request' });
 
     const metaUserId = parsed.user_id || parsed.user?.id || null;

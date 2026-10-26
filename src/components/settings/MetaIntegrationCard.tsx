@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/vpsDb';
+import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,8 +22,9 @@ interface MetaDiagnosis {
 
 /**
  * Card de configuração da integração Meta (Instagram/Facebook) para postagens automáticas.
- * Salva as credenciais do App Meta da agência na tabela api_integrations (provider = 'meta_ads'),
- * usada pelo backend da VPS para gerar os links de conexão dos clientes.
+ * Lê e salva pela rota /api/meta-integration (só admin), na mesma linha de api_integrations
+ * (provider = 'meta_ads') que o servidor usa no OAuth. Não passa pelo /api/db/query, que filtra
+ * pela cidade (em Uruaçu o card mostrava "Pendente" e salvar criava uma segunda integração).
  */
 export default function MetaIntegrationCard() {
   const [loading, setLoading] = useState(true);
@@ -41,21 +43,16 @@ export default function MetaIntegrationCard() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from('api_integrations')
-        .select('*')
-        .eq('provider', 'meta_ads')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      if (data) {
-        const d = data as any;
-        setIntegrationId(d.id);
-        setConfigured(d.status === 'ativo' && !!d.config?.meta_app_id);
+      const { data, error } = await invokeVpsFunction('meta-integration', { method: 'GET' });
+      if (error) {
+        toast.error('Erro ao carregar a Integração Meta: ' + error.message);
+      } else if (data?.id) {
+        setIntegrationId(data.id);
+        setConfigured(!!data.configured);
         setForm({
-          metaAppId: d.config?.meta_app_id || '',
+          metaAppId: data.meta_app_id || '',
           metaAppSecret: '',
-          instagramAppId: d.config?.instagram_app_id || '',
+          instagramAppId: data.instagram_app_id || '',
           instagramAppSecret: '',
         });
       }
@@ -68,52 +65,27 @@ export default function MetaIntegrationCard() {
       toast.error('Preencha o App ID da Meta');
       return;
     }
+    // App Secrets são 32 caracteres hexadecimais; tokens (EAA/IGAA/...ZDZD) não servem aqui.
+    // Confere antes de gravar qualquer coisa (o servidor confere de novo).
+    const secretOk = (s: string): boolean => !s || /^[a-f0-9]{32}$/i.test(s);
+    if (!secretOk(form.metaAppSecret.trim()) || !secretOk(form.instagramAppSecret.trim())) {
+      toast.error('O secret colado não é uma "Chave secreta do app" (deve ter 32 caracteres, letras a-f e números). Parece um token de acesso.');
+      return;
+    }
     setSaving(true);
     try {
-      const configData: any = {
-        meta_app_id: form.metaAppId.trim(),
-        instagram_app_id: form.instagramAppId.trim() || undefined,
-      };
+      // Uma chamada só: App IDs e secrets vão juntos para a linha que o servidor usa no OAuth.
+      const { data, error } = await invokeVpsFunction('meta-integration', {
+        body: {
+          meta_app_id: form.metaAppId.trim(),
+          instagram_app_id: form.instagramAppId.trim(),
+          meta_app_secret: form.metaAppSecret.trim() || undefined,
+          instagram_app_secret: form.instagramAppSecret.trim() || undefined,
+        },
+      });
+      if (error || data?.error) throw new Error(data?.error || error?.message || 'Erro desconhecido');
 
-      const payload: any = {
-        name: 'Meta (Postagens Automáticas)',
-        provider: 'meta_ads',
-        api_type: 'rest',
-        endpoint_url: 'https://graph.facebook.com/v21.0',
-        config: configData,
-        status: 'ativo',
-        updated_at: new Date().toISOString(),
-      };
-
-      let savedId = integrationId;
-      if (integrationId) {
-        // Merge with existing config to preserve other keys (tokens, etc.)
-        const { data: current } = await supabase.from('api_integrations').select('config').eq('id', integrationId).single();
-        payload.config = { ...((current as any)?.config || {}), ...configData };
-        await supabase.from('api_integrations').update(payload).eq('id', integrationId);
-      } else {
-        const { data } = await supabase.from('api_integrations').insert(payload).select().single();
-        if (data) savedId = (data as any).id;
-      }
-
-      // Armazena os secrets completos no backend (nunca exibidos no frontend)
-      // App Secrets são 32 caracteres hexadecimais; tokens (EAA/IGAA/...ZDZD) não servem aqui.
-      const secretOk = (s: string): boolean => !s || /^[a-f0-9]{32}$/i.test(s);
-      if (!secretOk(form.metaAppSecret.trim()) || !secretOk(form.instagramAppSecret.trim())) {
-        throw new Error('O secret colado não é uma "Chave secreta do app" (deve ter 32 caracteres, letras a-f e números). Parece um token de acesso.');
-      }
-      if (savedId && (form.metaAppSecret.trim() || form.instagramAppSecret.trim())) {
-        const { error } = await supabase.functions.invoke('meta-store-credentials', {
-          body: {
-            integration_id: savedId,
-            meta_app_secret: form.metaAppSecret.trim() || undefined,
-            instagram_app_secret: form.instagramAppSecret.trim() || undefined,
-          },
-        });
-        if (error) throw error;
-      }
-
-      setIntegrationId(savedId);
+      setIntegrationId(data?.id || integrationId);
       setConfigured(true);
       setForm(f => ({ ...f, metaAppSecret: '', instagramAppSecret: '' }));
       toast.success('Integração Meta salva e ativada');

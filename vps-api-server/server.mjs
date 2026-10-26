@@ -15468,9 +15468,28 @@ async function searchTrainingFileByName(base) {
   return null;
 }
 
+// Caminho já resolvido (chave = o caminho gravado na aula): o stream resolve a cada pedaço
+// de 1 MB, então evita refazer as dezenas de stat por pedaço.
+const TRAINING_RESOLVED_TTL_MS = 5 * 60_000;
+const trainingResolvedCache = new Map(); // caminho da aula -> { abs, at }
+
 /** Caminho absoluto do vídeo da aula (só vídeo, só dentro das pastas de upload) ou null. */
 async function resolveTrainingFile(videoPathOrUrl) {
   if (!videoPathOrUrl) return null;
+  const cacheKey = String(videoPathOrUrl);
+  const cached = trainingResolvedCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < TRAINING_RESOLVED_TTL_MS && await statTrainingFile(cached.abs)) return cached.abs;
+  const abs = await findTrainingFile(cacheKey);
+  if (abs) {
+    trainingResolvedCache.set(cacheKey, { abs, at: Date.now() });
+    if (trainingResolvedCache.size > 1000) trainingResolvedCache.delete(trainingResolvedCache.keys().next().value);
+  } else {
+    trainingResolvedCache.delete(cacheKey);
+  }
+  return abs;
+}
+
+async function findTrainingFile(videoPathOrUrl) {
   let rel = String(videoPathOrUrl).trim();
   rel = rel.replace(/^https?:\/\/[^/]+/, '');
   try {

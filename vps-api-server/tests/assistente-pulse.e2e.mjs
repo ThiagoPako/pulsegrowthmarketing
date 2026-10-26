@@ -158,6 +158,7 @@ const server = spawn('node', [path.join(API_DIR, 'server.mjs')], {
     ...process.env, DATABASE_URL: DB, JWT_SECRET: SECRET, API_PORT: String(PORT),
     ANTHROPIC_API_KEY: 'sk-ant-teste-falsa', ANTHROPIC_BASE_URL: `http://127.0.0.1:${fake.address().port}`, GOOGLE_GEMINI_API_KEY: '',
     ASSISTANT_TICK_MS: '300', ASSISTANT_MONITOR_TICK_MS: '700', ASSISTANT_GROUP_DEBOUNCE_S: '1',
+    TEMPERATURE_DISABLED: '1', // a análise diária da temperatura chamaria o modelo no meio do roteiro (teste próprio)
     WA_PRIVATE_DIR: WA_DIR, WHISPER_BIN: path.join(TMP, 'sem-whisper'), WHISPER_MODEL: path.join(TMP, 'sem-modelo.bin'),
     UPLOAD_ROOT: UPLOADS, PUBLIC_UPLOADS_URL: 'https://agenciapulse.tech/uploads',
   },

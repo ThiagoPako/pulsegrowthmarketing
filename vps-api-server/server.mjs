@@ -27,6 +27,7 @@ import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
 import { registerAssistant } from './assistant/index.mjs';
+import { recordPortalAccess } from './assistant/temperature.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
 import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOption } from './lib/portalSession.mjs';
 import { cleanupOldEditVersions } from './lib/versionCleanup.mjs';
@@ -5753,6 +5754,8 @@ app.post('/api/portal-actions', async (req, res) => {
     if (!caller && rejectPortalCallWithoutSession(res, 'portal-actions', action)) return;
     const isTeamCaller = caller?.kind === 'team';
     const client_id = effectiveClientId(caller, req.body.client_id);
+    // Temperatura do cliente: dia com acesso do cliente ao portal (a equipe abrindo não conta; sem esperar)
+    if (caller?.kind === 'client') recordPortalAccess(pool, caller.clientId);
     // Filtro das ações por id de item (conteúdo, comentário, arte, panfleto, notificação).
     const scopeClientId = itemScopeClientId(caller, req.body.client_id);
     // Cliente não assina como equipe: comentário e ajuste do cliente saem sempre como 'client'.
@@ -19005,6 +19008,11 @@ registerAssistant(app, {
   uploadRoot: UPLOAD_ROOT,
   publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
   getClientInsights,
+  // temperatura do cliente: tela da gestão (cidade ativa) e aviso no sino com a regra de cidade do portal
+  verifyUser,
+  userHasAnyRole,
+  resolveActiveCity,
+  notifyTeam: notifyPortalTeam,
 });
 
 // ─── Agentes de design (artes, Análise IA, aprendizado) ─────

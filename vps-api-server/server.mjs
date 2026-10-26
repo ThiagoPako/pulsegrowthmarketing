@@ -758,6 +758,8 @@ async function ensureClientDatabaseTables() {
       ALTER TABLE clients ADD COLUMN IF NOT EXISTS birthday_arts_enabled BOOLEAN NOT NULL DEFAULT false;
       ALTER TABLE design_tasks ADD COLUMN IF NOT EXISTS collaborator_id UUID;
       ALTER TABLE design_tasks ADD COLUMN IF NOT EXISTS auto_ref TEXT;
+      -- checklist das tarefas de Reformulação do onboarding (já está no schema base; garante para o feed)
+      ALTER TABLE design_tasks ADD COLUMN IF NOT EXISTS checklist JSONB DEFAULT '[]'::jsonb;
       CREATE UNIQUE INDEX IF NOT EXISTS idx_design_tasks_auto_ref
         ON design_tasks (auto_ref) WHERE auto_ref IS NOT NULL;
     `).catch((error) => {
@@ -10509,6 +10511,20 @@ app.post('/api/db/query', async (req, res) => {
 // CRUD ROUTES — Phase 4: Direct DB access (replaces Supabase SDK)
 // ═══════════════════════════════════════════════════════════════
 
+/** checklist vem como JSONB (array) ou, em base antiga, como texto JSON. */
+function parseDesignChecklist(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 // ─── Designer fast feed ──────────────────────────────────────
 // Endpoint especializado para o Kanban/Painel da designer.
 // Evita o endpoint genérico /db/query, que precisa montar SELECT + JOINs
@@ -10534,8 +10550,16 @@ app.get('/api/design-tasks/fast', async (req, res) => {
 
     params.push(limit);
 
+    // Checklist (Reformulação do onboarding) e colaborador (arte de aniversário) aparecem no
+    // detalhe da tarefa; só entram se a coluna existir, para o feed não cair por falta dela.
+    const dtColumns = await getExistingColumns('design_tasks').catch(() => null);
+    const extraSelect = [
+      dtColumns?.has('checklist') ? 'dt.checklist' : null,
+      dtColumns?.has('collaborator_id') ? 'dt.collaborator_id' : null,
+    ].filter(Boolean).map((col) => `\n          ${col},`).join('');
+
     const { rows } = await pool.query(
-      `SELECT
+      `SELECT${extraSelect}
           dt.id,
           dt.client_id,
           dt.prospect_name,
@@ -10619,6 +10643,8 @@ app.get('/api/design-tasks/fast', async (req, res) => {
       position: row.position,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      checklist: parseDesignChecklist(row.checklist),
+      collaborator_id: row.collaborator_id ?? null,
       clients: row.clients_company_name ? {
         company_name: row.clients_company_name,
         color: row.clients_color || '217 91% 60%',

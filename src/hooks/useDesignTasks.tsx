@@ -148,7 +148,7 @@ export function useDesignTasks() {
     'priority','copy_text','attachment_url','attachment_urls','editable_file_url',
     'assigned_to','started_at','completed_at','sent_to_client_at','client_approved_at',
     'auto_approved','time_spent_seconds','timer_running','timer_started_at','version',
-    'mockup_url','due_date','position','created_at','updated_at','collaborator_id'
+    'mockup_url','due_date','position','created_at','updated_at','collaborator_id','checklist'
   ].join(',');
 
   const tasksQuery = useQuery({

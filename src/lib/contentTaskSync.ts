@@ -69,6 +69,17 @@ export async function syncContentTaskColumnChange(
   newColumn: string,
   ctx: SyncContext
 ) {
+  // Só sincroniza card que existe na cidade ativa. O update de um card de outra cidade (ou já
+  // removido) não muda nada no servidor, mas o sync seguia e criava entrega no Social Media,
+  // aviso no portal e histórico "fantasmas".
+  if (!ctx.taskId) return;
+  const { data: currentRow, error: currentRowError } = await supabase
+    .from('content_tasks').select('id').eq('id', ctx.taskId).maybeSingle();
+  if (!currentRowError && !currentRow) {
+    console.warn('[contentTaskSync] card fora da cidade ativa ou removido; sync ignorado:', ctx.taskId);
+    return;
+  }
+
   const updates: Record<string, any> = {
     reviewing_by: null,
     reviewing_by_name: null,

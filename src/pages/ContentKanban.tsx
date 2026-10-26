@@ -757,14 +757,14 @@ export default function ContentKanban() {
       t.id === draggedTask.id ? { ...t, kanban_column: targetColumn } : t
     ));
 
-    const { error } = await supabase.from('content_tasks').update({
+    const result = await updateTaskRow(draggedTask.id, {
       kanban_column: targetColumn,
       ...(targetColumn === 'revisao' ? { assigned_to: null } : {}),
       updated_at: new Date().toISOString(),
-    } as any).eq('id', draggedTask.id);
+    });
 
-    if (error) {
-      toast.error('Erro ao mover cartão');
+    if (result !== 'ok') {
+      toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao mover cartão');
       setTasks(prev => prev.map(t =>
         t.id === draggedTask.id ? { ...t, kanban_column: oldColumn } : t
       ));
@@ -855,14 +855,24 @@ export default function ContentKanban() {
     await syncContentTaskColumnChange(newColumn, ctx);
   };
 
+  // Update do card conferindo se alguma linha mudou: card de outra cidade (ou já removido)
+  // volta vazio do servidor, sem erro. Antes o handler seguia, mostrava sucesso e sincronizava.
+  const MISSING_TASK_MSG = 'Este card não está na cidade ativa (ou foi removido). Nada foi alterado.';
+  const updateTaskRow = async (taskId: string, payload: Record<string, any>): Promise<'ok' | 'error' | 'missing'> => {
+    const { data, error } = await supabase.from('content_tasks').update(payload as any).eq('id', taskId).select('id');
+    if (error) return 'error';
+    if (!data || (Array.isArray(data) && data.length === 0)) return 'missing';
+    return 'ok';
+  };
+
   // ─── APPROVE FROM REVISÃO ─────────────────────────────────
   const handleApproveTask = async (task: ContentTask) => {
-    const { error } = await supabase.from('content_tasks').update({
+    const result = await updateTaskRow(task.id, {
       kanban_column: 'envio',
       approved_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
-    if (error) { toast.error('Erro ao aprovar'); return; }
+    });
+    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao aprovar'); return; }
     await syncOnColumnChange(task, 'envio');
     toast.success('✅ Conteúdo aprovado! Movido para Enviado p/ Cliente');
     fetchTasks();
@@ -887,14 +897,14 @@ export default function ContentKanban() {
       return;
     }
     
-    const { error } = await supabase.from('content_tasks').update({
+    const result = await updateTaskRow(adjustmentTask.id, {
       kanban_column: 'alteracao',
       adjustment_notes: adjustmentNotes.trim(),
       immediate_alteration: adjustmentImmediate,
       assigned_to: null,
       updated_at: new Date().toISOString(),
-    } as any).eq('id', adjustmentTask.id);
-    if (error) { toast.error('Erro ao solicitar ajustes'); return; }
+    });
+    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao solicitar ajustes'); return; }
 
     // Use shared sync for full cross-module synchronization
     const client = clients.find(c => c.id === adjustmentTask.client_id);
@@ -913,12 +923,12 @@ export default function ContentKanban() {
 
   // ─── CONFIRM POSTED (archive card) ────────────────────────
   const handleConfirmPosted = async (task: ContentTask) => {
-    const { error } = await supabase.from('content_tasks').update({
+    const result = await updateTaskRow(task.id, {
       kanban_column: 'arquivado',
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    });
 
-    if (error) { toast.error('Erro ao arquivar'); return; }
+    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao arquivar'); return; }
 
     await supabase.from('social_media_deliveries').update({
       status: 'postado',
@@ -972,9 +982,9 @@ export default function ContentKanban() {
     // Optimistic
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, kanban_column: targetColumn } : t));
 
-    const { error } = await supabase.from('content_tasks').update(updatePayload as any).eq('id', task.id);
-    if (error) {
-      toast.error('Erro ao mover');
+    const result = await updateTaskRow(task.id, updatePayload);
+    if (result !== 'ok') {
+      toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao mover');
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, kanban_column: oldColumn } : t));
       return;
     }
@@ -1010,13 +1020,13 @@ export default function ContentKanban() {
       toast.error('Preencha data e horário');
       return;
     }
-    const { error } = await supabase.from('content_tasks').update({
+    const result = await updateTaskRow(scheduleDialogTask.id, {
       scheduled_recording_date: scheduleDate,
       scheduled_recording_time: scheduleTime,
       kanban_column: 'acompanhamento',
       updated_at: new Date().toISOString(),
-    } as any).eq('id', scheduleDialogTask.id);
-    if (error) { toast.error('Erro ao agendar'); return; }
+    });
+    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao agendar'); return; }
 
     await syncOnColumnChange(scheduleDialogTask, 'acompanhamento');
     toast.success('📅 Agendado! Movido para Acompanhamento');
@@ -1031,11 +1041,11 @@ export default function ContentKanban() {
       toast.error('Adicione o link do vídeo editado antes de reenviar');
       return;
     }
-    const { error } = await supabase.from('content_tasks').update({
+    const result = await updateTaskRow(task.id, {
       kanban_column: 'revisao',
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
-    if (error) { toast.error('Erro ao reenviar'); return; }
+    });
+    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao reenviar'); return; }
 
     await syncOnColumnChange(task, 'revisao');
     toast.success('🔄 Reenviado para Revisão!');
@@ -1399,6 +1409,7 @@ export default function ContentKanban() {
                               if (isRestricted) return undefined;
                               return getAdjacentColumns(task.kanban_column).prev?.label;
                             })()}
+                            {...(isForeignTask(task) ? FOREIGN_TASK_NO_ACTIONS : {})}
                           />
                         </motion.div>
                       ))}
@@ -1771,6 +1782,22 @@ interface TaskCardProps {
   forwardLabel?: string;
   backwardLabel?: string;
 }
+
+// Card de outra cidade é só para consulta: sem aprovar, ajustes, setas, links nem agendar.
+// O servidor não altera nada fora da cidade ativa, e as ações geravam registros fantasmas.
+const FOREIGN_TASK_NO_ACTIONS: Partial<TaskCardProps> = {
+  onDelete: undefined,
+  onConfirmPosted: undefined,
+  onApprove: undefined,
+  onRequestAdjustments: undefined,
+  onAddDriveLink: undefined,
+  onAddVideoLink: undefined,
+  onMoveToNext: undefined,
+  onSchedule: undefined,
+  onResubmit: undefined,
+  onMoveForward: undefined,
+  onMoveBackward: undefined,
+};
 
 function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, linkedScript, isDragging, viewOnly, cityLabel, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);

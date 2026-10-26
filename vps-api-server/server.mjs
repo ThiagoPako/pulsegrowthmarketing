@@ -6315,9 +6315,11 @@ app.post('/api/portal-actions', async (req, res) => {
       if (!content_id) return res.status(400).json({ error: 'content_id required' });
       // Idempotente (clique duplo não aprova nem avisa duas vezes) e nunca em 'revisao_interna':
       // o vídeo ainda não foi liberado para o cliente. O Kanban se mexe aqui mesmo.
+      // 'agendado'/'publicado' (agendamento do conteúdo avulso) contam como aprovado: não regrava.
       const { rows: [approvedContent] } = await pool.query(
         `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW()
-          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND status NOT IN ('aprovado', 'revisao_interna')
+          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)
+            AND status NOT IN ('aprovado', 'agendado', 'publicado', 'revisao_interna')
           RETURNING *`,
         [content_id, scopeClientId]
       );
@@ -6327,7 +6329,7 @@ app.post('/api/portal-actions', async (req, res) => {
           [content_id, scopeClientId]
         );
         if (!currentContent || (currentContent.status === 'revisao_interna' && !isTeamCaller)) return res.status(404).json({ error: 'Conteúdo não encontrado' });
-        if (currentContent.status === 'aprovado') return res.json({ success: true, already_approved: true });
+        if (['aprovado', 'agendado', 'publicado'].includes(currentContent.status)) return res.json({ success: true, already_approved: true });
         return res.status(409).json({ error: 'Este conteúdo ainda está em revisão interna' });
       }
       // A aprovação já foi gravada: falha no Kanban/avisos só vai para o log. Devolver erro aqui
@@ -6342,9 +6344,10 @@ app.post('/api/portal-actions', async (req, res) => {
 
     if (action === 'request_adjustment') {
       if (!content_id || !message) return res.status(400).json({ error: 'content_id and message required' });
+      // Agendado ou publicado: o ajuste não para o post (pede à equipe).
       const { rows: [adjustedContent] } = await pool.query(
         `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW()
-          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND status <> 'revisao_interna'
+          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND status NOT IN ('revisao_interna', 'agendado', 'publicado')
           RETURNING *`,
         [content_id, scopeClientId]
       );
@@ -6353,6 +6356,9 @@ app.post('/api/portal-actions', async (req, res) => {
           'SELECT status FROM client_portal_contents WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)',
           [content_id, scopeClientId]
         );
+        if (currentContent && ['agendado', 'publicado'].includes(currentContent.status)) {
+          return res.status(409).json({ error: 'Este conteúdo já está agendado/publicado. Fale com a equipe para alterar.' });
+        }
         if (!currentContent || !isTeamCaller) return res.status(404).json({ error: 'Conteúdo não encontrado' });
         return res.status(409).json({ error: 'Este conteúdo ainda está em revisão interna' });
       }
@@ -8945,6 +8951,18 @@ const DELIVERY_STATUS_LABELS = {
   entregue: 'Agendar', agendado: 'Agendado', postado: 'Postado',
 };
 
+/** URL comparável da mídia: sem domínio (o post guarda https://…/uploads/x.png; a arte pode ter /uploads/x.png). */
+function comparableMediaUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  try {
+    const u = new URL(raw, 'https://agenciapulse.tech');
+    return decodeURIComponent(u.pathname + u.search).replace(/\/+$/, '');
+  } catch {
+    return raw;
+  }
+}
+
 /**
  * Confere, logo antes de publicar, se a entrega e o card ainda pedem esta postagem.
  * Vale para qualquer tela (kanban social, kanban de conteúdo, tráfego, agentes) e
@@ -8971,11 +8989,23 @@ async function getAutoPostCancelReason(post) {
   }
   // Arte e conteúdo avulso do portal agendados pelo módulo de Agendamentos (scheduling.mjs)
   if (post.design_task_id) {
-    const { rows } = await pool.query('SELECT kanban_column FROM design_tasks WHERE id = $1', [post.design_task_id]);
+    const { rows } = await pool.query(
+      `SELECT kanban_column, attachment_url, mockup_url, COALESCE(to_jsonb(attachment_urls), '[]'::jsonb) AS attachment_urls
+         FROM design_tasks WHERE id = $1`,
+      [post.design_task_id]
+    );
     if (!rows.length) return 'a arte foi excluída';
     // 'postado' aqui só pode ser marcação manual (o robô move depois de publicar): sair de novo duplicaria.
     if (rows[0].kanban_column === 'postado') return 'a arte já foi marcada como postada';
     if (rows[0].kanban_column !== 'aprovado') return `a arte saiu de Aprovado (está em "${rows[0].kanban_column}")`;
+    // O post guarda a cópia das URLs: se a arte foi trocada, publicaria a versão antiga.
+    const listed = Array.isArray(rows[0].attachment_urls) ? rows[0].attachment_urls : [];
+    const current = new Set([...listed.map((u) => (typeof u === 'string' ? u : u?.url)), rows[0].attachment_url, rows[0].mockup_url]
+      .map(comparableMediaUrl).filter(Boolean));
+    const postUrls = postMediaList(post).map((item) => comparableMediaUrl(item.url)).filter(Boolean);
+    if (postUrls.length && !postUrls.some((u) => current.has(u))) {
+      return 'a arte foi trocada depois do agendamento. Agende de novo';
+    }
   }
   if (post.portal_content_id) {
     const { rows } = await pool.query('SELECT status FROM client_portal_contents WHERE id = $1', [post.portal_content_id]);

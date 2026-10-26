@@ -39,12 +39,19 @@ const CONTENT_TYPE_ICONS: Record<string, any> = {
 };
 const STATUS_LABELS: Record<string, string> = {
   pendente: 'Pendente', aprovado: 'Aprovado', ajuste_solicitado: 'Ajuste Solicitado', revisao_interna: 'Em Revisão',
+  agendado: 'Agendado', publicado: 'Publicado',
 };
+/** Estados finais de um conteúdo aprovado (agendado/publicado vêm do agendamento do conteúdo avulso). */
+const APPROVED_STATUSES = ['aprovado', 'agendado', 'publicado'];
+/** Só o que ainda espera a decisão do cliente mostra "Aprovar" e "Solicitar ajuste". */
+const DECISION_STATUSES = ['pendente', 'ajuste_solicitado'];
 const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   pendente: { bg: 'bg-amber-500/15', text: 'text-amber-400', dot: 'bg-amber-400' },
   aprovado: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', dot: 'bg-emerald-400' },
   ajuste_solicitado: { bg: 'bg-orange-500/15', text: 'text-orange-400', dot: 'bg-orange-400' },
   revisao_interna: { bg: 'bg-blue-500/15', text: 'text-blue-400', dot: 'bg-blue-400' },
+  agendado: { bg: 'bg-sky-500/15', text: 'text-sky-400', dot: 'bg-sky-400' },
+  publicado: { bg: 'bg-violet-500/15', text: 'text-violet-400', dot: 'bg-violet-400' },
 };
 
 interface PortalContent {
@@ -493,7 +500,7 @@ export default function ClientPortal() {
   const creativosCount = seasonContents.filter(c => c.content_type === 'criativo').length;
   const artesCount = seasonContents.filter(c => c.content_type === 'arte').length;
   const videosCount = seasonContents.filter(c => ['institucional', 'anuncio'].includes(c.content_type)).length;
-  const approvedCount = seasonContents.filter(c => c.status === 'aprovado').length;
+  const approvedCount = seasonContents.filter(c => APPROVED_STATUSES.includes(c.status)).length;
   const pendingCount = seasonContents.filter(c => c.status === 'pendente').length;
   const adjustmentCount = seasonContents.filter(c => c.status === 'ajuste_solicitado').length;
   const totalDelivered = seasonContents.length;
@@ -1269,7 +1276,7 @@ export default function ClientPortal() {
                     Em revisão interna: o cliente ainda não vê este conteúdo. Libere pelo Kanban.
                   </div>
                 )}
-                {selectedContent.status !== 'aprovado' && selectedContent.status !== 'revisao_interna' && (
+                {DECISION_STATUSES.includes(selectedContent.status) && (
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={handleApprove}
@@ -1287,7 +1294,7 @@ export default function ClientPortal() {
                   </div>
                 )}
 
-                {selectedContent.status === 'aprovado' && (
+                {APPROVED_STATUSES.includes(selectedContent.status) && (
                   <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm">
                     <Check size={16} /> Conteúdo aprovado
                     {selectedContent.approved_at && (
@@ -1315,7 +1322,7 @@ export default function ClientPortal() {
 
                 {/* Adjustment form */}
                 <AnimatePresence>
-                  {showAdjustment && (
+                  {showAdjustment && DECISION_STATUSES.includes(selectedContent.status) && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
                       <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 space-y-3">
                         <textarea

@@ -22,6 +22,7 @@ import ClientLogo from '@/components/ClientLogo';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
 import { downloadSingleArt, downloadArtsAsPdf } from '@/lib/designerDownload';
+import { splitScheduledArts } from '@/lib/postingSchedule';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -922,12 +923,21 @@ export default function DesignerKanban() {
                               <DropdownMenuItem
                                 onClick={async () => {
                                   if (allColTasks.length === 0) return;
-                                  if (!window.confirm(`Enviar todas as ${allColTasks.length} artes aprovadas para "Artes Postadas"?`)) return;
-                                  toast.info(`Enviando ${allColTasks.length} arte(s) para postadas...`);
-                                  for (const t of allColTasks) {
+                                  // Arte com postagem agendada no futuro fica em Aprovadas (o post dela ainda vai sair)
+                                  const { move, keep } = splitScheduledArts(allColTasks);
+                                  if (move.length === 0) {
+                                    toast.info(`${keep.length} arte(s) com postagem agendada ficam em Aprovadas.`);
+                                    return;
+                                  }
+                                  const keptNote = keep.length ? ` ${keep.length} com postagem agendada ficam em Aprovadas.` : '';
+                                  if (!window.confirm(`Enviar ${move.length} arte(s) aprovada(s) para "Artes Postadas"?${keptNote}`)) return;
+                                  toast.info(`Enviando ${move.length} arte(s) para postadas...`);
+                                  for (const t of move) {
                                     await updateTask.mutateAsync({ id: t.id, kanban_column: 'postado' } as any);
                                   }
-                                  toast.success('Todas movidas para Artes Postadas!');
+                                  toast.success(keep.length
+                                    ? `${move.length} arte(s) em Artes Postadas. ${keep.length} com postagem agendada ficaram em Aprovadas.`
+                                    : 'Todas movidas para Artes Postadas!');
                                 }}
                               >
                                 <Send size={14} className="mr-2" /> Enviar todas para Postadas

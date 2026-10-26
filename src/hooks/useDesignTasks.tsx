@@ -246,7 +246,7 @@ export function useDesignTasks() {
     'auto_approved','time_spent_seconds','timer_running','timer_started_at','version',
     'mockup_url','due_date','position','created_at','updated_at','collaborator_id','checklist',
     'copy_brief','dimensions','materials_link','designed_by','agent_step','agent_heartbeat_at',
-    'references_drive_link','references_archived_at'
+    'references_drive_link','references_archived_at','posting_at'
   ].join(',');
 
   const tasksQuery = useQuery({

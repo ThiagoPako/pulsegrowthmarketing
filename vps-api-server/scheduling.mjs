@@ -37,6 +37,30 @@ const MAX_RANGE_DAYS = 100;
 
 const isUuid = (v) => typeof v === 'string' && UUID_RE.test(v);
 
+// Conteúdo do portal sem card ("avulso") que entra no módulo. O vínculo do portal com o card/arte só
+// existe desde 25/10/2026 e o histórico ficou sem ele: um vídeo já postado em maio voltaria como "não
+// agendado" e seria publicado de novo. Entra só a linha sem vínculo, sem card nem arte do cliente com o
+// mesmo título (qualquer coluna e data) e que é aprovação recente (45 dias) ou já foi agendada aqui
+// (posting_at e o post automático só são gravados por este módulo). Mesma regra na lista, no contador
+// e ao agendar/remarcar.
+const PORTAL_STANDALONE_MAX_AGE_DAYS = 45;
+export function standalonePortalSql(alias = 'pc') {
+  return `(${alias}.content_task_id IS NULL AND ${alias}.design_task_id IS NULL
+    AND NOT EXISTS (SELECT 1 FROM content_tasks sct
+                     WHERE sct.client_id = ${alias}.client_id
+                       AND lower(btrim(coalesce(sct.title, ''))) = lower(btrim(coalesce(${alias}.title, ''))))
+    AND NOT EXISTS (SELECT 1 FROM design_tasks sdt
+                     WHERE sdt.client_id = ${alias}.client_id
+                       AND 'arte: ' || lower(btrim(coalesce(sdt.title, ''))) = lower(btrim(coalesce(${alias}.title, ''))))
+    AND (
+      (${alias}.status = 'aprovado'
+        AND coalesce(${alias}.approved_at, ${alias}.created_at) >= now() - interval '${PORTAL_STANDALONE_MAX_AGE_DAYS} days')
+      OR ${alias}.posting_at IS NOT NULL
+      OR EXISTS (SELECT 1 FROM scheduled_posts ssp
+                  WHERE ssp.portal_content_id = ${alias}.id AND ssp.status IN ('agendado', 'publicando', 'erro'))
+    ))`;
+}
+
 function httpError(statusCode, message, extra = {}) {
   return Object.assign(new Error(message), { statusCode, ...extra });
 }
@@ -294,7 +318,8 @@ export function buildMaterials(rows, { from, to, publicAppUrl } = {}) {
       caption: current?.caption || '',
       platform_label: null,
     };
-    if (d.kanban_column === 'postado') {
+    // Em Postadas com post ainda na fila (levada antes da hora): aparece como o post, não como publicada
+    if (d.kanban_column === 'postado' && !active) {
       const when = published ? whenFromInstant(published.published_at || published.scheduled_at) : whenFromInstant(d.posting_at);
       if (when) pushScheduled({ ...base, when, state: 'publicado', mode: published ? 'auto' : 'manual', locked: true, post: postSummary(published) });
       continue;
@@ -544,7 +569,8 @@ export function registerSchedulingRoutes(app, deps) {
       END
       $fn$;
 
-      -- Arte que sai de Aprovado (ajuste, volta de coluna): a data e o post pendente deixam de valer
+      -- Arte que sai de Aprovado (ajuste, volta de coluna): a data e o post pendente deixam de valer.
+      -- Arte trocada depois de agendada (o post guarda a cópia das URLs): o post sai e ela volta a não agendada.
       CREATE OR REPLACE FUNCTION pulse_design_task_posting_at() RETURNS trigger
       LANGUAGE plpgsql AS $fn$
       BEGIN
@@ -556,6 +582,18 @@ export function registerSchedulingRoutes(app, deps) {
             UPDATE scheduled_posts
                SET status = 'cancelado', last_error = 'Cancelado: a arte saiu de Aprovado.', updated_at = now()
              WHERE design_task_id = NEW.id AND status IN ('agendado', 'erro');
+          ELSIF OLD.kanban_column = 'aprovado' AND NEW.kanban_column = 'aprovado'
+             AND (NEW.attachment_url IS DISTINCT FROM OLD.attachment_url
+                  OR NEW.attachment_urls::text IS DISTINCT FROM OLD.attachment_urls::text
+                  OR NEW.mockup_url IS DISTINCT FROM OLD.mockup_url) THEN
+            UPDATE scheduled_posts
+               SET status = 'cancelado',
+                   last_error = 'Cancelado: a arte foi trocada depois do agendamento. Agende de novo.',
+                   updated_at = now()
+             WHERE design_task_id = NEW.id AND status IN ('agendado', 'erro');
+            IF FOUND AND NEW.posting_at IS NOT DISTINCT FROM OLD.posting_at THEN
+              NEW.posting_at := NULL;
+            END IF;
           END IF;
         EXCEPTION WHEN OTHERS THEN
           RAISE WARNING 'pulse_design_task_posting_at: %', SQLERRM;
@@ -687,11 +725,11 @@ export function registerSchedulingRoutes(app, deps) {
           [NON_SOCIAL_DESIGN_FORMATS]
         ),
         pool.query(
-          `SELECT client_id,
-                  count(*) FILTER (WHERE status = 'aprovado' AND posting_at IS NULL)::int AS pending,
-                  count(*) FILTER (WHERE posting_at IS NOT NULL)::int AS scheduled
-             FROM client_portal_contents
-            WHERE status IN ('aprovado', 'agendado') AND content_task_id IS NULL AND design_task_id IS NULL
+          `SELECT pc.client_id,
+                  count(*) FILTER (WHERE pc.status = 'aprovado' AND pc.posting_at IS NULL)::int AS pending,
+                  count(*) FILTER (WHERE pc.posting_at IS NOT NULL)::int AS scheduled
+             FROM client_portal_contents pc
+            WHERE pc.status IN ('aprovado', 'agendado') AND ${standalonePortalSql('pc')}
             GROUP BY 1`
         ),
       ]);
@@ -746,16 +784,25 @@ export function registerSchedulingRoutes(app, deps) {
            FROM design_tasks
           WHERE client_id = $1 AND coalesce(format_type, '') <> ALL($3::text[])
             AND (kanban_column = 'aprovado'
-                 OR (kanban_column = 'postado' AND updated_at >= $2::timestamptz - interval '3 days'))`,
+                 OR (kanban_column = 'postado' AND updated_at >= $2::timestamptz - interval '3 days')
+                 OR (kanban_column = 'postado' AND EXISTS (
+                       SELECT 1 FROM scheduled_posts sp
+                        WHERE sp.design_task_id = design_tasks.id AND sp.status IN ('agendado', 'publicando', 'erro'))))`,
         [clientId, fromIso, NON_SOCIAL_DESIGN_FORMATS]
       ),
+      // Com vínculo: só mídia e miniatura do card/arte. Sem vínculo: a regra do conteúdo avulso.
       pool.query(
-        `SELECT id, title, content_type, status, file_url, thumbnail_url, approved_at, posting_at,
-                content_task_id, design_task_id, created_at
-           FROM client_portal_contents
-          WHERE client_id = $1 AND status IN ('aprovado', 'agendado', 'publicado')
-            AND (status <> 'publicado' OR updated_at >= $2::timestamptz - interval '3 days')
-          ORDER BY created_at DESC`,
+        `SELECT pc.id, pc.title, pc.content_type, pc.status, pc.file_url, pc.thumbnail_url, pc.approved_at, pc.posting_at,
+                pc.content_task_id, pc.design_task_id, pc.created_at
+           FROM client_portal_contents pc
+          WHERE pc.client_id = $1
+            AND (
+              ((pc.content_task_id IS NOT NULL OR pc.design_task_id IS NOT NULL)
+                AND pc.status IN ('aprovado', 'agendado', 'publicado')
+                AND (pc.status <> 'publicado' OR pc.updated_at >= $2::timestamptz - interval '3 days'))
+              OR (pc.status IN ('aprovado', 'agendado', 'publicado') AND ${standalonePortalSql('pc')})
+            )
+          ORDER BY pc.created_at DESC`,
         [clientId, fromIso]
       ),
     ]);
@@ -890,10 +937,21 @@ export function registerSchedulingRoutes(app, deps) {
     return null;
   }
 
+  /** Conteúdo avulso do portal: a mesma regra da lista, conferida na linha já travada. */
+  async function assertStandalonePortal(db, id) {
+    const { rows: [row] } = await db.query(
+      `SELECT ${standalonePortalSql('pc')} AS ok FROM client_portal_contents pc WHERE pc.id = $1`,
+      [id]
+    );
+    if (!row?.ok) throw httpError(409, 'Este conteúdo não está aprovado para agendar.', { code: 'not_ready' });
+  }
+
   function assertNotPublished(kind, material, posts) {
+    const hasActivePost = posts.some((p) => ACTIVE_POST_STATUSES.has(p.status));
     const published = posts.some((p) => p.status === 'publicado')
       || (kind === 'conteudo' && ['arquivado', 'postado'].includes(material.kanban_column))
-      || (kind === 'arte' && material.kanban_column === 'postado')
+      // Arte em Postadas com post ainda na fila: segue agendada (remarca e cancela)
+      || (kind === 'arte' && material.kanban_column === 'postado' && !hasActivePost)
       || (kind === 'portal' && material.status === 'publicado');
     if (published) throw httpError(409, 'Este material já foi publicado.', { code: 'published' });
     if (posts.some((p) => p.status === 'publicando')) throw httpError(409, 'Este post está sendo publicado agora.', { code: 'publishing' });
@@ -976,9 +1034,10 @@ export function registerSchedulingRoutes(app, deps) {
         if (kind === 'arte' && material.kanban_column !== 'aprovado') {
           throw httpError(409, `A arte não está aprovada para agendar (está em "${material.kanban_column}").`, { code: 'not_ready' });
         }
-        if (kind === 'portal' && (material.content_task_id || material.design_task_id || !['aprovado', 'agendado'].includes(material.status))) {
+        if (kind === 'portal' && !['aprovado', 'agendado'].includes(material.status)) {
           throw httpError(409, 'Este conteúdo não está aprovado para agendar.', { code: 'not_ready' });
         }
+        if (kind === 'portal') await assertStandalonePortal(db, material.id);
         if (kind === 'post' && !['agendado', 'erro'].includes(material.status)) {
           throw httpError(409, 'Só dá para mudar posts agendados ou com erro.', { code: 'not_ready' });
         }
@@ -1077,10 +1136,7 @@ export function registerSchedulingRoutes(app, deps) {
         const detail = `${label} · ${mode === 'auto' ? `${platformLabel(prepared.platform)} (automático)` : 'manual'}`;
         if (kind === 'conteudo') {
           const wasScheduled = material.kanban_column === 'acompanhamento';
-          await db.query(
-            `UPDATE client_portal_contents SET status = 'agendado', updated_at = now() WHERE content_task_id = $1 AND status = 'aprovado'`,
-            [material.id]
-          );
+          // O conteúdo do portal ligado ao card fica 'aprovado' (o portal do cliente só conhece esse estado final).
           // Por último: os gatilhos da entrega/fila gravam posting_at também; o valor final é este.
           await db.query(
             `UPDATE content_tasks
@@ -1102,10 +1158,6 @@ export function registerSchedulingRoutes(app, deps) {
           }
         } else if (kind === 'arte') {
           const wasScheduled = !!material.posting_at;
-          await db.query(
-            `UPDATE client_portal_contents SET status = 'agendado', updated_at = now() WHERE design_task_id = $1 AND status = 'aprovado'`,
-            [material.id]
-          );
           await db.query(`UPDATE design_tasks SET posting_at = $2, updated_at = now() WHERE id = $1`, [material.id, whenIso]);
           await insertHistory(db, kind, material, user, wasScheduled ? '📅 Postagem remarcada' : '📅 Agendada para postagem', detail);
         } else if (kind === 'portal') {
@@ -1144,6 +1196,7 @@ export function registerSchedulingRoutes(app, deps) {
         } else {
           assertNotPublished(kind, material, posts);
         }
+        if (kind === 'portal') await assertStandalonePortal(db, material.id);
         const active = posts.find((p) => ACTIVE_POST_STATUSES.has(p.status)) || null;
         if (active?.status === 'erro' || (kind === 'post' && material.status === 'erro')) {
           throw httpError(409, 'O post deu erro: abra e agende de novo.', { code: 'post_error' });
@@ -1237,10 +1290,6 @@ export function registerSchedulingRoutes(app, deps) {
               WHERE content_task_id = $1 AND status = 'agendado'`,
             [material.id]
           );
-          await db.query(
-            `UPDATE client_portal_contents SET status = 'aprovado', updated_at = now() WHERE content_task_id = $1 AND status = 'agendado'`,
-            [material.id]
-          );
           // A data de gravação só é apagada quando era a data desta postagem (o agendar do Kanban grava ali).
           await db.query(
             `UPDATE content_tasks
@@ -1256,10 +1305,6 @@ export function registerSchedulingRoutes(app, deps) {
           }
         } else if (kind === 'arte') {
           await db.query(`UPDATE design_tasks SET posting_at = NULL, updated_at = now() WHERE id = $1`, [material.id]);
-          await db.query(
-            `UPDATE client_portal_contents SET status = 'aprovado', updated_at = now() WHERE design_task_id = $1 AND status = 'agendado'`,
-            [material.id]
-          );
           await insertHistory(db, kind, material, user, '↩️ Agendamento cancelado', null);
         } else if (kind === 'portal') {
           await db.query(

@@ -1,8 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
 import AgentReviewBadge from '@/components/kanban/AgentReviewBadge';
 import AgentReadinessBadge from '@/components/kanban/AgentReadinessBadge';
+
+// Pulse Plus: os selos só aparecem para quem tem o acesso (lista do servidor)
+const PLUS = vi.hoisted(() => ({ value: true }));
+vi.mock('@/hooks/usePulsePlus', () => ({
+  PULSE_PLUS_MODULE: 'pulse_plus',
+  usePulsePlus: () => PLUS.value,
+  usePulsePlusKnown: () => PLUS.value,
+}));
+afterEach(() => { PLUS.value = true; });
 
 const BEA = 'agent-bea';
 const ANA = 'human-ana';
@@ -75,5 +84,20 @@ describe('AgentReadinessBadge', () => {
   it('card fora da fila dos agentes não mostra nada', () => {
     const { container } = render(<AgentReadinessBadge task={{ ...base, assigned_to: ANA }} agentIds={agents} />);
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('sem Pulse Plus', () => {
+  it('nenhum selo de agente aparece, nem com os dados de agente no card', () => {
+    PLUS.value = false;
+    const base = { kanban_column: 'edicao', content_type: 'reels', client_id: 'c', drive_link: 'https://d', script_id: 's', editing_deadline: '2026-11-01T00:00:00Z' };
+    const work = render(<AgentWorkBadge task={{ kanban_column: 'edicao', assigned_to: BEA, agent_step: 'cortando', agent_heartbeat_at: ago(3) }} users={users} agentIds={agents} />);
+    expect(work.container).toBeEmptyDOMElement();
+    const review = render(<AgentReviewBadge task={{ kanban_column: 'pre_revisao', agent_review_verdict: 'ajustes', agent_review_notes: 'x', agent_review_by: 'uriel' }} users={users} />);
+    expect(review.container).toBeEmptyDOMElement();
+    const waiting = render(<AgentReviewBadge task={{ kanban_column: 'pre_revisao' }} users={users} />);
+    expect(waiting.container).toBeEmptyDOMElement();
+    const ready = render(<AgentReadinessBadge task={base} agentIds={agents} detailed />);
+    expect(ready.container).toBeEmptyDOMElement();
   });
 });

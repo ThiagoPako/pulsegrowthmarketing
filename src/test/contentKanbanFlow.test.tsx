@@ -44,6 +44,14 @@ const loginAs = (id: string, role: string) => {
   AUTH.value = { user: { id }, profile: { id, name: `Pessoa ${role}`, role, roles: [role] } };
 };
 
+// Pulse Plus (lista do servidor): os testes antigos são de quem tem o acesso; o último, de quem não tem
+const PLUS = vi.hoisted(() => ({ value: true }));
+vi.mock('@/hooks/usePulsePlus', () => ({
+  PULSE_PLUS_MODULE: 'pulse_plus',
+  usePulsePlus: () => PLUS.value,
+  usePulsePlusKnown: () => PLUS.value,
+}));
+
 vi.mock('@/lib/vpsDb', () => {
   const builder = () => {
     const b: any = {};
@@ -60,7 +68,9 @@ vi.mock('@/lib/vpsDb', () => {
         return { ok: true, status: 200, json: async () => ({ agents: [{ user_id: BEA, working: true }] }) } as any;
       }
       const body = init?.body ? JSON.parse(String(init.body)) : {};
-      const data = body.table === 'content_tasks' ? TASKS : [];
+      // como o servidor: sem Pulse Plus, as colunas internas dos agentes saem nulas
+      const strip = (t: Record<string, unknown>) => Object.fromEntries(Object.entries(t).map(([k, v]) => [k, k.startsWith('agent_') ? null : v]));
+      const data = body.table === 'content_tasks' ? (PLUS.value ? TASKS : TASKS.map(strip)) : [];
       return { ok: true, status: 200, json: async () => ({ data }) } as any;
     }),
   };
@@ -152,6 +162,31 @@ describe('Kanban de Conteúdo — ações por coluna e agentes', () => {
       expect(within(cardOf('free')).getByTitle('Mover para Revisão')).toBeInTheDocument();
     } finally {
       loginAs(ADMIN, 'admin');
+    }
+  }, SLOW);
+
+  it('sem Pulse Plus: nenhum selo, parecer ou fila de agente; o agente aparece como responsável e a Análise segue igual', async () => {
+    PLUS.value = false;
+    const { vpsAuthedFetch } = await import('@/lib/vpsDb');
+    vi.mocked(vpsAuthedFetch).mockClear();
+    try {
+      render(<MemoryRouter><ContentKanban /></MemoryRouter>);
+      await screen.findByText('Na analise', undefined, { timeout: 10_000 });
+      expect(within(cardOf('free')).queryByText('Pronto p/ fila')).toBeNull();
+      expect(within(cardOf('agent')).queryByText(/Editando/)).toBeNull();
+      expect(within(cardOf('agent')).getAllByText(/Beatriz/).length).toBeGreaterThan(0);
+      expect(within(cardOf('analise')).queryByText(/Parecer/)).toBeNull();
+      expect(within(cardOf('analise')).queryByText(/aguardando parecer/)).toBeNull();
+      // as ações da equipe não mudam
+      expect(within(cardOf('analise')).getByText('Liberar p/ Revisão')).toBeInTheDocument();
+      expect(within(cardOf('revisao')).getByText('Aprovar e enviar')).toBeInTheDocument();
+      expect(within(cardOf('free')).getByTitle('Mover para Revisão')).toBeInTheDocument();
+      // ("Beatriz Agente" e "Com agente" são o nome e o título dados pelo teste)
+      expect((document.body.textContent || '').replace(/Beatriz Agente|Com agente/g, '')).not.toMatch(/agente|Agente|\bIA\b|🤖/);
+      // nem pergunta ao servidor quem é agente
+      expect(vi.mocked(vpsAuthedFetch).mock.calls.some(([path]) => String(path).includes('agents/office'))).toBe(false);
+    } finally {
+      PLUS.value = true;
     }
   }, SLOW);
 

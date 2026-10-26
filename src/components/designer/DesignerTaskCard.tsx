@@ -47,7 +47,7 @@ interface Props {
 }
 
 function getDesignDeadlineStatus(task: DesignTask) {
-  if (['aprovado'].includes(task.kanban_column)) return { label: 'Concluído 💖', variant: 'success' as const, progress: 100 };
+  if (['aprovado', 'postado'].includes(task.kanban_column)) return { label: 'Concluído 💖', variant: 'success' as const, progress: 100 };
   const sla = PRIORITY_CONFIG[task.priority]?.slaHours || 72;
   const deadline = new Date(new Date(task.created_at).getTime() + sla * 3600000);
   const now = new Date();

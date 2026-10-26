@@ -42,13 +42,20 @@ const FORMAT_LABELS: Record<string, string> = {
   feed: 'Feed', story: 'Story', logomarca: 'Logo', midia_fisica: 'Mídia Física',
 };
 
+// Arte concluída pela designer: aprovada ou já postada (o envio em massa leva as aprovadas para 'postado').
+const DONE_COLS = ['aprovado', 'postado'];
+// Arte entregue, esperando revisão interna ou o cliente: não é atraso da designer.
+const WAITING_COLS = ['em_analise', 'enviar_cliente'];
+// Data em que a arte foi concluída (updated_at muda no envio em massa para Postadas).
+const doneAt = (t: DesignTask) => t.completed_at || t.client_approved_at || t.updated_at;
+
 function getDesignDeadline(task: DesignTask): Date {
   const sla = PRIORITY_CONFIG[task.priority]?.slaHours || 72;
   return addDays(new Date(task.created_at), sla / 24);
 }
 
 function getDesignDeadlineStatus(task: DesignTask) {
-  if (['aprovado'].includes(task.kanban_column)) return { label: 'Concluído', variant: 'success' as const, hoursLeft: 0, progress: 100 };
+  if (DONE_COLS.includes(task.kanban_column)) return { label: 'Concluído', variant: 'success' as const, hoursLeft: 0, progress: 100 };
   const deadline = getDesignDeadline(task);
   const now = new Date();
   const hoursLeft = differenceInHours(deadline, now);
@@ -128,22 +135,22 @@ export default function DesignerDashboard() {
     const pending = myTasks.filter(t => t.kanban_column === 'nova_tarefa');
     const inProgress = myTasks.filter(t => t.kanban_column === 'executando');
     const adjustments = myTasks.filter(t => t.kanban_column === 'ajustes');
-    const completed = myAssigned.filter(t => ['concluida', 'aprovada_cliente', 'aprovado'].includes(t.kanban_column));
-    const urgent = myTasks.filter(t => (t.priority === 'urgente' || t.priority === 'alta') && !['aprovado', 'concluida', 'aprovada_cliente'].includes(t.kanban_column));
+    const completed = myAssigned.filter(t => DONE_COLS.includes(t.kanban_column));
+    const urgent = myTasks.filter(t => (t.priority === 'urgente' || t.priority === 'alta') && !DONE_COLS.includes(t.kanban_column));
     const completedWithTime = completed.filter(t => t.time_spent_seconds > 0);
     const avgTime = completedWithTime.length > 0
       ? completedWithTime.reduce((s, t) => s + t.time_spent_seconds, 0) / completedWithTime.length : 0;
     const now = new Date();
     const ws = new Date(now); ws.setDate(now.getDate() - now.getDay()); ws.setHours(0,0,0,0);
-    const completedThisWeek = completed.filter(t => new Date(t.completed_at || t.updated_at) >= ws);
+    const completedThisWeek = completed.filter(t => new Date(doneAt(t)) >= ws);
     const dayStart = new Date(now); dayStart.setHours(0,0,0,0);
-    const completedToday = completed.filter(t => new Date(t.completed_at || t.updated_at) >= dayStart);
+    const completedToday = completed.filter(t => new Date(doneAt(t)) >= dayStart);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const completedThisMonth = completed.filter(t => new Date(t.completed_at || t.updated_at) >= monthStart);
+    const completedThisMonth = completed.filter(t => new Date(doneAt(t)) >= monthStart);
     const totalTime = completedWithTime.reduce((s, t) => s + t.time_spent_seconds, 0);
     const uniqueClients = new Set(completed.map(t => t.client_id)).size;
     const overdue = myTasks.filter(t =>
-      !['aprovado', 'concluida', 'aprovada_cliente'].includes(t.kanban_column) && getDesignDeadlineStatus(t).variant === 'destructive'
+      !DONE_COLS.includes(t.kanban_column) && !WAITING_COLS.includes(t.kanban_column) && getDesignDeadlineStatus(t).variant === 'destructive'
     ).length;
 
     const byFormat: Record<string, number> = {};
@@ -153,7 +160,7 @@ export default function DesignerDashboard() {
     });
 
     const byClient: Record<string, { name: string; count: number; color: string; logoUrl: string | null }> = {};
-    myTasks.filter(t => !['aprovado', 'concluida', 'aprovada_cliente'].includes(t.kanban_column)).forEach(t => {
+    myTasks.filter(t => !DONE_COLS.includes(t.kanban_column)).forEach(t => {
       if (!byClient[t.client_id]) {
         byClient[t.client_id] = { name: t.clients?.company_name || '—', count: 0, color: t.clients?.color || '217 91% 60%', logoUrl: t.clients?.logo_url || null };
       }
@@ -161,7 +168,7 @@ export default function DesignerDashboard() {
     });
 
     // Scoring
-    const scoringCompleted = myAssigned.filter(t => ['concluida', 'aprovada_cliente', 'aprovado'].includes(t.kanban_column)).length;
+    const scoringCompleted = completed.length;
     const scoringHours = Math.round(myAssigned.reduce((a, t) => a + (t.time_spent_seconds || 0), 0) / 3600);
     const designerScore = scoringCompleted * DESIGNER_SCORE.CONCLUIDO + scoringHours * DESIGNER_SCORE.POR_HORA;
 
@@ -485,7 +492,7 @@ export default function DesignerDashboard() {
 
   const activeClients = useMemo(() => {
     const map = new Map<string, string>();
-    myTasks.filter(t => !['aprovado'].includes(t.kanban_column)).forEach(t => {
+    myTasks.filter(t => !DONE_COLS.includes(t.kanban_column)).forEach(t => {
       if (t.clients?.company_name) map.set(t.client_id, t.clients.company_name);
     });
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
@@ -493,17 +500,17 @@ export default function DesignerDashboard() {
 
   const recentCompleted = useMemo(() => {
     return tasks
-      .filter(t => t.kanban_column === 'aprovado' && t.assigned_to === user?.id)
-      .sort((a, b) => new Date(b.completed_at || b.updated_at).getTime() - new Date(a.completed_at || a.updated_at).getTime())
+      .filter(t => DONE_COLS.includes(t.kanban_column) && t.assigned_to === user?.id)
+      .sort((a, b) => new Date(doneAt(b)).getTime() - new Date(doneAt(a)).getTime())
       .slice(0, 5);
   }, [tasks, user?.id]);
 
   const getTasksForDay = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     return myTasks.filter(t => {
-      if (t.kanban_column === 'aprovado') return t.completed_at?.startsWith(dateStr);
+      if (DONE_COLS.includes(t.kanban_column)) return t.completed_at?.startsWith(dateStr);
       if (t.kanban_column === 'executando' && t.started_at) return t.started_at.startsWith(dateStr);
-      return t.created_at?.startsWith(dateStr) && !['aprovado'].includes(t.kanban_column);
+      return t.created_at?.startsWith(dateStr) && !DONE_COLS.includes(t.kanban_column);
     });
   };
 
@@ -1163,7 +1170,7 @@ export default function DesignerDashboard() {
                     )}
                     {dayTasks.slice(0, 5).map(task => {
                       const taskColor = task.clients?.color || '217 91% 60%';
-                      const isApproved = task.kanban_column === 'aprovado';
+                      const isApproved = DONE_COLS.includes(task.kanban_column);
                       const ds = getDesignDeadlineStatus(task);
                       return (
                         <motion.div

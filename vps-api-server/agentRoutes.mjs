@@ -1585,8 +1585,9 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
 
   // Card completo (o `pulse ver` deveria usar esta rota): campos da fila, prontidão, parecer,
   // histórico de ajustes, versões entregues e as últimas movimentações. Editor: card livre na
-  // Edição ou que é/foi dele; chefe e revisão: qualquer card.
-  app.get('/api/agent/tasks/:id', async (req, res) => {
+  // Edição ou que é/foi dele; chefe e revisão: qualquer card. O id só aceita hexadecimal e hífen:
+  // assim a rota não captura outros GET em /api/agent/tasks/<nome> que venham a ser criados.
+  app.get('/api/agent/tasks/:id([0-9a-fA-F-]+)', async (req, res) => {
     try {
       const agent = await verifyAgent(req);
       const id = String(req.params.id || '').trim();

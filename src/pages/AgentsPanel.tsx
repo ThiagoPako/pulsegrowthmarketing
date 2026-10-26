@@ -404,7 +404,7 @@ export default function AgentsPanel() {
             ) : (
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  {design.learning.approved} de {design.learning.reviews} artes aprovadas de primeira na Análise IA.
+                  {design.learning.reviews} parecer(es) da Análise IA: {design.learning.approved} aprovado(s), {design.learning.reviews - design.learning.approved} com ajustes.
                 </p>
                 <div className="space-y-1.5">
                   {design.learning.by_category.map((c) => {

@@ -16,7 +16,6 @@ import UserAvatar from '@/components/UserAvatar';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import jsPDF from 'jspdf';
 import pulseHeaderImg from '@/assets/pulse_header.png';
 import { exportReportPDF } from '@/lib/pdfExport';
 import type { UserRole } from '@/types';
@@ -491,6 +490,7 @@ export default function Reports() {
   };
 
   const generateDetailedCostsPDF = async () => {
+    const { default: jsPDF } = await import('jspdf');
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageW = 210;
     const margin = 15;
@@ -617,6 +617,7 @@ export default function Reports() {
 
   // ── PDF Generation ──
   const generatePDF = async () => {
+    const { default: jsPDF } = await import('jspdf');
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageW = 210;
     const margin = 15;

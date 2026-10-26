@@ -1,4 +1,3 @@
-import jsPDF from 'jspdf';
 
 export type KPI = { label: string; value: string; sub?: string };
 export type TableSpec = { title: string; headers: string[]; rows: (string | number)[][] };
@@ -20,7 +19,8 @@ const PAGE_H = 297;
  * Simple, dependency-light PDF generator for KPI + table reports.
  * Uses only jsPDF core (no autotable) to keep bundle minimal.
  */
-export function exportReportPDF(opts: Options) {
+export async function exportReportPDF(opts: Options): Promise<void> {
+  const { default: jsPDF } = await import('jspdf');
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   let y = MARGIN;
 

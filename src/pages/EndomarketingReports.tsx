@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { FileDown, FileText, BarChart3, DollarSign } from 'lucide-react';
-import jsPDF from 'jspdf';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -63,7 +62,8 @@ export default function EndomarketingReports() {
     return [...map.values()];
   }, [filteredContracts, filteredTasks]);
 
-  const exportPDF = (type: 'delivery' | 'financial' | 'general') => {
+  const exportPDF = async (type: 'delivery' | 'financial' | 'general') => {
+    const { default: jsPDF } = await import('jspdf');
     const doc = new jsPDF();
     const pageW = doc.internal.pageSize.getWidth();
     let y = 20;

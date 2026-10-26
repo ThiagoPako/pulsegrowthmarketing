@@ -1,4 +1,3 @@
-import jsPDF from 'jspdf';
 import type { Client, DayOfWeek } from '@/types';
 import { DAY_LABELS } from '@/types';
 import { NICHE_OPTIONS } from '@/lib/seasonalDates';
@@ -6,6 +5,8 @@ import { NICHE_OPTIONS } from '@/lib/seasonalDates';
 const HEADER_URL = '/roteiro-header.pdf';
 
 export async function generateClientCardPdf(client: Client, videomakerName: string) {
+  // jsPDF (~400 kB) só baixa no clique, não junto com a tela de Clientes
+  const { default: jsPDF } = await import('jspdf');
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 15;

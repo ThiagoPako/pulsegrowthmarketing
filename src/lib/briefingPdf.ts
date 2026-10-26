@@ -1,4 +1,3 @@
-import jsPDF from 'jspdf';
 import { parseEditorial } from './editorialFormatter';
 import pulseHeader from '@/assets/pulse_header.png';
 import pulseLogo from '@/assets/pulse_logo.png';
@@ -149,6 +148,7 @@ export async function generateBriefingPdf(opts: {
   const { companyName, responsiblePerson, niche, city, briefingData, editorial, submittedAt } = opts;
   const data = briefingData && typeof briefingData === 'object' ? briefingData : {};
 
+  const { default: jsPDF } = await import('jspdf');
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();

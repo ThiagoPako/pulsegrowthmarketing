@@ -1,4 +1,4 @@
-import { jsPDF } from 'jspdf';
+import type { jsPDF } from 'jspdf';
 import { toast } from 'sonner';
 import pulseHeader from '@/assets/pulse_header.png';
 import pulseLogo from '@/assets/pulse_logo.png';
@@ -130,7 +130,8 @@ export async function downloadArtsAsPdf(
     return;
   }
 
-  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const { jsPDF: JsPDF } = await import('jspdf');
+  const pdf = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const margin = 10;

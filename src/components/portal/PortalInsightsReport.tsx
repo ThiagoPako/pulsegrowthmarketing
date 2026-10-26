@@ -42,7 +42,7 @@ export function PortalInsightsReport({ open, onOpenChange, clientName, accountNa
   const toggle = (id: string) =>
     setSelected(prev => (prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]));
 
-  const handleExport = () => {
+  const handleExport = async () => {
     const kpis: KPI[] = chosen.map(m => ({ label: m.label, value: nf(m.value) }));
     const posts = [...data.posts]
       .sort((a, b) => (b.reach ?? 0) - (a.reach ?? 0))
@@ -56,7 +56,7 @@ export function PortalInsightsReport({ open, onOpenChange, clientName, accountNa
         nf(p.comments),
       ]);
 
-    exportReportPDF({
+    await exportReportPDF({
       title: `Relatório de Instagram · ${clientName}`,
       subtitle: accountName ? `Conta @${accountName}` : undefined,
       period: { start: formatDate(period.since), end: formatDate(period.until) },

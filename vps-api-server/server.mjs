@@ -15304,9 +15304,8 @@ app.post('/api/presence/heartbeat', async (req, res) => {
   const auth = await presenceRequestUser(req);
   if (!auth) return res.status(401).json({ error: 'Unauthorized' });
   const userId = auth.ownId(req.body?.userId) || String(auth.user.id);
-  setPresenceHeartbeat(userId);
-  // Broadcast to WebSocket clients
-  broadcastPresence();
+  // Broadcast to WebSocket clients só na entrada (o resto vai na sincronização de 30 s)
+  if (setPresenceHeartbeat(userId)) broadcastPresence();
   res.json({ ok: true });
 });
 
@@ -16532,14 +16531,17 @@ function broadcastQuickMessage(payload) {
   }
 }
 
+/** Grava o sinal de presença. true quando a pessoa acabou de entrar (não estava online). */
 function setPresenceHeartbeat(userId) {
   const now = new Date().toISOString();
   const existing = presenceState.get(userId);
+  const wasOnline = Boolean(existing) && Date.now() - getPresenceHeartbeatTime(existing) < ONLINE_PRESENCE_MS;
   presenceState.set(userId, {
     userId,
     heartbeatAt: now,
-    connectedAt: existing?.connectedAt || now,
+    connectedAt: wasOnline ? (existing?.connectedAt || now) : now,
   });
+  return !wasOnline;
 }
 
 wssOffice.on('connection', (ws) => {
@@ -16575,8 +16577,9 @@ wssOffice.on('connection', (ws) => {
       const ownId = (id) => (id && ws._pulseIds?.has(String(id)) ? String(id) : null);
       if (data.type === 'heartbeat') {
         const userId = ownId(data.userId) || ws._pulseUser.id;
-        setPresenceHeartbeat(userId);
-        broadcastPresence();
+        // Só avisa todo mundo quando alguém entra; o resto vai na sincronização de 30 s
+        // (antes cada sinal mandava a lista inteira para todos: tráfego N²).
+        if (setPresenceHeartbeat(userId)) broadcastPresence();
       } else if (data.type === 'leave') {
         const userId = ownId(data.userId) || ws._pulseUser.id;
         presenceState.delete(userId);
@@ -16716,12 +16719,11 @@ function emitRealtime(channel, event, payload) {
 }
 globalThis.emitRealtime = emitRealtime;
 
-// Clean stale presence every 30s
+// A cada 30 s: limpa quem parou de dar sinal e manda a lista atualizada (com os
+// horários do último sinal) para todos. Entradas e saídas saem na hora.
 setInterval(() => {
-  const before = presenceState.size;
   collectOnlinePresenceUsers();
-  const changed = presenceState.size !== before;
-  if (changed) broadcastPresence();
+  broadcastPresence();
 }, 30_000);
 
 // ═══════════════════════════════════════════════════════════════

@@ -61,7 +61,7 @@ interface Agent {
   email: string | null;
 }
 
-const ROLE_LABELS: Record<string, string> = { editor: 'Editor', revisor: 'Revisão', chefe: 'Chefe' };
+const ROLE_LABELS: Record<string, string> = { editor: 'Editor', revisor: 'Revisão', chefe: 'Chefe', designer: 'Designer', revisor_arte: 'Revisão de artes' };
 const ONLINE_MS = 15 * 60 * 1000;
 const PULSE_CMD = 'node ~/Movies/"OPEN CUT"/ferramentas/sistema/pulse.mjs conectar';
 

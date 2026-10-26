@@ -205,6 +205,8 @@ export default function VirtualOffice() {
             : job.column === 'edicao' ? 'edicao'
             : job.roles.includes('revisor') ? 'revisao'
             : job.roles.includes('chefe') ? 'gestao'
+            // agente de design (pulse arte etapa): "Criando arte" no Ateliê
+            : job.roles.includes('designer') ? 'designing'
             : 'edicao',
         };
       }

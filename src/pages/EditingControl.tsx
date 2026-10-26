@@ -43,6 +43,14 @@ const CONTENT_TYPE_LABELS: Record<string, string> = {
   produto: 'Produto',
 };
 
+// Fila = card de edição sem dono e sem timer, ou alteração ainda não iniciada. Card de edição já
+// atribuído a alguém (marcado ou distribuído), mas ainda não iniciado, fica na coluna do editor:
+// entrar em Edição não liga mais o timer, então editing_started_at sozinho não diz se o card tem dono.
+function isQueueTask(t: EditingTask) {
+  return (t.kanban_column === 'edicao' && !t.editing_started_at && !t.assigned_to) ||
+    (t.kanban_column === 'alteracao' && !t.editing_started_at);
+}
+
 export default function EditingControl() {
   const { clients, users } = useApp();
   const { user } = useAuth();
@@ -84,12 +92,9 @@ export default function EditingControl() {
     return () => clearInterval(interval);
   }, [activeCity, cityLoading]);
 
-  // Queue = tasks in edicao/alteracao with no editing_started_at (not yet picked up)
+  // Queue = tasks in edicao/alteracao with no editing_started_at (not yet picked up) — ver isQueueTask
   const queueTasks = useMemo(() =>
-    tasks.filter(t =>
-      (t.kanban_column === 'edicao' || t.kanban_column === 'alteracao') &&
-      !t.editing_started_at
-    ).sort((a, b) => {
+    tasks.filter(isQueueTask).sort((a, b) => {
       // Priority first, then immediate alteration, then by date
       if (a.editing_priority !== b.editing_priority) return a.editing_priority ? -1 : 1;
       if (a.immediate_alteration !== b.immediate_alteration) return a.immediate_alteration ? -1 : 1;
@@ -104,8 +109,8 @@ export default function EditingControl() {
     editors.forEach(e => { map[e.id] = []; });
 
     tasks.forEach(t => {
-      // Skip queue tasks (edicao/alteracao without editing started)
-      if ((t.kanban_column === 'edicao' || t.kanban_column === 'alteracao') && !t.editing_started_at) return;
+      // Skip queue tasks (edicao sem dono / alteracao without editing started)
+      if (isQueueTask(t)) return;
 
       const editorId = t.edited_by || t.assigned_to;
       if (editorId && map[editorId]) {

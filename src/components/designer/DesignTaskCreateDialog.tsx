@@ -120,14 +120,21 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
         position: 0, // Posicionamento inicial seguro no topo
       } as any);
 
-      // Notify designers
-      await supabase.rpc('notify_role', {
-        _role: 'fotografo',
-        _title: 'Nova tarefa de design',
-        _message: `Nova tarefa: ${title}`,
-        _type: 'design',
-        _link: '/designer',
-      });
+      // Notify designers: o painel de design atende os cargos 'designer' e 'fotografo'
+      // (antes só o 'fotografo' era avisado). Falha no aviso não desfaz a demanda criada.
+      for (const role of ['designer', 'fotografo']) {
+        try {
+          await supabase.rpc('notify_role', {
+            _role: role,
+            _title: 'Nova tarefa de design',
+            _message: `Nova tarefa: ${title}`,
+            _type: 'design',
+            _link: '/designer',
+          });
+        } catch (err) {
+          console.warn('[design] falha ao avisar o cargo', role, err);
+        }
+      }
 
       setClientId('');
       setProspectName('');

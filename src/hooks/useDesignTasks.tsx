@@ -90,6 +90,24 @@ export function getConflictingExecutingTasks(tasks: DesignTask[], taskId: string
   );
 }
 
+// ── Prazo (due_date) ──
+// O prazo é uma data (YYYY-MM-DD). new Date('YYYY-MM-DD') é meia-noite UTC, ou seja, 21h do
+// dia anterior em Brasília: o card ficava "atrasado" no próprio dia e mostrava o dia anterior.
+
+/** Prazo como data local (meia-noite do dia do prazo). */
+export function parseDueDate(value?: string | null): Date | null {
+  if (!value) return null;
+  const m = String(value).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+/** Prazo formatado em pt-BR ('' sem prazo). */
+export function formatDueDate(value?: string | null): string {
+  const d = parseDueDate(value);
+  return d ? d.toLocaleDateString('pt-BR') : '';
+}
+
 // Persistência local pra primeira renderização instantânea entre reloads/navegações.
 // Guarda por cidade e limita ao que é útil pro kanban/painel.
 const LS_KEY = (city: string) => `pulse:design-tasks:${city || 'default'}`;

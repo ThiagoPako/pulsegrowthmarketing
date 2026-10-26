@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BookOpen } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/vpsDb';
-import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn, stopTimerFields, hasOpenTimer, getConflictingExecutingTasks } from '@/hooks/useDesignTasks';
+import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn, stopTimerFields, hasOpenTimer, getConflictingExecutingTasks, parseDueDate, formatDueDate } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -1098,14 +1098,14 @@ export default function DesignerKanban() {
 
 /* ── Agendamentos View: tasks grouped by due_date ── */
 function AgendamentosView({ tasks, onOpen }: { tasks: DesignTask[]; onOpen: (id: string) => void }) {
-  const COMPLETED_COLS = ['em_analise', 'enviar_cliente', 'aprovado'];
+  const COMPLETED_COLS = ['em_analise', 'enviar_cliente', 'aprovado', 'postado'];
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
   const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7);
 
   const scheduled = tasks
-    .filter(t => t.due_date && !COMPLETED_COLS.includes(t.kanban_column))
-    .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime());
+    .filter(t => parseDueDate(t.due_date) && !COMPLETED_COLS.includes(t.kanban_column))
+    .sort((a, b) => parseDueDate(a.due_date)!.getTime() - parseDueDate(b.due_date)!.getTime());
 
   const groups: { label: string; tone: string; items: DesignTask[] }[] = [
     { label: '⚠️ Atrasados', tone: 'text-red-600 border-red-500/40', items: [] },
@@ -1116,7 +1116,7 @@ function AgendamentosView({ tasks, onOpen }: { tasks: DesignTask[]; onOpen: (id:
   ];
 
   scheduled.forEach(t => {
-    const d = new Date(t.due_date!); d.setHours(0, 0, 0, 0);
+    const d = parseDueDate(t.due_date)!;
     if (d < today) groups[0].items.push(t);
     else if (d.getTime() === today.getTime()) groups[1].items.push(t);
     else if (d.getTime() === tomorrow.getTime()) groups[2].items.push(t);
@@ -1151,7 +1151,7 @@ function AgendamentosView({ tasks, onOpen }: { tasks: DesignTask[]; onOpen: (id:
                   <p className="text-[11px] text-muted-foreground truncate">{t.clients?.company_name} • {FORMAT_LABELS[t.format_type] || t.format_type}</p>
                 </div>
                 <Badge variant="outline" className="text-[10px] shrink-0">
-                  <Calendar size={10} className="mr-1" /> {new Date(t.due_date!).toLocaleDateString('pt-BR')}
+                  <Calendar size={10} className="mr-1" /> {formatDueDate(t.due_date)}
                 </Badge>
                 <Badge className={`text-[10px] shrink-0 ${PRIORITY_CONFIG[t.priority]?.color}`}>{PRIORITY_CONFIG[t.priority]?.label}</Badge>
                 <Badge variant="secondary" className="text-[10px] shrink-0">{DESIGN_COLUMNS.find(c => c.key === t.kanban_column)?.label}</Badge>
@@ -1331,8 +1331,9 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
   
   const COMPLETED_COLS = ['em_analise', 'enviar_cliente', 'aprovado', 'postado'];
-  const isOverdue = task.due_date && new Date(task.due_date) < new Date() && !COMPLETED_COLS.includes(task.kanban_column);
-  const formattedDueDate = task.due_date && !COMPLETED_COLS.includes(task.kanban_column) ? new Date(task.due_date).toLocaleDateString('pt-BR') : null;
+  // Mesma regra do filtro "Atrasados": só depois do dia do prazo (comparando datas, não horários)
+  const isOverdue = isDesignTaskOverdue(task);
+  const formattedDueDate = task.due_date && !COMPLETED_COLS.includes(task.kanban_column) ? formatDueDate(task.due_date) || null : null;
   const isNext = queueIndex === 1 && columnKey === 'nova_tarefa';
 
   return (

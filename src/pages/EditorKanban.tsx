@@ -7,6 +7,10 @@ import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/Con
 import KanbanColumnJumpBar, { kanbanColumnDomId } from '@/components/kanban/KanbanColumnJumpBar';
 import { useAgentIds } from '@/hooks/useAgentIds';
 import { agentReviewOf, agentWorkState, matchesOwnerFilter, OWNER_FILTER_OPTIONS, type OwnerFilter } from '@/lib/agentCardStatus';
+import {
+  ANALYSIS_FORBIDDEN_MSG, EDITING_NEEDS_FOOTAGE_MSG, SEND_TO_CLIENT_FORBIDDEN_MSG,
+  canReleaseAnalysis, isContentManager, missingFootageForEditing,
+} from '@/lib/contentKanbanRules';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth, profileHasRole, profileOwnsUserId } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
@@ -502,6 +506,7 @@ export default function EditorKanban() {
 
   const { profile } = useAuth();
   const isEditorRole = profileHasRole(profile, 'editor', 'videomaker');
+  const isManager = isContentManager(profile);
   // Todos os videomakers têm a mesma visão completa da bancada (igual admin/editor multi-função)
   const hasFullBenchAccess = profileHasRole(profile, 'admin', 'gestor_projetos', 'videomaker');
 
@@ -603,9 +608,15 @@ export default function EditorKanban() {
   };
 
   // ─── VALIDATION RULES ─────────────────────────────────────
+  // Decisões do dono (26/10/2026): a gestão (admin, social media, gestor de projetos) move qualquer
+  // card e manda ao cliente; editor e videomaker só nas colunas deles; outros papéis só visualizam.
   const validateTransition = (task: EditorTask, targetColumn: string): string | null => {
+    if (!isManager) {
+      if (targetColumn === 'envio') return SEND_TO_CLIENT_FORBIDDEN_MSG;
+      if (!isEditorRole) return 'Seu papel só visualiza este quadro: quem move os cards é a gestão.';
+    }
     // Editor role restrictions: can only interact with edicao and alteracao
-    if (isEditorRole) {
+    if (isEditorRole && !isManager) {
       // Editor can move: edicao→revisao, alteracao→revisao (sending finished work)
       // Editor CANNOT move: revisao→anywhere (that's for admin/social_media)
       // Editor CANNOT move: envio→anywhere
@@ -624,6 +635,14 @@ export default function EditorKanban() {
       if (targetColumn !== 'revisao' && targetColumn !== 'edicao' && targetColumn !== 'alteracao') {
         return 'Editores só podem enviar para Revisão ou mover entre Edição e Alteração.';
       }
+    }
+    // Análise: liberar para a revisão humana ou devolver é do admin e da social media (e da chefe IA)
+    if (task.kanban_column === 'pre_revisao' && targetColumn !== 'pre_revisao' && !canReleaseAnalysis(profile)) {
+      return ANALYSIS_FORBIDDEN_MSG;
+    }
+    // Para entrar em Edição só o link dos brutos é obrigatório; o card entra livre na fila
+    if (targetColumn === 'edicao' && task.kanban_column !== 'edicao' && missingFootageForEditing(task)) {
+      return EDITING_NEEDS_FOOTAGE_MSG;
     }
     // Moving to revisao requires edited_video_link
     if (targetColumn === 'revisao' && !task.edited_video_link) {
@@ -712,6 +731,11 @@ export default function EditorKanban() {
     // Always ensure edited_by is set when an editor interacts with a task
     if (isEditorRole && !task.edited_by && user) {
       updateData.edited_by = user.id;
+    }
+    // Entrar em Edição sem alguém pegando agora: o card entra livre na fila (humanos e agentes pegam)
+    if (targetColumn === 'edicao' && !shouldAutoClaim && !startsEditing) {
+      updateData.assigned_to = null;
+      if (task.agent_step) { updateData.agent_step = null; updateData.agent_heartbeat_at = null; }
     }
     // Guarda atômica: card que estava livre só muda se ainda estiver livre (ninguém pegou no meio)
     const guardUnassigned = isEditorRole && !task.assigned_to;

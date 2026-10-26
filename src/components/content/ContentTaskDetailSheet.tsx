@@ -29,6 +29,10 @@ import AgentReviewBadge from '@/components/kanban/AgentReviewBadge';
 import AgentReadinessBadge from '@/components/kanban/AgentReadinessBadge';
 import { useAgentIds } from '@/hooks/useAgentIds';
 import { agentReviewOf, agentWorkState } from '@/lib/agentCardStatus';
+import {
+  ANALYSIS_FORBIDDEN_MSG, EDITING_NEEDS_FOOTAGE_MSG, SEND_TO_CLIENT_FORBIDDEN_MSG,
+  canReleaseAnalysis, isContentManager, missingFootageForEditing,
+} from '@/lib/contentKanbanRules';
 
 import ClientLogo from '@/components/ClientLogo';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -734,7 +738,8 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
   // ─── LIVE REVIEWING PRESENCE ──────────────────────────────
   // Only admin and social_media should mark as "reviewing" — editors don't review
-  const canReview = profile?.role === 'admin' || profile?.role === 'social_media';
+  // Revisar e mandar ao cliente é da gestão: admin, social media e gestor de projetos (decisão do dono)
+  const canReview = isContentManager(profile);
   useEffect(() => {
     if (!open || !task?.id || task.kanban_column !== 'revisao' || !user?.id || !profile?.name || !canReview) return;
 
@@ -897,6 +902,8 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
   // ─── ACTIONS ──────────────────────────────────────────────
   const handleApprove = async () => {
+    // Mandar ao cliente é da gestão (o servidor também recusa os outros papéis)
+    if (!isContentManager(profile)) { toast.error(SEND_TO_CLIENT_FORBIDDEN_MSG); return; }
     const isReviewer = profile?.role === 'admin' || profile?.role === 'social_media';
     const saved = await saveTask({
       kanban_column: 'envio',
@@ -917,6 +924,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
   const handleRequestAdjustments = async () => {
     if (!adjustmentNotes.trim()) { toast.error('Descreva os ajustes'); return; }
+    if (task.kanban_column === 'pre_revisao' && !canReleaseAnalysis(profile)) { toast.error(ANALYSIS_FORBIDDEN_MSG); return; }
     const isReviewer = profile?.role === 'admin' || profile?.role === 'social_media';
     const saved = await saveTask({
       kanban_column: 'alteracao',
@@ -1235,8 +1243,12 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       await splitOptimizationIntoCards();
       return;
     }
-    if (targetColumn === 'edicao' && !task.drive_link) {
-      toast.error('Adicione o link dos materiais (Drive) primeiro');
+    // Mesmas regras do Kanban (decisões do dono): envio ao cliente é da gestão; a Análise, do admin e da social media
+    if (targetColumn === 'envio' && !isContentManager(profile)) { toast.error(SEND_TO_CLIENT_FORBIDDEN_MSG); return; }
+    if (task.kanban_column === 'pre_revisao' && !canReleaseAnalysis(profile)) { toast.error(ANALYSIS_FORBIDDEN_MSG); return; }
+    // Para entrar em Edição só os brutos são obrigatórios; o card entra livre na fila
+    if (targetColumn === 'edicao' && missingFootageForEditing(task)) {
+      toast.error(EDITING_NEEDS_FOOTAGE_MSG);
       return;
     }
     if (targetColumn === 'revisao' && !task.edited_video_link) {
@@ -1245,7 +1257,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     }
     const saved = await saveTask({
       kanban_column: targetColumn,
-      ...(targetColumn === 'revisao' ? { assigned_to: null } : {}),
+      ...(targetColumn === 'revisao' || targetColumn === 'edicao' ? { assigned_to: null } : {}),
       updated_at: new Date().toISOString(),
     }, 'mover o cartão');
     if (!saved) return;
@@ -1751,13 +1763,13 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
                   {/* Role-based action permissions */}
                   {(() => {
-                    const role = profile?.role || '';
                     const isEditor = profileHasRole(profile, 'editor');
                     const isVideomaker = profileHasRole(profile, 'videomaker');
                     const isEditingOperator = profileHasRole(profile, 'editor', 'videomaker');
-                    const isAdmin = role === 'admin';
-                    const isSocialMedia = role === 'social_media';
-                    const canManage = isAdmin || isSocialMedia;
+                    // Gestão (admin, social media, gestor de projetos) move qualquer card e manda ao cliente;
+                    // a Análise é liberada ou devolvida pelo admin e pela social media (decisões do dono)
+                    const canManage = isContentManager(profile);
+                    const canLiberate = canReleaseAnalysis(profile);
 
                     return (
                       <>
@@ -1810,11 +1822,12 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                         )}
 
                         {/* Finalizar Etapa buttons - role restricted */}
-                        {task.kanban_column === 'ideias' && !isEditor && (
+                        {/* Ideias e Captação: gestão e videomaker (os outros papéis só consultam) */}
+                        {task.kanban_column === 'ideias' && (canManage || isVideomaker) && (
                           <RocketLaunchButton label="Captação" onClick={() => handleMoveToNext('captacao')} />
                         )}
 
-                        {task.kanban_column === 'captacao' && !isEditor && (
+                        {task.kanban_column === 'captacao' && (canManage || isVideomaker) && (
                           <RocketLaunchButton label="Edição" onClick={() => handleMoveToNext('edicao')} disabled={!task.drive_link} />
                         )}
 
@@ -1822,8 +1835,8 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                           <RocketLaunchButton label="Revisão" onClick={() => handleMoveToNext('revisao')} />
                         )}
 
-                        {/* Análise: a chefe (IA) libera ou devolve pelo `pulse mover`; o admin pode fazer por aqui */}
-                        {task.kanban_column === 'pre_revisao' && isAdmin && (
+                        {/* Análise: a chefe (IA) libera ou devolve pelo `pulse mover`; admin e social media também, por aqui */}
+                        {task.kanban_column === 'pre_revisao' && canLiberate && (
                           <>
                             <Button size="sm" className="w-full gap-2 justify-start bg-teal-600 hover:bg-teal-700" onClick={() => handleMoveToNext('revisao')}>
                               <CheckCircle2 size={14} /> Liberar para a Revisão da equipe
@@ -1838,7 +1851,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                             </Button>
                           </>
                         )}
-                        {task.kanban_column === 'pre_revisao' && !isAdmin && (
+                        {task.kanban_column === 'pre_revisao' && !canLiberate && (
                           <div className="p-3 rounded-lg bg-muted/50 border border-border">
                             <p className="text-xs text-muted-foreground text-center">
                               🤖 Aguardando o parecer do revisor IA e a liberação da chefe

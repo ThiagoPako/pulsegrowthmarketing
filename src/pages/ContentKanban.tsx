@@ -7,9 +7,13 @@ import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/Con
 import KanbanColumnJumpBar, { kanbanColumnDomId } from '@/components/kanban/KanbanColumnJumpBar';
 import { useAgentIds } from '@/hooks/useAgentIds';
 import { agentReviewOf, agentWorkState, matchesOwnerFilter, OWNER_FILTER_OPTIONS, type OwnerFilter } from '@/lib/agentCardStatus';
+import {
+  ANALYSIS_FORBIDDEN_MSG, EDITING_NEEDS_FOOTAGE_MSG, SEND_TO_CLIENT_FORBIDDEN_MSG,
+  canReleaseAnalysis, isContentManager, missingFootageForEditing,
+} from '@/lib/contentKanbanRules';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, profileHasRole } from '@/hooks/useAuth';
 import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
 import { useCity, CITY_LABELS, type CityCode } from '@/contexts/CityContext';
 
@@ -651,6 +655,30 @@ export default function ContentKanban() {
     const enteringColumn = editingTask
       ? (editingTask.kanban_column !== payload.kanban_column ? payload.kanban_column : null)
       : payload.kanban_column;
+    // Trocar a coluna pelo "Editar" passa pelas mesmas regras do arrastar, para todos os papéis
+    // (papel, Análise, brutos para Edição, vídeo para Revisão). Antes só editor/videomaker.
+    if (editingTask && enteringColumn) {
+      const transitionError = validateKanbanTransition(
+        { ...editingTask, ...payload, kanban_column: editingTask.kanban_column } as ContentTask,
+        enteringColumn
+      );
+      if (transitionError) { toast.error(transitionError); return; }
+    }
+    if (!editingTask) {
+      // Card novo fora da coluna em que o diálogo abriu: mesmas regras do arrastar
+      if (isRestricted && payload.kanban_column !== dialogInitialColumn) {
+        const transitionError = validateKanbanTransition(
+          { ...payload, kanban_column: dialogInitialColumn } as ContentTask,
+          payload.kanban_column
+        );
+        if (transitionError) { toast.error(transitionError); return; }
+      }
+      // Card novo direto em Edição também precisa dos brutos (entra livre na fila)
+      if (payload.kanban_column === 'edicao' && missingFootageForEditing(payload)) {
+        toast.error(EDITING_NEEDS_FOOTAGE_MSG);
+        return;
+      }
+    }
     if (enteringColumn === 'alteracao') {
       toast.error('Para mandar para Alteração use "Ajustes" no card: o editor precisa saber o que mudar.');
       return;
@@ -671,15 +699,7 @@ export default function ContentKanban() {
         payload.kanban_column = 'acompanhamento';
       }
       const columnChanged = editingTask.kanban_column !== payload.kanban_column;
-      // Editor/videomaker: trocar a coluna pelo "Editar" passa pelas mesmas regras do arrastar.
-      // Antes dava para levar o card direto para "Enviado p/ Cliente" pulando a revisão.
-      if (columnChanged && isRestricted) {
-        const transitionError = validateKanbanTransition(
-          { ...editingTask, ...payload, kanban_column: editingTask.kanban_column } as ContentTask,
-          payload.kanban_column
-        );
-        if (transitionError) { toast.error(transitionError); return; }
-      }
+      // (a troca de coluna já passou pelas regras do arrastar lá em cima)
       const { error } = await supabase.from('content_tasks').update(payload).eq('id', editingTask.id);
       if (error) { toast.error(`Não foi possível salvar o cartão${error.message ? `: ${error.message}` : '. Tente de novo.'}`); return; }
       toast.success(payload.kanban_column === 'acompanhamento' && editingTask.kanban_column === 'agendamentos'
@@ -702,14 +722,7 @@ export default function ContentKanban() {
         await supabase.from('scripts').update({ recorded: true } as any).eq('id', formScriptId);
       }
     } else {
-      // Card novo de editor/videomaker fora da coluna em que o diálogo abriu: mesmas regras do arrastar
-      if (isRestricted && payload.kanban_column !== dialogInitialColumn) {
-        const transitionError = validateKanbanTransition(
-          { ...payload, kanban_column: dialogInitialColumn } as ContentTask,
-          payload.kanban_column
-        );
-        if (transitionError) { toast.error(transitionError); return; }
-      }
+      // (as regras do card novo já foram conferidas lá em cima)
       payload.created_by = user?.id || null;
       payload.position = tasksByColumn[formColumn]?.length || 0;
       const { data: inserted, error } = await supabase.from('content_tasks').insert(payload).select().single();
@@ -807,7 +820,8 @@ export default function ContentKanban() {
 
     const result = await updateTaskRow(draggedTask.id, {
       kanban_column: targetColumn,
-      ...(targetColumn === 'revisao' ? { assigned_to: null } : {}),
+      // Revisão tira o editor; Edição entra livre na fila (humanos e agentes pegam)
+      ...(targetColumn === 'revisao' || targetColumn === 'edicao' ? { assigned_to: null } : {}),
       updated_at: new Date().toISOString(),
     });
 
@@ -824,28 +838,36 @@ export default function ContentKanban() {
     setDraggedTask(null);
   };
 
-  // ─── EXECUTION COLUMNS THAT REQUIRE assigned_to ────────────
-  // Note: alteracao does NOT require assigned_to — editor is only assigned when they click "Iniciar Alteração"
-  const EXECUTION_COLUMNS = ['edicao'];
-
   // ─── ROLE-BASED COLUMN PERMISSIONS ────────────────────────
+  // Decisão do dono (26/10/2026): só a gestão (admin, social media, gestor de projetos) move qualquer
+  // card e manda para "Enviado p/ Cliente". Editor e videomaker movem só nas colunas deles; os
+  // outros papéis só visualizam. O servidor também recusa o envio ao cliente de quem não é da gestão.
   const ROLE_ALLOWED_COLUMNS: Record<string, string[]> = {
     editor: ['edicao', 'alteracao', 'revisao'], // editor can move to edicao/alteracao/revisao only
-    videomaker: ['ideias', 'captacao', 'alteracao', 'revisao'], // videomaker also handles alteração de stories
+    // videomaker: Ideias/Captação, entrega para Edição (com os brutos) e alteração de stories
+    videomaker: ['ideias', 'captacao', 'edicao', 'alteracao', 'revisao'],
   };
 
-  const userRole = profile?.role || '';
-  const isRestricted = userRole === 'editor' || userRole === 'videomaker';
+  const isManager = isContentManager(profile);
+  // Papel que vale para as regras do quadro: a gestão pelo papel principal; fora dela, editor ou
+  // videomaker (também como papel adicional); qualquer outro só visualiza
+  const userRole = isManager
+    ? (profile?.role || '')
+    : profileHasRole(profile, 'editor') ? 'editor'
+      : profileHasRole(profile, 'videomaker') ? 'videomaker'
+        : (profile?.role || '');
+  const isRestricted = !isManager;
 
   // All columns visible to everyone (view-only for non-permitted columns)
   const visibleColumns = useMemo(() => [...KANBAN_COLUMNS], []);
 
   // Columns where user can interact (drag, add, execute actions)
   const interactiveColumns = useMemo(() => {
+    if (isManager) return KANBAN_COLUMNS.map(c => c.id) as string[];
     if (userRole === 'editor') return ['edicao', 'revisao', 'alteracao'];
     if (userRole === 'videomaker') return ['ideias', 'captacao', 'alteracao', 'revisao'];
-    return KANBAN_COLUMNS.map(c => c.id) as string[];
-  }, [userRole]);
+    return [] as string[];
+  }, [isManager, userRole]);
 
   const isColumnInteractive = (colId: string) => interactiveColumns.includes(colId);
 
@@ -853,7 +875,9 @@ export default function ContentKanban() {
   const validateKanbanTransition = (task: ContentTask, targetColumn: string): string | null => {
     // Role-based restrictions
     if (isRestricted) {
+      if (targetColumn === 'envio') return SEND_TO_CLIENT_FORBIDDEN_MSG;
       const allowed = ROLE_ALLOWED_COLUMNS[userRole];
+      if (!allowed) return 'Seu papel só visualiza este quadro: quem move os cards é a gestão.';
       if (allowed && !allowed.includes(targetColumn)) {
         const roleLabel = userRole === 'editor' ? 'Editores' : 'Videomakers';
         return `${roleLabel} não têm permissão para mover cards para esta coluna.`;
@@ -875,13 +899,14 @@ export default function ContentKanban() {
         }
       }
     }
-    // Rule: tasks in execution columns MUST have a responsible person
-    if (EXECUTION_COLUMNS.includes(targetColumn) && !task.assigned_to) {
-      return 'Esta tarefa precisa ter um responsável atribuído antes de entrar em execução. Edite o card e selecione o responsável.';
+    // Análise: liberar para a revisão humana ou devolver é do admin e da social media (e da chefe IA)
+    if (task.kanban_column === 'pre_revisao' && targetColumn !== 'pre_revisao' && !canReleaseAnalysis(profile)) {
+      return ANALYSIS_FORBIDDEN_MSG;
     }
-    // captacao → edicao: needs drive_link (materiais brutos)
-    if (targetColumn === 'edicao' && task.kanban_column === 'captacao' && !task.drive_link) {
-      return 'O card precisa ter o link dos materiais brutos (Drive) para ir para edição';
+    // Para entrar em Edição só o link dos brutos é obrigatório. Antes exigia responsável, e quem era
+    // escolhido virava dono: o card saía da fila livre dos editores e dos agentes.
+    if (targetColumn === 'edicao' && task.kanban_column !== 'edicao' && missingFootageForEditing(task)) {
+      return EDITING_NEEDS_FOOTAGE_MSG;
     }
     // edicao → revisao: needs edited_video_link
     if (targetColumn === 'revisao' && !task.edited_video_link) {
@@ -1037,8 +1062,8 @@ export default function ContentKanban() {
       kanban_column: targetColumn,
       updated_at: new Date().toISOString(),
     };
-    // Clear assigned_to when moving to revisao or envio
-    if (targetColumn === 'revisao' || targetColumn === 'envio') {
+    // Clear assigned_to when moving to revisao or envio; Edição entra livre na fila (humanos e agentes pegam)
+    if (targetColumn === 'revisao' || targetColumn === 'envio' || targetColumn === 'edicao') {
       updatePayload.assigned_to = null;
     }
 
@@ -1400,17 +1425,18 @@ export default function ContentKanban() {
                             onEdit={() => openEdit(task)}
                             onDelete={(profile?.role === 'admin' || profile?.role === 'social_media') ? () => openDeleteConfirm(task) : undefined}
                             onCardClick={() => { setDetailTask(task); setDetailOpen(true); }}
-                            onConfirmPosted={task.kanban_column === 'acompanhamento' && !isRestricted ? () => handleConfirmPosted(task) : undefined}
-                            onApprove={task.kanban_column === 'revisao' && (userRole === 'admin' || userRole === 'social_media') ? () => handleApproveTask(task) : undefined}
-                            onRequestAdjustments={task.kanban_column === 'revisao' && (userRole === 'admin' || userRole === 'social_media') ? () => openAdjustmentDialog(task) : undefined}
-                            // Análise: quem decide é a chefe (IA) pelo `pulse mover`; o admin pode liberar ou devolver por aqui
-                            onReleaseAnalysis={task.kanban_column === 'pre_revisao' && userRole === 'admin' ? () => handleReleaseAnalysis(task) : undefined}
-                            onReturnAnalysis={task.kanban_column === 'pre_revisao' && userRole === 'admin' ? () => requestMove(task, 'alteracao') : undefined}
+                            onConfirmPosted={task.kanban_column === 'acompanhamento' && isManager ? () => handleConfirmPosted(task) : undefined}
+                            // Aprovar manda ao cliente: só a gestão (admin, social media, gestor de projetos)
+                            onApprove={task.kanban_column === 'revisao' && isManager ? () => handleApproveTask(task) : undefined}
+                            onRequestAdjustments={task.kanban_column === 'revisao' && isManager ? () => openAdjustmentDialog(task) : undefined}
+                            // Análise: quem decide é a chefe (IA) pelo `pulse mover`; admin e social media também, por aqui
+                            onReleaseAnalysis={task.kanban_column === 'pre_revisao' && canReleaseAnalysis(profile) ? () => handleReleaseAnalysis(task) : undefined}
+                            onReturnAnalysis={task.kanban_column === 'pre_revisao' && canReleaseAnalysis(profile) ? () => requestMove(task, 'alteracao') : undefined}
                             onAddDriveLink={(['captacao', 'edicao'].includes(task.kanban_column)) && userRole !== 'videomaker' || (userRole === 'videomaker' && task.kanban_column === 'captacao') ? () => openLinkDialog(task, 'drive') : undefined}
                             onAddVideoLink={(task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && userRole !== 'videomaker' ? () => openLinkDialog(task, 'video') : undefined}
                             onMoveToNext={
                               task.kanban_column === 'captacao' && task.drive_link && (userRole !== 'editor') ? () => handleMoveToNext(task, 'edicao') :
-                              task.kanban_column === 'envio' && (userRole === 'admin' || userRole === 'social_media') ? () => handleMoveToNext(task, 'agendamentos') :
+                              task.kanban_column === 'envio' && isManager ? () => handleMoveToNext(task, 'agendamentos') :
                               undefined
                             }
                             nextColumnLabel={
@@ -1418,8 +1444,8 @@ export default function ContentKanban() {
                               task.kanban_column === 'envio' ? 'Agendamentos' :
                               undefined
                             }
-                            onSchedule={task.kanban_column === 'agendamentos' && (userRole === 'admin' || userRole === 'social_media') ? () => openScheduleDialog(task) : undefined}
-                            onResubmit={task.kanban_column === 'alteracao' && (userRole === 'editor' || userRole === 'admin' || (userRole === 'videomaker' && task.content_type === 'story')) ? () => handleResubmitFromAlteracao(task) : undefined}
+                            onSchedule={task.kanban_column === 'agendamentos' && isManager ? () => openScheduleDialog(task) : undefined}
+                            onResubmit={task.kanban_column === 'alteracao' && (userRole === 'editor' || isManager || (userRole === 'videomaker' && task.content_type === 'story')) && agentWorkState(task, { agentIds })?.state !== 'working' ? () => handleResubmitFromAlteracao(task) : undefined}
                             onMoveForward={(() => {
                               if (isRestricted) {
                                 // Editor: Edição → Revisão (na Alteração o card já tem "Reenviar Revisão")
@@ -1434,7 +1460,7 @@ export default function ContentKanban() {
                               }
                               const arrow = flowArrow(task, 'forward');
                               // Alteração com "Reenviar Revisão" no card: a seta não repete
-                              if (!arrow || (task.kanban_column === 'alteracao' && userRole === 'admin')) return undefined;
+                              if (!arrow || task.kanban_column === 'alteracao') return undefined;
                               return () => requestMove(task, arrow.target);
                             })()}
                             onMoveBackward={(() => {
@@ -1460,7 +1486,8 @@ export default function ContentKanban() {
                               if (isRestricted) return undefined;
                               return flowArrow(task, 'backward')?.label;
                             })()}
-                            {...(isForeignTask(task) ? FOREIGN_TASK_NO_ACTIONS : {})}
+                            // Card de outra praça ou coluna em que o papel não atua: só consulta
+                            {...(isForeignTask(task) || !isColumnInteractive(col.id) ? FOREIGN_TASK_NO_ACTIONS : {})}
                           />
                         </motion.div>
                       ))}

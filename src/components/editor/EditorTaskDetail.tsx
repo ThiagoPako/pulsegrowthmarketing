@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/contexts/AppContext';
-import { useAuth, profileHasRole } from '@/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
+import { isContentManager } from '@/lib/contentKanbanRules';
 import { supabase } from '@/lib/vpsDb';
 import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
 import AgentReviewBadge from '@/components/kanban/AgentReviewBadge';
@@ -225,8 +226,8 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const [celebrationPoints, setCelebrationPoints] = useState(0);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const agentIds = useAgentIds();
-  // Mandar ao cliente (Revisão → Enviado) é da revisão: admin e social media
-  const canApprove = profileHasRole(profile, 'admin', 'social_media');
+  // Mandar ao cliente (Revisão → Enviado) é da gestão: admin, social media e gestor de projetos
+  const canApprove = isContentManager(profile);
   const agentBusy = !!agentWorkState(task as AgentCardFields, { agentIds });
 
   const client = clients.find(c => c.id === task.client_id);
@@ -1335,7 +1336,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
                 </motion.div>
               )}
               {task.kanban_column === 'revisao' && !canApprove && (
-                <p className="text-xs text-muted-foreground self-center">👁 Aguardando a revisão (Social Media ou Administrador)</p>
+                <p className="text-xs text-muted-foreground self-center">👁 Aguardando a revisão da gestão (admin, social media ou gestor de projetos)</p>
               )}
             </div>
           </div>

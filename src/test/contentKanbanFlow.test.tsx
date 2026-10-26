@@ -12,7 +12,7 @@ const SLOW = 30_000;
  */
 
 // vi.mock sobe para o topo do arquivo: os dados que os mocks usam também (vi.hoisted)
-const { CLIENT, BEA, ADMIN, TASKS } = vi.hoisted(() => {
+const { CLIENT, BEA, ADMIN, TASKS, AUTH } = vi.hoisted(() => {
   const CLIENT = 'client-1';
   const BEA = 'agent-bea';
   const ADMIN = 'admin-1';
@@ -35,8 +35,14 @@ const { CLIENT, BEA, ADMIN, TASKS } = vi.hoisted(() => {
     { ...base, id: 't-alt', title: 'Alteracao', kanban_column: 'alteracao', edited_by: BEA, edited_video_link: 'https://x/v.mp4', adjustment_notes: 'trocar musica', alteration_deadline: '2099-01-01T12:00:00Z' },
     { ...base, id: 't-envio', title: 'Enviado', kanban_column: 'envio', edited_by: BEA, edited_video_link: 'https://x/v.mp4' },
   ];
-  return { CLIENT, BEA, ADMIN, TASKS };
+  // Quem está logado (troca por teste; a referência fica estável durante a renderização)
+  const AUTH = { value: { user: { id: ADMIN }, profile: { id: ADMIN, name: 'Thiago Dono', role: 'admin', roles: ['admin'] } } };
+  return { CLIENT, BEA, ADMIN, TASKS, AUTH };
 });
+
+const loginAs = (id: string, role: string) => {
+  AUTH.value = { user: { id }, profile: { id, name: `Pessoa ${role}`, role, roles: [role] } };
+};
 
 vi.mock('@/lib/vpsDb', () => {
   const builder = () => {
@@ -72,10 +78,10 @@ vi.mock('@/contexts/AppContext', () => {
   return { useApp: () => value };
 });
 
-vi.mock('@/hooks/useAuth', async (importOriginal) => {
-  const value = { user: { id: ADMIN }, profile: { id: ADMIN, name: 'Thiago Dono', role: 'admin', roles: ['admin'] } };
-  return { ...(await importOriginal<typeof import('@/hooks/useAuth')>()), useAuth: () => value };
-});
+vi.mock('@/hooks/useAuth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/hooks/useAuth')>()),
+  useAuth: () => AUTH.value,
+}));
 
 vi.mock('@/contexts/CityContext', () => {
   const value = { activeCity: 'minacu', availableCities: ['minacu'], isLoading: false };
@@ -131,5 +137,32 @@ describe('Kanban de Conteúdo — ações por coluna e agentes', () => {
     fireEvent.click(within(cardOf('analise')).getByText('Devolver'));
     expect(await screen.findByText('Devolver da Análise para Alteração')).toBeInTheDocument();
     expect(screen.getByDisplayValue('00:08 titulo antes da fala')).toBeInTheDocument();
+  }, SLOW);
+
+  it('editor não aprova, não libera a Análise e não mexe em Enviado p/ Cliente', async () => {
+    loginAs('editor-1', 'editor');
+    try {
+      render(<MemoryRouter><ContentKanban /></MemoryRouter>);
+      await screen.findByText('Na analise', undefined, { timeout: 10_000 });
+      expect(within(cardOf('revisao')).queryByText('Aprovar e enviar')).toBeNull();
+      expect(within(cardOf('analise')).queryByText('Liberar p/ Revisão')).toBeNull();
+      expect(within(cardOf('envio')).queryByTitle(/Mover para/)).toBeNull();
+      // na coluna dele segue com a seta de entrega
+      expect(within(cardOf('free')).getByTitle('Mover para Revisão')).toBeInTheDocument();
+    } finally {
+      loginAs(ADMIN, 'admin');
+    }
+  }, SLOW);
+
+  it('gestor de projetos aprova e manda ao cliente, mas não libera a Análise', async () => {
+    loginAs('gestor-1', 'gestor_projetos');
+    try {
+      render(<MemoryRouter><ContentKanban /></MemoryRouter>);
+      await screen.findByText('Na analise', undefined, { timeout: 10_000 });
+      expect(within(cardOf('revisao')).getByText('Aprovar e enviar')).toBeInTheDocument();
+      expect(within(cardOf('analise')).queryByText('Liberar p/ Revisão')).toBeNull();
+    } finally {
+      loginAs(ADMIN, 'admin');
+    }
   }, SLOW);
 });

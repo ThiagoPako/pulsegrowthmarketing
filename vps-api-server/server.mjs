@@ -12043,6 +12043,7 @@ app.get('/api/design-tasks/fast', async (req, res) => {
       agent_heartbeat_at: row.agent_heartbeat_at ?? null,
       references_drive_link: row.references_drive_link ?? null,
       references_archived_at: row.references_archived_at ?? null,
+      posting_at: row.posting_at ?? null,
       clients: row.clients_company_name ? {
         company_name: row.clients_company_name,
         color: row.clients_color || '217 91% 60%',

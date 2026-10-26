@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import AgentFixBadge from '@/components/kanban/AgentFixBadge';
+import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
+import AgentReviewBadge from '@/components/kanban/AgentReviewBadge';
+import AgentReadinessBadge from '@/components/kanban/AgentReadinessBadge';
+import AdjustmentRequestDialog from '@/components/kanban/AdjustmentRequestDialog';
+import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
+import KanbanColumnJumpBar, { kanbanColumnDomId } from '@/components/kanban/KanbanColumnJumpBar';
+import { useAgentIds } from '@/hooks/useAgentIds';
+import { agentReviewOf, agentWorkState, matchesOwnerFilter, OWNER_FILTER_OPTIONS, type OwnerFilter } from '@/lib/agentCardStatus';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,7 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, ArrowLeft, Send, Eye, Maximize2, Rocket, Download, ChevronLeft, ChevronRight, ArrowDownUp } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, ArrowLeft, Send, Eye, Maximize2, Rocket, Download, ChevronLeft, ChevronRight, ArrowDownUp } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -181,8 +188,59 @@ interface ContentTask {
   prospect_name: string | null;
   /** Praça de origem da tarefa (usada na visualização multi-cidade). */
   city?: string | null;
-
+  /** Agente de IA com o card (gravado pela API dos agentes no pegar/etapa). */
+  agent_step?: string | null;
+  agent_heartbeat_at?: string | null;
+  /** Parecer do revisor IA na Análise (POST /api/agent/tasks/:id/review). */
+  agent_review_verdict?: string | null;
+  agent_review_notes?: string | null;
+  agent_review_at?: string | null;
+  agent_review_by?: string | null;
 }
+
+/** Ordem dos cards nas colunas: última movimentação ou prazo da etapa. */
+type SortMode = 'recent' | 'deadline';
+
+/** Prazo da etapa em que o card está (o mesmo que o selo de prazo mostra). */
+function columnDeadline(task: ContentTask): string | null {
+  switch (task.kanban_column) {
+    case 'edicao': return task.editing_deadline;
+    case 'revisao': return task.review_deadline;
+    case 'alteracao': return task.immediate_alteration ? null : task.alteration_deadline;
+    case 'envio': return task.approval_deadline;
+    case 'agendamentos':
+    case 'acompanhamento': return task.scheduled_recording_date;
+    default: return null;
+  }
+}
+
+/**
+ * Setas do card (papéis sem restrição): seguem o fluxo, não a coluna vizinha na tela. Antes a seta
+ * de Alteração mandava ao cliente pulando a revisão e a de Revisão ia para Alteração sem ajuste.
+ * Onde a coluna tem botão próprio (→ Edição, Liberar/Devolver, Aprovar/Ajustes, Reenviar,
+ * → Agendamentos, Agendar, Confirmar Postagem) a seta não repete a ação.
+ */
+const FLOW_ARROWS: Record<string, { forward?: string; backward?: string }> = {
+  ideias: { forward: 'captacao' },
+  captacao: { backward: 'ideias' },
+  edicao: { backward: 'captacao', forward: 'revisao' },
+  pre_revisao: {},
+  revisao: {},
+  alteracao: { forward: 'revisao' },
+  envio: { backward: 'alteracao' },
+  agendamentos: { backward: 'envio' },
+  acompanhamento: { backward: 'agendamentos' },
+};
+
+/** Destinos que abrem um diálogo antes de mover (ajuste, agendamento ou confirmação de envio). */
+const DIALOG_TARGETS = new Set(['alteracao', 'acompanhamento', 'envio']);
+
+const SEND_TO_CLIENT_DESCRIPTION = (
+  <>
+    <p>O vídeo fica visível no portal do cliente e ele recebe o aviso pelo WhatsApp.</p>
+    <p>Use quando a revisão já aprovou o vídeo. Não dá para desfazer o aviso.</p>
+  </>
+);
 
 export default function ContentKanban() {
   const { clients, recordings, scripts, users } = useApp();
@@ -202,6 +260,12 @@ export default function ContentKanban() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterClient, setFilterClient] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
+  // Filtro "Responsável": agente de IA, equipe, sem responsável, prontos para a IA, agente sem sinal
+  const [filterOwner, setFilterOwner] = useState<OwnerFilter>('all');
+  const [sortMode, setSortMode] = useState<SortMode>('recent');
+  const agentIds = useAgentIds();
+  // Confirmação de ação que não dá para desfazer pela tela (enviar ao cliente)
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 
   // Drag state
   const [draggedTask, setDraggedTask] = useState<ContentTask | null>(null);
@@ -484,6 +548,7 @@ export default function ContentKanban() {
       if (t.content_type === 'criativo' && t.approved_at) return false;
       if (filterClient !== 'all' && t.client_id !== filterClient) return false;
       if (filterType !== 'all' && t.content_type !== filterType) return false;
+      if (filterOwner !== 'all' && !matchesOwnerFilter(t, filterOwner, agentIds)) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         const client = getClient(t.client_id);
@@ -491,7 +556,7 @@ export default function ContentKanban() {
       }
       return true;
     });
-  }, [tasks, filterClient, filterType, searchQuery, clients]);
+  }, [tasks, filterClient, filterType, filterOwner, agentIds, searchQuery, clients, foreignClients]);
 
   const tasksByColumn = useMemo(() => {
     const map: Record<string, ContentTask[]> = {};
@@ -500,12 +565,23 @@ export default function ContentKanban() {
       if (map[t.kanban_column]) map[t.kanban_column].push(t);
       else map['ideias'].push(t);
     });
-    // Order: most recently moved/updated cards on top of each column
+    // Ordem: última movimentação no topo, ou (Ordem: prazo) imediata/prioridade e prazo da etapa mais próximo
+    const byRecent = (a: ContentTask, b: ContentTask) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+    const deadlineTime = (t: ContentTask) => {
+      const value = columnDeadline(t);
+      const time = value ? new Date(value).getTime() : NaN;
+      return Number.isFinite(time) ? time : Number.MAX_SAFE_INTEGER;
+    };
     Object.keys(map).forEach(colId => {
-      map[colId].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+      map[colId].sort(sortMode === 'deadline'
+        ? (a, b) => (Number(!!b.immediate_alteration) - Number(!!a.immediate_alteration))
+          || (Number(!!b.editing_priority) - Number(!!a.editing_priority))
+          || (deadlineTime(a) - deadlineTime(b))
+          || byRecent(a, b)
+        : byRecent);
     });
     return map;
-  }, [filteredTasks]);
+  }, [filteredTasks, sortMode]);
 
   // ─── CRUD ──────────────────────────────────────────────────
   const resetForm = () => {
@@ -544,7 +620,7 @@ export default function ContentKanban() {
     setDialogOpen(true);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (confirmedSend = false) => {
     if ((!formClientId && !isUnregistered) || !formTitle) {
       toast.error('Preencha cliente e título');
       return;
@@ -570,6 +646,25 @@ export default function ContentKanban() {
       updated_at: new Date().toISOString(),
     };
 
+    // Entrar em Alteração pelo diálogo deixava o editor sem saber o que mudar; ir para "Enviado p/
+    // Cliente" libera o vídeo no portal e avisa o cliente: pede confirmação, como no arrastar.
+    const enteringColumn = editingTask
+      ? (editingTask.kanban_column !== payload.kanban_column ? payload.kanban_column : null)
+      : payload.kanban_column;
+    if (enteringColumn === 'alteracao') {
+      toast.error('Para mandar para Alteração use "Ajustes" no card: o editor precisa saber o que mudar.');
+      return;
+    }
+    if (enteringColumn === 'envio' && !confirmedSend) {
+      setConfirmAction({
+        title: 'Enviar ao cliente?',
+        description: SEND_TO_CLIENT_DESCRIPTION,
+        confirmLabel: 'Salvar e enviar ao cliente',
+        onConfirm: () => handleSave(true),
+      });
+      return;
+    }
+
     if (editingTask) {
       // Auto-move to acompanhamento if in agendamentos and date+time are set
       if (payload.kanban_column === 'agendamentos' && payload.scheduled_recording_date && payload.scheduled_recording_time) {
@@ -586,7 +681,7 @@ export default function ContentKanban() {
         if (transitionError) { toast.error(transitionError); return; }
       }
       const { error } = await supabase.from('content_tasks').update(payload).eq('id', editingTask.id);
-      if (error) { toast.error('Erro ao atualizar'); return; }
+      if (error) { toast.error(`Não foi possível salvar o cartão${error.message ? `: ${error.message}` : '. Tente de novo.'}`); return; }
       toast.success(payload.kanban_column === 'acompanhamento' && editingTask.kanban_column === 'agendamentos'
         ? 'Agendado! Movido para Acompanhamento'
         : 'Cartão atualizado');
@@ -618,7 +713,7 @@ export default function ContentKanban() {
       payload.created_by = user?.id || null;
       payload.position = tasksByColumn[formColumn]?.length || 0;
       const { data: inserted, error } = await supabase.from('content_tasks').insert(payload).select().single();
-      if (error || !inserted) { toast.error('Erro ao criar cartão'); return; }
+      if (error || !inserted) { toast.error(`Não foi possível criar o cartão${error?.message ? `: ${error.message}` : '. Tente de novo.'}`); return; }
       toast.success('Cartão criado');
 
       // Trigger sync for the initial column (sets deadlines, etc.)
@@ -649,8 +744,8 @@ export default function ContentKanban() {
       const { deleteContentTask } = await import('@/lib/contentDeleteSync');
       await deleteContentTask(deleteTaskId);
       toast.success('Tarefa excluída com sucesso');
-    } catch {
-      toast.error('Erro ao excluir');
+    } catch (err: any) {
+      toast.error(`Não foi possível excluir${err?.message ? `: ${err.message}` : '. Tente de novo.'}`);
     }
     setDeleteDialogOpen(false);
     setDeleteTaskId(null);
@@ -689,6 +784,12 @@ export default function ContentKanban() {
       setDraggedTask(null);
       return;
     }
+    // Alteração pede o ajuste, Acompanhamento pede a data e "Enviado p/ Cliente" pede confirmação
+    if (DIALOG_TARGETS.has(targetColumn)) {
+      requestMove(draggedTask, targetColumn);
+      setDraggedTask(null);
+      return;
+    }
 
     const oldColumn = draggedTask.kanban_column;
     // Optimistic update
@@ -702,8 +803,8 @@ export default function ContentKanban() {
       updated_at: new Date().toISOString(),
     });
 
-    if (result !== 'ok') {
-      toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao mover cartão');
+    if (result.status !== 'ok') {
+      toast.error(updateErrorMessage(result, 'mover o cartão'));
       setTasks(prev => prev.map(t =>
         t.id === draggedTask.id ? { ...t, kanban_column: oldColumn } : t
       ));
@@ -784,12 +885,13 @@ export default function ContentKanban() {
   };
 
   // ─── SYNC WITH OTHER MODULES ──────────────────────────────
-  const syncOnColumnChange = async (task: ContentTask, newColumn: string) => {
+  const syncOnColumnChange = async (task: ContentTask, newColumn: string, historyDetails?: string | null) => {
     const client = clients.find(c => c.id === task.client_id);
     const ctx = buildSyncContext(task as any, {
       userId: user?.id,
       clientName: client?.companyName,
       clientWhatsapp: client?.whatsapp,
+      historyDetails,
     });
     await syncContentTaskColumnChange(newColumn, ctx);
   };
@@ -797,11 +899,18 @@ export default function ContentKanban() {
   // Update do card conferindo se alguma linha mudou: card de outra cidade (ou já removido)
   // volta vazio do servidor, sem erro. Antes o handler seguia, mostrava sucesso e sincronizava.
   const MISSING_TASK_MSG = 'Este card não está na cidade ativa (ou foi removido). Nada foi alterado.';
-  const updateTaskRow = async (taskId: string, payload: Record<string, any>): Promise<'ok' | 'error' | 'missing'> => {
+  type UpdateResult = { status: 'ok' } | { status: 'missing' } | { status: 'error'; message: string | null };
+  const updateTaskRow = async (taskId: string, payload: Record<string, any>): Promise<UpdateResult> => {
     const { data, error } = await supabase.from('content_tasks').update(payload as any).eq('id', taskId).select('id');
-    if (error) return 'error';
-    if (!data || (Array.isArray(data) && data.length === 0)) return 'missing';
-    return 'ok';
+    if (error) return { status: 'error', message: error.message || null };
+    if (!data || (Array.isArray(data) && data.length === 0)) return { status: 'missing' };
+    return { status: 'ok' };
+  };
+  // Mensagem de erro com o motivo do servidor (antes era só "Erro ao mover cartão")
+  const updateErrorMessage = (result: UpdateResult, action: string) => {
+    if (result.status === 'missing') return MISSING_TASK_MSG;
+    const message = result.status === 'error' ? result.message : null;
+    return `Não foi possível ${action}${message ? `: ${message}` : '. Tente de novo.'}`;
   };
 
   // ─── APPROVE FROM REVISÃO ─────────────────────────────────
@@ -811,53 +920,54 @@ export default function ContentKanban() {
       approved_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     });
-    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao aprovar'); return; }
+    if (result.status !== 'ok') { toast.error(updateErrorMessage(result, 'aprovar')); return; }
     await syncOnColumnChange(task, 'envio');
     toast.success('✅ Conteúdo aprovado! Movido para Enviado p/ Cliente');
     fetchTasks();
   };
 
   // ─── REQUEST ADJUSTMENTS ──────────────────────────────────
+  // Toda ida para Alteração passa por aqui (botão Ajustes, Devolver da Análise, seta ou arrastar)
   const [adjustmentDialogOpen, setAdjustmentDialogOpen] = useState(false);
-  const [adjustmentNotes, setAdjustmentNotes] = useState('');
   const [adjustmentTask, setAdjustmentTask] = useState<ContentTask | null>(null);
-  const [adjustmentImmediate, setAdjustmentImmediate] = useState(false);
+  const [adjustmentInitialNotes, setAdjustmentInitialNotes] = useState('');
 
-  const openAdjustmentDialog = (task: ContentTask) => {
+  const openAdjustmentDialog = (task: ContentTask, initialNotes = '') => {
     setAdjustmentTask(task);
-    setAdjustmentNotes('');
-    setAdjustmentImmediate(false);
+    setAdjustmentInitialNotes(initialNotes);
     setAdjustmentDialogOpen(true);
   };
 
-  const handleRequestAdjustments = async () => {
-    if (!adjustmentTask || !adjustmentNotes.trim()) {
+  const handleRequestAdjustments = async (notes: string, immediate: boolean): Promise<boolean> => {
+    if (!adjustmentTask || !notes.trim()) {
       toast.error('Descreva os ajustes necessários');
-      return;
+      return false;
     }
-    
+
     const result = await updateTaskRow(adjustmentTask.id, {
       kanban_column: 'alteracao',
-      adjustment_notes: adjustmentNotes.trim(),
-      immediate_alteration: adjustmentImmediate,
+      adjustment_notes: notes.trim(),
+      immediate_alteration: immediate,
       assigned_to: null,
       updated_at: new Date().toISOString(),
     });
-    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao solicitar ajustes'); return; }
+    if (result.status !== 'ok') { toast.error(updateErrorMessage(result, 'pedir os ajustes')); return false; }
 
-    // Use shared sync for full cross-module synchronization
+    // Use shared sync for full cross-module synchronization. O texto do ajuste vai para o
+    // histórico (antes só ficava no card e se perdia na alteração seguinte).
     const client = clients.find(c => c.id === adjustmentTask.client_id);
-    const ctx = buildSyncContext({ ...adjustmentTask, immediate_alteration: adjustmentImmediate } as any, {
+    const ctx = buildSyncContext({ ...adjustmentTask, immediate_alteration: immediate } as any, {
       userId: user?.id,
       clientName: client?.companyName,
       clientWhatsapp: client?.whatsapp,
+      historyDetails: `${adjustmentTask.kanban_column === 'pre_revisao' ? 'Devolvido da Análise · ' : ''}Ajustes: ${notes.trim()}`,
     });
     await syncContentTaskColumnChange('alteracao', ctx);
 
-    toast.success(adjustmentImmediate ? '🚨 Ajustes IMEDIATOS solicitados!' : '📝 Ajustes solicitados! Movido para Alteração');
-    setAdjustmentDialogOpen(false);
+    toast.success(immediate ? '🚨 Ajustes IMEDIATOS solicitados!' : '📝 Ajustes solicitados! Movido para Alteração');
     setAdjustmentTask(null);
     fetchTasks();
+    return true;
   };
 
   // ─── CONFIRM POSTED (archive card) ────────────────────────
@@ -867,12 +977,15 @@ export default function ContentKanban() {
       updated_at: new Date().toISOString(),
     });
 
-    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao arquivar'); return; }
+    if (result.status !== 'ok') { toast.error(updateErrorMessage(result, 'arquivar')); return; }
 
     await supabase.from('social_media_deliveries').update({
       status: 'postado',
       posted_at: format(new Date(), 'yyyy-MM-dd'),
     } as any).eq('content_task_id', task.id);
+    // Mesmo efeito do "Postado" do Social Media: cancela a postagem automática pendente (senão o
+    // robô postava de novo), registra o histórico e avisa o portal
+    await syncOnColumnChange(task, 'arquivado');
 
     toast.success(`✅ ${task.title} confirmado como postado e arquivado!`);
     fetchTasks();
@@ -891,12 +1004,16 @@ export default function ContentKanban() {
       toast.error('Insira um link válido');
       return;
     }
+    if (!/^https?:\/\//i.test(linkDialogValue.trim())) {
+      toast.error('Cole o link completo, começando com https://');
+      return;
+    }
     const field = linkDialogType === 'drive' ? 'drive_link' : 'edited_video_link';
-    const { error } = await supabase.from('content_tasks').update({
+    const result = await updateTaskRow(linkDialogTask.id, {
       [field]: linkDialogValue.trim(),
       updated_at: new Date().toISOString(),
-    } as any).eq('id', linkDialogTask.id);
-    if (error) { toast.error('Erro ao salvar link'); return; }
+    });
+    if (result.status !== 'ok') { toast.error(updateErrorMessage(result, 'salvar o link')); return; }
     toast.success(linkDialogType === 'drive' ? '📁 Link do Drive salvo!' : '🎬 Link do vídeo salvo!');
     setLinkDialogOpen(false);
     setLinkDialogTask(null);
@@ -904,7 +1021,7 @@ export default function ContentKanban() {
   };
 
   // ─── QUICK MOVE TO ANY COLUMN ────────────────────────────
-  const handleMoveToColumn = async (task: ContentTask, targetColumn: string) => {
+  const handleMoveToColumn = async (task: ContentTask, targetColumn: string, historyDetails?: string | null) => {
     const validationError = validateKanbanTransition(task, targetColumn);
     if (validationError) { toast.error(validationError); return; }
 
@@ -922,13 +1039,13 @@ export default function ContentKanban() {
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, kanban_column: targetColumn } : t));
 
     const result = await updateTaskRow(task.id, updatePayload);
-    if (result !== 'ok') {
-      toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao mover');
+    if (result.status !== 'ok') {
+      toast.error(updateErrorMessage(result, 'mover o cartão'));
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, kanban_column: oldColumn } : t));
       return;
     }
 
-    await syncOnColumnChange(task, targetColumn);
+    await syncOnColumnChange(task, targetColumn, historyDetails);
     toast.success(`Movido para ${KANBAN_COLUMNS.find(c => c.id === targetColumn)?.label}`);
     fetchTasks();
   };
@@ -936,14 +1053,60 @@ export default function ContentKanban() {
   // Alias for backward compat
   const handleMoveToNext = handleMoveToColumn;
 
-  // Get adjacent columns
-  const getAdjacentColumns = (currentCol: string) => {
-    const cols = visibleColumns;
-    const idx = cols.findIndex(c => c.id === currentCol);
-    return {
-      prev: idx > 0 ? cols[idx - 1] : null,
-      next: idx < cols.length - 1 ? cols[idx + 1] : null,
-    };
+  /**
+   * Movimento pedido por seta, arrastar ou botão: Alteração abre o pedido de ajuste, Acompanhamento
+   * abre o agendamento (data e hora) e "Enviado p/ Cliente" pede confirmação (o cliente é avisado).
+   */
+  const requestMove = (task: ContentTask, targetColumn: string) => {
+    const validationError = validateKanbanTransition(task, targetColumn);
+    if (validationError) { toast.error(validationError); return; }
+    if (targetColumn === 'alteracao') {
+      const review = agentReviewOf(task);
+      openAdjustmentDialog(task, review?.verdict === 'ajustes' ? review.notes || '' : '');
+      return;
+    }
+    if (targetColumn === 'acompanhamento') { openScheduleDialog(task); return; }
+    if (targetColumn === 'envio') {
+      setConfirmAction({
+        title: 'Enviar ao cliente?',
+        description: SEND_TO_CLIENT_DESCRIPTION,
+        confirmLabel: 'Enviar ao cliente',
+        onConfirm: () => handleMoveToColumn(task, 'envio'),
+      });
+      return;
+    }
+    void handleMoveToColumn(task, targetColumn);
+  };
+
+  // Análise: liberar a entrega do agente para a revisão humana (o que a Marcely faz pelo `pulse mover`)
+  const handleReleaseAnalysis = (task: ContentTask) => {
+    const review = agentReviewOf(task);
+    void handleMoveToColumn(task, 'revisao',
+      `Liberado da Análise por ${profile?.name || 'equipe'}${review ? ` (parecer IA: ${review.verdict})` : ' (sem parecer da IA)'}`);
+  };
+
+  // Seta do card para papéis sem restrição (FLOW_ARROWS). Com um agente trabalhando no card não
+  // há seta: ele entrega pela fila (mover no meio da renderização cancelava a entrega).
+  const flowArrow = (task: ContentTask, direction: 'forward' | 'backward') => {
+    if (agentWorkState(task, { agentIds })) return null;
+    const target = FLOW_ARROWS[task.kanban_column]?.[direction];
+    if (!target) return null;
+    const label = target === 'alteracao' ? 'Pedir ajuste'
+      : target === 'envio' ? 'Enviar ao cliente'
+      : KANBAN_COLUMNS.find(c => c.id === target)?.label || target;
+    return { target, label };
+  };
+
+  // Quem aparece no card: depois da edição, quem editou; na alteração, quem corrige
+  const responsibleOf = (task: ContentTask): { id: string | null; label: string } => {
+    const column = task.kanban_column;
+    if (['pre_revisao', 'revisao', 'envio', 'agendamentos', 'acompanhamento', 'arquivado'].includes(column)) {
+      return { id: task.edited_by || task.assigned_to, label: task.edited_by ? 'Editado por' : 'Responsável' };
+    }
+    if (column === 'alteracao') {
+      return { id: task.assigned_to || task.edited_by, label: task.assigned_to ? 'Corrigindo' : 'Quem corrige' };
+    }
+    return { id: task.assigned_to, label: 'Responsável' };
   };
 
   // ─── QUICK SCHEDULE (agendamentos) ────────────────────────
@@ -965,7 +1128,7 @@ export default function ContentKanban() {
       kanban_column: 'acompanhamento',
       updated_at: new Date().toISOString(),
     });
-    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao agendar'); return; }
+    if (result.status !== 'ok') { toast.error(updateErrorMessage(result, 'agendar')); return; }
 
     await syncOnColumnChange(scheduleDialogTask, 'acompanhamento');
     toast.success('📅 Agendado! Movido para Acompanhamento');
@@ -984,7 +1147,7 @@ export default function ContentKanban() {
       kanban_column: 'revisao',
       updated_at: new Date().toISOString(),
     });
-    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao reenviar'); return; }
+    if (result.status !== 'ok') { toast.error(updateErrorMessage(result, 'reenviar')); return; }
 
     await syncOnColumnChange(task, 'revisao');
     toast.success('🔄 Reenviado para Revisão!');
@@ -1058,17 +1221,17 @@ export default function ContentKanban() {
             </div>
           )}
 
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Pesquisar..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="pl-8 h-9 w-44 text-sm rounded-xl bg-secondary/50 border-border/50 focus:bg-card"
+              className="pl-8 h-9 w-full sm:w-44 text-sm rounded-xl bg-secondary/50 border-border/50 focus:bg-card"
             />
           </div>
           <Select value={filterClient} onValueChange={setFilterClient}>
-            <SelectTrigger className="h-9 w-40 text-sm rounded-xl bg-secondary/50 border-border/50">
+            <SelectTrigger className="h-9 flex-1 min-w-[140px] sm:flex-none sm:w-40 text-sm rounded-xl bg-secondary/50 border-border/50">
               <SelectValue placeholder="Cliente" />
             </SelectTrigger>
             <SelectContent>
@@ -1079,7 +1242,7 @@ export default function ContentKanban() {
             </SelectContent>
           </Select>
           <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="h-9 w-36 text-sm rounded-xl bg-secondary/50 border-border/50">
+            <SelectTrigger className="h-9 flex-1 min-w-[120px] sm:flex-none sm:w-36 text-sm rounded-xl bg-secondary/50 border-border/50">
               <SelectValue placeholder="Tipo" />
             </SelectTrigger>
             <SelectContent>
@@ -1089,12 +1252,22 @@ export default function ContentKanban() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={filterOwner} onValueChange={v => setFilterOwner(v as OwnerFilter)}>
+            <SelectTrigger className="h-9 flex-1 min-w-[160px] sm:flex-none sm:w-48 text-sm rounded-xl bg-secondary/50 border-border/50" title="Filtrar por quem está com o card">
+              <SelectValue placeholder="Responsável" />
+            </SelectTrigger>
+            <SelectContent>
+              {OWNER_FILTER_OPTIONS.map(o => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {/* Antes "Organizar" reordenava por movimentação, que já é a ordem das colunas */}
           <motion.div whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.03 }}>
-            <Button size="sm" variant="outline" onClick={() => {
-              setTasks(prev => [...prev].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
-              toast.success('Cards organizados por última movimentação');
-            }} className="gap-1.5 rounded-xl h-9 px-3 font-medium border-border/60">
-              <ArrowDownUp size={14} /> Organizar
+            <Button size="sm" variant="outline" onClick={() => setSortMode(m => m === 'recent' ? 'deadline' : 'recent')}
+              title={sortMode === 'recent' ? 'Cards mais recentes no topo. Clique para ordenar por prazo.' : 'Imediatas e prioridades no topo, depois o prazo mais próximo. Clique para ordenar por movimentação.'}
+              className="gap-1.5 rounded-xl h-9 px-3 font-medium border-border/60">
+              <ArrowDownUp size={14} /> {sortMode === 'recent' ? 'Ordem: recentes' : 'Ordem: prazo'}
             </Button>
           </motion.div>
           <motion.div whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.03 }}>
@@ -1106,6 +1279,9 @@ export default function ContentKanban() {
         </div>
       </div>
 
+      {/* Celular: atalho para cada coluna (arrastar não funciona no toque) */}
+      <KanbanColumnJumpBar columns={visibleColumns.map(c => ({ id: c.id, label: c.label, count: tasksByColumn[c.id]?.length || 0 }))} />
+
       {/* Kanban Board */}
       <DragScrollContainer className="flex-1">
         <div className="flex gap-3 h-full min-w-max pb-2">
@@ -1116,10 +1292,11 @@ export default function ContentKanban() {
             return (
               <motion.div
                 key={col.id}
+                id={kanbanColumnDomId(col.id)}
                 initial={{ opacity: 0, y: 24 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: colIdx * 0.06, duration: 0.4, ease: 'easeOut' }}
-                className={`flex flex-col w-[280px] shrink-0 rounded-2xl transition-all duration-200 ${
+                className={`flex flex-col w-[85vw] max-w-[280px] sm:w-[280px] shrink-0 rounded-2xl transition-all duration-200 ${
                   !isColumnInteractive(col.id) ? 'opacity-75' : ''
                 } ${
                   isDragOver && isColumnInteractive(col.id) ? 'ring-2 ring-primary/40 bg-accent/20 scale-[1.01]' : 'bg-muted/10'
@@ -1159,6 +1336,11 @@ export default function ContentKanban() {
                     🎬 Cards em gravação. Quando concluída sem o link do Drive, o cartão fica destacado em <strong>amarelo pulsante</strong> aguardando o upload.
                   </div>
                 )}
+                {col.id === 'pre_revisao' && (
+                  <div className="px-3 py-2 bg-purple-500/10 border-b border-purple-500/20 text-[10.5px] text-purple-700 dark:text-purple-300 leading-snug">
+                    🤖 Entregas dos agentes de IA. O revisor IA dá o parecer e a chefe libera para a <strong>Revisão</strong> ou devolve para <strong>Alteração</strong>. A equipe só é avisada quando sai daqui.
+                  </div>
+                )}
 
                 {/* Cards */}
                 <div className="flex-1 px-2 py-2 overflow-y-auto max-h-[calc(100vh-18rem)]">
@@ -1181,11 +1363,10 @@ export default function ContentKanban() {
 
                             task={task}
                             client={getClient(task.client_id)}
-                            assignedUser={getUser(
-                              ['revisao', 'envio', 'agendamentos', 'acompanhamento', 'arquivado'].includes(task.kanban_column)
-                                ? (task.edited_by || task.assigned_to)
-                                : task.assigned_to
-                            )}
+                            assignedUser={getUser(responsibleOf(task).id)}
+                            responsibleLabel={responsibleOf(task).label}
+                            users={users}
+                            agentIds={agentIds}
                             videomaker={(() => {
                               if (task.kanban_column !== 'captacao') return null;
                               const rec = task.recording_id ? recordings.find(r => r.id === task.recording_id) : null;
@@ -1206,6 +1387,9 @@ export default function ContentKanban() {
                             onConfirmPosted={task.kanban_column === 'acompanhamento' && !isRestricted ? () => handleConfirmPosted(task) : undefined}
                             onApprove={task.kanban_column === 'revisao' && (userRole === 'admin' || userRole === 'social_media') ? () => handleApproveTask(task) : undefined}
                             onRequestAdjustments={task.kanban_column === 'revisao' && (userRole === 'admin' || userRole === 'social_media') ? () => openAdjustmentDialog(task) : undefined}
+                            // Análise: quem decide é a chefe (IA) pelo `pulse mover`; o admin pode liberar ou devolver por aqui
+                            onReleaseAnalysis={task.kanban_column === 'pre_revisao' && userRole === 'admin' ? () => handleReleaseAnalysis(task) : undefined}
+                            onReturnAnalysis={task.kanban_column === 'pre_revisao' && userRole === 'admin' ? () => requestMove(task, 'alteracao') : undefined}
                             onAddDriveLink={(['captacao', 'edicao'].includes(task.kanban_column)) && userRole !== 'videomaker' || (userRole === 'videomaker' && task.kanban_column === 'captacao') ? () => openLinkDialog(task, 'drive') : undefined}
                             onAddVideoLink={(task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && userRole !== 'videomaker' ? () => openLinkDialog(task, 'video') : undefined}
                             onMoveToNext={
@@ -1222,21 +1406,20 @@ export default function ContentKanban() {
                             onResubmit={task.kanban_column === 'alteracao' && (userRole === 'editor' || userRole === 'admin' || (userRole === 'videomaker' && task.content_type === 'story')) ? () => handleResubmitFromAlteracao(task) : undefined}
                             onMoveForward={(() => {
                               if (isRestricted) {
-                                // Editor: only forward from edicao→revisao or alteracao→revisao
-                                if (userRole === 'editor' && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao')) {
+                                // Editor: Edição → Revisão (na Alteração o card já tem "Reenviar Revisão")
+                                if (userRole === 'editor' && task.kanban_column === 'edicao' && !agentWorkState(task, { agentIds })) {
                                   return () => handleMoveToColumn(task, 'revisao');
                                 }
-                                // Videomaker: ideias→captacao; story alteracao→revisao
+                                // Videomaker: ideias→captacao (alteração de story usa "Reenviar Revisão")
                                 if (userRole === 'videomaker' && task.kanban_column === 'ideias') {
                                   return () => handleMoveToColumn(task, 'captacao');
                                 }
-                                if (userRole === 'videomaker' && task.kanban_column === 'alteracao' && task.content_type === 'story') {
-                                  return () => handleMoveToColumn(task, 'revisao');
-                                }
                                 return undefined;
                               }
-                              const { next } = getAdjacentColumns(task.kanban_column);
-                              return next ? () => handleMoveToColumn(task, next.id) : undefined;
+                              const arrow = flowArrow(task, 'forward');
+                              // Alteração com "Reenviar Revisão" no card: a seta não repete
+                              if (!arrow || (task.kanban_column === 'alteracao' && userRole === 'admin')) return undefined;
+                              return () => requestMove(task, arrow.target);
                             })()}
                             onMoveBackward={(() => {
                               if (isRestricted) {
@@ -1247,20 +1430,19 @@ export default function ContentKanban() {
                                 // Editor: no backward (edicao is their start)
                                 return undefined;
                               }
-                              const { prev } = getAdjacentColumns(task.kanban_column);
-                              return prev ? () => handleMoveToColumn(task, prev.id) : undefined;
+                              const arrow = flowArrow(task, 'backward');
+                              return arrow ? () => requestMove(task, arrow.target) : undefined;
                             })()}
                             forwardLabel={(() => {
-                              if (userRole === 'editor' && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao')) return 'Revisão';
+                              if (userRole === 'editor' && task.kanban_column === 'edicao') return 'Revisão';
                               if (userRole === 'videomaker' && task.kanban_column === 'ideias') return 'Captação';
-                              if (userRole === 'videomaker' && task.kanban_column === 'alteracao' && task.content_type === 'story') return 'Revisão';
                               if (isRestricted) return undefined;
-                              return getAdjacentColumns(task.kanban_column).next?.label;
+                              return flowArrow(task, 'forward')?.label;
                             })()}
                             backwardLabel={(() => {
                               if (userRole === 'videomaker' && task.kanban_column === 'captacao') return 'Ideias';
                               if (isRestricted) return undefined;
-                              return getAdjacentColumns(task.kanban_column).prev?.label;
+                              return flowArrow(task, 'backward')?.label;
                             })()}
                             {...(isForeignTask(task) ? FOREIGN_TASK_NO_ACTIONS : {})}
                           />
@@ -1455,58 +1637,23 @@ export default function ContentKanban() {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>Cancelar</Button>
-            <Button onClick={handleSave}>{editingTask ? 'Salvar' : 'Criar Cartão'}</Button>
+            <Button onClick={() => handleSave()}>{editingTask ? 'Salvar' : 'Criar Cartão'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Adjustment Notes Dialog */}
-      <Dialog open={adjustmentDialogOpen} onOpenChange={v => { if (!v) { setAdjustmentDialogOpen(false); setAdjustmentTask(null); } }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <MessageSquareWarning size={18} className="text-amber-500" />
-              Solicitar Ajustes
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            {adjustmentTask && (
-              <p className="text-sm text-muted-foreground">
-                Conteúdo: <span className="font-medium text-foreground">{adjustmentTask.title}</span>
-              </p>
-            )}
-            <div>
-              <Label className="text-xs">Descreva os ajustes necessários *</Label>
-              <Textarea
-                value={adjustmentNotes}
-                onChange={e => setAdjustmentNotes(e.target.value)}
-                rows={4}
-                placeholder="Ex: Ajustar corte no segundo 15, trocar música de fundo..."
-                autoFocus
-              />
-            </div>
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
-              <input
-                type="checkbox"
-                checked={adjustmentImmediate}
-                onChange={e => setAdjustmentImmediate(e.target.checked)}
-                className="h-4 w-4 rounded border-destructive/40 text-destructive focus:ring-destructive"
-                id="immediate-check"
-              />
-              <label htmlFor="immediate-check" className="text-sm cursor-pointer">
-                <span className="font-semibold text-destructive">🚨 Alteração Imediata</span>
-                <span className="text-xs text-muted-foreground block">O editor será notificado para fazer a correção com prioridade máxima</span>
-              </label>
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => { setAdjustmentDialogOpen(false); setAdjustmentTask(null); }}>Cancelar</Button>
-            <Button onClick={handleRequestAdjustments} className="bg-amber-500 hover:bg-amber-600 text-white">
-              <MessageSquareWarning size={14} /> Enviar Ajustes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Pedido de ajuste: toda ida para Alteração (botão, seta, arrastar, devolver da Análise) */}
+      <AdjustmentRequestDialog
+        open={adjustmentDialogOpen}
+        title={adjustmentTask?.kanban_column === 'pre_revisao' ? 'Devolver da Análise para Alteração' : 'Solicitar Ajustes'}
+        taskTitle={adjustmentTask?.title}
+        initialNotes={adjustmentInitialNotes}
+        onOpenChange={v => { setAdjustmentDialogOpen(v); if (!v) setAdjustmentTask(null); }}
+        onSubmit={handleRequestAdjustments}
+      />
+
+      {/* Confirmação de ação que avisa o cliente */}
+      <ConfirmActionDialog action={confirmAction} onClose={() => setConfirmAction(null)} />
 
       {/* Quick Link Dialog */}
       <Dialog open={linkDialogOpen} onOpenChange={v => { if (!v) { setLinkDialogOpen(false); setLinkDialogTask(null); } }}>
@@ -1613,6 +1760,11 @@ interface TaskCardProps {
   task: ContentTask;
   client?: Client;
   assignedUser?: { id?: string; name: string; avatarUrl?: string } | null;
+  /** "Responsável", "Editado por", "Quem corrige"… (o que o avatar do card representa). */
+  responsibleLabel?: string;
+  /** Equipe (nome do agente e do revisor nos selos) e ids dos agentes de IA. */
+  users?: { id: string; name?: string | null }[];
+  agentIds?: ReadonlySet<string>;
   videomaker?: { id?: string; name: string; avatarUrl?: string } | null;
   recordingStatus?: string | null;
   linkedScript?: Script;
@@ -1628,6 +1780,9 @@ interface TaskCardProps {
   onConfirmPosted?: () => void;
   onApprove?: () => void;
   onRequestAdjustments?: () => void;
+  /** Análise: liberar para a Revisão / devolver para Alteração (admin). */
+  onReleaseAnalysis?: () => void;
+  onReturnAnalysis?: () => void;
   onAddDriveLink?: () => void;
   onAddVideoLink?: () => void;
   onMoveToNext?: () => void;
@@ -1647,6 +1802,8 @@ const FOREIGN_TASK_NO_ACTIONS: Partial<TaskCardProps> = {
   onConfirmPosted: undefined,
   onApprove: undefined,
   onRequestAdjustments: undefined,
+  onReleaseAnalysis: undefined,
+  onReturnAnalysis: undefined,
   onAddDriveLink: undefined,
   onAddVideoLink: undefined,
   onMoveToNext: undefined,
@@ -1656,7 +1813,7 @@ const FOREIGN_TASK_NO_ACTIONS: Partial<TaskCardProps> = {
   onMoveBackward: undefined,
 };
 
-function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, linkedScript, isDragging, viewOnly, cityLabel, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável', users = [], agentIds, videomaker, recordingStatus, linkedScript, isDragging, viewOnly, cityLabel, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onReleaseAnalysis, onReturnAnalysis, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
@@ -1803,7 +1960,9 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
             <span className="text-[9px] font-bold text-white uppercase tracking-widest">🚨 Imediato</span>
           </div>
         )}
-        <AgentFixBadge task={task as any} users={assignedUser ? [assignedUser as any] : []} />
+        {/* Agente de IA com o card (Edição/Alteração) e parecer da Análise */}
+        <AgentWorkBadge task={task} users={users} agentIds={agentIds} />
+        <AgentReviewBadge task={task} users={users} />
         {task.content_type === 'otimizacao' && (
           <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-fuchsia-500 via-pink-500 to-violet-500 animate-pulse shadow-lg shadow-fuchsia-500/40">
             <Rocket size={11} className="text-white animate-bounce" />
@@ -1811,14 +1970,14 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
           </div>
         )}
 
-        {/* Actions on hover */}
+        {/* Editar/Excluir: no hover no computador; sempre visíveis no celular (não há hover) */}
         {!viewOnly && (
-          <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
-            <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-5 h-5 rounded-md flex items-center justify-center bg-card/95 backdrop-blur text-muted-foreground hover:text-foreground border border-border/60 shadow-sm transition-colors">
+          <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-200 z-10">
+            <button onClick={e => { e.stopPropagation(); onEdit(); }} title="Editar cartão" aria-label="Editar cartão" className="w-6 h-6 sm:w-5 sm:h-5 rounded-md flex items-center justify-center bg-card/95 backdrop-blur text-muted-foreground hover:text-foreground border border-border/60 shadow-sm transition-colors">
               <Edit size={10} />
             </button>
             {onDelete && (
-              <button onClick={e => { e.stopPropagation(); onDelete(); }} className="w-5 h-5 rounded-md flex items-center justify-center bg-card/95 backdrop-blur text-muted-foreground hover:text-destructive border border-border/60 shadow-sm transition-colors">
+              <button onClick={e => { e.stopPropagation(); onDelete(); }} title="Excluir cartão" aria-label="Excluir cartão" className="w-6 h-6 sm:w-5 sm:h-5 rounded-md flex items-center justify-center bg-card/95 backdrop-blur text-muted-foreground hover:text-destructive border border-border/60 shadow-sm transition-colors">
                 <Trash2 size={10} />
               </button>
             )}
@@ -1849,29 +2008,17 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
             {task.kanban_column === 'envio' && task.approval_deadline && (
               <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" startedAt={task.approval_sent_at} totalHours={24} />
             )}
+            {/* Fila dos agentes: pronto para a IA ou o que falta */}
+            <AgentReadinessBadge task={task} agentIds={agentIds} />
           </div>
 
-          {/* Client name (big) */}
+          {/* Cliente (o tipo já está no selo acima; antes cliente e tipo apareciam duas vezes) */}
           <h3 className="text-sm font-bold text-foreground leading-tight pr-8" style={{ fontFamily: 'var(--font-display)' }}>
-            {client?.companyName || 'Cliente'}
+            {client?.companyName || task.prospect_name || 'Cliente'}
           </h3>
 
           {/* Structured fields — Pipefy style */}
           <div className="space-y-1.5">
-            <div className="flex items-start gap-2">
-              <User size={10} className="text-muted-foreground mt-0.5 shrink-0" />
-              <div className="min-w-0">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-primary/60 block leading-none">Cliente</span>
-                <span className="text-[11px] text-foreground/80 leading-snug block truncate">{client?.companyName || '—'}</span>
-              </div>
-            </div>
-            <div className="flex items-start gap-2">
-              <TypeIcon size={10} className="text-muted-foreground mt-0.5 shrink-0" />
-              <div className="min-w-0">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-primary/60 block leading-none">Tipo</span>
-                <span className="text-[11px] text-foreground/80 leading-snug block">{typeConfig.label}</span>
-              </div>
-            </div>
             <div className="flex items-start gap-2">
               <FileText size={10} className="text-muted-foreground mt-0.5 shrink-0" />
               <div className="min-w-0">
@@ -1908,17 +2055,16 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
             </button>
           )}
 
-          {/* Avatar */}
+          {/* Responsável / quem editou / quem corrige (a bolinha verde "online" saiu: não indicava presença) */}
           {assignedUser && (
             <div className="flex items-center gap-2 pt-0.5">
-              <div className="relative shrink-0">
-                <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" />
-                <span className="absolute -bottom-0.5 -right-0.5 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500 border border-card"></span>
+              <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" />
+              <div className="min-w-0">
+                <span className="text-[8.5px] font-bold uppercase tracking-wider text-primary/60 block leading-none">
+                  {responsibleLabel}{assignedUser.id && agentIds?.has(assignedUser.id) ? ' · 🤖 IA' : ''}
                 </span>
+                <span className="text-[10px] text-muted-foreground truncate block">{assignedUser.name}</span>
               </div>
-              <span className="text-[10px] text-muted-foreground truncate">{assignedUser.name}</span>
             </div>
           )}
 
@@ -1954,7 +2100,8 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
               </a>
             </div>
           )}
-          {!isRevisao && ['envio', 'agendamentos', 'acompanhamento'].includes(task.kanban_column) && task.edited_video_link && (
+          {/* Análise: o vídeo ainda não está no portal, só o arquivo */}
+          {!isRevisao && ['pre_revisao', 'envio', 'agendamentos', 'acompanhamento'].includes(task.kanban_column) && task.edited_video_link && (
             <a href={task.edited_video_link} download target="_blank" rel="noopener noreferrer"
               onClick={e => e.stopPropagation()}
               className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-violet-600 transition-all text-[9px] font-bold">
@@ -1968,8 +2115,9 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
               {onApprove && (
                 <motion.button whileTap={{ scale: 0.9 }}
                   onClick={e => { e.stopPropagation(); onApprove(); }}
+                  title="Aprova e envia ao cliente: o vídeo aparece no portal e o cliente é avisado pelo WhatsApp"
                   className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-green-500/10 hover:bg-green-500/20 border border-green-500/25 text-green-600 text-[9px] font-bold">
-                  <ThumbsUp size={10} /> Aprovar
+                  <ThumbsUp size={10} /> Aprovar e enviar
                 </motion.button>
               )}
               {onRequestAdjustments && (
@@ -1977,6 +2125,28 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
                   onClick={e => { e.stopPropagation(); onRequestAdjustments(); }}
                   className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-600 text-[9px] font-bold">
                   <MessageSquareWarning size={10} /> Ajustes
+                </motion.button>
+              )}
+            </div>
+          )}
+
+          {/* Análise (admin): liberar a entrega do agente para a Revisão ou devolver com o ajuste */}
+          {task.kanban_column === 'pre_revisao' && (onReleaseAnalysis || onReturnAnalysis) && (
+            <div className="grid grid-cols-2 gap-1.5">
+              {onReleaseAnalysis && (
+                <motion.button whileTap={{ scale: 0.9 }}
+                  onClick={e => { e.stopPropagation(); onReleaseAnalysis(); }}
+                  title="Vai para a Revisão: a equipe é avisada e o vídeo entra no portal em revisão interna"
+                  className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/25 text-teal-600 text-[9px] font-bold">
+                  <CheckCircle2 size={10} /> Liberar p/ Revisão
+                </motion.button>
+              )}
+              {onReturnAnalysis && (
+                <motion.button whileTap={{ scale: 0.9 }}
+                  onClick={e => { e.stopPropagation(); onReturnAnalysis(); }}
+                  title="Volta para Alteração do mesmo editor, com o que mudar"
+                  className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-600 text-[9px] font-bold">
+                  <ArrowLeft size={10} /> Devolver
                 </motion.button>
               )}
             </div>
@@ -1991,7 +2161,8 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
                 <Link2 size={10} /> Link Drive
               </motion.button>
             )}
-            {task.drive_link && (task.kanban_column === 'captacao' || task.kanban_column === 'edicao') && (
+            {/* Brutos: também na Análise e na Alteração (quem corrige precisa do material) */}
+            {task.drive_link && ['captacao', 'edicao', 'pre_revisao', 'alteracao'].includes(task.kanban_column) && (
               <a href={task.drive_link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                 className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 w-full text-left text-[9px] font-bold text-blue-700">
                 <Link2 size={10} className="shrink-0" />

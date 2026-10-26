@@ -266,9 +266,11 @@ export default function TrainingModuleAdmin() {
     setUploading(lessonId);
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      // A pasta vem antes do arquivo: o multer só lê os campos que chegaram antes dele. Na
+      // ordem antiga o vídeo caía na raiz de /uploads, fora do bloqueio de training-videos.
       formData.append('folder', 'training-videos');
       formData.append('path', 'training-videos');
+      formData.append('file', file);
 
       const token = localStorage.getItem('pulse_jwt');
       const response = await fetch('https://agenciapulse.tech/api/upload', {

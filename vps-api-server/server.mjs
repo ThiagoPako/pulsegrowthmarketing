@@ -15385,6 +15385,17 @@ function getTrainingStreamContentType(filePathOrUrl = '') {
   return getPortalMediaContentType(filePathOrUrl);
 }
 
+// A pasta onde o /api/upload grava (UPLOAD_ROOT, definida mais abaixo) também vale:
+// se ela não for /var/www/uploads, os vídeos novos ficam lá (antes só a busca por nome em
+// /var/www os achava). Lida na hora do pedido, não no carregamento do módulo.
+function trainingVideoRoots() {
+  return Array.from(new Set([...TRAINING_VIDEO_ROOTS, path.resolve(UPLOAD_ROOT, 'training-videos'), path.resolve(UPLOAD_ROOT)]));
+}
+
+function trainingFallbackRoots() {
+  return Array.from(new Set([...TRAINING_FALLBACK_SEARCH_ROOTS, path.resolve(UPLOAD_ROOT)]));
+}
+
 function isTrainingVideoName(fileName) {
   const base = path.basename(String(fileName || ''));
   return Boolean(base) && !base.startsWith('.') && TRAINING_VIDEO_EXTENSIONS.has(path.extname(base).toLowerCase());
@@ -15410,7 +15421,7 @@ async function realTrainingRoot(root) {
 async function isInsideTrainingRoots(abs) {
   const real = await fs.promises.realpath(abs).catch(() => null);
   if (!real || !isTrainingVideoName(real)) return false;
-  for (const root of [...TRAINING_VIDEO_ROOTS, ...TRAINING_FALLBACK_SEARCH_ROOTS]) {
+  for (const root of [...trainingVideoRoots(), ...trainingFallbackRoots()]) {
     const realRoot = await realTrainingRoot(root);
     if (realRoot && real.startsWith(realRoot + path.sep)) return true;
   }
@@ -15424,7 +15435,7 @@ async function searchTrainingFileByName(base) {
   if (missAt && Date.now() - missAt < TRAINING_FALLBACK_MISS_MS) return null;
 
   let found = null;
-  for (const r of TRAINING_FALLBACK_SEARCH_ROOTS) {
+  for (const r of trainingFallbackRoots()) {
     if (found) break;
     const stack = [r];
     let steps = 0;
@@ -15483,7 +15494,7 @@ async function resolveTrainingFile(videoPathOrUrl) {
     `training-videos/${base}`,
   ].filter(Boolean)));
 
-  for (const root of TRAINING_VIDEO_ROOTS) {
+  for (const root of trainingVideoRoots()) {
     for (const candidate of relativeCandidates) {
       const abs = path.resolve(root, candidate);
       if (!abs.startsWith(root + path.sep)) continue;

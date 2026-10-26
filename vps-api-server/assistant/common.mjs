@@ -113,7 +113,8 @@ export const fmtDate = (value) => {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s.split('-').reverse().join('/') : s;
 };
 
-export const fmtMoney = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+// "R$ 350,00" com espaço comum (o Intl põe espaço não separável)
+export const fmtMoney = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/ /g, ' ');
 
 export const roundMoney = (value) => Math.round(Number(value || 0) * 100) / 100;
 

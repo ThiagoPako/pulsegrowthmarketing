@@ -16,6 +16,8 @@
 // Incluir alguém direto no banco:  INSERT INTO module_access (module, user_id, created_by)
 //                                  VALUES ('pulse_plus', '<id do perfil>', 'manual');
 
+import path from 'node:path';
+
 export const PULSE_PLUS_MODULE = 'pulse_plus';
 const COPY_FROM_MODULE = 'agendamentos';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -61,24 +63,45 @@ export const AGENT_COLUMNS = {
 
 // Textos gravados pelos agentes que marcam quem fez como agente. O registro continua visível para todos;
 // para quem não tem Pulse Plus sai só a marca ("Arte iniciada (agente)" → "Arte iniciada").
+// Também os textos que o PULSE gravou antes (cards pedidos pelo WhatsApp e lançamentos do financeiro).
 const AGENT_TEXT_COLUMNS = {
   task_history: ['action', 'details'],
   design_task_history: ['action', 'details'],
   notifications: ['title', 'message'],
-  design_tasks: ['observations'],
+  content_tasks: ['description'],
+  design_tasks: ['observations', 'description'],
+  financial_activity_log: ['description'],
 };
 const AGENT_TEXT_RULES = [
+  [/🤖\s*Pedido pelo PULSE \(WhatsApp\)/g, 'Pedido pelo WhatsApp'],
+  [/🤖\s*Card criado pelo PULSE \(WhatsApp\)/g, 'Card criado pelo WhatsApp'],
+  [/[ \t]*\(PULSE, [^)]*\)/g, ''],
   [/[ \t]*\((?:agente|agente de IA)\)/gi, ''],
   [/[ \t]+pel[oa] agente\b/gi, ''],
   [/🤖\s*Análise IA/g, 'Pré-análise'],
   [/\bAnálise IA\b/g, 'Pré-análise'],
   [/Observação do agente:/g, 'Observação:'],
 ];
+// details (JSON) do financeiro: a origem do lançamento feito pelo PULSE não sai para quem não tem Pulse Plus
+const PULSE_ORIGIN = 'assistente_pulse';
 
 // Envio pedido pelo PULSE: no histórico do WhatsApp aparece como envio avulso.
 const WHATSAPP_TRIGGER_TABLES = new Set(['whatsapp_messages']);
 
 const CONTENT_LOCK_MINUTES = 30; // mesmo limite do `pulse travados` e do selo "parada"
+// Colunas em que o agente trabalha no card (vídeo: edita/corrige; arte: cria/corrige)
+const WORKING_COLUMNS = { content_tasks: ['edicao', 'alteracao'], design_tasks: ['executando', 'ajustes'] };
+
+/** Colunas que quem não tem Pulse Plus não filtra, ordena, liga nem renomeia, por tabela da consulta. */
+function protectedColumnsFor(tables) {
+  const out = {};
+  for (const table of tables) {
+    const set = new Set([...(AGENT_COLUMNS[table] || []), ...(AGENT_TEXT_COLUMNS[table] || [])]);
+    if (WHATSAPP_TRIGGER_TABLES.has(table)) set.add('trigger_type');
+    if (set.size) out[table] = set;
+  }
+  return out;
+}
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { statusCode: status, status, ...extra });
 
@@ -131,6 +154,7 @@ export function neutralizeAgentTexts(rows, tables) {
     }
   }
   const whatsapp = tables.some((table) => WHATSAPP_TRIGGER_TABLES.has(table));
+  const financial = tables.includes('financial_activity_log');
   if (!columns.size && !whatsapp) return rows;
   for (const row of Array.isArray(rows) ? rows : [rows]) {
     if (!row || typeof row !== 'object') continue;
@@ -138,12 +162,65 @@ export function neutralizeAgentTexts(rows, tables) {
       if (typeof row[column] === 'string') row[column] = neutralAgentText(row[column]);
     }
     if (whatsapp && row.trigger_type === 'assistente') row.trigger_type = 'manual';
+    if (financial) row.details = withoutPulseOrigin(row.details);
   }
   return rows;
 }
 
-/** Partes do select do /api/db/query que citam coluna interna com outro nome (o zerar é pelo nome). */
-function renamedAgentColumn(select, baseTable) {
+// Fotos trocadas pelo Painel de Agentes antes de 26/10/2026 ficaram em /uploads/avatars/agentes/<id>/: o endereço
+// marcava o membro como agente. Sem mexer no banco nem nos arquivos, o endereço sai trocado por um caminho neutro
+// servido pela API (GET /api/avatar-files/<id>/<arquivo>, ver registerRoutes), para todo mundo.
+const AGENT_AVATAR_RE = /\/uploads\/avatars\/agentes\/([^/?#"\s]+)\/([^/?#"\s]+)/gi; // pasta do membro (o id) e arquivo
+const AVATAR_FOLDER_RE = /^[\w-]{1,80}$/;
+const AVATAR_FILE_RE = /^[\w-][\w.-]*\.(png|jpe?g|webp)$/i;
+
+export function neutralAvatarUrl(value) {
+  if (typeof value !== 'string' || !value.includes('/avatars/agentes/')) return value;
+  return value.replace(AGENT_AVATAR_RE, '/api/avatar-files/$1/$2');
+}
+
+/** Troca, em qualquer campo cujo nome cite "avatar" (avatar_url, profiles_avatar_url, editor_avatar…), o endereço da foto. */
+export function neutralizeAvatars(value, depth = 0) {
+  if (!value || typeof value !== 'object' || depth > 5) return value;
+  if (Array.isArray(value)) {
+    for (const item of value) neutralizeAvatars(item, depth + 1);
+    return value;
+  }
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === 'string') {
+      if (/avatar/i.test(key)) value[key] = neutralAvatarUrl(item);
+    } else if (item && typeof item === 'object') {
+      neutralizeAvatars(item, depth + 1);
+    }
+  }
+  return value;
+}
+
+/** details do financeiro sem a origem "assistente_pulse" e o número que pediu (objeto ou texto JSON). */
+function withoutPulseOrigin(details) {
+  let obj = details;
+  if (typeof details === 'string') {
+    try { obj = JSON.parse(details); } catch { return details; }
+  }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj) || obj.origem !== PULSE_ORIGIN) return details;
+  const { origem, numero, ...rest } = obj;
+  return typeof details === 'string' ? JSON.stringify(rest) : rest;
+}
+
+/**
+ * Todas as formas de nome de coluna que o servidor pode montar a partir de um texto: o nome inteiro sem os
+ * caracteres não permitidos (o que o buildDbQueryWhere usa: "agent_step." vira agent_step) e cada pedaço
+ * separado por ponto (o que o sanitizeOrderColumn usa: "t.agent_step.x" vira t.agent_step), em minúsculas
+ * (no Postgres, AGENT_STEP sem aspas é agent_step).
+ */
+export function columnVariants(value) {
+  const raw = String(value ?? '');
+  const clean = (s) => s.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
+  return [clean(raw), ...raw.split('.').map(clean)].filter(Boolean);
+}
+
+/** Partes do select do /api/db/query que citam coluna protegida com outro nome (o zerar e a limpeza são pelo nome). */
+function renamedProtectedColumn(select, baseTable, protectedByTable) {
   if (typeof select !== 'string') return null;
   for (const part of select.split(',').map((p) => p.trim()).filter(Boolean)) {
     const match = part.match(/^(?:([a-z_][a-z0-9_]*)\.)?([a-z_][a-z0-9_]*)\s+as\s+([a-z_][a-z0-9_]*)$/i);
@@ -151,29 +228,35 @@ function renamedAgentColumn(select, baseTable) {
     const table = (match[1] || baseTable).toLowerCase();
     const column = match[2].toLowerCase();
     const alias = match[3].toLowerCase();
-    if (!(AGENT_COLUMNS[table] || []).includes(column)) continue;
+    if (!(protectedByTable[table] || new Set()).has(column)) continue;
     if (alias !== column && alias !== `${table}_${column}`) return column;
   }
   return null;
 }
 
-/** Colunas citadas nos filtros e na ordenação do /api/db/query (inclusive dentro do "or"). */
+/** Colunas citadas nos filtros e na ordenação do /api/db/query (inclusive dentro do "or"), em todas as formas. */
 function referencedColumns(filters, order) {
   const out = [];
-  const clean = (value) => String(value || '').replace(/[^a-zA-Z0-9_.]/g, '').split('.').pop().toLowerCase();
   for (const filter of Array.isArray(filters) ? filters : []) {
     if (!filter || typeof filter !== 'object') continue;
-    if (filter.op === 'or' && typeof filter.value === 'string') {
-      for (const part of filter.value.split(',')) out.push(clean(part.split('.')[0]));
-    } else {
-      out.push(clean(filter.column));
+    if (filter.op === 'or') {
+      // mais fino que o splitOrFilterParts do servidor: cada parte dele começa no início de uma destas
+      for (const part of String(filter.value ?? '').split(',')) out.push(...columnVariants(part.split('.')[0]));
     }
+    out.push(...columnVariants(filter.column));
   }
-  for (const item of Array.isArray(order) ? order : order ? [order] : []) out.push(clean(item?.column));
-  return out.filter(Boolean);
+  for (const item of Array.isArray(order) ? order : order ? [order] : []) out.push(...columnVariants(item?.column));
+  return out;
 }
 
-export function createPulsePlus({ pool, verifyUser, getLinkedUserIds, isStrictAdmin, logger = console, cacheMs = 5000 }) {
+/** Colunas citadas no ON dos joins (estruturado ou "a.b = c.d"). */
+function joinColumns(joins) {
+  return (Array.isArray(joins) ? joins : []).flatMap((join) => [
+    join?.leftColumn, join?.rightColumn, ...String(join?.on || '').split('='),
+  ]).flatMap(columnVariants);
+}
+
+export function createPulsePlus({ pool, verifyUser, getLinkedUserIds, isStrictAdmin, uploadRoot = null, logger = console, cacheMs = 5000 }) {
   const accessCache = new Map(); // user id → { at, promise }
   let agentIdsCache = null;
 
@@ -334,25 +417,32 @@ export function createPulsePlus({ pool, verifyUser, getLinkedUserIds, isStrictAd
 
   // ── /api/db/query ──
   /**
-   * Antes da consulta: quem não tem Pulse Plus não filtra, ordena nem renomeia coluna interna dos agentes, e a
-   * troca de responsável de um card limpa a etapa do agente (como a tela de quem tem Pulse Plus faz). Card com um
-   * agente trabalhando (sinal nos últimos 30 min) não muda de coluna nem de responsável por quem não vê o agente:
-   * a entrega dele seria recusada (é a mesma trava que a tela aplica para quem vê).
+   * Antes da consulta, para quem não tem Pulse Plus:
+   * - não filtra, ordena, liga (ON do join) nem renomeia coluna interna dos agentes nem as colunas de texto que
+   *   saem limpas (histórico, avisos, observações, descrição, gatilho do WhatsApp): a lista de linhas escolhidas
+   *   mostraria quais são de agente, mesmo com o texto limpo;
+   * - card com um agente trabalhando (sinal nos últimos 30 min: vídeo em edição/alteração, arte em
+   *   executando/ajustes) não muda de COLUNA: a entrega dele seria recusada (no vídeo é a mesma trava que a tela de
+   *   quem vê os agentes aplica). Trocar o responsável continua livre, como no "Tirar mesmo assim" do Controle
+   *   de Edição e na ficha do card;
+   * - quando o card sai da mão do agente (outra coluna ou outro responsável), a etapa dele é limpa, como a tela
+   *   de quem tem Pulse Plus já faz.
    */
   async function beforeDbQuery({ safeTable, operation, data, filters, select, order, joins, user, buildWhere }) {
-    const joinTables = (Array.isArray(joins) ? joins : []).map((j) => String(j?.table || '').replace(/[^a-zA-Z0-9_]/g, ''));
+    const joinTables = (Array.isArray(joins) ? joins : []).map((j) => String(j?.table || '').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase());
     const tables = [safeTable, ...joinTables];
-    const touchesAgentTable = tables.some((table) => AGENT_COLUMNS[table]);
-    if (!touchesAgentTable) return { data, filters };
+    const protectedByTable = protectedColumnsFor(tables);
+    const protectedAll = new Set(Object.values(protectedByTable).flatMap((set) => [...set]));
+    if (!protectedAll.size) return { data, filters };
     if (await hasPulsePlus(user)) return { data, filters };
 
-    const internal = new Set(Object.values(AGENT_COLUMNS).flat());
+    const refused = operation === 'select' ? 'Sem permissão para esta consulta.' : 'Sem permissão para esta operação.';
+    if (referencedColumns(filters, operation === 'select' ? order : null).some((column) => protectedAll.has(column))) throw httpError(403, refused);
+    if (joinColumns(joins).some((column) => protectedAll.has(column))) throw httpError(403, refused);
     if (operation === 'select') {
-      if (referencedColumns(filters, order).some((column) => internal.has(column))) throw httpError(403, 'Sem permissão para esta consulta.');
-      if (renamedAgentColumn(select, safeTable)) throw httpError(403, 'Sem permissão para esta consulta.');
+      if (renamedProtectedColumn(select, safeTable, protectedByTable)) throw httpError(403, refused);
       return { data, filters };
     }
-    if (referencedColumns(filters, null).some((column) => internal.has(column))) throw httpError(403, 'Sem permissão para esta operação.');
     if (!AGENT_COLUMNS[safeTable] || operation !== 'update' || Array.isArray(data) || typeof buildWhere !== 'function') {
       return { data, filters };
     }
@@ -384,11 +474,14 @@ export function createPulsePlus({ pool, verifyUser, getLinkedUserIds, isStrictAd
       || (nextOwner !== undefined && String(nextOwner ?? '') !== String(row.assigned_to ?? '')));
     if (!changed.length) return { data, filters };
 
-    // Vídeo com o agente renderizando (sinal nos últimos 30 min): mover agora faria a entrega dele ser recusada.
-    // É a mesma trava que a tela de quem vê os agentes aplica; a mensagem fala da pessoa, como em qualquer card.
-    if (safeTable === 'content_tasks') {
+    // Agente trabalhando (sinal recente) e o card mudando de COLUNA: mover agora faria a entrega dele ser recusada.
+    // A mensagem fala da pessoa, como em qualquer card. Trocar só o responsável não trava (limpa a etapa abaixo).
+    const workingColumns = WORKING_COLUMNS[safeTable] || [];
+    const movesColumn = (row) => nextColumn !== undefined && String(nextColumn ?? '') !== String(row.kanban_column ?? '');
+    const candidates = changed.filter((row) => movesColumn(row) && row.recent && workingColumns.includes(row.kanban_column));
+    if (candidates.length) {
       const agents = await activeAgentIds();
-      const busy = changed.find((row) => row.recent && ['edicao', 'alteracao'].includes(row.kanban_column) && agents.has(row.assigned_to));
+      const busy = candidates.find((row) => agents.has(row.assigned_to));
       if (busy) {
         const first = String(busy.name || '').trim().split(/\s+/)[0] || 'Alguém';
         throw httpError(409, `${first} está trabalhando neste card agora. Espere a entrega para mover.`, { code: 'card_em_trabalho' });
@@ -403,6 +496,8 @@ export function createPulsePlus({ pool, verifyUser, getLinkedUserIds, isStrictAd
   /** Depois da consulta: colunas internas nulas e textos sem a marca de agente para quem não tem Pulse Plus. */
   async function afterDbQuery(rows, tables, user) {
     if (!rows) return rows;
+    // endereço neutro da foto, para todo mundo (com ou sem Pulse Plus)
+    if (tables.includes('profiles')) neutralizeAvatars(rows);
     const needsColumns = tables.some((table) => AGENT_COLUMNS[table]);
     const needsTexts = tables.some((table) => AGENT_TEXT_COLUMNS[table] || WHATSAPP_TRIGGER_TABLES.has(table));
     if (!needsColumns && !needsTexts) return rows;
@@ -412,8 +507,9 @@ export function createPulsePlus({ pool, verifyUser, getLinkedUserIds, isStrictAd
     return rows;
   }
 
-  /** Para rotas próprias que devolvem cards (feed rápido do Kanban de Design etc.). */
+  /** Para rotas próprias que devolvem cards (feed rápido do Kanban de Design etc.), com a foto do responsável. */
   async function forUser(user, rows, tables) {
+    neutralizeAvatars(rows);
     return afterDbQuery(rows, tables, user);
   }
 
@@ -436,6 +532,19 @@ export function createPulsePlus({ pool, verifyUser, getLinkedUserIds, isStrictAd
   }
 
   function registerRoutes(app) {
+    // Foto antiga de agente pelo caminho neutro (público, como /uploads): só arquivos de imagem daquela pasta.
+    app.get('/api/avatar-files/:userId/:file', (req, res) => {
+      const userId = String(req.params.userId || '');
+      const file = String(req.params.file || '');
+      if (!uploadRoot || !AVATAR_FOLDER_RE.test(userId) || !AVATAR_FILE_RE.test(file) || file.includes('..')) {
+        return res.status(404).json({ error: 'Arquivo não encontrado' });
+      }
+      const root = path.join(uploadRoot, 'avatars', 'agentes', userId);
+      res.sendFile(file, { root, maxAge: '1d', dotfiles: 'deny' }, (error) => {
+        if (error && !res.headersSent) res.status(404).json({ error: 'Arquivo não encontrado' });
+      });
+    });
+
     app.get('/api/team/pulse-plus', async (req, res) => {
       try {
         await requireManager(req);

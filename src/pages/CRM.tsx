@@ -1170,6 +1170,10 @@ function LeadDetailsDialog({
   trigger?: ReactNode,
 }) {
   const [note, setNote] = useState('');
+  // Notas só carregam com o diálogo aberto: o componente fica montado em cada card do
+  // pipeline, e cada um fazia a própria consulta ao abrir o CRM.
+  const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
   const { activeCity } = useCity();
   // Links da proposta: não existe plano 'mensal' (caía na lista sem lead nem cidade).
   // Vão para a lista de planos da cidade do lead, levando o lead e a oferta 6+6.
@@ -1188,7 +1192,8 @@ function LeadDetailsDialog({
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
-    }
+    },
+    enabled: open,
   });
 
   const addNote = useMutation({
@@ -1203,12 +1208,17 @@ function LeadDetailsDialog({
     onSuccess: () => {
       setNote('');
       onUpdate();
+      // a nota nova aparece no histórico na hora (antes só ao vencer o cache de 5 min)
+      queryClient.invalidateQueries({ queryKey: ['lead_notes', lead.id] });
       toast.success('Nota registrada no histórico!');
-    }
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Não foi possível registrar a nota.');
+    },
   });
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger ?? (
           <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/5" aria-label={`Gerenciar ${lead.name}`}>

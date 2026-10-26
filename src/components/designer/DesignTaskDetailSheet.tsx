@@ -80,6 +80,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [copyText, setCopyText] = useState(task.copy_text || '');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [movingAction, setMovingAction] = useState<string | null>(null);
+  // Envio ao cliente em andamento: trava o botão (o clique repetido mandava a arte duas vezes)
+  const [sendingToClient, setSendingToClient] = useState(false);
   const [stageAnimKey, setStageAnimKey] = useState(0);
   const [showRocketFlyby, setShowRocketFlyby] = useState(false);
   const [dueDate, setDueDate] = useState(task.due_date || '');
@@ -361,73 +363,128 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   };
 
   const handleSendToClient = async () => {
-    const fileUrl = attachmentUrl || task.attachment_url;
-    let portalContentId: string | null = null;
-    
-    // Send art to client portal for approval (like videos)
-    if (fileUrl && task.client_id) {
-      try {
-        const now = new Date();
-        const { data: portalContent } = await supabase.from('client_portal_contents').insert({
-          client_id: task.client_id,
-          title: `Arte: ${task.title}`,
-          content_type: 'arte',
-          file_url: fileUrl,
-          thumbnail_url: /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(fileUrl) ? fileUrl : null,
-          status: 'pendente',
-          season_month: now.getMonth() + 1,
-          season_year: now.getFullYear(),
-          uploaded_by: user?.id,
-          // Vínculo com o card: a aprovação/ajuste pela biblioteca do portal anda este card
-          design_task_id: task.id,
-        } as any).select('id').single();
-        portalContentId = (portalContent as any)?.id || null;
-        
-        // Notify client in portal
-        await supabase.from('client_portal_notifications').insert({
-          client_id: task.client_id,
-          title: 'Nova arte para aprovação',
-          message: `A arte "${task.title}" está pronta para sua aprovação.`,
-          type: 'design',
-        } as any);
-      } catch (err) { console.error('Portal insert error:', err); }
+    if (sendingToClient) return;
+    if (task.sent_to_client_at) {
+      const sentAt = new Date(task.sent_to_client_at).toLocaleString('pt-BR');
+      if (!window.confirm(`Esta arte já foi enviada ao cliente em ${sentAt}. Enviar de novo?`)) return;
     }
-
+    setSendingToClient(true);
     try {
-      const clientName = task.clients?.responsible_person || task.clients?.company_name;
-      const msg = `Olá, ${clientName}! 🎨\n\nSegue a arte criada para sua empresa. Pode nos confirmar se está aprovado?\n\nVocê também pode aprovar pelo Portal do Cliente.`;
+      const fileUrl = attachmentUrl || task.attachment_url;
+      let portalContentId: string | null = null;
+      // Resultado por canal, para o aviso final dizer o que deu certo e o que falhou
+      let portalStatus: 'ok' | 'ja_estava' | 'falhou' | 'sem_arte' = 'sem_arte';
+      let whatsStatus: 'na_fila' | 'falhou' | 'sem_numero' = 'sem_numero';
+      let whatsError = '';
 
-      if (fileUrl && task.clients?.whatsapp) {
-        const fileName = fileUrl.split('/').pop() || 'arte.png';
-        const result = await sendWhatsAppMediaMessage({
-          number: task.clients?.whatsapp || '',
-          message: msg,
-          mediaUrl: fileUrl,
-          mediaFileName: fileName,
-          clientId: task.client_id,
-          triggerType: 'auto_design_approved',
-          purpose: 'aprovacao',
-        });
-        if (!result.success) {
-          console.error('WhatsApp media send error:', result.error);
-          toast.error('Erro ao enviar arte: ' + (result.error || 'erro desconhecido'));
-        } else if (portalContentId) {
-          // o cliente já recebeu a arte aqui: o aviso automático de "conteúdo novo no portal" não manda de novo
-          await supabase.from('client_portal_contents').update({ wa_notified_at: new Date().toISOString() } as any).eq('id', portalContentId);
+      // Send art to client portal for approval (like videos)
+      if (fileUrl && task.client_id) {
+        try {
+          // Reenvio da mesma arte não cria um segundo item pendente no portal
+          const { data: existing } = await supabase
+            .from('client_portal_contents')
+            .select('id')
+            .eq('client_id', task.client_id)
+            .eq('file_url', fileUrl)
+            .eq('status', 'pendente')
+            .limit(1);
+          if (Array.isArray(existing) && existing.length > 0) {
+            portalContentId = (existing[0] as any).id;
+            portalStatus = 'ja_estava';
+          } else {
+            const now = new Date();
+            const { data: portalContent, error: portalError } = await supabase.from('client_portal_contents').insert({
+              client_id: task.client_id,
+              title: `Arte: ${task.title}`,
+              content_type: 'arte',
+              file_url: fileUrl,
+              thumbnail_url: /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(fileUrl) ? fileUrl : null,
+              status: 'pendente',
+              season_month: now.getMonth() + 1,
+              season_year: now.getFullYear(),
+              uploaded_by: user?.id,
+              // Vínculo com o card: a aprovação/ajuste pela biblioteca do portal anda este card
+              design_task_id: task.id,
+            } as any).select('id').single();
+            if (portalError) throw portalError;
+            portalContentId = (portalContent as any)?.id || null;
+            portalStatus = 'ok';
+
+            // Notify client in portal
+            await supabase.from('client_portal_notifications').insert({
+              client_id: task.client_id,
+              title: 'Nova arte para aprovação',
+              message: `A arte "${task.title}" está pronta para sua aprovação.`,
+              type: 'design',
+            } as any);
+          }
+        } catch (err) {
+          console.error('Portal insert error:', err);
+          portalStatus = 'falhou';
         }
-      } else if (task.clients?.whatsapp) {
-        await sendWhatsAppMessage({
-          number: task.clients?.whatsapp || '',
-          message: msg,
-          clientId: task.client_id,
-          triggerType: 'auto_design_approved',
-          purpose: 'aprovacao',
-        });
       }
-    } catch (err) { console.error('WhatsApp send error:', err); }
-    await updateTask.mutateAsync({ id: task.id, sent_to_client_at: new Date().toISOString() } as any);
-    await addHistory.mutateAsync({ task_id: task.id, action: 'Enviado para cliente via WhatsApp + Portal', user_id: user?.id });
-    toast.success('Arte enviada ao cliente e adicionada ao Portal!');
+
+      try {
+        const clientName = task.clients?.responsible_person || task.clients?.company_name;
+        const msg = `Olá, ${clientName}! 🎨\n\nSegue a arte criada para sua empresa. Pode nos confirmar se está aprovado?\n\nVocê também pode aprovar pelo Portal do Cliente.`;
+
+        if (task.clients?.whatsapp) {
+          const result = fileUrl
+            ? await sendWhatsAppMediaMessage({
+                number: task.clients?.whatsapp || '',
+                message: msg,
+                mediaUrl: fileUrl,
+                mediaFileName: fileUrl.split('/').pop() || 'arte.png',
+                clientId: task.client_id,
+                triggerType: 'auto_design_approved',
+                purpose: 'aprovacao',
+              })
+            : await sendWhatsAppMessage({
+                number: task.clients?.whatsapp || '',
+                message: msg,
+                clientId: task.client_id,
+                triggerType: 'auto_design_approved',
+                purpose: 'aprovacao',
+              });
+          if (!result.success) {
+            console.error('WhatsApp send error:', result.error);
+            whatsStatus = 'falhou';
+            whatsError = result.error || 'erro desconhecido';
+          } else {
+            whatsStatus = 'na_fila';
+            if (fileUrl && portalContentId) {
+              // o cliente já recebeu a arte aqui: o aviso automático de "conteúdo novo no portal" não manda de novo
+              await supabase.from('client_portal_contents').update({ wa_notified_at: new Date().toISOString() } as any).eq('id', portalContentId);
+            }
+          }
+        }
+      } catch (err: any) {
+        console.error('WhatsApp send error:', err);
+        whatsStatus = 'falhou';
+        whatsError = err?.message || 'erro desconhecido';
+      }
+
+      const portalOk = portalStatus === 'ok' || portalStatus === 'ja_estava';
+      if (!portalOk && whatsStatus !== 'na_fila') {
+        // Nada chegou ao cliente: não marca como enviada
+        toast.error(whatsStatus === 'falhou'
+          ? `Não foi possível enviar a arte: ${whatsError}`
+          : 'Não foi possível enviar: o cliente não tem WhatsApp cadastrado e a arte não foi para o Portal.');
+        return;
+      }
+
+      await updateTask.mutateAsync({ id: task.id, sent_to_client_at: new Date().toISOString() } as any);
+      const channels = [portalOk ? 'Portal' : null, whatsStatus === 'na_fila' ? 'WhatsApp' : null].filter(Boolean).join(' + ');
+      await addHistory.mutateAsync({ task_id: task.id, action: `Enviado para cliente via ${channels}`, user_id: user?.id });
+
+      const portalMsg = portalStatus === 'ok' ? 'Portal ok' : portalStatus === 'ja_estava' ? 'já estava no Portal' : portalStatus === 'falhou' ? 'falhou no Portal' : 'sem arte para o Portal';
+      const whatsMsg = whatsStatus === 'na_fila' ? 'WhatsApp na fila' : whatsStatus === 'falhou' ? `WhatsApp falhou (${whatsError})` : 'sem WhatsApp cadastrado';
+      if (portalStatus === 'ok' && whatsStatus === 'na_fila') toast.success('Arte enviada ao cliente e adicionada ao Portal!');
+      else if (portalOk && whatsStatus === 'na_fila') toast.success(`Arte enviada: ${portalMsg} · ${whatsMsg}`);
+      else toast.warning(`Arte enviada só em parte: ${portalMsg} · ${whatsMsg}`);
+    } finally {
+      setSendingToClient(false);
+    }
   };
 
   const handleClientApproval = async () => {
@@ -1894,11 +1951,13 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         >
                           <Button
                             onClick={action.onClick}
-                            disabled={!!movingAction}
+                            disabled={!!movingAction || sendingToClient}
                             className="w-full justify-start gap-2 text-xs font-bold h-10 text-white border-0 hover:opacity-90 transition-opacity"
                             style={{ backgroundColor: action.color }}
                           >
-                            <Icon size={14} /> {action.label}
+                            {sendingToClient && action.onClick === handleSendToClient
+                              ? <><Loader2 size={14} className="animate-spin" /> ENVIANDO...</>
+                              : <><Icon size={14} /> {action.label}</>}
                             <ArrowRight size={12} className="ml-auto" />
                           </Button>
                         </motion.div>

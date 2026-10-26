@@ -6687,6 +6687,92 @@ const secretSuffix = (s) => (s ? '••••' + String(s).slice(-4) : '(vazio)
 /** Códigos OAuth do Instagram já trocados (uso único; mantidos por 1h em memória). */
 const USED_IG_CODES = new Set();
 
+// Login do Facebook que devolve várias Páginas: antes todas viravam contas do cliente e o
+// robô publicava em todas (inclusive nas de outros clientes). Agora a pessoa escolhe UMA.
+// O código OAuth é de uso único, então as Páginas (com os tokens) ficam só aqui, em memória,
+// por 15 min; o navegador recebe só id, nome e @ do Instagram.
+const FB_PAGE_SELECTIONS = new Map();
+const FB_PAGE_SELECTION_TTL_MS = 15 * 60 * 1000;
+
+function publicFacebookPageInfo(page) {
+  return {
+    id: String(page.id),
+    name: page.name || String(page.id),
+    instagram_username: page.instagram_business_account?.username || null,
+    picture: fbPagePictureUrl(page.id),
+  };
+}
+
+function createFacebookPageSelection(clientId, pages) {
+  const now = Date.now();
+  for (const [key, entry] of FB_PAGE_SELECTIONS) {
+    if (entry.expiresAt < now) FB_PAGE_SELECTIONS.delete(key);
+  }
+  const key = crypto.randomBytes(24).toString('hex');
+  FB_PAGE_SELECTIONS.set(key, { clientId: String(clientId), pages, expiresAt: now + FB_PAGE_SELECTION_TTL_MS });
+  return { needs_page_selection: true, selection_key: key, pages: pages.map(publicFacebookPageInfo) };
+}
+
+/** Escolha pendente; só vale para o mesmo cliente que fez o login. */
+function getFacebookPageSelection(key, clientId) {
+  const entry = FB_PAGE_SELECTIONS.get(String(key || ''));
+  if (!entry || entry.expiresAt < Date.now() || entry.clientId !== String(clientId)) return null;
+  return entry;
+}
+
+/**
+ * Grava UMA Página do Facebook (e o Instagram ligado a ela) como conta do cliente.
+ * Troca só o que veio por Página: o Instagram conectado direto (api_base='instagram')
+ * é mantido e, nesse caso, o Instagram da Página não entra (seria uma segunda conta de IG).
+ */
+async function saveFacebookPageConnection(clientId, page, logMessage) {
+  await ensureSocialPostsSchema();
+  const expiration = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+  const connectedAccounts = [];
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    await db.query(`DELETE FROM social_accounts WHERE client_id = $1 AND COALESCE(api_base,'facebook') = 'facebook'`, [clientId]);
+    const { rows: directIg } = await db.query(
+      `SELECT account_name, username, instagram_business_id, profile_picture_url FROM social_accounts
+        WHERE client_id = $1 AND platform = 'instagram' AND api_base = 'instagram' LIMIT 1`,
+      [clientId]
+    );
+    await db.query(
+      `INSERT INTO social_accounts (client_id, platform, facebook_page_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
+       VALUES ($1,'facebook',$2,$3,$4,$5,$6,'connected',$7,'facebook')`,
+      [clientId, page.id, page.name, page.name, fbPagePictureUrl(page.id), page.access_token, expiration]
+    );
+    connectedAccounts.push({ platform: 'facebook', name: page.name, pageId: page.id });
+    if (page.instagram_business_account && directIg.length === 0) {
+      const ig = page.instagram_business_account;
+      await db.query(
+        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
+         VALUES ($1,'instagram',$2,$3,$4,$5,$6,$7,'connected',$8,'facebook')`,
+        [clientId, page.id, ig.id, ig.username || ig.name, ig.username || null, ig.profile_picture_url || null, page.access_token, expiration]
+      );
+      connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.name, username: ig.username, businessId: ig.id, profilePicture: ig.profile_picture_url, pageId: page.id });
+    } else if (directIg.length) {
+      // O Instagram conectado direto continua valendo: vai na resposta para a tela não mostrá-lo como desconectado
+      const ig = directIg[0];
+      connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.account_name, username: ig.username || ig.account_name, businessId: ig.instagram_business_id, profilePicture: ig.profile_picture_url, pageId: '', api_base: 'instagram' });
+    }
+    await db.query('COMMIT');
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    db.release();
+  }
+  if (logMessage) {
+    await pool.query(
+      `INSERT INTO integration_logs (client_id, platform, action, status, message) VALUES ($1,'facebook','oauth_connect','success',$2)`,
+      [clientId, `${logMessage}: Página ${page.name}.`]
+    ).catch(() => {});
+  }
+  return connectedAccounts;
+}
+
 /**
  * Diagnóstico das credenciais do Login do Instagram (somente admin).
  * Não expõe segredos: mostra só os 4 últimos caracteres e valida o par
@@ -6748,6 +6834,22 @@ function socialAuthErrorStatus(error) {
   return error?.message === 'Admin access required' ? 403 : 401;
 }
 
+// Link de conexão: vale até expires_at e, depois do primeiro uso, só por mais 24 h
+// (dá para conectar Instagram e depois Facebook na mesma visita, mas o link enviado
+// pelo WhatsApp não fica valendo para sempre).
+const SOCIAL_CONNECT_REUSE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** Motivo para recusar o link ({ status, error }) ou null quando ele ainda vale. */
+function socialConnectLinkProblem(link) {
+  if (new Date(link.expires_at).getTime() < Date.now()) {
+    return { status: 410, error: 'Este link expirou. Peça um novo para a agência.' };
+  }
+  if (link.used_at && new Date(link.used_at).getTime() + SOCIAL_CONNECT_REUSE_WINDOW_MS < Date.now()) {
+    return { status: 410, error: 'Este link já foi usado. Peça um novo para a agência.' };
+  }
+  return null;
+}
+
 /**
  * Cliente autorizado a conectar contas no /api/meta-oauth:
  * equipe logada (Clientes) usa o client_id do corpo; o cliente na página
@@ -6762,13 +6864,12 @@ async function resolveMetaOAuthClientId(req) {
   if (!inviteToken) throw Object.assign(new Error('Unauthorized'), { status: 401 });
   await ensureSocialPostsSchema();
   const { rows } = await pool.query(
-    'SELECT client_id, expires_at FROM social_connect_links WHERE token = $1 LIMIT 1',
+    'SELECT client_id, expires_at, used_at FROM social_connect_links WHERE token = $1 LIMIT 1',
     [inviteToken]
   );
   if (!rows.length) throw Object.assign(new Error('Link inválido ou removido.'), { status: 401 });
-  if (new Date(rows[0].expires_at).getTime() < Date.now()) {
-    throw Object.assign(new Error('Este link expirou. Peça um novo para a agência.'), { status: 410 });
-  }
+  const problem = socialConnectLinkProblem(rows[0]);
+  if (problem) throw Object.assign(new Error(problem.error), { status: problem.status });
   return rows[0].client_id;
 }
 
@@ -6819,20 +6920,28 @@ app.post('/api/meta-oauth', async (req, res) => {
       if (pagesData.error) return res.status(400).json({ error: 'Failed to fetch pages: ' + pagesData.error.message });
 
       const pages = pagesData.data || [];
-      const connectedAccounts = [];
-      await admin.from('social_accounts').delete().eq('client_id', client_id);
-
-      for (const page of pages) {
-        await admin.from('social_accounts').insert({ client_id, platform: 'facebook', facebook_page_id: page.id, account_name: page.name, username: page.name, profile_picture_url: fbPagePictureUrl(page.id), access_token: page.access_token, status: 'connected', token_expiration: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() });
-        connectedAccounts.push({ platform: 'facebook', name: page.name, pageId: page.id });
-        if (page.instagram_business_account) {
-          const ig = page.instagram_business_account;
-          await admin.from('social_accounts').insert({ client_id, platform: 'instagram', facebook_page_id: page.id, instagram_business_id: ig.id, account_name: ig.username || ig.name, username: ig.username || ig.name, profile_picture_url: ig.profile_picture_url || null, access_token: page.access_token, status: 'connected', token_expiration: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() });
-          connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.name, username: ig.username, businessId: ig.id, profilePicture: ig.profile_picture_url, pageId: page.id });
-        }
-        await admin.from('integration_logs').insert({ client_id, platform: 'facebook', action: 'oauth_connect', status: 'success', message: `Página ${page.name} conectada via OAuth.` });
+      // Sem Página autorizada não apaga nada (antes o cliente ficava sem conta nenhuma)
+      if (pages.length === 0) {
+        return res.status(400).json({ error: 'Nenhuma Página do Facebook foi autorizada. Na tela da Meta, marque a Página do cliente e tente de novo.' });
       }
+      // Várias Páginas (o login é de quem administra Páginas de vários clientes): escolher uma
+      if (pages.length > 1) return res.json(createFacebookPageSelection(client_id, pages));
+
+      const connectedAccounts = await saveFacebookPageConnection(client_id, pages[0], 'Conectada via OAuth');
       return res.json({ success: true, accounts: connectedAccounts, pages_found: pages.length });
+    }
+
+    // Segunda etapa do login do Facebook com várias Páginas: grava só a escolhida
+    if (action === 'select_facebook_page') {
+      const { selection_key, page_id } = req.body;
+      if (!client_id || !selection_key || !page_id) return res.status(400).json({ error: 'Escolha a Página do cliente.' });
+      const pending = getFacebookPageSelection(selection_key, client_id);
+      if (!pending) return res.status(410).json({ error: 'A escolha da Página expirou. Clique em conectar de novo.' });
+      const page = pending.pages.find(p => String(p.id) === String(page_id));
+      if (!page) return res.status(400).json({ error: 'Página não encontrada entre as autorizadas.' });
+      const connectedAccounts = await saveFacebookPageConnection(client_id, page, 'Conectada via OAuth (Página escolhida)');
+      FB_PAGE_SELECTIONS.delete(String(selection_key));
+      return res.json({ success: true, accounts: connectedAccounts, pages_found: pending.pages.length });
     }
 
     // ── Instagram Login direto (sem Página do Facebook) ──
@@ -6999,31 +7108,18 @@ app.post('/api/social-accounts/manual-token', async (req, res) => {
     const pages = pagesData.data || [];
     if (pages.length === 0) return res.status(400).json({ error: 'Nenhuma página do Facebook encontrada para esse token.' });
 
-    // Preserva conexão direta do Instagram (api_base='instagram'), remove apenas o que veio via Página
-    await pool.query(`DELETE FROM social_accounts WHERE client_id = $1 AND COALESCE(api_base,'facebook') = 'facebook'`, [client_id]);
-    const { rows: directIg } = await pool.query(
-      `SELECT 1 FROM social_accounts WHERE client_id = $1 AND platform = 'instagram' AND api_base = 'instagram' LIMIT 1`,
-      [client_id]
-    );
-    const hasDirectIg = directIg.length > 0;
-    const connectedAccounts = [];
-    for (const page of pages) {
-      await pool.query(
-        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
-         VALUES ($1,'facebook',$2,$3,$4,$5,$6,'connected',$7,'facebook')`,
-        [client_id, page.id, page.name, page.name, fbPagePictureUrl(page.id), page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
-      );
-      connectedAccounts.push({ platform: 'facebook', name: page.name, pageId: page.id });
-      if (page.instagram_business_account && !hasDirectIg) {
-        const ig = page.instagram_business_account;
-        await pool.query(
-          `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
-           VALUES ($1,'instagram',$2,$3,$4,$5,$6,$7,'connected',$8,'facebook')`,
-          [client_id, page.id, ig.id, ig.username || ig.name, ig.username || null, ig.profile_picture_url || null, page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
-        );
-        connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.name, username: ig.username, businessId: ig.id, pageId: page.id });
-      }
+    // Token com várias Páginas: grava só a escolhida (antes todas viravam contas do cliente).
+    // A tela manda de novo o mesmo token com facebook_page_id.
+    let page = pages[0];
+    if (facebook_page_id) {
+      page = pages.find(p => String(p.id) === String(facebook_page_id));
+      if (!page) return res.status(400).json({ error: 'Essa Página não está entre as do token.' });
+    } else if (pages.length > 1) {
+      return res.json({ needs_page_selection: true, pages: pages.map(publicFacebookPageInfo) });
     }
+
+    // Preserva conexão direta do Instagram (api_base='instagram'), troca apenas o que veio via Página
+    const connectedAccounts = await saveFacebookPageConnection(client_id, page, null);
     await enablePortalInsights(client_id);
     return res.json({ success: true, accounts: connectedAccounts, pages_found: pages.length });
 
@@ -7281,7 +7377,7 @@ app.post('/api/social-connect-links', async (req, res) => {
   }
 
   try {
-    const { client_id, days = 14 } = req.body || {};
+    const { client_id, days = 14, reuse = false } = req.body || {};
     if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
     await ensureSocialPostsSchema();
 
@@ -7290,6 +7386,23 @@ app.post('/api/social-connect-links', async (req, res) => {
       [client_id]
     );
     if (!clientRows.length) return res.status(404).json({ error: 'Cliente não encontrado' });
+
+    // reuse: devolve o link que o cliente já recebeu, se ainda vale (gerar outro derruba o anterior)
+    if (reuse) {
+      const { rows: current } = await pool.query(
+        `SELECT token, expires_at, used_at FROM social_connect_links WHERE client_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [client_id]
+      );
+      if (current[0] && !socialConnectLinkProblem(current[0])) {
+        return res.json({
+          token: current[0].token,
+          path: `/conectar-social/${current[0].token}`,
+          client_name: clientRows[0].company_name,
+          expires_at: new Date(current[0].expires_at).toISOString(),
+          reused: true,
+        });
+      }
+    }
 
     const token = crypto.randomBytes(24).toString('hex');
     const validDays = Math.min(Math.max(Number(days) || 14, 1), 90);
@@ -7318,16 +7431,15 @@ app.get('/api/social-connect/:token', async (req, res) => {
   try {
     await ensureSocialPostsSchema();
     const { rows } = await pool.query(
-      `SELECT l.client_id, l.expires_at, c.company_name
+      `SELECT l.client_id, l.expires_at, l.used_at, c.company_name
          FROM social_connect_links l
          JOIN clients c ON c.id = l.client_id
         WHERE l.token = $1 LIMIT 1`,
       [req.params.token]
     );
     if (!rows.length) return res.status(404).json({ error: 'Link inválido ou removido.' });
-    if (new Date(rows[0].expires_at).getTime() < Date.now()) {
-      return res.status(410).json({ error: 'Este link expirou. Peça um novo para a agência.' });
-    }
+    const problem = socialConnectLinkProblem(rows[0]);
+    if (problem) return res.status(problem.status).json({ error: problem.error });
 
     const { rows: accounts } = await pool.query(
       `SELECT platform, account_name, username, profile_picture_url FROM social_accounts WHERE client_id = $1 AND status = 'connected'`,
@@ -7350,7 +7462,15 @@ app.get('/api/social-connect/:token', async (req, res) => {
 app.post('/api/social-connect/:token/complete', async (req, res) => {
   try {
     await ensureSocialPostsSchema();
-    await pool.query(`UPDATE social_connect_links SET used_at = now() WHERE token = $1`, [req.params.token]);
+    const { rows } = await pool.query(
+      'SELECT expires_at, used_at FROM social_connect_links WHERE token = $1 LIMIT 1',
+      [req.params.token]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Link inválido ou removido.' });
+    const problem = socialConnectLinkProblem(rows[0]);
+    if (problem) return res.status(problem.status).json({ error: problem.error });
+    // Guarda só o primeiro uso: a janela de 24 h conta dele e não se renova a cada conexão
+    await pool.query(`UPDATE social_connect_links SET used_at = COALESCE(used_at, now()) WHERE token = $1`, [req.params.token]);
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -8315,9 +8435,12 @@ app.get('/api/social-posts/media-library', async (req, res) => {
 app.post('/api/social-accounts/disconnect', async (req, res) => {
   try {
     await verifyUser(req);
-    const { client_id, platform } = req.body || {};
+    const { client_id, platform, account_id } = req.body || {};
     if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
-    if (platform) {
+    if (account_id) {
+      // Uma conta só (ex.: Página de outro cliente gravada por uma conexão antiga)
+      await pool.query(`DELETE FROM social_accounts WHERE id = $1 AND client_id = $2`, [account_id, client_id]);
+    } else if (platform) {
       await pool.query(`DELETE FROM social_accounts WHERE client_id = $1 AND platform = $2`, [client_id, platform]);
     } else {
       await pool.query(`DELETE FROM social_accounts WHERE client_id = $1`, [client_id]);

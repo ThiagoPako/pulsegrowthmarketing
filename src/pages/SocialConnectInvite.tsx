@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Instagram, Facebook, Loader2, CheckCircle2, ShieldCheck } from 'lucide-react';
+import FacebookPagePickerDialog, { type FacebookPageOption } from '@/components/social/FacebookPagePickerDialog';
 
 const API_BASE = 'https://agenciapulse.tech/api';
 /** Mesmo endereço cadastrado na Meta e usado pelo servidor na troca do código. */
@@ -37,6 +38,9 @@ export default function SocialConnectInvite() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Platform | null>(null);
+  // Login do Facebook com várias Páginas: o cliente escolhe a dele (só ela fica conectada)
+  const [pagePicker, setPagePicker] = useState<{ pages: FacebookPageOption[]; selectionKey: string } | null>(null);
+  const [pagePickerSaving, setPagePickerSaving] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -127,16 +131,50 @@ export default function SocialConnectInvite() {
       });
       const result = await exchangeRes.json().catch(() => null);
       if (!exchangeRes.ok || result?.error) throw new Error(result?.error || 'Falha ao concluir a autorização.');
+      if (result?.needs_page_selection) {
+        setPagePicker({ pages: result.pages || [], selectionKey: result.selection_key });
+        return;
+      }
 
-      await fetch(`${API_BASE}/social-connect/${token}/complete`, { method: 'POST' });
-      toast.success(tr('Conta autorizada com sucesso!', 'Instagram Business account connected successfully via Meta API.'));
-      // Avisa a tela de Conexões Sociais aberta em outra aba para atualizar na hora.
-      try { new BroadcastChannel('pulse-social').postMessage({ type: 'pulse-social-connected' }); } catch { /* navegador antigo */ }
-      await load();
+      await finishAuthorization();
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
       setBusy(null);
+    }
+  };
+
+  const finishAuthorization = async () => {
+    await fetch(`${API_BASE}/social-connect/${token}/complete`, { method: 'POST' });
+    toast.success(tr('Conta autorizada com sucesso!', 'Instagram Business account connected successfully via Meta API.'));
+    // Avisa a tela de Conexões Sociais aberta em outra aba para atualizar na hora.
+    try { new BroadcastChannel('pulse-social').postMessage({ type: 'pulse-social-connected' }); } catch { /* navegador antigo */ }
+    await load();
+  };
+
+  const selectFacebookPage = async (pageId: string) => {
+    if (!invite || !pagePicker) return;
+    setPagePickerSaving(pageId);
+    try {
+      const res = await fetch(`${API_BASE}/meta-oauth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'select_facebook_page',
+          client_id: invite.client_id,
+          invite_token: token,
+          selection_key: pagePicker.selectionKey,
+          page_id: pageId,
+        }),
+      });
+      const result = await res.json().catch(() => null);
+      if (!res.ok || result?.error) throw new Error(result?.error || 'Falha ao conectar a Página.');
+      setPagePicker(null);
+      await finishAuthorization();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setPagePickerSaving(null);
     }
   };
 
@@ -225,6 +263,15 @@ export default function SocialConnectInvite() {
               </div>
             );
           })}
+
+          <FacebookPagePickerDialog
+            open={!!pagePicker}
+            pages={pagePicker?.pages || []}
+            clientName={invite.client_name}
+            savingPageId={pagePickerSaving}
+            onSelect={selectFacebookPage}
+            onCancel={() => setPagePicker(null)}
+          />
 
           <p className="text-xs text-muted-foreground pt-2">
             A autorização pode ser cancelada a qualquer momento nas configurações da sua conta na Meta.

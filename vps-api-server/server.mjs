@@ -11647,10 +11647,17 @@ const DB_QUERY_TABLE_RULES = {
   training_tracks: { write: 'admin' },
   training_modules: { write: 'admin' },
   training_lessons: { write: 'admin' },
+  // Fila de postagem: as telas gravam pelas rotas /api/social-posts e /api/scheduling (nenhuma pelo genérico).
+  // Pelo genérico, só admin e social_media; as colunas dos stories nunca (ver DB_QUERY_STORY_COLUMNS).
+  scheduled_posts: { write: 'admin' },
 };
 
 // Colunas de destino de redirecionamento: só http(s) — um 'javascript:' rodaria no domínio do sistema.
-const DB_QUERY_REDIRECT_URL_COLUMNS = { short_links: 'original_url', regulations: 'external_url' };
+const DB_QUERY_REDIRECT_URL_COLUMNS = { short_links: 'original_url', regulations: 'external_url', scheduled_posts: 'story_link' };
+
+// Colunas dos stories (lembrete com link e repetição, storySeries.mjs): só as rotas dos stories gravam.
+// Um lembrete gravado pelo genérico avisaria a equipe no sino e no WhatsApp do PULSE com o link de quem gravou.
+const DB_QUERY_STORY_COLUMNS = ['story_mode', 'story_series_id', 'series_slot_at', 'reminder_sent_at', 'reminder_followup_at', 'manual_posted_by'];
 
 // Artes: excluir um card (e o histórico dele) é de admin/social_media, como no detalhe da
 // tarefa. Apagar em massa — filtro que não é o id de um card, como o "Limpar Banco de Dados"
@@ -11775,6 +11782,13 @@ async function enforceDbQueryRules({ safeTable, operation, data, filters, user, 
     );
     if (!bySingleCard && !(await isStrictAdminUser(user))) {
       throw forbidden('Só um administrador pode apagar várias artes de uma vez.');
+    }
+  }
+
+  if (safeTable === 'scheduled_posts' && isWrite && operation !== 'delete') {
+    const items = Array.isArray(data) ? data : [data];
+    if (items.some((item) => dbQueryRowKeys(item).some((key) => DB_QUERY_STORY_COLUMNS.includes(key)))) {
+      throw forbidden('Stories com lembrete ou repetição só são gravados pelos Agendamentos.');
     }
   }
 

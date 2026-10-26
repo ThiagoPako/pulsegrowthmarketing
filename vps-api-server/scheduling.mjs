@@ -26,7 +26,7 @@
 
 import { POSTING_TZ, DATE_KEY_RE, TIME_RE, brtParts, brtToIso, formatBrt } from './lib/postingTime.mjs';
 import { listOccurrences, occurrenceAt, ruleFromRow, ruleSummary } from './lib/storyRecurrence.mjs';
-import { registerStoryRoutes } from './storySeries.mjs';
+import { isHttpsUrl, registerStoryRoutes } from './storySeries.mjs';
 
 export const SCHEDULING_MODULE = 'agendamentos';
 
@@ -1263,6 +1263,10 @@ export function registerSchedulingRoutes(app, deps) {
       // Story: "Postar sozinho" (o robô publica) ou "Lembrete com link" (avisa a equipe, que posta pelo app)
       const storyMode = mode === 'auto' && body.publish_type === 'stories'
         ? (body.story_mode === 'lembrete' ? 'lembrete' : 'auto') : null;
+      // O link do lembrete vira <a href> na página e vai no sino e no WhatsApp: só https
+      if (storyMode === 'lembrete' && String(body.story_link || '').trim() && !isHttpsUrl(body.story_link)) {
+        throw httpError(400, 'O link do story precisa começar com https://');
+      }
 
       const result = await withTransaction(async (db) => {
         const material = await lockMaterial(db, kind, id, client.id);

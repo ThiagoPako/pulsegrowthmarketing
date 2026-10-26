@@ -10,6 +10,26 @@ export const DEFAULT_BUTTON_TEXTS = ['Clique aqui', 'Agende sua consulta', 'Fale
 export const DEFAULT_TIME = '09:00';
 const LAST_TIME_KEY = 'agendamentos:ultima-hora';
 
+/** Link do story que pode virar <a href>: só https (um "javascript:" rodaria no domínio do sistema). */
+export function safeStoryLink(value: string | null | undefined): string | null {
+  try {
+    const url = new URL(String(value || '').trim());
+    return url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Vídeo para baixar: só http(s). */
+export function safeMediaUrl(value: string | null | undefined): string | null {
+  try {
+    const url = new URL(String(value || '').trim());
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 /** A orientação curta do lembrete (a única explicação na tela). */
 export function storyGuidance(button: string | null | undefined, link: string | null | undefined): string {
   return `Poste pelo app com o adesivo de link na parte de baixo. Botão: ${button || DEFAULT_BUTTON_TEXTS[0]}. Link: ${link || '—'}`;

@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { BellRing, CheckCircle2, Copy, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { storyGuidance } from '@/lib/storySeries';
+import { safeMediaUrl, safeStoryLink, storyGuidance } from '@/lib/storySeries';
 import { markStoryPosted } from '@/services/storiesApi';
 
 interface Props {
@@ -30,8 +30,10 @@ async function copy(text: string) {
 }
 
 /** Lembrete com link: vídeo original para baixar, link para copiar, a orientação curta e o "Postado". */
-export default function StoryReminderPanel({ postId, mediaUrl, link, buttonText, notified, posted, postedBy, onPosted, className }: Props) {
+export default function StoryReminderPanel({ postId, mediaUrl: rawMedia, link: rawLink, buttonText, notified, posted, postedBy, onPosted, className }: Props) {
   const [saving, setSaving] = useState(false);
+  const mediaUrl = safeMediaUrl(rawMedia);
+  const link = safeStoryLink(rawLink);
 
   const markPosted = async () => {
     if (!postId) return;

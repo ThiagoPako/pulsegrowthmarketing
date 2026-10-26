@@ -65,6 +65,14 @@ const isHttpUrl = (value) => {
   }
 };
 const isoOf = (v) => (v ? new Date(v).toISOString() : null);
+/** Link do story: só https (vira <a href> na página do lembrete e vai no sino e no WhatsApp). */
+export const isHttpsUrl = (value) => {
+  try {
+    return new URL(String(value || '').trim()).protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
 
 /** Orientação curta do lembrete (a única explicação que aparece na tela e no aviso). */
 export function reminderGuidance(button, link) {
@@ -314,7 +322,7 @@ export function registerStoryRoutes(app, deps) {
     const platform = PLATFORMS.has(body.platform) ? body.platform : 'instagram';
     // "Postar sozinho" não leva link (a API da Meta não aplica o adesivo); o lembrete leva
     const storyLink = storyMode === 'lembrete' ? (String(body.story_link || '').trim() || null) : null;
-    if (storyLink && !isHttpUrl(storyLink)) throw httpError(400, 'O link do story precisa começar com https://');
+    if (storyLink && !isHttpsUrl(storyLink)) throw httpError(400, 'O link do story precisa começar com https://');
     const storyLinkText = storyMode === 'lembrete' ? (clip(body.story_link_text, 40) || DEFAULT_BUTTON_TEXTS[0]) : null;
     return { storyMode, platform, storyLink, storyLinkText };
   }
@@ -557,15 +565,20 @@ export function registerStoryRoutes(app, deps) {
         WHERE sp.id = $1`,
       [post.id]
     );
-    const defaults = post.story_link ? null : await linkDefaults(post.client_id);
+    // Conferido de novo na saída (a linha pode ter vindo de fora das rotas dos stories): link só https,
+    // vídeo só http(s). Fora disso, o link do cliente ou nada. Vale para o sino, o WhatsApp e a página.
+    const ownLink = isHttpsUrl(post.story_link) ? String(post.story_link).trim() : null;
+    const defaults = ownLink ? null : await linkDefaults(post.client_id);
+    const defaultLink = isHttpsUrl(defaults?.url) ? defaults.url : null;
+    const mediaUrl = media.absolute(post.media_url);
     const when = brtParts(post.scheduled_at);
     return {
       client,
       title: names?.title || 'Story',
       postedByName: names?.posted_by_name || null,
-      link: post.story_link || defaults?.url || null,
-      button: post.story_link_text || defaults?.default_text || DEFAULT_BUTTON_TEXTS[0],
-      mediaUrl: media.absolute(post.media_url),
+      link: ownLink || defaultLink,
+      button: clip(post.story_link_text, 40) || defaults?.default_text || DEFAULT_BUTTON_TEXTS[0],
+      mediaUrl: isHttpUrl(mediaUrl) ? mediaUrl : null,
       when,
       city: clientCityValue(client),
     };

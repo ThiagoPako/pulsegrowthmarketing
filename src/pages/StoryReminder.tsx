@@ -10,6 +10,7 @@ import { usePlaybackUrl } from '@/hooks/usePlaybackUrl';
 import { useModuleAccess } from '@/hooks/useModuleAccess';
 import { formatDayLabel } from '@/lib/postingSchedule';
 import { cn } from '@/lib/utils';
+import { safeStoryLink } from '@/lib/storySeries';
 import { fetchStoryReminder, type StoryReminder as Reminder } from '@/services/storiesApi';
 
 const STATE: Record<Reminder['state'], { label: string; icon: typeof BellRing; tone: string }> = {
@@ -108,11 +109,13 @@ export default function StoryReminder() {
             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
               <Link2 size={13} /> {reminder.button_text}
             </div>
-            {reminder.story_link && (
-              <a href={reminder.story_link} target="_blank" rel="noreferrer" className="block break-all text-sm font-medium text-primary hover:underline">
+            {safeStoryLink(reminder.story_link) ? (
+              <a href={safeStoryLink(reminder.story_link) as string} target="_blank" rel="noreferrer" className="block break-all text-sm font-medium text-primary hover:underline">
                 {reminder.story_link}
               </a>
-            )}
+            ) : reminder.story_link ? (
+              <p className="break-all text-sm text-muted-foreground">{reminder.story_link}</p>
+            ) : null}
           </div>
           {reminder.client && has('pulse_plus') && (
             <Button asChild variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">

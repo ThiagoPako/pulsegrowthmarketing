@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
-import { VM_SCORE, calcVmDeliveryScore, calcWaitPoints, dedupeDeliveryRecords } from '@/lib/scoringSystem';
+import { VM_SCORE, calcVmDeliveryScore, calcWaitPoints, dedupeDeliveryRecords, EDITOR_APPROVED_COLUMNS } from '@/lib/scoringSystem';
+import { userHasRole } from '@/lib/userRoles';
 import { DAY_LABELS } from '@/types';
 import { fetchAISeasonalAlerts, NICHE_OPTIONS, type AISeasonalAlert, clearSeasonalCache } from '@/lib/seasonalDates';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,7 +11,7 @@ import {
   ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare, Trophy, BarChart3,
   Clapperboard, Film, Megaphone, AlertTriangle, Rocket, Bell, Send, Hourglass, Trash2, Package, Target
 } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays, formatDistanceToNow, differenceInMinutes, differenceInHours } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays, addMonths, formatDistanceToNow, differenceInMinutes, differenceInHours, differenceInCalendarDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';
@@ -28,6 +29,11 @@ import ContentCoverageWidget from '@/components/ContentCoverageWidget';
 import { getMessageStats } from '@/services/whatsappService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 import { Badge } from '@/components/ui/badge';
+import { buttonVariants } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 interface LiveEditorTask {
@@ -128,7 +134,15 @@ export default function Dashboard() {
   const [rawDeliveryRecords, setDeliveryRecords] = useState<any[]>([]);
   const [rawLiveEditorTasks, setLiveEditorTasks] = useState<LiveEditorTask[]>([]);
   const [endoMetrics, setEndoMetrics] = useState({ totalClients: 0, revenue: 0, costs: 0, profit: 0, margin: 0, topClients: [] as { name: string; profit: number }[] });
-  const [contractAlerts, setContractAlerts] = useState<{ clientName: string; daysLeft: number; endDate: string }[]>([]);
+  const [contractRows, setContractRows] = useState<{ clientId: string; startDate: string; endDate: string | null; durationMonths: number | null }[]>([]);
+  // Gravação a cancelar (confirmação) e cobranças já enviadas nesta tela (não repete a notificação)
+  const [cancelTarget, setCancelTarget] = useState<any | null>(null);
+  const [chargedKeys, setChargedKeys] = useState<Set<string>>(() => new Set());
+  const markCharged = (key: string, on: boolean) => setChargedKeys(prev => {
+    const next = new Set(prev);
+    if (on) next.add(key); else next.delete(key);
+    return next;
+  });
   const [expandedWeekDay, setExpandedWeekDay] = useState<string | null>(null);
   const [waitLogs, setWaitLogs] = useState<any[]>([]);
   const [rawContentTasks, setContentTasks] = useState<any[]>([]);
@@ -144,15 +158,30 @@ export default function Dashboard() {
     setSeasonalLoading(false);
   };
 
+  // Esperas do mês atual (um dia de folga: o card usa started_at e a pontuação created_at).
+  // Antes vinha a tabela inteira a cada abertura do painel.
+  const loadWaitLogs = async () => {
+    const since = format(addDays(startOfMonth(new Date()), -1), 'yyyy-MM-dd');
+    const { data } = await supabase.from('recording_wait_logs').select('*').gte('created_at', since);
+    if (data) setWaitLogs(data);
+  };
+
   useEffect(() => { getMessageStats().then(setWaStats); }, []);
   useEffect(() => {
-    supabase.from('delivery_records').select('*').then(({ data }) => { if (data) setDeliveryRecords(data); });
+    // Só o mês atual: a pontuação do mês é o único uso aqui
+    const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+    const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+    supabase.from('delivery_records').select('*').gte('date', monthStart).lte('date', monthEnd)
+      .then(({ data }) => { if (data) setDeliveryRecords(data); });
   }, []);
+  useEffect(() => { loadWaitLogs(); }, []);
   useEffect(() => {
-    supabase.from('recording_wait_logs').select('*').then(({ data }) => { if (data) setWaitLogs(data); });
-  }, []);
-  useEffect(() => {
-    supabase.from('content_tasks').select('id, client_id, kanban_column, created_at, content_type').then(({ data }) => { if (data) setContentTasks(data); });
+    // Conteúdos aprovados no mês (progresso por cliente). O kanban não tem coluna 'finalizado'.
+    const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+    supabase.from('content_tasks').select('id, client_id, kanban_column, approved_at, content_type')
+      .in('kanban_column', [...EDITOR_APPROVED_COLUMNS])
+      .gte('approved_at', monthStart)
+      .then(({ data }) => { if (data) setContentTasks(data); });
   }, []);
 
   const [rawSocialDeliveries, setSocialDeliveries] = useState<any[]>([]);
@@ -165,7 +194,9 @@ export default function Dashboard() {
   const [plansData, setPlansData] = useState<any[]>([]);
   const [clientPlans, setClientPlans] = useState<Record<string, string>>({});
   useEffect(() => {
-    supabase.from('social_media_deliveries').select('id, client_id, content_type, delivered_at, status').then(({ data }) => { if (data) setSocialDeliveries(data); });
+    supabase.from('social_media_deliveries').select('id, client_id, content_type, delivered_at, status')
+      .gte('delivered_at', format(startOfMonth(new Date()), 'yyyy-MM-dd'))
+      .then(({ data }) => { if (data) setSocialDeliveries(data); });
     supabase.from('plans').select('id, name, reels_qty, creatives_qty, stories_qty, arts_qty, recording_sessions').then(({ data }) => { if (data) setPlansData(data); });
     supabase.from('clients').select('id, plan_id').then(({ data }) => {
       if (data) {
@@ -176,32 +207,49 @@ export default function Dashboard() {
     });
   }, []);
 
-  // Load AI seasonal alerts when clients are available
+  // Load AI seasonal alerts when clients are available (de novo quando a lista muda, ex.: troca de cidade)
+  const seasonalClientKey = useMemo(() => clients.map(c => c.id).sort().join(','), [clients]);
   useEffect(() => {
-    if (clients.length > 0) loadAIAlerts();
-  }, [clients.length]);
+    if (seasonalClientKey) loadAIAlerts();
+  }, [seasonalClientKey]);
 
   useEffect(() => {
-    const fetchContractAlerts = async () => {
-      const { data } = await supabase.from('clients').select('company_name, contract_start_date, contract_duration_months').not('contract_start_date', 'is', null);
-      if (!data) return;
-      const now = new Date();
-      const alerts: { clientName: string; daysLeft: number; endDate: string }[] = [];
-      for (const c of data) {
-        if (!c.contract_start_date || !(c as any).contract_duration_months) continue;
-        const start = new Date(c.contract_start_date);
-        const endDate = new Date(start);
-        endDate.setMonth(endDate.getMonth() + (c as any).contract_duration_months);
-        const diffMs = endDate.getTime() - now.getTime();
-        const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-        if (daysLeft <= 60 && daysLeft > 0) {
-          alerts.push({ clientName: c.company_name, daysLeft, endDate: format(endDate, 'dd/MM/yyyy') });
-        }
+    const fetchContracts = async () => {
+      // Fonte certa é o contrato ativo (a renovação atualiza financial_contracts, não o cliente)
+      const { data, error } = await supabase.from('financial_contracts')
+        .select('client_id, contract_start_date, contract_end_date, contract_duration_months')
+        .eq('status', 'ativo');
+      if (!error && data) {
+        setContractRows(data
+          .filter((c: any) => c.client_id && c.contract_start_date)
+          .map((c: any) => ({ clientId: c.client_id, startDate: c.contract_start_date, endDate: c.contract_end_date || null, durationMonths: c.contract_duration_months || 12 })));
+        return;
       }
-      setContractAlerts(alerts.sort((a, b) => a.daysLeft - b.daysLeft));
+      // Sem acesso ao financeiro: datas do cadastro do cliente, como antes
+      const { data: clientRows } = await supabase.from('clients').select('id, contract_start_date, contract_duration_months').not('contract_start_date', 'is', null);
+      setContractRows((clientRows || [])
+        .filter((c: any) => c.contract_start_date && c.contract_duration_months)
+        .map((c: any) => ({ clientId: c.id, startDate: c.contract_start_date, endDate: null, durationMonths: c.contract_duration_months })));
     };
-    fetchContractAlerts();
+    fetchContracts();
   }, []);
+
+  // Só clientes não cancelados; vence em até 60 dias ou venceu há até 30 (o vencido é o mais urgente)
+  const contractAlerts = useMemo(() => {
+    const todayDate = parseISO(format(new Date(), 'yyyy-MM-dd'));
+    const alerts: { clientName: string; daysLeft: number; endDate: string }[] = [];
+    for (const row of contractRows) {
+      const client = clients.find(c => c.id === row.clientId);
+      if (!client) continue;
+      const end = row.endDate ? parseISO(row.endDate) : addMonths(parseISO(row.startDate), row.durationMonths || 12);
+      if (Number.isNaN(end.getTime())) continue;
+      const daysLeft = differenceInCalendarDays(end, todayDate);
+      if (daysLeft <= 60 && daysLeft >= -30) {
+        alerts.push({ clientName: client.companyName, daysLeft, endDate: format(end, 'dd/MM/yyyy') });
+      }
+    }
+    return alerts.sort((a, b) => a.daysLeft - b.daysLeft);
+  }, [contractRows, clients]);
 
   useEffect(() => {
     const fetchLiveTasks = async () => {
@@ -220,11 +268,17 @@ export default function Dashboard() {
       setLiveEditorTasks(combined);
     };
     fetchLiveTasks();
-    const channel = supabase
-      .channel('live-editor-tasks')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'content_tasks' }, () => fetchLiveTasks())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // O servidor não manda as mudanças de content_tasks pelo realtime: atualiza a cada 45 s
+    // com a aba visível (e ao voltar para ela), em vez de ficar parado no estado da abertura.
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') fetchLiveTasks();
+    }, 45_000);
+    const onVisibility = () => { if (document.visibilityState === 'visible') fetchLiveTasks(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, []);
 
   useEffect(() => {
@@ -279,7 +333,8 @@ export default function Dashboard() {
     return recs.sort((a, b) => a.startTime.localeCompare(b.startTime));
   }, [recordings, today, currentUser]);
 
-  const videomakers = users.filter(u => u.role === 'videomaker');
+  // Função principal ou adicional (videomaker + editor também grava)
+  const videomakers = users.filter(u => userHasRole(u, 'videomaker'));
   const videomakerStats = useMemo(() => {
     return videomakers.map(vm => {
       const weekRecs = recordings.filter(r => r.videomakerId === vm.id && isWithinInterval(parseISO(r.date), { start: weekStart, end: weekEnd }));
@@ -334,8 +389,8 @@ export default function Dashboard() {
       const plan = plansData.find(p => p.id === clientPlans[client.id]);
       // Monthly deliveries from social_media_deliveries
       const monthDeliveries = socialDeliveries.filter(d => d.client_id === client.id && d.delivered_at >= monthStart && d.delivered_at <= monthEnd);
-      // Also count finalized content_tasks this month
-      const monthTasks = contentTasks.filter(t => t.client_id === client.id && t.kanban_column === 'finalizado' && (t.created_at?.slice(0, 10) || '') >= monthStart && (t.created_at?.slice(0, 10) || '') <= monthEnd);
+      // Also count content_tasks approved this month (envio, agendamentos, acompanhamento, arquivado)
+      const monthTasks = contentTasks.filter(t => t.client_id === client.id && (EDITOR_APPROVED_COLUMNS as readonly string[]).includes(t.kanban_column) && (t.approved_at?.slice(0, 10) || '') >= monthStart && (t.approved_at?.slice(0, 10) || '') <= monthEnd);
 
       const countDelivered = (type: string) => {
         const fromDeliveries = monthDeliveries.filter(d => d.content_type === type).length;
@@ -488,10 +543,10 @@ export default function Dashboard() {
               <motion.div key={i} whileTap={{ scale: 0.97 }} className={`flex items-center justify-between p-2 sm:p-3 rounded-lg border ${alert.daysLeft <= 30 ? 'bg-destructive/10 border-destructive/30' : 'bg-warning/10 border-warning/30'}`}>
                 <div className="min-w-0">
                   <p className="text-xs sm:text-sm font-medium truncate">{alert.clientName}</p>
-                  <p className="text-[10px] text-muted-foreground">Vence {alert.endDate}</p>
+                  <p className="text-[10px] text-muted-foreground">{alert.daysLeft < 0 ? 'Venceu' : 'Vence'} {alert.endDate}</p>
                 </div>
                 <Badge variant={alert.daysLeft <= 30 ? 'destructive' : 'outline'} className="text-[10px] shrink-0 ml-1">
-                  {alert.daysLeft}d
+                  {alert.daysLeft < 0 ? `vencido há ${-alert.daysLeft}d` : alert.daysLeft === 0 ? 'hoje' : `${alert.daysLeft}d`}
                 </Badge>
               </motion.div>
             ))}
@@ -537,10 +592,13 @@ export default function Dashboard() {
           const maxMin = thresholds.stale;
           const progressPct = Math.min((elapsedMin / maxMin) * 100, 100);
 
+          const chargeKey = `task:${task.id}`;
+          const charged = chargedKeys.has(chargeKey);
           const handleDemandNotification = async () => {
             const targetId = task.assigned_to;
-            if (!targetId) return;
-            await supabase.from('notifications').insert({
+            if (!targetId || charged) return;
+            markCharged(chargeKey, true);
+            const { error } = await supabase.from('notifications').insert({
               user_id: targetId,
               title: `Cobrança — ${config.label}`,
               message: `A tarefa "${task.title}" (${client?.companyName || 'cliente'}) está em ${config.label} há ${elapsedLabel}. Atualize o status.`,
@@ -548,6 +606,11 @@ export default function Dashboard() {
               link: '/edicao',
             });
             const { toast } = await import('@/hooks/use-toast');
+            if (error) {
+              markCharged(chargeKey, false);
+              toast({ title: 'Cobrança não enviada', description: error.message || 'Tente de novo.', variant: 'destructive' });
+              return;
+            }
             toast({ title: 'Notificação enviada', description: `Cobrança enviada para ${editor?.name || 'editor'}` });
           };
 
@@ -623,10 +686,11 @@ export default function Dashboard() {
                   animate={{ opacity: 1, scale: 1 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={handleDemandNotification}
-                  className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-warning/15 hover:bg-warning/25 text-warning text-[10px] font-semibold transition-colors"
+                  disabled={charged}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-warning/15 hover:bg-warning/25 text-warning text-[10px] font-semibold transition-colors disabled:opacity-60 disabled:cursor-default"
                 >
-                  <Send size={11} />
-                  Cobrar Atualização
+                  {charged ? <Check size={11} /> : <Send size={11} />}
+                  {charged ? 'Cobrança enviada' : 'Cobrar Atualização'}
                 </motion.button>
               )}
             </motion.div>
@@ -682,9 +746,12 @@ export default function Dashboard() {
                     const isStale = elapsedMin > expectedDuration * 1.5;
                     const isWarning = elapsedMin > expectedDuration;
 
+                    const chargeKey = `rec:${ar.recordingId}`;
+                    const charged = chargedKeys.has(chargeKey);
                     const handleDemandNotification = async () => {
-                      if (!vm) return;
-                      await supabase.from('notifications').insert({
+                      if (!vm || charged) return;
+                      markCharged(chargeKey, true);
+                      const { error } = await supabase.from('notifications').insert({
                         user_id: vm.id,
                         title: 'Cobrança de Gravação',
                         message: `A gravação de ${client?.companyName || 'cliente'} está em andamento há ${elapsedLabel}. Atualize o status.`,
@@ -692,6 +759,11 @@ export default function Dashboard() {
                         link: '/agenda',
                       });
                       const { toast } = await import('@/hooks/use-toast');
+                      if (error) {
+                        markCharged(chargeKey, false);
+                        toast({ title: 'Cobrança não enviada', description: error.message || 'Tente de novo.', variant: 'destructive' });
+                        return;
+                      }
                       toast({ title: 'Notificação enviada', description: `Cobrança enviada para ${vm.name}` });
                     };
 
@@ -750,8 +822,9 @@ export default function Dashboard() {
                         {(isWarning || isStale) && (
                           <motion.button initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} whileTap={{ scale: 0.95 }}
                             onClick={handleDemandNotification}
-                            className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-warning/15 hover:bg-warning/25 text-warning text-[10px] font-semibold transition-colors">
-                            <Send size={11} /> Cobrar Atualização
+                            disabled={charged}
+                            className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-warning/15 hover:bg-warning/25 text-warning text-[10px] font-semibold transition-colors disabled:opacity-60 disabled:cursor-default">
+                            {charged ? <><Check size={11} /> Cobrança enviada</> : <><Send size={11} /> Cobrar Atualização</>}
                           </motion.button>
                         )}
                       </motion.div>
@@ -845,12 +918,24 @@ export default function Dashboard() {
               whileTap={{ scale: 0.95 }}
               className="text-destructive text-[10px] h-6 px-2 ml-1 rounded hover:bg-destructive/10 flex items-center"
               onClick={async () => {
-                if (!confirm('Limpar todos os dados de tempo de espera?')) return;
-                const ids = waitLogs.map((l: any) => l.id);
-                for (const id of ids) {
-                  await supabase.from('recording_wait_logs').delete().eq('id', id);
+                // Só as esperas do mês mostrado no card (antes apagava o histórico inteiro, um pedido por registro).
+                // Mesmo critério do card: started_at no mês (data UTC) e com duração gravada.
+                const now = new Date();
+                const monthKey = format(now, 'yyyy-MM');
+                const nextMonthKey = format(addMonths(startOfMonth(now), 1), 'yyyy-MM');
+                const monthLabel = format(now, 'MMMM', { locale: ptBR });
+                if (!confirm(`Apagar as ${waitTimeStats.totalCount} esperas de ${monthLabel}? Os pontos de espera deste mês saem do ranking. Os meses anteriores não mudam.`)) return;
+                const { error } = await supabase.from('recording_wait_logs').delete()
+                  .gte('started_at', `${monthKey}-01T00:00:00Z`)
+                  .lt('started_at', `${nextMonthKey}-01T00:00:00Z`)
+                  .gt('wait_duration_seconds', 0);
+                const { toast } = await import('@/hooks/use-toast');
+                if (error) {
+                  toast({ title: 'Não foi possível limpar', description: error.message || 'Tente de novo.', variant: 'destructive' });
+                  return;
                 }
-                setWaitLogs([]);
+                toast({ title: 'Tempo de espera do mês limpo' });
+                loadWaitLogs();
               }}
             >
               <Trash2 size={12} className="mr-1" /> Limpar
@@ -991,7 +1076,7 @@ export default function Dashboard() {
                     {rec.status === 'agendada' && !isMobile && (
                       <div className="hidden group-hover:flex gap-1 shrink-0">
                         <button onClick={() => updateRecording({ ...rec, status: 'concluida' })} className="w-7 h-7 rounded-md bg-success/15 text-success flex items-center justify-center hover:bg-success/25"><Check size={14} /></button>
-                        <button onClick={() => cancelRecording(rec.id)} className="w-7 h-7 rounded-md bg-destructive/15 text-destructive flex items-center justify-center hover:bg-destructive/25"><XCircle size={14} /></button>
+                        <button onClick={() => setCancelTarget(rec)} title="Cancelar gravação" className="w-7 h-7 rounded-md bg-destructive/15 text-destructive flex items-center justify-center hover:bg-destructive/25"><XCircle size={14} /></button>
                       </div>
                     )}
                   </motion.div>
@@ -1316,6 +1401,35 @@ export default function Dashboard() {
         )}
 
       </div>
+
+      {/* Cancelar gravação pelo painel: confirma antes (o botão fica colado ao de concluir) */}
+      <AlertDialog open={!!cancelTarget} onOpenChange={(open) => { if (!open) setCancelTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar esta gravação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {cancelTarget ? `${getClientName(cancelTarget.clientId)} às ${cancelTarget.startTime} com ${getVideomakerName(cancelTarget.videomakerId)}. ` : ''}
+              Por aqui o cliente não é avisado e não recebe o link para reagendar. Para avisar o cliente ou pôr um backup no horário, cancele pela Agenda.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <button
+              type="button"
+              className={buttonVariants({ variant: 'outline' })}
+              onClick={() => { setCancelTarget(null); navigate('/agenda'); }}
+            >
+              Abrir a Agenda
+            </button>
+            <AlertDialogAction
+              className={buttonVariants({ variant: 'destructive' })}
+              onClick={() => { const rec = cancelTarget; setCancelTarget(null); if (rec) cancelRecording(rec.id); }}
+            >
+              Cancelar gravação
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

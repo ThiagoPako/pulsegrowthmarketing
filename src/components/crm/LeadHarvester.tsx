@@ -167,8 +167,27 @@ export function LeadHarvester() {
     if (error) throw error;
   };
 
+  // Empresa que já está no CRM (mesmo telefone ou mesmo nome de empresa): reenviar duplicava o lead.
+  const normalizeName = (v?: string | null) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const phoneKey = (v?: string | null) => { const d = String(v || '').replace(/\D/g, ''); return d.length >= 8 ? d.slice(-8) : ''; };
+  const buildExistingIndex = () => {
+    const leads = (queryClient.getQueryData(['crm_leads']) as Array<{ company?: string | null; phone?: string | null }> | undefined) || [];
+    return {
+      names: new Set(leads.map(l => normalizeName(l.company)).filter(Boolean)),
+      phones: new Set(leads.map(l => phoneKey(l.phone)).filter(Boolean)),
+    };
+  };
+  const isAlreadyInCrm = (company: Company, index: ReturnType<typeof buildExistingIndex>) => {
+    const phone = phoneKey(company.telefone);
+    const name = normalizeName(company.razao_social);
+    return (!!phone && index.phones.has(phone)) || (!!name && index.names.has(name));
+  };
+
   const addLead = useMutation({
-    mutationFn: insertLead,
+    mutationFn: async (company: Company) => {
+      if (isAlreadyInCrm(company, buildExistingIndex())) throw new Error('esta empresa já está no CRM');
+      await insertLead(company);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
       toast.success('Empresa enviada para o CRM como novo lead!');
@@ -181,14 +200,33 @@ export function LeadHarvester() {
     setBulkLoading(true);
     let ok = 0;
     const fails: string[] = [];
+    // Pula o que já está no CRM (e repetidos dentro da própria seleção).
+    const index = buildExistingIndex();
+    const queue: Company[] = [];
+    let skipped = 0;
     for (const company of selectedCompanies) {
-      try { await insertLead(company); ok++; }
-      catch (err) { fails.push(`${company.razao_social}: ${(err as Error)?.message || 'erro'}`); }
+      if (isAlreadyInCrm(company, index)) { skipped++; continue; }
+      queue.push(company);
+      const phone = phoneKey(company.telefone);
+      const name = normalizeName(company.razao_social);
+      if (phone) index.phones.add(phone);
+      if (name) index.names.add(name);
     }
+    // 4 envios por vez em vez de um de cada vez (500 empresas levavam minutos).
+    let next = 0;
+    const worker = async () => {
+      while (next < queue.length) {
+        const company = queue[next++];
+        try { await insertLead(company); ok++; }
+        catch (err) { fails.push(`${company.razao_social}: ${(err as Error)?.message || 'erro'}`); }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
     setBulkLoading(false);
     setSelected({});
     queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
     if (ok > 0) toast.success(`${ok} lead(s) enviado(s) ao CRM.`);
+    if (skipped > 0) toast.info(`${skipped} empresa(s) já estavam no CRM e não foram enviadas de novo.`);
     if (fails.length > 0) toast.error(`${fails.length} falha(s): ${fails[0]}`);
   };
 

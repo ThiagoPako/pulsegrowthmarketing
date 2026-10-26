@@ -17188,6 +17188,13 @@ async function enrichCompanies(companies, maxItems = 400, concurrency = 10, opts
 }
 
 
+// Elementos brutos do Overpass por área + estado + nicho + limite (15 min): Anterior/Próxima e
+// os filtros de contato/termo/completude não refazem as duas consultas (até 30 s cada, com
+// risco de rate limit). Os filtros continuam rodando a cada chamada.
+const HARVEST_ELEMENTS_CACHE = new Map();
+const HARVEST_ELEMENTS_TTL_MS = 15 * 60 * 1000;
+const HARVEST_ELEMENTS_MAX = 20;
+
 app.post('/api/crm/harvest/search', async (req, res) => {
   try {
     await verifyUser(req);
@@ -17221,24 +17228,39 @@ app.post('/api/crm/harvest/search', async (req, res) => {
 
     // Combina a área administrativa com o bounding box. Algumas cidades têm relações OSM
     // incompletas; consultar somente uma das fontes pode devolver apenas poucos registros.
+    const elementsKey = [normalizeText(areaName), normalizeText(String(state || '')), String(niche || 'all'), cap].join('|');
+    const cachedElements = HARVEST_ELEMENTS_CACHE.get(elementsKey);
     let elements = [];
-    try {
-      const json = await runOverpass(buildQuery('(area.searchArea)'));
-      elements = Array.isArray(json?.elements) ? json.elements : [];
-    } catch (err) {
-      console.warn('[crm:harvest] area query falhou:', err.message);
-    }
-
-    if (bbox) {
+    if (cachedElements && Date.now() - cachedElements.at < HARVEST_ELEMENTS_TTL_MS) {
+      elements = cachedElements.elements;
+    } else {
       try {
-        const scope = `(${bbox.south},${bbox.west},${bbox.north},${bbox.east})`;
-        const json = await runOverpass(buildQuery(scope));
-        const bboxEls = Array.isArray(json?.elements) ? json.elements : [];
-        const byOsmId = new Map(elements.map(element => [`${element.type}/${element.id}`, element]));
-        bboxEls.forEach(element => byOsmId.set(`${element.type}/${element.id}`, element));
-        elements = Array.from(byOsmId.values());
+        const json = await runOverpass(buildQuery('(area.searchArea)'));
+        elements = Array.isArray(json?.elements) ? json.elements : [];
       } catch (err) {
-        console.warn('[crm:harvest] bbox query falhou:', err.message);
+        console.warn('[crm:harvest] area query falhou:', err.message);
+      }
+
+      if (bbox) {
+        try {
+          const scope = `(${bbox.south},${bbox.west},${bbox.north},${bbox.east})`;
+          const json = await runOverpass(buildQuery(scope));
+          const bboxEls = Array.isArray(json?.elements) ? json.elements : [];
+          const byOsmId = new Map(elements.map(element => [`${element.type}/${element.id}`, element]));
+          bboxEls.forEach(element => byOsmId.set(`${element.type}/${element.id}`, element));
+          elements = Array.from(byOsmId.values());
+        } catch (err) {
+          console.warn('[crm:harvest] bbox query falhou:', err.message);
+        }
+      }
+
+      // Só guarda resultado de verdade (consulta que falhou não fica no cache).
+      if (elements.length > 0) {
+        HARVEST_ELEMENTS_CACHE.delete(elementsKey);
+        HARVEST_ELEMENTS_CACHE.set(elementsKey, { at: Date.now(), elements });
+        while (HARVEST_ELEMENTS_CACHE.size > HARVEST_ELEMENTS_MAX) {
+          HARVEST_ELEMENTS_CACHE.delete(HARVEST_ELEMENTS_CACHE.keys().next().value);
+        }
       }
     }
 

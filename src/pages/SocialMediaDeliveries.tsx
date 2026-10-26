@@ -30,7 +30,8 @@ import ClientStatusBadge, { getClientStatus } from '@/components/social/ClientSt
 import { Loader2 } from 'lucide-react';
 import AutoPostScheduleForm, { type AutoPostFormValue } from '@/components/social/AutoPostScheduleForm';
 import AutoPostQueue from '@/components/social/AutoPostQueue';
-import { createScheduledPost, suggestPublishType } from '@/services/socialPostsApi';
+import { createScheduledPost, suggestPublishType, cancelLinkedScheduledPosts, fetchScheduledPosts, type ScheduledPost } from '@/services/socialPostsApi';
+import type { AutoPostInfo } from '@/components/social/SocialMediaKanban';
 
 interface SocialDelivery {
   id: string;
@@ -76,6 +77,14 @@ const STATUS_OPTIONS = [
 ];
 
 const PLATFORMS = ['Instagram', 'Facebook'];
+
+/** Gravação recusada pela API: avisa e devolve false (a ação não segue nem mostra sucesso). */
+function reportSaveError(label: string, error: unknown): false {
+  console.error(`${label} error:`, error);
+  const message = (error as { message?: string } | null)?.message;
+  toast.error(`Não foi possível salvar${message ? `: ${message}` : '. Tente de novo.'}`);
+  return false;
+}
 
 function ReviewVideoLink({ contentTaskId, clientId }: { contentTaskId: string | null; clientId: string }) {
   const [isAltered, setIsAltered] = useState(false);
@@ -261,10 +270,27 @@ export default function SocialMediaDeliveries() {
         return false;
       });
       if (toPost.length > 0) {
-        const ids = toPost.map(d => d.id);
-        await supabase.from('social_media_deliveries').update({ status: 'postado' } as any).in('id', ids);
+        const candidates = toPost.map(d => d.id);
+        // Entrega com postagem automática: quem marca 'postado' é o robô, só quando a publicação dá certo.
+        // Se a consulta falhar, não marca nada agora (tenta de novo no próximo minuto).
+        const withAutoPost = new Set<string>();
+        try {
+          for (let i = 0; i < candidates.length; i += 50) {
+            const chunk = candidates.slice(i, i + 50);
+            const posts = await fetchScheduledPosts({ delivery_ids: chunk });
+            posts
+              .filter(p => p.delivery_id && chunk.includes(p.delivery_id) && p.status !== 'cancelado')
+              .forEach(p => withAutoPost.add(p.delivery_id as string));
+          }
+        } catch {
+          return;
+        }
+        const ids = candidates.filter(id => !withAutoPost.has(id));
+        if (ids.length === 0) return;
+        const { error } = await supabase.from('social_media_deliveries').update({ status: 'postado' } as any).in('id', ids);
+        if (error) return;
         setDeliveries(prev => prev.map(d => ids.includes(d.id) ? { ...d, status: 'postado' } : d));
-        toast.success(`${toPost.length} conteúdo(s) marcado(s) como postado automaticamente`);
+        toast.success(`${ids.length} conteúdo(s) marcado(s) como postado automaticamente`);
       }
     };
     checkScheduled();
@@ -389,6 +415,24 @@ export default function SocialMediaDeliveries() {
       caption: (d as any).caption || '',
     });
     setScheduleDialogOpen(true);
+    // Reagendar: se a entrega já tem postagem automática pendente, o formulário vem com ela
+    // (antes vinha desligado e o post antigo continuava valendo no horário velho).
+    if (d.status === 'agendado') {
+      try {
+        const existing = (await fetchScheduledPosts({ delivery_ids: [d.id] }))
+          .find(p => p.delivery_id === d.id && (p.status === 'agendado' || p.status === 'erro'));
+        if (existing) {
+          setAutoPost({
+            enabled: true,
+            platform: existing.platform,
+            publishType: existing.publish_type,
+            mediaUrl: existing.media_url || '',
+            caption: existing.caption || '',
+          });
+          return;
+        }
+      } catch { /* sem a fila, segue com o formulário padrão */ }
+    }
     // Pré-preenche a mídia com o vídeo final enviado na edição (quando existir)
     if (d.content_task_id) {
       const { data: task } = await supabase.from('content_tasks')
@@ -421,9 +465,12 @@ export default function SocialMediaDeliveries() {
       platform: platformLabel, status: 'agendado',
       ...(autoPost.enabled && autoPost.publishType !== 'stories' ? { caption: autoPost.caption } : {}),
     } as any).eq('id', schedulingItem.id);
-    if (error) { toast.error('Erro ao agendar'); return; }
+    if (error) { reportSaveError('schedule', error); return; }
 
-    if (autoPost.enabled) {
+    if (!autoPost.enabled) {
+      // Reagendado sem postagem automática: o post automático antigo (outro horário) não pode sair
+      await cancelLinkedScheduledPosts({ deliveryId: schedulingItem.id, reason: 'reagendado sem postagem automática' });
+    } else {
       try {
         await createScheduledPost({
           client_id: schedulingItem.client_id,
@@ -436,16 +483,26 @@ export default function SocialMediaDeliveries() {
           scheduled_at: new Date(`${schedDate}T${schedTime}:00`).toISOString(),
         });
       } catch (err) {
+        // A fila recusou (link do Drive, conta não conectada…): a entrega volta como estava,
+        // senão ficava "Agendado" sem post e o timer a marcava como postada no horário.
+        const prev = schedulingItem as SocialDelivery & { caption?: string | null };
+        await supabase.from('social_media_deliveries').update({
+          posted_at: prev.posted_at, scheduled_time: prev.scheduled_time,
+          platform: prev.platform, status: prev.status,
+          ...(prev.caption !== undefined ? { caption: prev.caption } : {}),
+        } as any).eq('id', prev.id);
         toast.error(err instanceof Error ? err.message : 'Não foi possível criar a postagem automática');
+        fetchData();
         return;
       }
     }
     // Move content_task to acompanhamento with full sync
     if (schedulingItem.content_task_id) {
-      await supabase.from('content_tasks').update({
+      const { error: taskError } = await supabase.from('content_tasks').update({
         kanban_column: 'acompanhamento',
         updated_at: new Date().toISOString(),
       } as any).eq('id', schedulingItem.content_task_id);
+      if (taskError) reportSaveError('schedule content_task', taskError);
       const { data: taskData } = await supabase.from('content_tasks').select('*').eq('id', schedulingItem.content_task_id).single();
       if (taskData) {
         const client = clients.find(c => c.id === schedulingItem.client_id);
@@ -483,18 +540,23 @@ export default function SocialMediaDeliveries() {
     }
   };
 
-  const handleMarkPosted = async (id: string) => {
+  const handleMarkPosted = async (id: string): Promise<boolean> => {
     const { error } = await supabase.from('social_media_deliveries').update({
       status: 'postado', posted_at: format(new Date(), 'yyyy-MM-dd'),
     } as any).eq('id', id);
-    if (error) { toast.error('Erro'); return; }
+    if (error) return reportSaveError('markPosted', error);
     // Sync linked content_task to 'arquivado'
     const delivery = deliveries.find(d => d.id === id);
     if (delivery?.content_task_id) {
-      await supabase.from('content_tasks').update({
+      const { error: taskError } = await supabase.from('content_tasks').update({
         kanban_column: 'arquivado',
         updated_at: new Date().toISOString(),
       } as any).eq('id', delivery.content_task_id);
+      if (taskError) {
+        await supabase.from('social_media_deliveries').update({ status: delivery.status, posted_at: delivery.posted_at } as any).eq('id', id);
+        fetchData();
+        return reportSaveError('markPosted content_task', taskError);
+      }
       const { data: taskData } = await supabase.from('content_tasks').select('*').eq('id', delivery.content_task_id).single();
       if (taskData) {
         const client = clients.find(c => c.id === delivery.client_id);
@@ -506,7 +568,10 @@ export default function SocialMediaDeliveries() {
         await syncContentTaskColumnChange('arquivado', ctx);
       }
     }
+    // Postado à mão: a postagem automática pendente não pode sair de novo
+    await cancelLinkedScheduledPosts({ deliveryId: id, reason: 'o conteúdo foi marcado como postado manualmente' });
     toast.success('Marcado como postado'); fetchData();
+    return true;
   };
 
   const handleSave = async () => {
@@ -573,7 +638,8 @@ export default function SocialMediaDeliveries() {
       .order('created_at', { ascending: false })
       .limit(1);
     if (!data?.length) { toast.error('Nenhum story para remover'); return; }
-    await supabase.from('social_media_deliveries').delete().eq('id', data[0].id);
+    const { error } = await supabase.from('social_media_deliveries').delete().eq('id', data[0].id);
+    if (error) { reportSaveError('removeLastStory', error); return; }
     toast.success('Story removido'); fetchData();
   };
 
@@ -601,7 +667,8 @@ export default function SocialMediaDeliveries() {
       .order('created_at', { ascending: false })
       .limit(1);
     if (!data?.length) { toast.error(`Nenhum ${label} para remover`); return; }
-    await supabase.from('social_media_deliveries').delete().eq('id', data[0].id);
+    const { error } = await supabase.from('social_media_deliveries').delete().eq('id', data[0].id);
+    if (error) { reportSaveError('removeLastContent', error); return; }
     toast.success(`${label} removido`); fetchData();
   };
 
@@ -633,10 +700,21 @@ export default function SocialMediaDeliveries() {
   };
 
   // ─── REVIEW/APPROVAL HANDLERS ─────────────────────────────
-  const handleApproveReview = async (d: SocialDelivery) => {
-    await supabase.from('social_media_deliveries').update({ status: 'aprovacao_cliente' } as any).eq('id', d.id);
+  /** Segunda gravação falhou: a entrega volta ao status anterior para não ficar fora de sincronia com o card. */
+  const revertDeliveryStatus = async (d: SocialDelivery) => {
+    await supabase.from('social_media_deliveries').update({ status: d.status, posted_at: d.posted_at } as any).eq('id', d.id);
+    fetchData();
+  };
+
+  const handleApproveReview = async (d: SocialDelivery): Promise<boolean> => {
+    const { error } = await supabase.from('social_media_deliveries').update({ status: 'aprovacao_cliente' } as any).eq('id', d.id);
+    if (error) return reportSaveError('approveReview', error);
     if (d.content_task_id) {
-      await supabase.from('content_tasks').update({ kanban_column: 'envio', updated_at: new Date().toISOString() } as any).eq('id', d.content_task_id);
+      const { error: taskError } = await supabase.from('content_tasks').update({ kanban_column: 'envio', updated_at: new Date().toISOString() } as any).eq('id', d.content_task_id);
+      if (taskError) {
+        await revertDeliveryStatus(d);
+        return reportSaveError('approveReview content_task', taskError);
+      }
       // Use shared sync for full cross-module synchronization
       const { data: taskData } = await supabase.from('content_tasks').select('*').eq('id', d.content_task_id).single();
       if (taskData) {
@@ -651,6 +729,7 @@ export default function SocialMediaDeliveries() {
     }
     toast.success('Revisão aprovada! Pronto para enviar ao cliente.');
     fetchData();
+    return true;
   };
 
   const openAlterationDialog = (d: SocialDelivery) => {
@@ -666,16 +745,21 @@ export default function SocialMediaDeliveries() {
       return;
     }
     const taskId = alterationDelivery.content_task_id;
+    const { error: deliveryError } = await supabase.from('social_media_deliveries').update({ status: 'ajuste' } as any).eq('id', alterationDelivery.id);
+    if (deliveryError) { reportSaveError('sendToAlteration', deliveryError); return; }
     if (taskId) {
-      await supabase.from('content_tasks').update({
+      const { error: taskError } = await supabase.from('content_tasks').update({
         kanban_column: 'alteracao',
         adjustment_notes: alterationNotes.trim(),
         description: alterationNotes.trim(),
         immediate_alteration: alterationImmediate,
         updated_at: new Date().toISOString(),
       } as any).eq('id', taskId);
-
-      await supabase.from('social_media_deliveries').update({ status: 'ajuste' } as any).eq('id', alterationDelivery.id);
+      if (taskError) {
+        await revertDeliveryStatus(alterationDelivery);
+        reportSaveError('sendToAlteration content_task', taskError);
+        return;
+      }
 
       // Use shared sync for full cross-module synchronization
       const { data: taskData } = await supabase.from('content_tasks').select('*').eq('id', taskId).single();
@@ -689,6 +773,8 @@ export default function SocialMediaDeliveries() {
         await syncContentTaskColumnChange('alteracao', ctx);
       }
     }
+    // O vídeo vai mudar: a postagem automática pendente não pode sair com a versão reprovada
+    await cancelLinkedScheduledPosts({ deliveryId: alterationDelivery.id, reason: 'o conteúdo foi enviado para alteração' });
     toast.success(alterationImmediate ? '🚨 Enviado para alteração IMEDIATA!' : 'Enviado para alteração');
     setAlterationDialogOpen(false);
     setAlterationDelivery(null);
@@ -776,14 +862,19 @@ export default function SocialMediaDeliveries() {
     }
   };
 
-  const handleClientApproved = async (d: SocialDelivery) => {
-    await supabase.from('social_media_deliveries').update({ status: 'entregue' } as any).eq('id', d.id);
+  const handleClientApproved = async (d: SocialDelivery): Promise<boolean> => {
+    const { error } = await supabase.from('social_media_deliveries').update({ status: 'entregue' } as any).eq('id', d.id);
+    if (error) return reportSaveError('clientApproved', error);
     if (d.content_task_id) {
-      await supabase.from('content_tasks').update({
+      const { error: taskError } = await supabase.from('content_tasks').update({
         kanban_column: 'agendamentos',
         approved_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       } as any).eq('id', d.content_task_id);
+      if (taskError) {
+        await revertDeliveryStatus(d);
+        return reportSaveError('clientApproved content_task', taskError);
+      }
       // Use shared sync
       const { data: taskData } = await supabase.from('content_tasks').select('*').eq('id', d.content_task_id).single();
       if (taskData) {
@@ -798,6 +889,7 @@ export default function SocialMediaDeliveries() {
     }
     toast.success('Aprovado pelo cliente! Pronto para agendamento.');
     fetchData();
+    return true;
   };
 
   // ─── DRAG MOVE HANDLER (Kanban drag & arrows) ─────────────
@@ -807,7 +899,8 @@ export default function SocialMediaDeliveries() {
     if (socialStatus === 'postado') {
       updatePayload.posted_at = format(new Date(), 'yyyy-MM-dd');
     }
-    await supabase.from('social_media_deliveries').update(updatePayload as any).eq('id', delivery.id);
+    const { error } = await supabase.from('social_media_deliveries').update(updatePayload as any).eq('id', delivery.id);
+    if (error) { reportSaveError('dragMove', error); return; }
 
     // Sync linked content_task
     if (delivery.content_task_id) {
@@ -822,7 +915,12 @@ export default function SocialMediaDeliveries() {
       if (contentColumn === 'agendamentos') {
         contentUpdate.approved_at = new Date().toISOString();
       }
-      await supabase.from('content_tasks').update(contentUpdate as any).eq('id', delivery.content_task_id);
+      const { error: taskError } = await supabase.from('content_tasks').update(contentUpdate as any).eq('id', delivery.content_task_id);
+      if (taskError) {
+        await revertDeliveryStatus(delivery);
+        reportSaveError('dragMove content_task', taskError);
+        return;
+      }
 
       // Full cross-module sync
       const { data: taskData } = await supabase.from('content_tasks').select('*').eq('id', delivery.content_task_id).single();
@@ -835,6 +933,10 @@ export default function SocialMediaDeliveries() {
         });
         await syncContentTaskColumnChange(contentColumn, ctx);
       }
+    }
+    // Fora de Agendado a postagem automática pendente deixa de valer (voltou, foi para alteração ou postada à mão)
+    if (socialStatus !== 'agendado') {
+      await cancelLinkedScheduledPosts({ deliveryId: delivery.id, reason: `a entrega foi movida para "${socialStatus}"` });
     }
 
     const colName = [
@@ -900,6 +1002,27 @@ export default function SocialMediaDeliveries() {
       posted: cd.filter(d => d.status === 'postado'),
     };
   }, [selectedClientId, deliveries]);
+
+  // Postagem automática das entregas agendadas do cliente aberto (selo "falhou" / "automática")
+  const [autoPostByDelivery, setAutoPostByDelivery] = useState<Record<string, AutoPostInfo>>({});
+  const scheduledIdsKey = clientDeliveries.scheduled.map(d => d.id).join(',');
+  useEffect(() => {
+    if (!selectedClientId || !scheduledIdsKey) { setAutoPostByDelivery({}); return; }
+    let active = true;
+    fetchScheduledPosts({ client_id: selectedClientId })
+      .then((posts: ScheduledPost[]) => {
+        if (!active) return;
+        const map: Record<string, AutoPostInfo> = {};
+        // A lista vem do horário mais novo para o mais antigo: fica o post mais recente de cada entrega
+        posts.forEach(p => {
+          if (!p.delivery_id || p.status === 'cancelado' || map[p.delivery_id]) return;
+          map[p.delivery_id] = { status: p.status, last_error: p.last_error };
+        });
+        setAutoPostByDelivery(map);
+      })
+      .catch(() => { if (active) setAutoPostByDelivery({}); });
+    return () => { active = false; };
+  }, [selectedClientId, scheduledIdsKey]);
 
   // Editing queue tasks for the selected client
   const [editingQueueTasks, setEditingQueueTasks] = useState<any[]>([]);
@@ -1299,6 +1422,7 @@ export default function SocialMediaDeliveries() {
           editingQueueTasks={editingQueueTasks}
           deliveries={clientDeliveries}
           taskDeadlines={taskDeadlines}
+          autoPostByDelivery={autoPostByDelivery}
           onApproveReview={handleApproveReview}
           onOpenAlteration={openAlterationDialog}
           onMarkPriority={handleMarkPriorityEditing}

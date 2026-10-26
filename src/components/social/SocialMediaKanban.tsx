@@ -79,6 +79,11 @@ interface SocialDelivery {
   content_task_id: string | null;
 }
 
+export interface AutoPostInfo {
+  status: string;
+  last_error: string | null;
+}
+
 interface KanbanColumn {
   id: string;
   title: string;
@@ -102,13 +107,16 @@ interface SocialMediaKanbanProps {
     posted: SocialDelivery[];
   };
   taskDeadlines: Record<string, any>;
-  onApproveReview: (d: SocialDelivery) => void;
+  /** Postagem automática de cada entrega agendada (para o selo "falhou"). */
+  autoPostByDelivery?: Record<string, AutoPostInfo>;
+  // Devolvem false quando a gravação falhou (aí o foguete não sobe)
+  onApproveReview: (d: SocialDelivery) => Promise<boolean> | void;
   onOpenAlteration: (d: SocialDelivery) => void;
   onMarkPriority: (d: SocialDelivery) => void;
-  onClientApproved: (d: SocialDelivery) => void;
+  onClientApproved: (d: SocialDelivery) => Promise<boolean> | void;
   onSendWhatsApp: (d: SocialDelivery) => void;
   onOpenSchedule: (d: SocialDelivery) => void;
-  onMarkPosted: (id: string) => void;
+  onMarkPosted: (id: string) => Promise<boolean> | void;
   onTogglePriority: (taskId: string, current: boolean) => void;
   sendingWhatsApp: boolean;
   onDragMove?: (delivery: SocialDelivery, targetColumnId: string, socialStatus: string, contentColumn: string) => void;
@@ -238,6 +246,7 @@ export default function SocialMediaKanban({
   editingQueueTasks,
   deliveries,
   taskDeadlines,
+  autoPostByDelivery,
   onApproveReview,
   onOpenAlteration,
   onMarkPriority,
@@ -273,9 +282,10 @@ export default function SocialMediaKanban({
     return { ...def, items };
   });
 
-  const handleActionWithRocket = (action: () => void) => {
-    triggerRocket();
-    action();
+  // O foguete só sobe depois que a ação gravou (antes subia mesmo com erro)
+  const handleActionWithRocket = async (action: () => Promise<boolean> | void) => {
+    const ok = await action();
+    if (ok !== false) triggerRocket();
   };
 
   // Drag handlers
@@ -419,6 +429,7 @@ export default function SocialMediaKanban({
                             index={i}
                             columnId={col.id}
                             taskDeadlines={taskDeadlines}
+                            autoPost={autoPostByDelivery?.[item.id]}
                             onApproveReview={() => handleActionWithRocket(() => onApproveReview(item))}
                             onOpenAlteration={() => onOpenAlteration(item)}
                             onMarkPriority={() => onMarkPriority(item)}
@@ -499,6 +510,7 @@ function DeliveryCard({
   index,
   columnId,
   taskDeadlines,
+  autoPost,
   onApproveReview,
   onOpenAlteration,
   onMarkPriority,
@@ -520,6 +532,7 @@ function DeliveryCard({
   index: number;
   columnId: string;
   taskDeadlines: Record<string, any>;
+  autoPost?: AutoPostInfo;
   onApproveReview: () => void;
   onOpenAlteration: () => void;
   onMarkPriority: () => void;
@@ -602,6 +615,16 @@ function DeliveryCard({
             )}
             {d.platform && columnId === 'agendado' && (
               <Badge variant="outline" className="text-[9px] px-1.5 py-0">{d.platform}</Badge>
+            )}
+            {columnId === 'agendado' && autoPost?.status === 'erro' && (
+              <Badge className="text-[9px] px-1.5 py-0 border-0 bg-red-500 text-white gap-1" title={autoPost.last_error || undefined}>
+                <AlertTriangle size={9} /> Postagem automática falhou
+              </Badge>
+            )}
+            {columnId === 'agendado' && (autoPost?.status === 'agendado' || autoPost?.status === 'publicando') && (
+              <Badge variant="outline" className="text-[9px] px-1.5 py-0 gap-1 text-primary border-primary/30">
+                <Zap size={9} /> {autoPost.status === 'publicando' ? 'Publicando…' : 'Automática'}
+              </Badge>
             )}
           </div>
 

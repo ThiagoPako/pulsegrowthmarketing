@@ -126,6 +126,10 @@ export default function Clients() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Plano, contrato e "Métricas no Portal" vêm de uma leitura extra ao abrir a edição:
+  // o Salvar espera essa leitura para não gravar os valores padrão por cima.
+  const [loadingEditData, setLoadingEditData] = useState(false);
+  const editLoadRef = useRef<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [preferredShift, setPreferredShift] = useState<PreferredShift>('ambos');
   const [sendWaOpen, setSendWaOpen] = useState(false);
@@ -438,7 +442,11 @@ export default function Clients() {
       setIsAdminClient(client.isAdminClient === true);
       setProposalId((client as any).proposalId || null);
       // Load plan data for editing
-      supabase.from('clients').select('plan_id, contract_start_date, auto_renewal, contract_duration_months, client_type, proposal_id').eq('id', client.id).single().then(({ data }) => {
+      editLoadRef.current = client.id;
+      setShowMetrics(true);
+      setLoadingEditData(true);
+      Promise.resolve(supabase.from('clients').select('plan_id, contract_start_date, auto_renewal, contract_duration_months, client_type, proposal_id, show_metrics').eq('id', client.id).single()).then(({ data }) => {
+        if (editLoadRef.current !== client.id) return;
         if (data) {
           setPlanId((data as any).plan_id || null);
           // If no plan but weekly targets exist, treat as special plan
@@ -451,6 +459,8 @@ export default function Clients() {
           if ((data as any).client_type) setClientType((data as any).client_type as any);
           if ((data as any).proposal_id) setProposalId((data as any).proposal_id);
         }
+      }).finally(() => {
+        if (editLoadRef.current === client.id) setLoadingEditData(false);
       });
       // Load financial contract for editing
       supabase.from('financial_contracts').select('*').eq('client_id', client.id).maybeSingle().then(({ data }) => {
@@ -473,6 +483,8 @@ export default function Clients() {
       });
     }
     else {
+      editLoadRef.current = null;
+      setLoadingEditData(false);
       setEditing(null);
       setForm(emptyClient());
       setLogoPreview(null);
@@ -673,7 +685,7 @@ export default function Clients() {
   };
 
   const handleSave = async () => {
-    if (saving) return;
+    if (saving || loadingEditData) return;
     if (!form.companyName || !form.responsiblePerson || !form.whatsapp) {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
@@ -2530,7 +2542,9 @@ export default function Clients() {
               {/* Navigation buttons */}
               <div className="flex gap-2 pt-2">
                 {editing ? (
-                  <Button onClick={handleSave} className="w-full">Salvar Alterações</Button>
+                  <Button onClick={handleSave} className="w-full" disabled={saving || loadingEditData}>
+                    {loadingEditData ? <><Loader2 size={14} className="animate-spin" /> Carregando dados...</> : saving ? <><Loader2 size={14} className="animate-spin" /> Salvando...</> : 'Salvar Alterações'}
+                  </Button>
                 ) : (() => {
                   const stepLabelsUsed = clientType === 'sem_contrato' ? STEP_LABELS_SEM_CONTRATO : (hasMetaApi ? STEP_LABELS_WITH_META : STEP_LABELS_NO_META);
                   const maxStep = stepLabelsUsed.length - 1;

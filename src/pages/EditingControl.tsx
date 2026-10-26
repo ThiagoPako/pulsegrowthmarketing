@@ -13,7 +13,8 @@ import ClientLogo from '@/components/ClientLogo';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useCity } from '@/contexts/CityContext';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, profileOwnsUserId } from '@/hooks/useAuth';
+import { editingControlMoveError, isContentManager } from '@/lib/contentKanbanRules';
 import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
 import { useAgentIds } from '@/hooks/useAgentIds';
 import { agentWorkState, formatSince } from '@/lib/agentCardStatus';
@@ -59,7 +60,12 @@ function isQueueTask(t: EditingTask) {
 
 export default function EditingControl() {
   const { clients, users } = useApp();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  // Decisão do dono (26/10/2026): tirar ou reatribuir card de outro é da gestão (admin, social media,
+  // gestor de projetos). Editor e videomaker mexem só nos próprios cards e pegam da fila para si.
+  const isManager = isContentManager(profile);
+  const ownerOf = (t: EditingTask) => t.edited_by || t.assigned_to;
+  const canDragTask = (t: EditingTask) => isManager || !ownerOf(t) || profileOwnsUserId(profile, ownerOf(t));
   const { activeCity, isLoading: cityLoading } = useCity();
   const [tasks, setTasks] = useState<EditingTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -188,6 +194,18 @@ export default function EditingControl() {
 
     if (!draggedTask) { setDraggedTask(null); return; }
     const task = draggedTask;
+    const roleError = editingControlMoveError({
+      isManager,
+      ownsCard: profileOwnsUserId(profile, ownerOf(task)),
+      cardIsFree: !ownerOf(task),
+      target: targetEditorId,
+      targetIsSelf: profileOwnsUserId(profile, targetEditorId),
+    });
+    if (roleError) {
+      toast.error(roleError);
+      setDraggedTask(null);
+      return;
+    }
     // Agente com sinal recente (mesma regra do /api/agent/tasks/:id/assign): tirar o card no meio
     // da renderização faz a entrega dele falhar
     const work = agentWorkState(task, { agentIds });
@@ -400,6 +418,7 @@ export default function EditingControl() {
                   onDragStart={handleDragStart}
                   showEditor={false}
                   editors={users}
+                  canDrag={canDragTask(task)}
                 />
               ))}
             </AnimatePresence>
@@ -467,6 +486,7 @@ export default function EditingControl() {
                       onDragStart={handleDragStart}
                       showEditor={false}
                       editors={users}
+                      canDrag={canDragTask(task)}
                     />
                   ))}
                 </AnimatePresence>
@@ -511,8 +531,10 @@ export default function EditingControl() {
 
 /* ── Editing Task Card ── */
 function EditingTaskCard({
-  task, client, isDragging, onDragStart, showEditor, editors,
+  task, client, isDragging, onDragStart, showEditor, editors, canDrag = true,
 }: {
+  /** Fora da gestão, só os próprios cards (e os livres da fila) podem ser arrastados. */
+  canDrag?: boolean;
   task: EditingTask;
   client?: { id: string; companyName: string; color: string; logoUrl?: string };
   isDragging: boolean;
@@ -537,9 +559,10 @@ function EditingTaskCard({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: isDragging ? 0.5 : 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      draggable
-      onDragStart={e => onDragStart(e as unknown as React.DragEvent, task)}
-      className={`group relative p-3 rounded-lg border transition-all cursor-grab active:cursor-grabbing ${
+      draggable={canDrag}
+      onDragStart={canDrag ? (e => onDragStart(e as unknown as React.DragEvent, task)) : undefined}
+      title={canDrag ? undefined : 'Card de outro editor: só a gestão tira ou reatribui'}
+      className={`group relative p-3 rounded-lg border transition-all ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} ${
         isDragging
           ? 'border-primary/50 bg-primary/5 ring-2 ring-primary/20'
           : 'border-border bg-background hover:border-primary/30 hover:shadow-md'

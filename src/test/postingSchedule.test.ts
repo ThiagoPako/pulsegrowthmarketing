@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDaysKey, addMonthsKey, brtParts, brtToIso, canDrag, groupByDate, monthCounts, monthGridKeys,
-  moveToDateKeepingTime, suggestFormat, todayKey, weekKeys, withMovedDate, isWeekendKey,
+  moveToDateKeepingTime, suggestFormat, todayKey, weekKeys, withMovedDate, isWeekendKey, splitScheduledArts,
   type SchedulingItem,
 } from '@/lib/postingSchedule';
 
@@ -122,5 +122,26 @@ describe('regras dos itens', () => {
     expect(suggestFormat(item({ type: 'story' }))).toBe('stories');
     expect(suggestFormat(item({ kind: 'arte', type: 'arte', media_kind: 'image' }))).toBe('feed');
     expect(suggestFormat(item({ kind: 'arte', type: 'carrossel', media_kind: 'image', media_items: ['a', 'b'] }))).toBe('carousel');
+  });
+});
+
+describe('enviar todas as artes aprovadas para Postadas', () => {
+  it('a arte com postagem agendada no futuro fica em Aprovadas', () => {
+    const now = Date.parse('2026-11-03T12:00:00.000Z');
+    const { move, keep } = splitScheduledArts([
+      { id: 'sem-data', posting_at: null },
+      { id: 'futura', posting_at: '2026-11-05T13:00:00.000Z' },
+      { id: 'passou', posting_at: '2026-11-01T13:00:00.000Z' },
+      { id: 'sem-campo' },
+    ], now);
+    expect(move.map(t => t.id)).toEqual(['sem-data', 'passou', 'sem-campo']);
+    expect(keep.map(t => t.id)).toEqual(['futura']);
+  });
+
+  it('todas agendadas: nada para mover', () => {
+    const now = Date.parse('2026-11-03T12:00:00.000Z');
+    const { move, keep } = splitScheduledArts([{ posting_at: '2026-11-04T10:00:00.000Z' }], now);
+    expect(move).toHaveLength(0);
+    expect(keep).toHaveLength(1);
   });
 });

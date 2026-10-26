@@ -318,7 +318,8 @@ export function buildMaterials(rows, { from, to, publicAppUrl } = {}) {
       caption: current?.caption || '',
       platform_label: null,
     };
-    if (d.kanban_column === 'postado') {
+    // Em Postadas com post ainda na fila (levada antes da hora): aparece como o post, não como publicada
+    if (d.kanban_column === 'postado' && !active) {
       const when = published ? whenFromInstant(published.published_at || published.scheduled_at) : whenFromInstant(d.posting_at);
       if (when) pushScheduled({ ...base, when, state: 'publicado', mode: published ? 'auto' : 'manual', locked: true, post: postSummary(published) });
       continue;
@@ -783,7 +784,10 @@ export function registerSchedulingRoutes(app, deps) {
            FROM design_tasks
           WHERE client_id = $1 AND coalesce(format_type, '') <> ALL($3::text[])
             AND (kanban_column = 'aprovado'
-                 OR (kanban_column = 'postado' AND updated_at >= $2::timestamptz - interval '3 days'))`,
+                 OR (kanban_column = 'postado' AND updated_at >= $2::timestamptz - interval '3 days')
+                 OR (kanban_column = 'postado' AND EXISTS (
+                       SELECT 1 FROM scheduled_posts sp
+                        WHERE sp.design_task_id = design_tasks.id AND sp.status IN ('agendado', 'publicando', 'erro'))))`,
         [clientId, fromIso, NON_SOCIAL_DESIGN_FORMATS]
       ),
       // Com vínculo: só mídia e miniatura do card/arte. Sem vínculo: a regra do conteúdo avulso.
@@ -943,9 +947,11 @@ export function registerSchedulingRoutes(app, deps) {
   }
 
   function assertNotPublished(kind, material, posts) {
+    const hasActivePost = posts.some((p) => ACTIVE_POST_STATUSES.has(p.status));
     const published = posts.some((p) => p.status === 'publicado')
       || (kind === 'conteudo' && ['arquivado', 'postado'].includes(material.kanban_column))
-      || (kind === 'arte' && material.kanban_column === 'postado')
+      // Arte em Postadas com post ainda na fila: segue agendada (remarca e cancela)
+      || (kind === 'arte' && material.kanban_column === 'postado' && !hasActivePost)
       || (kind === 'portal' && material.status === 'publicado');
     if (published) throw httpError(409, 'Este material já foi publicado.', { code: 'published' });
     if (posts.some((p) => p.status === 'publicando')) throw httpError(409, 'Este post está sendo publicado agora.', { code: 'publishing' });

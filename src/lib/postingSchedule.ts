@@ -234,6 +234,20 @@ export function suggestFormat(item: SchedulingItem): PublishFormat {
   return 'reels';
 }
 
+/**
+ * "Enviar todas para Postadas" (Kanban de Design): arte com postagem marcada no futuro fica em Aprovadas,
+ * senão o post dela seria cancelado e o calendário a mostraria como publicada.
+ */
+export function splitScheduledArts<T extends { posting_at?: string | null }>(tasks: T[], now: number = Date.now()): { move: T[]; keep: T[] } {
+  const move: T[] = [];
+  const keep: T[] = [];
+  for (const task of tasks) {
+    const at = task.posting_at ? Date.parse(task.posting_at) : NaN;
+    (Number.isFinite(at) && at > now ? keep : move).push(task);
+  }
+  return { move, keep };
+}
+
 /** Data de postagem gravada no card: "03/11/2026 às 10:30" (Brasília). */
 export function formatPostingDate(iso: string | null | undefined): string | null {
   const parts = iso ? brtParts(iso) : null;

@@ -43,6 +43,7 @@ const ids = {
   taskMay: '00000000-0000-0000-0000-00000000a626', portalMay: '00000000-0000-0000-0000-00000000a642',
   portalOld: '00000000-0000-0000-0000-00000000a643', portalSolo: '00000000-0000-0000-0000-00000000a644',
   portalA: '00000000-0000-0000-0000-00000000a645', design3: '00000000-0000-0000-0000-00000000a633',
+  design4: '00000000-0000-0000-0000-00000000a634',
 };
 const CLIENTS = [ids.cliMin, ids.cliNoAcc, ids.cliUru];
 const PEOPLE = [ids.thiago, ids.other, ids.social];
@@ -124,8 +125,9 @@ async function fixtures() {
     `INSERT INTO design_tasks (id, client_id, title, format_type, kanban_column, attachment_url, client_approved_at) VALUES
        ($1, $3, 'Arte Promo', 'feed', 'aprovado', $4, now() - interval '1 day'),
        ($2, $3, 'Panfleto impresso', 'midia_fisica', 'aprovado', $5, now()),
-       ($6, $3, 'Arte Troca', 'feed', 'aprovado', $7, now() - interval '1 day')`,
-    [ids.design, ids.design2, ids.cliMin, MEDIA('arte.png'), MEDIA('panfleto.png'), ids.design3, MEDIA('troca.png')]
+       ($6, $3, 'Arte Troca', 'feed', 'aprovado', $7, now() - interval '1 day'),
+       ($8, $3, 'Arte levada cedo', 'feed', 'aprovado', $9, now() - interval '1 day')`,
+    [ids.design, ids.design2, ids.cliMin, MEDIA('arte.png'), MEDIA('panfleto.png'), ids.design3, MEDIA('troca.png'), ids.design4, MEDIA('cedo.png')]
   );
   await pool.query(
     `INSERT INTO client_portal_contents (id, client_id, title, content_type, file_url, status, approved_at, season_month, season_year)
@@ -242,7 +244,7 @@ try {
   assert.ok(!names.includes(ids.cliUru), 'cliente de Uruaçu fora da lista de Minaçu');
   const cli = r.json.clients.find((c) => c.id === ids.cliMin);
   assert.equal(cli.accounts.instagram, 1);
-  assert.equal(cli.pending, 5, 'vídeo A + 2 artes + 2 conteúdos avulsos recentes do portal (o panfleto e o histórico não contam)');
+  assert.equal(cli.pending, 6, 'vídeo A + 3 artes + 2 conteúdos avulsos recentes do portal (o panfleto e o histórico não contam)');
   r = await api('GET', '/scheduling/clients', null, { city: 'uruacu' });
   assert.ok(r.json.clients.some((c) => c.id === ids.cliUru) && !r.json.clients.some((c) => c.id === ids.cliMin));
   r = await materials(ids.cliMin, { city: 'uruacu' });
@@ -444,6 +446,27 @@ try {
   r = await materials(ids.cliMin);
   assert.ok(r.json.unscheduled.some((i) => i.key === `arte:${ids.design3}` && i.media_url === MEDIA('troca-v2.png')));
   ok('arte trocada depois de agendada: post cancelado e a arte volta para não agendados com a imagem nova');
+
+  // ── Arte agendada levada para Postadas antes da hora (envio em massa antigo): segue como agendada ──
+  r = await api('POST', '/scheduling/schedule', {
+    client_id: ids.cliMin, kind: 'arte', id: ids.design4, date: dayA, time: '17:00',
+    mode: 'auto', platform: 'instagram', publish_type: 'feed', caption: 'Cedo',
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  await pool.query(`UPDATE design_tasks SET kanban_column = 'postado', updated_at = now() - interval '30 days' WHERE id = $1`, [ids.design4]);
+  const postCedo = await row(`SELECT id, status FROM scheduled_posts WHERE design_task_id = $1 AND status = 'agendado'`, [ids.design4]);
+  assert.ok(postCedo, 'mover para Postadas não cancela o post na hora (o robô confere na publicação)');
+  r = await materials(ids.cliMin);
+  const cedo = r.json.scheduled.find((i) => i.key === `arte:${ids.design4}`);
+  assert.equal(cedo?.state, 'agendado');
+  assert.equal(cedo?.locked, false);
+  r = await api('POST', '/scheduling/reschedule', { client_id: ids.cliMin, kind: 'arte', id: ids.design4, date: addDays(today, 6) });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal((await row(`SELECT scheduled_at FROM scheduled_posts WHERE id = $1`, [postCedo.id])).scheduled_at.toISOString(), brtToIso(addDays(today, 6), '17:00'));
+  r = await api('POST', '/scheduling/cancel', { client_id: ids.cliMin, kind: 'arte', id: ids.design4 });
+  assert.equal(r.status, 200);
+  assert.equal((await row(`SELECT status FROM scheduled_posts WHERE id = $1`, [postCedo.id])).status, 'cancelado');
+  ok('arte em Postadas com post na fila aparece agendada (não "Publicado"), remarca e cancela');
 
   // ── Cancelar vídeo ──
   const postA = await row(`SELECT id FROM scheduled_posts WHERE content_task_id = $1 AND status = 'agendado'`, [ids.taskA]);

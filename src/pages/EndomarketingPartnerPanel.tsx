@@ -68,6 +68,7 @@ export default function EndomarketingPartnerPanel() {
     fetchEarnings();
   }, [user?.id, selectedMonth]);
   const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
@@ -93,7 +94,11 @@ export default function EndomarketingPartnerPanel() {
   };
 
   const handleComplete = async () => {
-    await completeTask(completingTaskId, notes);
+    if (saving) return;
+    setSaving(true);
+    const ok = await completeTask(completingTaskId, notes);
+    setSaving(false);
+    if (!ok) return; // o erro já foi avisado; o diálogo fica aberto para tentar de novo
     toast.success('Tarefa concluída! ✅');
     setCompleteDialogOpen(false);
   };
@@ -273,7 +278,7 @@ export default function EndomarketingPartnerPanel() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCompleteDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleComplete}>✅ Confirmar</Button>
+            <Button onClick={handleComplete} disabled={saving}>{saving ? 'Salvando...' : '✅ Confirmar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

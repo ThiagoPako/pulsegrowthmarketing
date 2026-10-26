@@ -10625,8 +10625,16 @@ app.post('/api/endo-daily-tasks-notify', async (req, res) => {
     let tasksQuery = admin.from('endomarketing_partner_tasks').select('*, clients(company_name)').eq('date', today).eq('status', 'pendente');
     const requestedPartnerId = req.body?.partner_id;
     if (requestedPartnerId) tasksQuery = tasksQuery.eq('partner_id', requestedPartnerId);
-    const { data: todayTasks } = await tasksQuery;
-    if (!todayTasks?.length) return res.json({ success: true, message: 'Sem tarefas para hoje', sent: 0 });
+    const { data: pendingToday } = await tasksQuery;
+    // Só tarefas de contrato ativo: contrato encerrado não manda mais tarefa para o parceiro.
+    const contractIds = [...new Set((pendingToday || []).map(t => t.contract_id).filter(Boolean))];
+    let activeContractIds = new Set();
+    if (contractIds.length) {
+      const { data: activeContracts } = await admin.from('client_endomarketing_contracts').select('id').in('id', contractIds).eq('status', 'ativo');
+      activeContractIds = new Set((activeContracts || []).map(c => c.id));
+    }
+    const todayTasks = (pendingToday || []).filter(t => !t.contract_id || activeContractIds.has(t.contract_id));
+    if (!todayTasks.length) return res.json({ success: true, message: 'Sem tarefas para hoje', sent: 0 });
 
     const tasksByPartner = new Map();
     for (const task of todayTasks) { if (!task.partner_id) continue; const arr = tasksByPartner.get(task.partner_id) || []; arr.push(task); tasksByPartner.set(task.partner_id, arr); }

@@ -90,6 +90,31 @@ export function getConflictingExecutingTasks(tasks: DesignTask[], taskId: string
   );
 }
 
+// ── Artes do card ──
+/**
+ * Todas as artes do card (o carrossel inteiro, sem repetir arquivo). O mockup só entra quando
+ * não há arte, para não trocar a arte final por ele. attachment_urls pode vir como texto JSON.
+ */
+export function getTaskArtUrls(task: { attachment_urls?: unknown; attachment_url?: string | null; mockup_url?: string | null }): string[] {
+  let list: unknown = task.attachment_urls;
+  if (typeof list === 'string') {
+    try { list = JSON.parse(list); } catch { list = []; }
+  }
+  const urls = [...(Array.isArray(list) ? list : []), task.attachment_url]
+    .filter((u): u is string => typeof u === 'string' && !!u);
+  const unique = Array.from(new Set(urls));
+  if (unique.length === 0 && task.mockup_url) unique.push(task.mockup_url);
+  return unique;
+}
+
+/** Itens de download de vários cards: uma entrada por arte, com sufixo -1, -2... no carrossel. */
+export function collectArtDownloadItems(tasks: Array<{ title: string; attachment_urls?: unknown; attachment_url?: string | null; mockup_url?: string | null }>) {
+  return tasks.flatMap(t => {
+    const urls = getTaskArtUrls(t);
+    return urls.map((url, i) => ({ url, title: urls.length > 1 ? `${t.title}-${i + 1}` : t.title }));
+  });
+}
+
 // ── Prazo (due_date) ──
 // O prazo é uma data (YYYY-MM-DD). new Date('YYYY-MM-DD') é meia-noite UTC, ou seja, 21h do
 // dia anterior em Brasília: o card ficava "atrasado" no próprio dia e mostrava o dia anterior.

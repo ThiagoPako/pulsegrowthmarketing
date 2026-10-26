@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BookOpen } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/vpsDb';
-import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn, stopTimerFields, hasOpenTimer, getConflictingExecutingTasks, parseDueDate, formatDueDate } from '@/hooks/useDesignTasks';
+import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn, stopTimerFields, hasOpenTimer, getConflictingExecutingTasks, parseDueDate, formatDueDate, getTaskArtUrls, collectArtDownloadItems } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -799,7 +799,7 @@ export default function DesignerKanban() {
                         className="ml-auto flex items-center gap-1"
                       >
                         <Badge variant="secondary" className="text-[10px] h-5">{allColTasks.length}</Badge>
-                        {col.key === 'aprovado' && colTasks.some(t => t.attachment_url || (t as any).mockup_url) && (
+                        {col.key === 'aprovado' && allColTasks.some(t => getTaskArtUrls(t).length > 0) && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button
@@ -813,11 +813,11 @@ export default function DesignerKanban() {
                             <DropdownMenuContent align="end" className="w-52">
                               <DropdownMenuItem
                                 onClick={async () => {
-                                  const items = colTasks
-                                    .map(t => ({ url: (t.attachment_url || (t as any).mockup_url) as string, title: t.title }))
-                                    .filter(i => i.url);
+                                  // Todos os cards da coluna (não só os 10 visíveis) e todos os slides de cada carrossel
+                                  const items = collectArtDownloadItems(allColTasks);
                                   if (items.length === 0) return toast.error('Nenhuma arte disponível');
-                                  toast.info(`Baixando ${items.length} arte${items.length > 1 ? 's' : ''}...`);
+                                  if (items.length > 30 && !window.confirm(`Baixar ${items.length} arquivos de ${allColTasks.length} cards? Para menos arquivos, filtre por cliente antes.`)) return;
+                                  toast.info(`Baixando ${items.length} arte${items.length > 1 ? 's' : ''} de ${allColTasks.length} card${allColTasks.length > 1 ? 's' : ''}...`);
                                   for (const it of items) await downloadSingleArt(it.url, it.title);
                                 }}
                               >
@@ -825,11 +825,10 @@ export default function DesignerKanban() {
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={async () => {
-                                  const items = colTasks
-                                    .map(t => ({ url: (t.attachment_url || (t as any).mockup_url) as string, title: t.title }))
-                                    .filter(i => i.url);
+                                  const items = collectArtDownloadItems(allColTasks);
                                   if (items.length === 0) return toast.error('Nenhuma arte disponível');
-                                  toast.info(`Gerando PDF com ${items.length} arte${items.length > 1 ? 's' : ''}...`);
+                                  if (items.length > 30 && !window.confirm(`Gerar um PDF com ${items.length} artes de ${allColTasks.length} cards? Pode demorar; para menos artes, filtre por cliente antes.`)) return;
+                                  toast.info(`Gerando PDF com ${items.length} arte${items.length > 1 ? 's' : ''} de ${allColTasks.length} card${allColTasks.length > 1 ? 's' : ''}...`);
                                   await downloadArtsAsPdf(items, `Artes-Aprovadas-${new Date().toISOString().slice(0, 10)}`);
                                   toast.success('PDF gerado!');
                                 }}

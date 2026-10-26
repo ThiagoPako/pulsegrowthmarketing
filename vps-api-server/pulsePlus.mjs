@@ -22,14 +22,36 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // Rotas da equipe que mostram ou mudam configuração e informação dos agentes e do PULSE.
 // As rotas dos próprios agentes (/api/agent/*, /api/agent-pair) não passam por aqui.
+// Sem diferenciar maiúsculas (o Express encaminha /api/Agents/office para /api/agents/office) e conferidas
+// sobre o caminho normalizado (decodificado, sem barras repetidas): ver guardedPath.
 const GUARDED_PATHS = [
-  /^\/api\/agent-keys(\/|$)/,
-  /^\/api\/agent-machines(\/|$)/,
-  /^\/api\/agents(\/|$)/,
-  /^\/api\/design-agents(\/|$)/,
-  /^\/api\/design-tasks\/[^/]+\/agent-reviews(\/|$)/,
-  /^\/api\/assistant(\/|$)/,
+  /^\/api\/agent-keys(\/|$)/i,
+  /^\/api\/agent-machines(\/|$)/i,
+  /^\/api\/agents(\/|$)/i,
+  /^\/api\/design-agents(\/|$)/i,
+  /^\/api\/design-tasks\/[^/]+\/agent-reviews(\/|$)/i,
+  /^\/api\/assistant(\/|$)/i,
 ];
+
+/** O caminho como o roteador pode entendê-lo: decodificado, sem barras repetidas e em minúsculas. */
+export function guardedPath(rawPath) {
+  let value = String(rawPath || '');
+  for (let i = 0; i < 3; i++) {
+    try {
+      const decoded = decodeURIComponent(value);
+      if (decoded === value) break;
+      value = decoded;
+    } catch {
+      break;
+    }
+  }
+  return value.replace(/\/{2,}/g, '/').toLowerCase();
+}
+
+export function isGuardedPath(rawPath) {
+  const normalized = guardedPath(rawPath);
+  return GUARDED_PATHS.some((re) => re.test(normalized));
+}
 
 // Colunas internas do fluxo dos agentes: saem nulas para quem não tem Pulse Plus.
 export const AGENT_COLUMNS = {
@@ -298,7 +320,7 @@ export function createPulsePlus({ pool, verifyUser, getLinkedUserIds, isStrictAd
 
   // ── Trava das rotas da equipe ──
   async function guard(req, res, next) {
-    if (req.method === 'OPTIONS' || !GUARDED_PATHS.some((re) => re.test(req.path))) return next();
+    if (req.method === 'OPTIONS' || !(isGuardedPath(req.path) || isGuardedPath(req.originalUrl?.split('?')[0]))) return next();
     let user;
     try {
       ({ user } = await verifyUser(req));

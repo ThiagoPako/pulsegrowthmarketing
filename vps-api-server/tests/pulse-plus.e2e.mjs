@@ -235,6 +235,30 @@ try {
   assert.equal(r.status, 401);
   ok(`sem Pulse Plus: ${guarded.length} rotas de agentes e do PULSE respondem 403 (admin e editor); sem login, 401`);
 
+  // O Express encaminha sem diferenciar maiúsculas (e aceita barra no fim): a trava também
+  const disguised = [
+    ['GET', '/Agents/office'], ['GET', '/AGENTS/OFFICE'], ['GET', '/agents/office/'], ['GET', '/Agents/Overview'],
+    ['GET', '/AGENT-KEYS'], ['GET', '/Agent-Machines'], ['GET', '/Design-Agents'], ['GET', `/design-tasks/${ids.design}/Agent-Reviews`],
+    ['GET', '/Assistant/overview'], ['GET', '/%61gents/office'], ['GET', '/agents%2Foffice'],
+    ['POST', '/Agent-Keys', { user_id: ids.editor, role: 'editor' }], ['PATCH', '/Assistant/settings', { enabled: true }],
+    ['POST', '/AGENTS/pause', { scope: 'all' }],
+  ];
+  for (const who of ['admin', 'editor']) {
+    for (const [method, url, body] of disguised) {
+      r = await api(method, url, body, { auth: T[who] });
+      assert.equal(r.status, 403, `${who} ${method} ${url} → ${r.status}`);
+    }
+  }
+  for (const url of ['/api//agents/office', '//api/agents/office', '/api/agents//office']) {
+    const resp = await fetch(`http://127.0.0.1:${PORT}${url}`, { headers: { Authorization: `Bearer ${T.editor}` } });
+    assert.ok([403, 404].includes(resp.status), `${url} → ${resp.status}`);
+    assert.ok(!JSON.stringify(await resp.json().catch(() => ({}))).includes(ids.agent));
+  }
+  assert.equal((await pool.query(`SELECT count(*)::int AS n FROM agent_keys WHERE user_id = $1`, [ids.editor])).rows[0].n, 0, 'nenhuma chave criada');
+  r = await api('GET', '/Agents/office');
+  assert.equal(r.status, 200, 'o caminho com outra caixa chega mesmo à rota (com Pulse Plus)');
+  ok('a trava não depende de maiúsculas, barra no fim, barra dupla nem caractere codificado');
+
   r = await api('GET', '/agents/office');
   assert.equal(r.status, 200);
   assert.ok(r.json.agents.some((a) => a.user_id === ids.agent), 'agente na lista de quem tem Pulse Plus');

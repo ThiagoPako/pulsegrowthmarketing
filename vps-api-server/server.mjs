@@ -8540,11 +8540,43 @@ app.post('/api/delete-user', async (req, res) => {
 });
 
 // ─── 14. Client Onboarding ──────────────────────────────────
+// Videomakers oferecidos no onboarding público: papel videomaker (user_roles ou o legado
+// profiles.role) que atende a cidade do cliente. Cliente global (sem cidade): todos.
+async function listOnboardingVideomakers(city) {
+  const params = [];
+  let cityClause = '';
+  if (city) {
+    await ensureUserCitiesTable().catch(() => {});
+    params.push(city);
+    cityClause = ` AND ${userServesCitySql('p.id', '$1')}`;
+  }
+  const { rows } = await pool.query(
+    `SELECT p.id, p.name, p.display_name, p.avatar_url, p.bio, p.job_title
+       FROM profiles p
+      WHERE (p.role::text = 'videomaker'
+             OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id::text = p.id::text AND ur.role::text = 'videomaker'))${cityClause}`,
+    params
+  );
+  return rows;
+}
+
+// Colunas do plano que o onboarding usa (has_recording/has_photography só existem em alguns bancos).
+async function getOnboardingPlan(planId) {
+  if (!planId) return null;
+  const existing = await getExistingColumns('plans').catch(() => new Set());
+  const cols = ['id', 'name', 'recording_sessions', 'accepts_extra_content', 'arts_qty', 'has_recording', 'has_photography']
+    .filter((col) => col === 'id' || col === 'name' || existing.has(col));
+  const { rows: planRows } = await pool.query(`SELECT ${cols.join(', ')} FROM plans WHERE id = $1`, [planId]);
+  return planRows[0] || null;
+}
+
 app.all('/api/client-onboarding', async (req, res) => {
+  let txClient = null;
   try {
     if (req.method === 'GET') {
       const clientId = req.query.clientId;
       if (!clientId) return res.status(400).json({ error: 'Missing clientId' });
+      if (!UUID_RE.test(String(clientId))) return res.status(404).json({ error: 'Client not found' });
 
       const { rows: clients } = await pool.query(
         `SELECT id, company_name, responsible_person, logo_url, onboarding_completed, videomaker_id,
@@ -8558,31 +8590,49 @@ app.all('/api/client-onboarding', async (req, res) => {
       // Link público: sem as senhas do briefing (o POST mantém as já salvas).
       client.briefing_data = withoutBriefingSecrets(client.briefing_data);
 
-      const { rows: videomakers } = await pool.query(
-        `SELECT id, name, display_name, avatar_url, bio, job_title FROM profiles WHERE role = 'videomaker'`
-      );
-      const { rows: settingsRows } = await pool.query(`SELECT * FROM company_settings LIMIT 1`);
-      const settings = settingsRows[0] || null;
+      // Tudo na praça do cliente: videomakers que atendem a cidade e o expediente dela.
+      const clientCity = await getClientCityForAgenda(clientId);
+      const videomakers = await listOnboardingVideomakers(clientCity);
+      const settings = (await getCompanySettingsForCity(clientCity)) || null;
+      // Horários ocupados: só videomaker/dia/hora, sem o id dos outros clientes e sem o próprio.
       const { rows: existingClients } = await pool.query(
-        `SELECT id, videomaker_id, fixed_day, fixed_time FROM clients WHERE videomaker_id IS NOT NULL`
+        `SELECT videomaker_id, fixed_day, fixed_time FROM clients
+          WHERE videomaker_id IS NOT NULL AND id <> $1 AND COALESCE(status::text, 'ativo') <> 'cancelado'`,
+        [clientId]
       );
 
-      let plan = null;
-      if (client.plan_id) {
-        const { rows: planRows } = await pool.query(
-          `SELECT id, name, recording_sessions, accepts_extra_content FROM plans WHERE id = $1`, [client.plan_id]
-        );
-        plan = planRows[0] || null;
-      }
+      const plan = await getOnboardingPlan(client.plan_id);
 
       return res.json({ client, videomakers: videomakers || [], settings, existingClients: existingClients || [], plan });
     }
 
     // POST — full onboarding save logic
-    const body = req.body;
+    const body = req.body || {};
     const { clientId, videomaker_id, fixed_day, fixed_time, backup_day, backup_time, monthly_recordings, accepts_extra, extra_content_types, extra_client_appears, selected_weeks, photo_preference, has_photo_shoot, accepts_photo_shoot_cost, briefing_data, full_shift_recording, preferred_shift } = body;
-    if (!clientId || !videomaker_id || !fixed_day) return res.status(400).json({ error: 'Missing required fields' });
-    if (!full_shift_recording && !fixed_time) return res.status(400).json({ error: 'Missing fixed_time' });
+    if (!clientId || !UUID_RE.test(String(clientId))) return res.status(400).json({ error: 'Missing required fields' });
+
+    const { rows: [currentClient] } = await pool.query(
+      'SELECT id, plan_id, onboarding_completed, briefing_data FROM clients WHERE id = $1',
+      [clientId]
+    );
+    if (!currentClient) return res.status(404).json({ error: 'Client not found' });
+    // Formulário já concluído (a tela mostra "Tudo certo" e não reenvia): não regrava agenda nem briefing.
+    if (currentClient.onboarding_completed === true) {
+      return res.status(409).json({ error: 'Este formulário já foi enviado. Fale com a equipe para alterar as preferências.' });
+    }
+
+    // O plano lido no servidor decide se há gravação (plano só de artes não escolhe videomaker).
+    const plan = await getOnboardingPlan(currentClient.plan_id);
+    const planHasRecording = plan?.has_recording !== false;
+    const clientCity = await getClientCityForAgenda(clientId);
+    if (planHasRecording) {
+      if (!videomaker_id || !fixed_day) return res.status(400).json({ error: 'Missing required fields' });
+      if (!full_shift_recording && !fixed_time) return res.status(400).json({ error: 'Missing fixed_time' });
+      const allowedVideomakers = await listOnboardingVideomakers(clientCity);
+      if (!allowedVideomakers.some((vm) => String(vm.id) === String(videomaker_id))) {
+        return res.status(400).json({ error: 'Videomaker indisponível para a sua cidade. Recarregue a página e escolha outro.' });
+      }
+    }
 
     const updateFields = {
       videomaker_id, fixed_day, fixed_time: fixed_time || '08:30',
@@ -8600,50 +8650,77 @@ app.all('/api/client-onboarding', async (req, res) => {
       preferred_shift: preferred_shift || 'manha',
     };
 
-    let briefingUpdate = '';
-    const vals = [updateFields.videomaker_id, updateFields.fixed_day, updateFields.fixed_time,
-      updateFields.backup_day, updateFields.backup_time, updateFields.monthly_recordings,
-      updateFields.accepts_extra, updateFields.extra_content_types, updateFields.extra_client_appears,
-      updateFields.selected_weeks, updateFields.onboarding_completed,
-      updateFields.photo_preference, updateFields.has_photo_shoot, updateFields.accepts_photo_shoot_cost,
-      clientId, updateFields.full_shift_recording, updateFields.preferred_shift];
+    const sets = [];
+    const vals = [];
+    const addSet = (column, value) => { vals.push(value); sets.push(`${column}=$${vals.length}`); };
+    // Plano sem gravação: não mexe na agenda fixa do cliente
+    if (planHasRecording) {
+      addSet('videomaker_id', updateFields.videomaker_id);
+      addSet('fixed_day', updateFields.fixed_day);
+      addSet('fixed_time', updateFields.fixed_time);
+      addSet('backup_day', updateFields.backup_day);
+      addSet('backup_time', updateFields.backup_time);
+      addSet('monthly_recordings', updateFields.monthly_recordings);
+      addSet('selected_weeks', updateFields.selected_weeks);
+      addSet('full_shift_recording', updateFields.full_shift_recording);
+      addSet('preferred_shift', updateFields.preferred_shift);
+    }
+    addSet('accepts_extra', updateFields.accepts_extra);
+    addSet('extra_content_types', updateFields.extra_content_types);
+    addSet('extra_client_appears', updateFields.extra_client_appears);
+    addSet('onboarding_completed', updateFields.onboarding_completed);
+    addSet('photo_preference', updateFields.photo_preference);
+    addSet('has_photo_shoot', updateFields.has_photo_shoot);
+    addSet('accepts_photo_shoot_cost', updateFields.accepts_photo_shoot_cost);
 
-    let paramIdx = 18;
-    let extraSets = '';
-    if (briefing_data && Object.keys(briefing_data).length > 0) {
-      // O GET não devolve as senhas: campo vazio mantém a que já estava salva.
-      const { rows: [prevBriefing] } = await pool.query('SELECT briefing_data FROM clients WHERE id = $1', [clientId]);
-      extraSets += `, briefing_data = $${paramIdx}`;
-      vals.push(JSON.stringify(mergeBriefingSecrets(briefing_data, prevBriefing?.briefing_data)));
-      paramIdx++;
-      if (briefing_data.instagram_login) {
-        extraSets += `, client_login = $${paramIdx}`;
-        vals.push(briefing_data.instagram_login);
-        paramIdx++;
-      }
-      if (briefing_data.niche) {
-        extraSets += `, niche = $${paramIdx}`;
-        vals.push(briefing_data.niche);
-        paramIdx++;
-      }
+    if (briefing_data && typeof briefing_data === 'object' && Object.keys(briefing_data).length > 0) {
+      // Junta com o briefing anterior (não apaga o que veio do /briefing) e mantém as
+      // senhas salvas quando o campo volta vazio (o GET não devolve as senhas).
+      const prevBriefing = parseBriefingObject(currentClient.briefing_data) || {};
+      addSet('briefing_data', JSON.stringify({ ...prevBriefing, ...mergeBriefingSecrets(briefing_data, currentClient.briefing_data) }));
+      if (briefing_data.instagram_login) addSet('client_login', briefing_data.instagram_login);
+      if (briefing_data.niche) addSet('niche', briefing_data.niche);
     }
 
-    await pool.query(
-      `UPDATE clients SET videomaker_id=$1, fixed_day=$2, fixed_time=$3,
-       backup_day=$4, backup_time=$5, monthly_recordings=$6,
-       accepts_extra=$7, extra_content_types=$8, extra_client_appears=$9,
-       selected_weeks=$10, onboarding_completed=$11,
-       photo_preference=$12, has_photo_shoot=$13, accepts_photo_shoot_cost=$14,
-       full_shift_recording=$16, preferred_shift=$17,
-       updated_at=now() ${extraSets}
-       WHERE id=$15`, vals
+    vals.push(clientId);
+    txClient = await pool.connect();
+    await txClient.query('BEGIN');
+    await txClient.query(
+      `UPDATE clients SET ${sets.join(', ')}, updated_at=now() WHERE id=$${vals.length}`,
+      vals
     );
 
     // Create upcoming recordings
     const weeks = selected_weeks || [1, 2, 3, 4];
     const dayMap = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6 };
-    const targetDay = dayMap[fixed_day];
+    const targetDay = planHasRecording ? dayMap[fixed_day] : undefined;
     if (targetDay !== undefined) {
+      // As fixas futuras que a agenda já tinha (do cadastro ou de um envio anterior) dão lugar
+      // às do horário escolhido agora. Ficam as pedidas pelo portal/link, as que já começaram e
+      // as que têm algo vinculado (mesma regra do "Regenerar agenda").
+      await ensurePublicReschedTable();
+      const { rows: replacedRows } = await txClient.query(
+        `DELETE FROM recordings r
+          WHERE r.client_id = $1 AND r.status::text = 'agendada' AND r.type::text = 'fixa'
+            AND (r.date > $2::date OR (r.date = $2::date
+                 AND (CASE WHEN r.start_time::text ~ '^[0-9]{1,2}:[0-9]{2}'
+                           THEN split_part(r.start_time::text, ':', 1)::int * 60 + split_part(r.start_time::text, ':', 2)::int
+                           ELSE 0 END) > $3))
+            ${recordingsSourceColumnReady ? "AND COALESCE(r.source, '') NOT IN ('portal', 'link')" : ''}
+            AND NOT EXISTS (SELECT 1 FROM recordings o WHERE o.rescheduled_to_id = r.id)
+            AND NOT EXISTS (SELECT 1 FROM active_recordings a WHERE a.recording_id = r.id)
+            AND NOT EXISTS (SELECT 1 FROM delivery_records d WHERE d.recording_id = r.id)
+            AND NOT EXISTS (SELECT 1 FROM content_tasks ct WHERE ct.recording_id = r.id)
+          RETURNING r.id::text AS id`,
+        [clientId, brtDateString(), brtMinutesNow()]
+      );
+      if (replacedRows.length > 0) {
+        await txClient.query(
+          'UPDATE scripts SET recording_id = NULL, updated_at = NOW() WHERE recording_id::text = ANY($1::text[])',
+          [replacedRows.map((row) => row.id)]
+        );
+      }
+
       const today = new Date();
       const year = today.getFullYear();
       const month = today.getMonth();
@@ -8659,23 +8736,31 @@ app.all('/api/client-onboarding', async (req, res) => {
         while (next.getMonth() === nextMonth.getMonth()) { if (next.getDay() === targetDay) nextAllDates.push(next.toISOString().split('T')[0]); next.setDate(next.getDate() + 1); }
         dates = weeks.filter(w => w >= 1 && w <= nextAllDates.length).map(w => nextAllDates[w - 1]);
       }
-      if (dates.length > 0) {
-        const insertVals = dates.map((date, i) => {
-          const base = i * 4;
-          return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, 'fixa', 'agendada', 'pendente')`;
-        }).join(', ');
-        const insertParams = dates.flatMap(date => [clientId, videomaker_id, date, fixed_time]);
-        await pool.query(
-          `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ${insertVals}`,
-          insertParams
+      // Gravações na cidade do cliente (sem cidade = cliente global: default da tabela + trigger)
+      const withCity = Boolean(clientCity) && await tableHasCityColumn('recordings');
+      for (const date of dates) {
+        // Não duplica uma fixa que ficou no mesmo dia (ex.: já vinculada a vídeos)
+        const { rows: [kept] } = await txClient.query(
+          `SELECT 1 FROM recordings WHERE client_id = $1 AND date = $2::date AND type::text = 'fixa' AND status::text <> 'cancelada' LIMIT 1`,
+          [clientId, date]
+        );
+        if (kept) continue;
+        await txClient.query(
+          `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status${withCity ? ', city' : ''})
+           VALUES ($1, $2, $3, $4, 'fixa', 'agendada', 'pendente'${withCity ? ', $5' : ''})`,
+          [clientId, videomaker_id, date, updateFields.fixed_time, ...(withCity ? [clientCity] : [])]
         );
       }
     }
 
+    await txClient.query('COMMIT');
     res.json({ success: true });
   } catch (err) {
+    if (txClient) await txClient.query('ROLLBACK').catch(() => {});
     console.error('Client onboarding error:', err);
     res.status(500).json({ error: err.message });
+  } finally {
+    if (txClient) txClient.release();
   }
 });
 

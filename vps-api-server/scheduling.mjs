@@ -1312,8 +1312,9 @@ export function registerSchedulingRoutes(app, deps) {
             media_url: mediaUrl,
             caption: body.publish_type === 'stories' ? '' : String(body.caption ?? ''),
             scheduled_at: whenIso,
-            story_link: body.publish_type === 'stories' ? (String(body.story_link || '').trim() || null) : null,
-            story_link_text: body.publish_type === 'stories' ? (String(body.story_link_text || '').trim() || null) : null,
+            // Link e botão só no lembrete: "Postar sozinho" sai sem link clicável (a API da Meta não aplica o adesivo)
+            story_link: storyMode === 'lembrete' ? (String(body.story_link || '').trim() || null) : null,
+            story_link_text: storyMode === 'lembrete' ? (String(body.story_link_text || '').trim().slice(0, 40) || 'Clique aqui') : null,
           }, { requireAccounts: storyMode !== 'lembrete' });
         }
 

@@ -573,7 +573,9 @@ export function useSupabaseData() {
 
 
   const updateClient = useCallback(async (client: Client): Promise<boolean> => {
-    const { id, ...rest } = clientToRow(client);
+    // A edição não manda a cidade: mudar de praça é só pelo "Transferir Cidade" (o servidor
+    // trata a marcação de cliente admin e devolve o cliente para a cidade ativa ao desmarcar).
+    const { id, city: _city, ...rest } = clientToRow(client);
     const { error } = await invokeVpsFunction(`clients/${id}`, { body: rest, method: 'PUT' });
     if (error) return reportSaveError('updateClient', error);
     setClients(prev => prev.map(c => c.id === client.id ? client : c));
@@ -583,7 +585,8 @@ export function useSupabaseData() {
   const deleteClient = useCallback(async (id: string): Promise<boolean> => {
     try {
       const { error } = await invokeVpsFunction(`clients/${id}`, { method: 'DELETE' });
-      if (error) { console.error('deleteClient error:', error); return false; }
+      // O aviso (com o motivo do servidor) sai no reportSaveError; quem chama não repete
+      if (error) return reportSaveError('deleteClient', error);
       setClients(prev => prev.filter(c => c.id !== id));
       setRecordings(prev => prev.filter(r => r.clientId !== id));
       setActiveRecordings(prev => prev.filter(a => a.clientId !== id));
@@ -591,8 +594,7 @@ export function useSupabaseData() {
       setScripts(prev => prev.filter(s => s.clientId !== id));
       return true;
     } catch (err) {
-      console.error('deleteClient error:', err);
-      return false;
+      return reportSaveError('deleteClient', err);
     }
   }, []);
 

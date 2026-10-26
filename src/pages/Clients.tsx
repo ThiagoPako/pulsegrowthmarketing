@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import WhatsAppGroupPicker from '@/components/whatsapp/WhatsAppGroupPicker';
 import { useApp } from '@/contexts/AppContext';
+import { useCity, CITY_LABELS, type CityCode } from '@/contexts/CityContext';
 import { generateClientCardPdf } from '@/lib/clientCardPdf';
 import { generateBriefingPdf } from '@/lib/briefingPdf';
 import { parseEditorial } from '@/lib/editorialFormatter';
@@ -104,6 +105,9 @@ export default function Clients() {
   const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient, regenerateScheduleForClient, currentUser, refetchData } = useApp();
   const { createOnboardingForClient } = useOnboarding();
   const isDesignerOnly = currentUser?.role === 'designer' || currentUser?.role === 'fotografo';
+  const { activeCity } = useCity();
+  // Mesmo critério do servidor (isAdminUser) para excluir cliente: admin ou social media
+  const canDeleteClients = ['admin', 'social_media'].some(role => currentUser?.role === role || currentUser?.roles?.includes(role as any));
   const [briefingClient, setBriefingClient] = useState<Client | null>(null);
   const [briefingSendOpen, setBriefingSendOpen] = useState(false);
   const [briefingSendClient, setBriefingSendClient] = useState<Client | null>(null);
@@ -836,7 +840,8 @@ export default function Clients() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza? Todos os dados deste cliente serão removidos permanentemente.')) return;
-    await deleteClient(id);
+    // Se a API recusar, o deleteClient já mostra o motivo
+    if (!(await deleteClient(id))) return;
     toast.success('Cliente e todos os dados relacionados foram removidos');
   };
 
@@ -1087,8 +1092,17 @@ export default function Clients() {
         <Input value={form.responsiblePerson} onChange={e => setForm({ ...form, responsiblePerson: e.target.value })} placeholder="Ex: João Silva" />
       </div>
       <div className="space-y-1">
-        <Label>Cidade</Label>
-        <Input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} placeholder="Goiânia - GO" />
+        <Label>Cidade (praça)</Label>
+        {/* A praça define em que cidade o cliente e as demandas aparecem: não é texto livre.
+            Cliente novo entra na cidade ativa; para mudar, use "Transferir Cidade" na lista. */}
+        <Input
+          value={isAdminClient
+            ? 'Todas as cidades (cliente admin)'
+            : CITY_LABELS[(editing ? form.city : activeCity) as CityCode] || 'Sem cidade definida'}
+          readOnly
+          disabled
+        />
+        <p className="text-[10px] text-muted-foreground">Para mudar a cidade, use o botão Transferir Cidade no card do cliente.</p>
       </div>
       <div className="space-y-1">
         <Label>WhatsApp do Cliente *</Label>
@@ -2634,11 +2648,11 @@ export default function Clients() {
                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Pulse Club" onClick={() => window.open(`/portal/${c.id}`, '_blank')}>
                   <MonitorPlay size={15} />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500" title="Transferir Cidade" onClick={() => setTransferClient(c)}>
-                  <MoveHorizontal size={15} />
-                </Button>
                 {!isDesignerOnly && (
                   <>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500" title="Transferir Cidade" onClick={() => setTransferClient(c)}>
+                      <MoveHorizontal size={15} />
+                    </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Link do portal"
                       onClick={() => {
                         const link = `${window.location.origin}/portal-registro/${c.id}`;
@@ -2680,7 +2694,9 @@ export default function Clients() {
                     ) : (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-500" title="Cancelar Cliente" onClick={() => { setCancelClient(c); setCancelDialogOpen(true); }}><UserMinus size={15} /></Button>
                     )}
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Excluir" onClick={() => handleDelete(c.id)}><Trash2 size={15} /></Button>
+                    {canDeleteClients && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Excluir" onClick={() => handleDelete(c.id)}><Trash2 size={15} /></Button>
+                    )}
                   </>
                 )}
               </div>

@@ -1935,6 +1935,70 @@ ensureGlobalClientSupport().catch((error) => {
 });
 
 /** Propaga a marcação de cliente global para todas as tabelas com `city`. */
+// Tabelas com cidade que não têm client_id: seguem a cidade do registro pai (comentários e
+// históricos das tarefas, comentários de proposta e botões da bio). Sem isso, numa
+// transferência elas ficavam na cidade antiga e sumiam da tela.
+const CLIENT_CITY_CHILD_TABLES = [
+  { table: 'task_comments', fk: 'task_id', parents: ['content_tasks', 'design_tasks'] },
+  { table: 'task_history', fk: 'task_id', parents: ['content_tasks', 'design_tasks'] },
+  { table: 'design_task_history', fk: 'task_id', parents: ['design_tasks'] },
+  { table: 'proposal_comments', fk: 'proposal_id', parents: ['commercial_proposals'] },
+  { table: 'client_bio_buttons', fk: 'bio_link_id', parents: ['client_bio_links'] },
+];
+
+/** WHERE (com o id do cliente em `placeholder`) das linhas filhas de um cliente, ou null se a tabela não se aplica. */
+async function clientChildCityWhere({ table, fk, parents }, placeholder) {
+  if (!(await tableHasCityColumn(table))) return null;
+  const columns = await getExistingColumns(table);
+  if (!columns.has(fk)) return null;
+  const selects = [];
+  for (const parent of parents) {
+    const parentColumns = await getExistingColumns(parent).catch(() => new Set());
+    if (parentColumns.has('id') && parentColumns.has('client_id')) {
+      selects.push(`SELECT id::text FROM ${parent} WHERE client_id::text = ${placeholder}::text`);
+    }
+  }
+  if (selects.length === 0) return null;
+  return `${fk}::text IN (${selects.join(' UNION ALL ')})`;
+}
+
+/** Leva as linhas filhas (sem client_id) do cliente para a cidade informada (null = global). */
+async function cascadeClientCityToChildren(clientId, city) {
+  for (const child of CLIENT_CITY_CHILD_TABLES) {
+    try {
+      const where = await clientChildCityWhere(child, '$2');
+      if (!where) continue;
+      await pool.query(`UPDATE ${child.table} SET city = $1 WHERE ${where}`, [city, clientId]);
+    } catch (err) {
+      console.warn(`[Client-City] Falha ao mover ${child.table}:`, err?.message || err);
+    }
+  }
+}
+
+/**
+ * Quem pode transferir um cliente de praça: admin/social_media (todas as cidades) ou
+ * gestor_projetos que atende a cidade de origem (sem cidade cadastrada = Minaçu).
+ */
+async function canTransferClientCity(user, originCity) {
+  if (await isAdminUser(user)) return true;
+  if (!(await userHasAssignedRole(user, 'gestor_projetos'))) return false;
+  const origin = normalizeCityValue(originCity);
+  if (!origin) return true;
+  try {
+    await ensureUserCitiesTable();
+    const linkedIds = await getLinkedUserIds(user);
+    const { rows } = await pool.query(
+      'SELECT city FROM user_cities WHERE user_id::text = ANY($1::text[])',
+      [linkedIds.length ? linkedIds : [String(user.id)]]
+    );
+    const allowed = rows.length ? rows.map((r) => normalizeCityValue(r.city)).filter(Boolean) : ['minacu'];
+    return allowed.includes(origin);
+  } catch (err) {
+    console.warn('[Client-City] Falha ao conferir cidades do usuário:', err?.message || err);
+    return false;
+  }
+}
+
 async function syncGlobalClientCity(clientId, isGlobal, fallbackCity = 'minacu') {
   const targetCity = isGlobal ? null : assertValidCity(fallbackCity);
   for (const tableName of TABLES_WITH_CITY) {
@@ -1948,6 +2012,7 @@ async function syncGlobalClientCity(clientId, isGlobal, fallbackCity = 'minacu')
       console.warn(`[Global-Client] Falha ao sincronizar ${tableName}:`, err?.message || err);
     }
   }
+  await cascadeClientCityToChildren(clientId, targetCity);
 }
 
 /**
@@ -10739,6 +10804,11 @@ const TRANSFER_TABLE_LABELS = {
   crm_notes: 'Notas CRM',
   endomarketing_clientes: 'Endomarketing',
   goals: 'Metas',
+  task_comments: 'Comentários de Tarefas',
+  task_history: 'Histórico de Tarefas',
+  design_task_history: 'Histórico de Design',
+  proposal_comments: 'Comentários de Propostas',
+  client_bio_buttons: 'Botões da Bio',
 };
 
 app.get('/api/clients/:id/transfer-preview', async (req, res) => {
@@ -10746,7 +10816,7 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
      const { id } = req.params;
 
      // Admins podem visualizar previews sem validar activeCity rigorosamente
-     await verifyUser(req);
+     const { user } = await verifyUser(req);
 
     // Diagnóstico estrito: em vez de cair silenciosamente em 'minacu', devolve
     // um erro estruturado (code + hint) quando a cidade não pode ser resolvida.
@@ -10778,6 +10848,15 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
     const currentCity = normalizeCityValue(client.city) || 'minacu';
     const targetCityFinal = validatedCity || 'minacu';
 
+    // Mesma regra do PUT: só a gestão da cidade de origem transfere.
+    if (!(await canTransferClientCity(user, currentCity))) {
+      return res.status(403).json({
+        code: 'TRANSFER_FORBIDDEN',
+        error: 'Sem permissão para transferir este cliente de cidade.',
+        message: 'Só admin, social media ou gestor de projetos da cidade de origem podem transferir o cliente.',
+      });
+    }
+
     const details = [];
     let total = 0;
 
@@ -10803,6 +10882,22 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
         }
       } catch (err) {
         console.warn(`[Transfer-Preview] Falha ao contar ${tableName}:`, err?.message || err);
+      }
+    }
+
+    // Comentários e históricos (sem client_id) também acompanham o cliente.
+    for (const child of CLIENT_CITY_CHILD_TABLES) {
+      try {
+        const where = await clientChildCityWhere(child, '$1');
+        if (!where) continue;
+        const { rows } = await pool.query(`SELECT COUNT(*)::int AS total FROM ${child.table} WHERE ${where}`, [id]);
+        const count = rows[0]?.total || 0;
+        if (count > 0) {
+          total += count;
+          details.push({ table: child.table, label: TRANSFER_TABLE_LABELS[child.table] || child.table, count });
+        }
+      } catch (err) {
+        console.warn(`[Transfer-Preview] Falha ao contar ${child.table}:`, err?.message || err);
       }
     }
 
@@ -10846,13 +10941,31 @@ app.put('/api/clients/:id', async (req, res) => {
     const { user, activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     const { id } = req.params;
     const c = req.body;
-    
+    await ensureClientExperienceColumns().catch(() => {});
+    await ensureGlobalClientSupport().catch(() => {});
+
     // First, get the current client data to check the existing city
-    const { rows: currentRows } = await pool.query('SELECT city FROM clients WHERE id = $1', [id]);
+    const { rows: currentRows } = await pool.query('SELECT * FROM clients WHERE id = $1', [id]);
     const oldCity = currentRows[0]?.city;
-    let newCityRaw = c.city;
-    if (newCityRaw) newCityRaw = normalizeCityValue(newCityRaw);
-    const newCity = newCityRaw ? assertValidCity(newCityRaw) : undefined;
+    const oldIsGlobal = currentRows[0]?.is_admin_client === true;
+
+    // Cidade só muda com um valor reconhecido. Texto livre ("Porangatu - GO") é recusado em vez
+    // de cair em Minaçu pelo fallback do assertValidCity (moveria o cliente e todos os registros).
+    // Cidade vazia (cliente legado sem praça) não mexe na coluna.
+    const rawCity = typeof c.city === 'string' ? c.city.trim() : c.city;
+    let newCity;
+    if (rawCity) {
+      const normalizedRaw = normalizeCityValue(rawCity);
+      if (!normalizedRaw || !ALLOWED_CITIES.has(normalizedRaw)) {
+        return res.status(400).json({
+          code: CITY_ERROR_CODES.INVALID,
+          error: `Cidade inválida: "${rawCity}". Use Minaçu ou Uruaçu (para mudar de cidade, use Transferir Cidade).`,
+          message: `Cidade inválida: "${rawCity}". Use Minaçu ou Uruaçu.`,
+          supported: [...ALLOWED_CITIES],
+        });
+      }
+      newCity = normalizedRaw;
+    }
 
     // Log de auditoria: registra qual fonte definiu a cidade nesta transferência.
     if (newCity && normalizeCityValue(oldCity) !== newCity) {
@@ -10869,7 +10982,7 @@ app.put('/api/clients/:id', async (req, res) => {
     const allowed = [
       'company_name','responsible_person','phone','color','logo_url','fixed_day','fixed_time',
       'videomaker_id','backup_time','backup_day','extra_day','extra_content_types','accepts_extra',
-      'extra_client_appears','whatsapp','whatsapp_group','email','city','weekly_reels','weekly_creatives',
+      'extra_client_appears','whatsapp','whatsapp_group','email','weekly_reels','weekly_creatives',
       'weekly_goal','has_endomarketing','has_vehicle_flyer','weekly_stories','presence_days',
       'monthly_recordings','niche','client_login','drive_link','drive_fotos','drive_identidade_visual',
       'editorial','plan_id','contract_start_date','contract_duration_months','auto_renewal',
@@ -10877,16 +10990,14 @@ app.put('/api/clients/:id', async (req, res) => {
       'photo_preference','client_type','onboarding_completed',
       'company_birthday','client_owners','is_admin_client'
     ];
-    await ensureClientExperienceColumns().catch(() => {});
-    await ensureGlobalClientSupport().catch(() => {});
     const isGlobalRequested = c.is_admin_client === true || c.is_admin_client === 'true';
+    // Só sincroniza as demandas quando a marcação de cliente admin realmente mudou.
+    const globalChanged = c.is_admin_client !== undefined && isGlobalRequested !== oldIsGlobal;
     const sets = []; const vals = [];
     let idx = 1;
     for (const key of allowed) {
       if (c[key] !== undefined) {
         let value = c[key];
-        // Cliente admin global não pertence a nenhuma praça.
-        if (key === 'city') value = isGlobalRequested ? null : newCity;
         if (key === 'is_admin_client') value = isGlobalRequested;
         if (key === 'briefing_data') value = JSON.stringify(c[key]);
         if (key === 'company_birthday') value = parseDateOrNull(c[key]);
@@ -10901,6 +11012,17 @@ app.put('/api/clients/:id', async (req, res) => {
       }
 
     }
+    // Cliente admin global não pertence a nenhuma praça. Ao desmarcar sem cidade informada,
+    // volta para a cidade ativa de forma explícita.
+    let cityToSet;
+    if (isGlobalRequested) cityToSet = null;
+    else if (newCity) cityToSet = newCity;
+    else if (globalChanged) cityToSet = activeCity || 'minacu';
+    if (cityToSet !== undefined) {
+      sets.push(`city = $${idx}`);
+      vals.push(cityToSet);
+      idx++;
+    }
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push(`updated_at = NOW()`);
     vals.push(id);
@@ -10908,13 +11030,23 @@ app.put('/api/clients/:id', async (req, res) => {
 
     // Detecta transferência de cidade ANTES de montar o escopo.
     const normalizedOldCity = normalizeCityValue(oldCity);
-    const isCityTransfer = Boolean(newCity && normalizedOldCity && newCity !== normalizedOldCity);
+    const isCityTransfer = Boolean(cityToSet && normalizedOldCity && cityToSet !== normalizedOldCity);
+
+    // Transferir de praça é ação de gestão: admin/social_media ou gestor_projetos que atende
+    // a cidade de origem. Antes qualquer login movia cliente de outra cidade.
+    if (isCityTransfer && !(await canTransferClientCity(user, normalizedOldCity))) {
+      return res.status(403).json({
+        code: 'TRANSFER_FORBIDDEN',
+        error: 'Sem permissão para transferir este cliente de cidade.',
+        message: 'Só admin, social media ou gestor de projetos da cidade de origem podem transferir o cliente.',
+      });
+    }
 
     // Em uma transferência, o frontend envia o header `x-pulse-city` já com a
     // cidade de DESTINO. Se aplicássemos esse escopo no WHERE, o cliente (ainda
     // na cidade de origem) não seria encontrado e o UPDATE afetaria 0 linhas —
     // exatamente o bug de "passou todas as etapas mas nada mudou". Por isso, em
-    // transferências o escopo usa a cidade de ORIGEM.
+    // transferências o escopo usa a cidade de ORIGEM (já conferida acima).
     if (scopeCity) {
       vals.push(isCityTransfer ? normalizedOldCity : activeCity);
       whereSql += ` AND ${cityVisibilityExpression('city', `$${idx + 1}`)}`;
@@ -10937,32 +11069,37 @@ app.put('/api/clients/:id', async (req, res) => {
 
       // If the city was changed, update all related scoped tables
       if (isCityTransfer) {
-        console.log(`[Cascading-City-Update] Transferring client ${id} from ${normalizedOldCity} to ${newCity}`);
-        
+        console.log(`[Cascading-City-Update] Transferring client ${id} from ${normalizedOldCity} to ${cityToSet}`);
+
         for (const tableName of TABLES_WITH_CITY) {
           if (tableName === 'clients') continue;
-          
+
           const hasCity = await tableHasCityColumn(tableName);
           if (!hasCity) continue;
-          
+
           const existingColumns = await getExistingColumns(tableName);
           if (existingColumns.has('client_id')) {
             await client.query(
               `UPDATE ${tableName} SET city = $1 WHERE client_id = $2`,
-              [newCity, id]
+              [cityToSet, id]
             );
           }
         }
       }
-      
+
       await client.query('COMMIT');
 
+      // Comentários e históricos das tarefas (sem client_id) acompanham a nova cidade.
+      if (isCityTransfer) {
+        await cascadeClientCityToChildren(id, cityToSet);
+      }
+
       // Marcou/desmarcou como admin global: propaga a cidade das demandas.
-      if (c.is_admin_client !== undefined) {
+      if (globalChanged) {
         await syncGlobalClientCity(
           id,
           isGlobalRequested,
-          newCity || normalizedOldCity || activeCity || 'minacu',
+          cityToSet || normalizedOldCity || activeCity || 'minacu',
         ).catch(() => {});
       }
 
@@ -11039,7 +11176,14 @@ app.delete('/api/clients/:id', async (req, res) => {
     } finally {
       client.release();
     }
-  } catch (e) { console.error('DELETE /api/clients error:', e); res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('DELETE /api/clients error:', e);
+    // Sem papel de admin/social media: 403 com mensagem legível (antes saía 500 em inglês)
+    if (e?.message === 'Admin access required') {
+      return res.status(403).json({ error: 'Só admin ou social media podem excluir clientes.' });
+    }
+    res.status(e?.message === 'Unauthorized' ? 401 : 500).json({ error: e.message });
+  }
 });
 
 // ─── Recordings ─────────────────────────────────────────────

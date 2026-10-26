@@ -2073,6 +2073,59 @@ ensureClientFractionalGoalColumns().catch((error) => {
  *    de escrita precisa conhecer a regra (evita divergências).
  */
 let globalClientSupportPromise;
+/**
+ * Correção única (out/2026): registros de cliente gravados na cidade errada (portal, banco de
+ * profissionais, entregas, gravações... quase todos de Uruaçu caídos em Minaçu) vão para a
+ * cidade do cliente. Cada linha mudada fica em city_backfill_log (cidade antiga e nova), para
+ * dar para desfazer; roda uma vez só (pulse_data_fixes).
+ */
+async function backfillClientCities() {
+  const fixName = 'cidade_do_cliente_2026_10';
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    await db.query(`CREATE TABLE IF NOT EXISTS pulse_data_fixes (name TEXT PRIMARY KEY, ran_at TIMESTAMPTZ NOT NULL DEFAULT now(), result JSONB)`);
+    const { rowCount: firstRun } = await db.query(`INSERT INTO pulse_data_fixes (name) VALUES ($1) ON CONFLICT DO NOTHING`, [fixName]);
+    if (!firstRun) { await db.query('ROLLBACK'); return; }
+    await db.query(`CREATE TABLE IF NOT EXISTS city_backfill_log (
+      table_name TEXT NOT NULL, row_id TEXT NOT NULL, old_city TEXT, new_city TEXT,
+      fixed_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+    const { rows: tables } = await db.query(`
+      SELECT c1.table_name AS name
+        FROM information_schema.columns c1
+        JOIN information_schema.columns c2 ON c2.table_schema = c1.table_schema AND c2.table_name = c1.table_name AND c2.column_name = 'client_id'
+        JOIN information_schema.columns c3 ON c3.table_schema = c1.table_schema AND c3.table_name = c1.table_name AND c3.column_name = 'id'
+        JOIN information_schema.tables tb ON tb.table_schema = c1.table_schema AND tb.table_name = c1.table_name AND tb.table_type = 'BASE TABLE'
+       WHERE c1.table_schema = 'public' AND c1.column_name = 'city' AND c1.table_name <> 'clients'
+       ORDER BY 1`);
+    const result = {};
+    for (const { name } of tables) {
+      const join = `FROM public.clients c
+        WHERE c.id::text = x.client_id::text AND c.city IS NOT NULL AND c.city::text <> ''
+          AND NOT COALESCE(c.is_admin_client, false) AND x.city::text IS DISTINCT FROM c.city::text`;
+      await db.query(`INSERT INTO city_backfill_log (table_name, row_id, old_city, new_city)
+        SELECT $1, x.id::text, x.city::text, c.city::text FROM public.${pgIdent(name)} x, public.clients c
+         WHERE c.id::text = x.client_id::text AND c.city IS NOT NULL AND c.city::text <> ''
+           AND NOT COALESCE(c.is_admin_client, false) AND x.city::text IS DISTINCT FROM c.city::text`, [name]);
+      const { rowCount } = await db.query(`UPDATE public.${pgIdent(name)} x SET city = c.city::text ${join}`);
+      if (rowCount) result[name] = rowCount;
+    }
+    await db.query(`UPDATE pulse_data_fixes SET result = $2 WHERE name = $1`, [fixName, JSON.stringify(result)]);
+    await db.query('COMMIT');
+    console.log('[cidade] registros levados para a cidade do cliente:', JSON.stringify(result));
+  } catch (error) {
+    await db.query('ROLLBACK').catch(() => {});
+    console.error('[cidade] correção da cidade dos registros não aplicada:', error.message);
+  } finally {
+    db.release();
+  }
+}
+
+/** Nome de tabela/coluna vindo do information_schema, entre aspas. */
+function pgIdent(name) {
+  return `"${String(name).replace(/"/g, '""')}"`;
+}
+
 async function ensureGlobalClientSupport() {
   if (!globalClientSupportPromise) {
     globalClientSupportPromise = (async () => {
@@ -2100,12 +2153,18 @@ async function ensureGlobalClientSupport() {
       await pool.query(`
         CREATE OR REPLACE FUNCTION public.apply_global_client_city() RETURNS trigger
         LANGUAGE plpgsql AS $fn$
-        DECLARE v_global boolean;
+        DECLARE v_global boolean; v_city text;
         BEGIN
           IF NEW.client_id IS NULL THEN RETURN NEW; END IF;
-          SELECT c.is_admin_client INTO v_global
+          SELECT c.is_admin_client, c.city::text INTO v_global, v_city
           FROM public.clients c WHERE c.id::text = NEW.client_id::text;
-          IF COALESCE(v_global, false) THEN NEW.city := NULL; END IF;
+          IF COALESCE(v_global, false) THEN
+            NEW.city := NULL;
+          ELSIF v_city IS NOT NULL AND v_city <> '' THEN
+            -- Cada cidade com o que é dela: registro de cliente fica na cidade do cliente,
+            -- venha de onde vier (portal, link público, agentes, WhatsApp, outra aba).
+            NEW.city := v_city;
+          END IF;
           RETURN NEW;
         END $fn$;
       `);
@@ -2146,9 +2205,12 @@ async function ensureGlobalClientSupport() {
   return globalClientSupportPromise;
 }
 
-ensureGlobalClientSupport().catch((error) => {
-  console.error('Failed to ensure global admin client support:', error);
-});
+ensureGlobalClientSupport()
+  // Gatilho de cidade pronto: corrige uma vez os registros antigos na cidade errada
+  .then(() => backfillClientCities())
+  .catch((error) => {
+    console.error('Failed to ensure global admin client support:', error);
+  });
 
 // Tabelas com cidade que não têm client_id: seguem a cidade do registro pai (comentários e
 // históricos das tarefas, comentários de proposta e botões da bio). Sem isso, numa

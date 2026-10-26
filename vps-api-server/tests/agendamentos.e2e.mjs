@@ -38,6 +38,9 @@ const ids = {
   taskLegacy: '00000000-0000-0000-0000-00000000a625',
   design: '00000000-0000-0000-0000-00000000a631', design2: '00000000-0000-0000-0000-00000000a632',
   portal: '00000000-0000-0000-0000-00000000a641', script: '00000000-0000-0000-0000-00000000a651',
+  // histórico do portal sem vínculo (antes de 25/10): não pode voltar como "não agendado"
+  taskMay: '00000000-0000-0000-0000-00000000a626', portalMay: '00000000-0000-0000-0000-00000000a642',
+  portalOld: '00000000-0000-0000-0000-00000000a643', portalSolo: '00000000-0000-0000-0000-00000000a644',
 };
 const CLIENTS = [ids.cliMin, ids.cliNoAcc, ids.cliUru];
 const PEOPLE = [ids.thiago, ids.other, ids.social];
@@ -126,6 +129,19 @@ async function fixtures() {
      VALUES ($1, $2, 'Vídeo do portal', 'reel', $3, 'aprovado', now(), 1, 2026)`,
     [ids.portal, ids.cliMin, MEDIA('portal.mp4')]
   );
+  // Vídeo postado em maio (card arquivado há 2 meses) e a linha antiga do portal, sem vínculo, ainda 'aprovado'
+  await pool.query(
+    `INSERT INTO content_tasks (id, client_id, title, content_type, kanban_column, edited_video_link, approved_at, updated_at)
+     VALUES ($1, $2, 'Vídeo de maio', 'reels', 'arquivado', $3, now() - interval '150 days', now() - interval '60 days')`,
+    [ids.taskMay, ids.cliMin, MEDIA('maio.mp4')]
+  );
+  await pool.query(
+    `INSERT INTO client_portal_contents (id, client_id, title, content_type, file_url, status, approved_at, season_month, season_year)
+     VALUES ($1, $3, ' vídeo de MAIO ', 'reel', $4, 'aprovado', now() - interval '2 days', 5, 2026),
+            ($2, $3, 'Vídeo avulso antigo', 'reel', $5, 'aprovado', now() - interval '60 days', 8, 2026),
+            ($6, $3, 'Vídeo avulso novo', 'reel', $7, 'aprovado', now() - interval '1 day', 10, 2026)`,
+    [ids.portalMay, ids.portalOld, ids.cliMin, MEDIA('maio.mp4'), MEDIA('antigo.mp4'), ids.portalSolo, MEDIA('solo.mp4')]
+  );
 }
 
 // ── Sobe o servidor ────────────────────────────────────────────
@@ -207,7 +223,7 @@ try {
   assert.ok(!names.includes(ids.cliUru), 'cliente de Uruaçu fora da lista de Minaçu');
   const cli = r.json.clients.find((c) => c.id === ids.cliMin);
   assert.equal(cli.accounts.instagram, 1);
-  assert.equal(cli.pending, 3, 'vídeo A + arte + conteúdo do portal (o panfleto não é post)');
+  assert.equal(cli.pending, 4, 'vídeo A + arte + 2 conteúdos avulsos recentes do portal (o panfleto e o histórico não contam)');
   r = await api('GET', '/scheduling/clients', null, { city: 'uruacu' });
   assert.ok(r.json.clients.some((c) => c.id === ids.cliUru) && !r.json.clients.some((c) => c.id === ids.cliMin));
   r = await materials(ids.cliMin, { city: 'uruacu' });
@@ -232,6 +248,20 @@ try {
   assert.equal(itemA.type, 'reels');
   assert.equal(r.json.accounts.length, 1);
   ok('não agendados: vídeo aprovado, arte aprovada e conteúdo aprovado no portal (com a legenda do roteiro)');
+
+  assert.ok(pendingKeys.includes(`portal:${ids.portalSolo}`), 'avulso recente aparece');
+  assert.ok(!pendingKeys.includes(`portal:${ids.portalMay}`), 'linha antiga do portal com o título de um card não aparece');
+  assert.ok(!pendingKeys.includes(`portal:${ids.portalOld}`), 'avulso aprovado há mais de 45 dias não aparece');
+  assert.ok(!r.json.scheduled.some((i) => i.key === `portal:${ids.portalMay}` || i.key === `portal:${ids.portalOld}`));
+  r = await api('POST', '/scheduling/schedule', { client_id: ids.cliMin, kind: 'portal', id: ids.portalMay, date: addDays(today, 3), time: '10:00', mode: 'manual' });
+  assert.equal(r.status, 409);
+  assert.equal(r.json.code, 'not_ready');
+  r = await api('POST', '/scheduling/schedule', { client_id: ids.cliMin, kind: 'portal', id: ids.portalOld, date: addDays(today, 3), time: '10:00', mode: 'manual' });
+  assert.equal(r.status, 409);
+  r = await api('POST', '/scheduling/reschedule', { client_id: ids.cliMin, kind: 'portal', id: ids.portalMay, date: addDays(today, 3), time: '10:00' });
+  assert.equal(r.status, 409);
+  assert.equal(await row(`SELECT posting_at FROM client_portal_contents WHERE id = $1`, [ids.portalMay]).then((x) => x.posting_at), null);
+  ok('histórico do portal sem vínculo (título de card, mais de 45 dias) não aparece, não conta e não agenda (409)');
 
   r = await materials(ids.cliNoAcc);
   const legacy = r.json.scheduled.find((i) => i.key === `conteudo:${ids.taskLegacy}`);

@@ -128,8 +128,12 @@ export default function PublicContributionPanel({
     }
     const [kind, id] = targetKey.split(':') as ['professional' | 'unit', string];
     setUploading(true);
+    let attached = 0;
     try {
-      const urls: string[] = [];
+      // Fotos e vídeos vão para listas diferentes: separa por arquivo (o tipo às vezes
+      // vem vazio no celular, então a extensão também conta).
+      const photoUrls: string[] = [];
+      const videoUrls: string[] = [];
       for (const file of Array.from(files)) {
         const form = new FormData();
         form.append('folder', 'client-database');
@@ -140,25 +144,36 @@ export default function PublicContributionPanel({
         );
         const uploadPayload = await uploadResponse.json().catch(() => ({}));
         if (!uploadResponse.ok) throw new Error(uploadPayload?.error || 'Falha no envio do arquivo.');
-        urls.push(uploadPayload.url);
+        const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm|avi|mkv|3gp)$/i.test(file.name);
+        (isVideo ? videoUrls : photoUrls).push(uploadPayload.url);
       }
 
-      const mediaType = Array.from(files).every((file) => file.type.startsWith('video/')) ? 'videos' : 'photos';
-      const attachResponse = await fetch(
-        `${apiBase}/public/client-database/${encodeURIComponent(token)}/media`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ kind, id, urls, mediaType }),
-        },
-      );
-      const attachPayload = await attachResponse.json().catch(() => ({}));
-      if (!attachResponse.ok) throw new Error(attachPayload?.error || 'Falha ao anexar as mídias.');
+      for (const [mediaType, list] of [['photos', photoUrls], ['videos', videoUrls]] as const) {
+        // O servidor aceita até 30 por chamada
+        for (let i = 0; i < list.length; i += 30) {
+          const urls = list.slice(i, i + 30);
+          const attachResponse = await fetch(
+            `${apiBase}/public/client-database/${encodeURIComponent(token)}/media`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ kind, id, urls, mediaType }),
+            },
+          );
+          const attachPayload = await attachResponse.json().catch(() => ({}));
+          if (!attachResponse.ok) {
+            const message = attachPayload?.error || 'Falha ao anexar as mídias.';
+            throw new Error(attached > 0 ? `${attached} arquivo(s) anexado(s), mas o restante falhou: ${message}` : message);
+          }
+          attached += urls.length;
+        }
+      }
 
-      toast.success(`${urls.length} arquivo(s) adicionado(s).`);
+      toast.success(`${attached} arquivo(s) adicionado(s).`);
       onContributed();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao enviar arquivos.');
+      if (attached > 0) onContributed();
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';

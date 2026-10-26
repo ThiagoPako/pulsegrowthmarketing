@@ -17064,6 +17064,16 @@ function sanitizeText(value, max = 500) {
   return value.trim().slice(0, max);
 }
 
+/** Só URLs devolvidas pelo upload público do banco (/uploads/client-database/...), até 30. */
+function publicClientDbMediaUrls(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((u) => typeof u === 'string')
+    .map((u) => u.trim())
+    .filter((u) => /^\/uploads\/client-database\/[^\s?#]+$/.test(u) && !u.includes('..'))
+    .slice(0, 30);
+}
+
 /** Upload público de mídia, restrito a um token de compartilhamento válido. */
 app.post('/api/public/client-database/:token/upload', async (req, res) => {
   // Valida o token ANTES de gravar qualquer coisa no disco.
@@ -17107,9 +17117,7 @@ app.post('/api/public/client-database/:token/professionals', async (req, res) =>
     const name = sanitizeText(req.body?.name, 160);
     if (!name) return res.status(400).json({ error: 'Nome é obrigatório' });
 
-    const photos = Array.isArray(req.body?.photos)
-      ? req.body.photos.filter((u) => typeof u === 'string' && u.trim()).slice(0, 30)
-      : [];
+    const photos = publicClientDbMediaUrls(req.body?.photos);
 
     const inserted = await pool.query(
       `INSERT INTO client_professionals
@@ -17152,9 +17160,7 @@ app.post('/api/public/client-database/:token/collaborators', async (req, res) =>
     const rawBirthday = sanitizeText(req.body?.birthday, 10);
     const birthday = /^\d{4}-\d{2}-\d{2}$/.test(rawBirthday) ? rawBirthday : null;
 
-    const photos = Array.isArray(req.body?.photos)
-      ? req.body.photos.filter((u) => typeof u === 'string' && u.trim()).slice(0, 30)
-      : [];
+    const photos = publicClientDbMediaUrls(req.body?.photos);
 
     const inserted = await pool.query(
       `INSERT INTO client_collaborators
@@ -17198,9 +17204,8 @@ app.post('/api/public/client-database/:token/media', async (req, res) => {
     const targetId = String(req.body?.id || '');
     if (!UUID_RE.test(targetId)) return res.status(400).json({ error: 'Registro inválido' });
 
-    const urls = Array.isArray(req.body?.urls)
-      ? req.body.urls.filter((u) => typeof u === 'string' && u.trim()).slice(0, 30)
-      : [];
+    // Só arquivos enviados pelo próprio upload público (nada de links externos ou de outras pastas)
+    const urls = publicClientDbMediaUrls(req.body?.urls);
     if (urls.length === 0) return res.status(400).json({ error: 'Nenhuma mídia enviada' });
 
     // COALESCE + concatenação garante que nada existente é removido.

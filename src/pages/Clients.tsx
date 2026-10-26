@@ -156,7 +156,6 @@ export default function Clients() {
 
   // Social accounts state
   const [socialAccounts, setSocialAccounts] = useState<SocialAccountState>(emptySocialAccounts());
-  const [existingSocialAccounts, setExistingSocialAccounts] = useState<any[]>([]);
   /** Indica se as chaves da Meta/Instagram já foram cadastradas em Financeiro → Integrações. */
   const [metaConfigured, setMetaConfigured] = useState(false);
   const [manualToken, setManualToken] = useState('');
@@ -461,7 +460,6 @@ export default function Clients() {
       });
       // Load social accounts for editing
       supabase.from('social_accounts').select('*').eq('client_id', client.id).then(({ data }) => {
-        setExistingSocialAccounts(data || []);
         const ig = (data || []).find((a: any) => a.platform === 'instagram');
         const fb = (data || []).find((a: any) => a.platform === 'facebook');
         setSocialAccounts({
@@ -486,7 +484,6 @@ export default function Clients() {
       setDueDay(10);
       setPaymentMethod('pix');
       setSocialAccounts(emptySocialAccounts());
-      setExistingSocialAccounts([]);
       setClientType('novo');
       setProposalId(null);
     }
@@ -721,7 +718,8 @@ export default function Clients() {
 
         // Checklist is now generated manually via button on the card
 
-        await saveSocialAccounts(editing.id);
+        // Contas sociais não são regravadas aqui: o OAuth e o token manual já gravam
+        // no servidor (com o token), e o "Remover" chama /social-accounts/disconnect.
 
         if (clientType !== 'sem_contrato') {
           await syncFinancialContract({
@@ -731,7 +729,9 @@ export default function Clients() {
             contract_start_date: contractStartDate || new Date().toISOString().split('T')[0],
             due_day: dueDay,
             payment_method: paymentMethod,
-            status: 'ativo',
+            // Edição não reativa contrato: cliente cancelado mantém 'cancelado' e os
+            // demais preservam o status atual (contrato novo nasce 'ativo').
+            status: (editing as any).status === 'cancelado' ? 'cancelado' : undefined,
           });
 
           const scheduleFieldsChanged =
@@ -808,8 +808,6 @@ export default function Clients() {
           });
         }
 
-        await saveSocialAccounts(clientId);
-
         if (clientType === 'novo') {
           await createOnboardingForClient.mutateAsync(clientId);
         }
@@ -833,43 +831,6 @@ export default function Clients() {
       toast.error(err instanceof Error ? err.message : 'Erro ao salvar cliente');
     } finally {
       setSaving(false);
-    }
-  };
-
-  const saveSocialAccounts = async (clientId: string) => {
-    await supabase.from('social_accounts').delete().eq('client_id', clientId);
-
-    const accounts = [];
-    if (socialAccounts.instagram.connected) {
-      accounts.push({
-        client_id: clientId,
-        platform: 'instagram',
-        facebook_page_id: socialAccounts.instagram.pageId || null,
-        instagram_business_id: socialAccounts.instagram.businessId || null,
-        account_name: socialAccounts.instagram.username || socialAccounts.instagram.accountName,
-        status: 'connected',
-      });
-    }
-    if (socialAccounts.facebook.connected) {
-      accounts.push({
-        client_id: clientId,
-        platform: 'facebook',
-        facebook_page_id: socialAccounts.facebook.pageId || null,
-        account_name: socialAccounts.facebook.accountName,
-        status: 'connected',
-      });
-    }
-    if (accounts.length > 0) {
-      await supabase.from('social_accounts').insert(accounts as any);
-      for (const acc of accounts) {
-        await supabase.from('integration_logs').insert({
-          client_id: clientId,
-          platform: acc.platform,
-          action: 'connect',
-          status: 'success',
-          message: `Conta ${acc.platform} conectada: ${acc.account_name}`,
-        } as any);
-      }
     }
   };
 
@@ -1416,7 +1377,12 @@ export default function Clients() {
    * flow 'instagram' → Login do Instagram direto no perfil (não precisa de Página)
    */
   const connectViaOAuth = async (flow: 'meta' | 'instagram' = 'meta') => {
-    const clientId = editing?.id || 'new';
+    // As contas são gravadas no servidor pelo id do cliente: cliente novo precisa ser salvo antes
+    if (!editing?.id) {
+      toast.error('Salve o cliente primeiro e depois conecte as redes sociais pela edição.');
+      return;
+    }
+    const clientId = editing.id;
     const exchangeAction = flow === 'instagram' ? 'exchange_instagram_code' : 'exchange_code';
     try {
       const redirectUri = 'https://agenciapulse.tech/'; // idêntico ao cadastrado na Meta e ao usado no servidor
@@ -1555,13 +1521,26 @@ export default function Clients() {
     }
   }, []);
 
-  const disconnectAccount = (platform: 'instagram' | 'facebook') => {
+  const disconnectAccount = async (platform: 'instagram' | 'facebook') => {
+    const label = platform === 'instagram' ? 'Instagram' : 'Facebook';
+    const clientId = editing?.id;
+    // Cliente já salvo: remove a conta no servidor na hora (o Salvar não regrava mais as contas)
+    if (clientId && clientId !== 'new') {
+      if (!confirm(`Remover a conexão do ${label} deste cliente? A publicação automática nessa rede para até conectar de novo.`)) return;
+      const { error } = await invokeVpsFunction('social-accounts/disconnect', {
+        body: { client_id: clientId, platform },
+      });
+      if (error) {
+        toast.error(error.message || `Erro ao desconectar o ${label}`);
+        return;
+      }
+    }
     if (platform === 'instagram') {
       setSocialAccounts(prev => ({ ...prev, instagram: emptySocialAccounts().instagram }));
     } else {
       setSocialAccounts(prev => ({ ...prev, facebook: emptySocialAccounts().facebook }));
     }
-    toast.success(`${platform === 'instagram' ? 'Instagram' : 'Facebook'} desconectado`);
+    toast.success(`${label} desconectado`);
   };
 
   const saveManualToken = async () => {
@@ -1619,6 +1598,15 @@ export default function Clients() {
           <Info size={16} className="text-destructive shrink-0 mt-0.5" />
           <p className="text-xs text-muted-foreground">
             As chaves do Instagram/Facebook ainda não foram cadastradas. Vá em <strong>Financeiro → Integrações</strong> e informe o App ID e o App Secret antes de conectar o perfil do cliente.
+          </p>
+        </div>
+      )}
+
+      {!editing && (
+        <div className="p-3 rounded-lg border border-border bg-muted/30 flex gap-2 items-start">
+          <Info size={16} className="text-muted-foreground shrink-0 mt-0.5" />
+          <p className="text-xs text-muted-foreground">
+            Cliente novo: termine o cadastro e depois conecte o Instagram/Facebook pelo botão de editar.
           </p>
         </div>
       )}

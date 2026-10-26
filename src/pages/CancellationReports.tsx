@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { UserMinus, TrendingDown, TrendingUp, Users, Target, AlertTriangle, DollarSign, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import ClientLogo from '@/components/ClientLogo';
 
@@ -26,6 +26,10 @@ interface ContractData {
   client_id: string;
   contract_value: number;
 }
+
+// cancellation_date é uma data ('2026-10-01'): new Date() lê como meia-noite UTC e, no
+// horário de Brasília, vira o dia anterior (cancelamento de 01/10 caía em setembro).
+const parseDay = (value: string) => parseISO(value.slice(0, 10));
 
 const CHART_COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 const PIE_COLORS = ['#22c55e', '#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899'];
@@ -69,12 +73,11 @@ export default function CancellationReports() {
   const stats = useMemo(() => {
     // Clientes internos (admin) não contam como clientes
     const realClients = clients.filter(c => !(c as any).isAdminClient);
-    const totalClients = realClients.length;
     const activeClients = realClients.filter(c => (c as any).status !== 'cancelado').length;
     const totalCancelled = cancelledClients.length;
 
-    // Cancellation rate
-    const totalEver = totalClients + totalCancelled;
+    // Cancellation rate (a lista de clientes já inclui os cancelados: base = ativos + cancelados)
+    const totalEver = activeClients + totalCancelled;
     const cancellationRate = totalEver > 0 ? (totalCancelled / totalEver) * 100 : 0;
 
     // Average contract value
@@ -103,7 +106,7 @@ export default function CancellationReports() {
     }
     cancelledClients.forEach(c => {
       if (c.cancellation_date) {
-        const key = format(new Date(c.cancellation_date), 'MMM/yy', { locale: ptBR });
+        const key = format(parseDay(c.cancellation_date), 'MMM/yy', { locale: ptBR });
         if (byMonth[key] !== undefined) byMonth[key]++;
       }
     });
@@ -118,7 +121,7 @@ export default function CancellationReports() {
     // Recent cancellation rate (last 3 months)
     const threeMonthsAgo = subMonths(new Date(), 3);
     const recentCancelled = cancelledClients.filter(c => 
-      c.cancellation_date && new Date(c.cancellation_date) >= threeMonthsAgo
+      c.cancellation_date && parseDay(c.cancellation_date) >= threeMonthsAgo
     ).length;
     const recentRate = activeClients > 0 ? (recentCancelled / (activeClients + recentCancelled)) * 100 : 0;
 
@@ -296,7 +299,7 @@ export default function CancellationReports() {
                   .sort((a, b) => (b.cancellation_date || '').localeCompare(a.cancellation_date || ''))
                   .map(c => {
                     const createdAt = new Date(c.created_at);
-                    const cancelledAt = c.cancellation_date ? new Date(c.cancellation_date) : new Date();
+                    const cancelledAt = c.cancellation_date ? parseDay(c.cancellation_date) : new Date();
                     const months = Math.round((cancelledAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24 * 30));
                     return (
                       <TableRow key={c.id}>
@@ -314,7 +317,7 @@ export default function CancellationReports() {
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">
-                          {c.cancellation_date ? format(new Date(c.cancellation_date), 'dd/MM/yyyy') : '—'}
+                          {c.cancellation_date ? format(parseDay(c.cancellation_date), 'dd/MM/yyyy') : '—'}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">{c.cancellation_reason || 'Não informado'}</Badge>

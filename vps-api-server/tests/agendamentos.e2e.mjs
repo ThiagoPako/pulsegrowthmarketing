@@ -544,7 +544,7 @@ try {
   );
   const robotDone = await waitFor(async () => {
     const p = await row(`SELECT status, last_error FROM scheduled_posts WHERE id = $1`, [due.id]);
-    return p.status !== 'agendado' ? p : null;
+    return !['agendado', 'publicando'].includes(p.status) ? p : null; // 'publicando' é o meio do caminho
   }, 'robô passar pelo post vencido', 40_000);
   assert.equal(robotDone.status, 'cancelado');
   assert.match(robotDone.last_error, /arte saiu de Aprovado/);
@@ -554,7 +554,7 @@ try {
   assert.equal(cancelledA.published_at, null);
   const robotTroca = await waitFor(async () => {
     const p = await row(`SELECT status, last_error FROM scheduled_posts WHERE id = $1`, [dueTroca.id]);
-    return p.status !== 'agendado' ? p : null;
+    return !['agendado', 'publicando'].includes(p.status) ? p : null;
   }, 'robô passar pelo post da arte trocada', 40_000);
   assert.equal(robotTroca.status, 'cancelado');
   assert.match(robotTroca.last_error, /arte foi trocada depois do agendamento/);

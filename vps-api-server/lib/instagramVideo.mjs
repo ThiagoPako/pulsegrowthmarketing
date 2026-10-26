@@ -300,6 +300,9 @@ export function buildIgFfmpegArgs({ src, dest, action, threads = 1, info = null,
     args.push('-vf', filters.join(','),
       '-c:v', 'libx264', '-profile:v', 'high', '-preset', IG_PRESETS.has(preset) ? preset : 'veryfast', '-crf', '18',
       '-maxrate', cap.maxrate, '-bufsize', cap.bufsize, '-pix_fmt', 'yuv420p',
+      // buffer começa com 10% (padrão do x264: 90%): sem isso um clipe curto passa da média de 25 Mbps
+      // (média ≤ maxrate + 0,1 × bufsize / duração: 21,3 Mbps num vídeo de 3 s)
+      '-x264-params', 'vbv-init=0.1',
       // GOP fechado de ~2 s
       '-g', String(Math.max(2, Math.round(outFps * 2))), '-flags', '+cgop',
       '-threads', t, ...AUDIO_ARGS);

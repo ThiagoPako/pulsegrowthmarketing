@@ -157,6 +157,7 @@ describe('argumentos do ffmpeg da .ig.mp4', () => {
     expect(valueOf(args, '-bufsize')).toBe('40M');
     expect(valueOf(args, '-g')).toBe('60');
     expect(valueOf(args, '-flags')).toBe('+cgop');
+    expect(valueOf(args, '-x264-params')).toBe('vbv-init=0.1');
     expect(valueOf(args, '-c:a')).toBe('aac');
     expect(valueOf(args, '-b:a')).toBe('128k');
     expect(valueOf(args, '-ar')).toBe('48000');

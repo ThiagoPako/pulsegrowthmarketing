@@ -160,9 +160,13 @@ app.get('/api/admin/health', async (req, res) => {
 const pgConnectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
 const pgPassword = process.env.PG_PASSWORD ?? process.env.PGPASSWORD ?? process.env.DB_PASSWORD;
 
+// connectionTimeoutMillis: com o pool esgotado, o pedido falha em 30 s em vez de esperar para
+// sempre (antes um travamento do pool parava a API inteira sem o PM2 perceber).
+const PG_POOL_TIMEOUTS = { connectionTimeoutMillis: 30_000 };
 const pool = pgConnectionString
-  ? new Pool({ connectionString: pgConnectionString })
+  ? new Pool({ connectionString: pgConnectionString, ...PG_POOL_TIMEOUTS })
   : new Pool({
+      ...PG_POOL_TIMEOUTS,
       host: process.env.PG_HOST || process.env.PGHOST || 'localhost',
       port: Number(process.env.PG_PORT || process.env.PGPORT) || 5432,
       database: process.env.PG_DATABASE || process.env.PGDATABASE || process.env.DB_NAME || 'pulse_db',

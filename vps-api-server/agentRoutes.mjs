@@ -701,9 +701,14 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       const active = cur && cur.until > Date.now();
       pairFailures.set(ip, { count: active ? cur.count + 1 : 1, until: active ? cur.until : Date.now() + 15 * 60_000 });
     };
-    const client = await pool.connect();
+    // O esquema usa outra conexão do pool: garante antes de segurar a da transação
     try {
       await ensureAgentSchema();
+    } catch (error) {
+      return sendError(res, error);
+    }
+    const client = await pool.connect();
+    try {
       const code = normalizePairCode(req.body?.code);
       const hostname = String(req.body?.hostname || '').trim().slice(0, 120) || null;
       await client.query('BEGIN');
@@ -1194,17 +1199,27 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
   });
 
   app.post('/api/agent/tasks/:id/move', async (req, res) => {
-    const client = await pool.connect();
+    // Autentica e valida ANTES de pegar a conexão da transação: o verifyAgent usa outra conexão
+    // do mesmo pool, e 10 pedidos simultâneos (até com chave falsa) travavam a API inteira.
+    let agent;
+    let column;
+    let reason;
+    let notes;
     try {
-      const agent = await verifyAgent(req);
+      agent = await verifyAgent(req);
       if (agent.role !== 'chefe') return res.status(403).json({ error: 'Apenas a chefe move cards' });
-      const column = String(req.body?.column || '');
+      column = String(req.body?.column || '');
       if (!MOVABLE.has(column)) {
         return res.status(400).json({ error: 'Coluna permitida: edicao, revisao ou alteracao (enviar ao cliente é decisão humana)' });
       }
-      const reason = String(req.body?.reason || '').slice(0, 500) || null;
-      const notes = req.body?.adjustment_notes != null ? String(req.body.adjustment_notes).slice(0, 4000) : null;
+      reason = String(req.body?.reason || '').slice(0, 500) || null;
+      notes = req.body?.adjustment_notes != null ? String(req.body.adjustment_notes).slice(0, 4000) : null;
+    } catch (error) {
+      return sendError(res, error);
+    }
 
+    const client = await pool.connect();
+    try {
       await client.query('BEGIN');
       const { rows } = await client.query(
         `SELECT t.*, c.company_name AS client_name FROM content_tasks t LEFT JOIN clients c ON c.id = t.client_id

@@ -18,6 +18,8 @@ interface SyncContext {
   scriptId: string | null;
   recordingId: string | null;
   assignedTo: string | null;
+  /** Editor que fez o vídeo (recebe o aviso de ajuste quando o card está sem responsável) */
+  editedBy?: string | null;
   editedVideoLink: string | null;
   immediateAlteration?: boolean;
   approvedAt?: string | null;
@@ -285,11 +287,12 @@ export async function syncContentTaskColumnChange(
   }
 
   if (newColumn === 'alteracao') {
-    // Notify the assigned editor
-    if (ctx.assignedTo) {
+    // Notify the assigned editor (em revisão/envio o card fica sem responsável: avisa quem editou)
+    const editorToNotify = ctx.assignedTo || ctx.editedBy;
+    if (editorToNotify) {
       const urgencyPrefix = ctx.immediateAlteration ? '🚨 IMEDIATO: ' : '';
       await supabase.rpc('notify_user', {
-        _user_id: ctx.assignedTo,
+        _user_id: editorToNotify,
         _title: `${urgencyPrefix}Ajuste solicitado`,
         _message: `\"${ctx.title}\" (${ctx.clientName || ''}) precisa de ajustes${ctx.immediateAlteration ? ' IMEDIATOS' : ''}`,
         _type: 'adjustment',
@@ -421,7 +424,7 @@ export async function syncContentTaskColumnChange(
  * Build SyncContext from a content_task row and optional client data.
  */
 export function buildSyncContext(
-  task: { id: string; client_id: string; title: string; content_type: string; description: string | null; script_id: string | null; recording_id: string | null; assigned_to: string | null; edited_video_link: string | null; immediate_alteration?: boolean; approved_at?: string | null },
+  task: { id: string; client_id: string; title: string; content_type: string; description: string | null; script_id: string | null; recording_id: string | null; assigned_to: string | null; edited_by?: string | null; edited_video_link: string | null; immediate_alteration?: boolean; approved_at?: string | null },
   opts?: { userId?: string; clientName?: string; clientWhatsapp?: string }
 ): SyncContext {
   return {
@@ -433,6 +436,7 @@ export function buildSyncContext(
     scriptId: task.script_id,
     recordingId: task.recording_id,
     assignedTo: task.assigned_to,
+    editedBy: task.edited_by ?? null,
     editedVideoLink: task.edited_video_link,
     immediateAlteration: task.immediate_alteration,
     approvedAt: task.approved_at,

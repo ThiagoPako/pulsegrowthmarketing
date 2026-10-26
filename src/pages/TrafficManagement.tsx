@@ -28,6 +28,7 @@ interface Creative {
   script_id: string | null;
   recording_id: string | null;
   assigned_to: string | null;
+  edited_by?: string | null;
   adjustment_notes: string | null;
 }
 
@@ -58,6 +59,7 @@ export default function TrafficManagement() {
   const [storyDialogOpen, setStoryDialogOpen] = useState(false);
   const [storyCreative, setStoryCreative] = useState<Creative | null>(null);
   const [storyNotes, setStoryNotes] = useState('');
+  const [storySaving, setStorySaving] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -65,7 +67,7 @@ export default function TrafficManagement() {
     setLoading(true);
     const [creativesRes, campaignsRes] = await Promise.all([
       supabase.from('content_tasks')
-        .select('id, client_id, title, content_type, edited_video_link, drive_link, approved_at, kanban_column, created_at, description, script_id, recording_id, assigned_to, adjustment_notes')
+        .select('id, client_id, title, content_type, edited_video_link, drive_link, approved_at, kanban_column, created_at, description, script_id, recording_id, assigned_to, edited_by, adjustment_notes')
         .eq('content_type', 'criativo')
         .not('approved_at', 'is', null)
         .order('created_at', { ascending: false }),
@@ -142,9 +144,13 @@ export default function TrafficManagement() {
       } as any).eq('id', alterationCreative.id);
       if (error) throw error;
 
-      // Sync with delivery system
+      // Sync with delivery system (o 2º argumento são as opções do sync, não o cliente:
+      // antes o aviso saía sem o nome do cliente e o histórico sem quem pediu)
       const client = clients.find(c => c.id === alterationCreative.client_id);
-      const ctx = buildSyncContext(alterationCreative as any, client as any);
+      const ctx = buildSyncContext(
+        { ...alterationCreative, adjustment_notes: alterationNotes.trim(), approved_at: null } as any,
+        { userId: user?.id, clientName: client?.companyName, clientWhatsapp: client?.whatsapp },
+      );
       await syncContentTaskColumnChange('alteracao', ctx);
 
       toast.success('Criativo enviado para alteração');
@@ -162,7 +168,8 @@ export default function TrafficManagement() {
 
   // Request social media to post story with this criativo
   const handleRequestStory = async () => {
-    if (!storyCreative) return;
+    if (!storyCreative || storySaving) return;
+    setStorySaving(true);
     try {
       // Create a new content_task of type 'story' assigned to Rayssa
       const { data: inserted, error } = await supabase.from('content_tasks').insert({
@@ -209,6 +216,8 @@ export default function TrafficManagement() {
       setStoryCreative(null);
     } catch {
       toast.error('Erro ao solicitar story');
+    } finally {
+      setStorySaving(false);
     }
   };
 
@@ -549,6 +558,7 @@ export default function TrafficManagement() {
             <Button variant="outline" onClick={() => setStoryDialogOpen(false)}>Cancelar</Button>
             <Button
               onClick={handleRequestStory}
+              disabled={storySaving}
               className="bg-pink-500 hover:bg-pink-600 text-white"
             >
               <Send size={14} className="mr-1.5" /> Solicitar Story

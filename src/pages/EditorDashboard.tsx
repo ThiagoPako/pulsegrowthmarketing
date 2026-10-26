@@ -31,6 +31,9 @@ import { syncContentTaskColumnChange, buildSyncContext, claimGuardFilter } from 
 import { uploadFileToVps, deleteFileFromVps } from '@/services/vpsApi';
 import { EDITOR_SCORE, EDITOR_APPROVED_COLUMNS, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate } from '@/lib/scoringSystem';
 import { useCity } from '@/contexts/CityContext';
+import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
+import { useAgentIds } from '@/hooks/useAgentIds';
+import { agentWorkState, formatSince } from '@/lib/agentCardStatus';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },
@@ -70,6 +73,18 @@ export interface EditorTask {
   position: number;
   created_at: string;
   updated_at: string;
+  /** Agente de IA com o card e parecer da Análise (gravados pela API dos agentes; podem faltar). */
+  agent_step?: string | null;
+  agent_heartbeat_at?: string | null;
+  agent_review_verdict?: string | null;
+  agent_review_notes?: string | null;
+  agent_review_at?: string | null;
+  agent_review_by?: string | null;
+}
+
+/** Prazo da etapa do card na fila: a alteração usa o prazo de alteração (antes aparecia sem prazo). */
+export function queueDeadlineOf(task: Pick<EditorTask, 'kanban_column' | 'editing_deadline' | 'alteration_deadline'>): string | null {
+  return task.kanban_column === 'alteracao' ? task.alteration_deadline : task.editing_deadline;
 }
 
 export function getDeadlineStatus(deadline: string | null) {
@@ -234,6 +249,8 @@ export default function EditorDashboard() {
    const [storyUploadProgress, setStoryUploadProgress] = useState('');
    const [storiesUploaded, setStoriesUploaded] = useState(0);
    const storyFileRef = useRef<HTMLInputElement>(null);
+   // Agentes de IA: o card que um agente pegou aparece com o selo e não abre a bancada dele
+   const agentIds = useAgentIds();
 
   const getTaskDisplayMeta = useCallback((task: EditorTask) => {
     const client = clients.find((c: any) => c.id === task.client_id);
@@ -384,14 +401,18 @@ export default function EditorDashboard() {
       if (b.immediate_alteration && !a.immediate_alteration) return 1;
       if (a.editing_priority && !b.editing_priority) return -1;
       if (b.editing_priority && !a.editing_priority) return 1;
-      const aS = getDeadlineStatus(a.editing_deadline);
-      const bS = getDeadlineStatus(b.editing_deadline);
+      // Prazo da etapa: na alteração é o prazo de alteração (antes usava o de edição, que a
+      // alteração não tem, e as alterações caíam no fim da fila)
+      const aDeadline = queueDeadlineOf(a);
+      const bDeadline = queueDeadlineOf(b);
+      const aS = getDeadlineStatus(aDeadline);
+      const bS = getDeadlineStatus(bDeadline);
       if (aS.variant === 'destructive' && bS.variant !== 'destructive') return -1;
       if (bS.variant === 'destructive' && aS.variant !== 'destructive') return 1;
-      if (!a.editing_deadline && !b.editing_deadline) return 0;
-      if (!a.editing_deadline) return 1;
-      if (!b.editing_deadline) return -1;
-      return new Date(a.editing_deadline).getTime() - new Date(b.editing_deadline).getTime();
+      if (!aDeadline && !bDeadline) return 0;
+      if (!aDeadline) return 1;
+      if (!bDeadline) return -1;
+      return new Date(aDeadline).getTime() - new Date(bDeadline).getTime();
     });
   }, [queueTasks, filterClient, filterType, searchQuery, getTaskDisplayMeta]);
 
@@ -622,6 +643,8 @@ export default function EditorDashboard() {
       editing_started_at: null,
       editing_paused_at: null,
       editing_paused_seconds: 0,
+      // Card de agente parado: limpa a etapa, como o `pulse liberar` (senão o selo de agente sobrava)
+      ...(targetTask.agent_step ? { agent_step: null, agent_heartbeat_at: null } : {}),
       updated_at: new Date().toISOString(),
     } as any).eq('id', targetTask.id);
     if (error) {
@@ -1110,15 +1133,32 @@ export default function EditorDashboard() {
             {inEditTasks.filter(t => t.id !== activeEditTask?.id).map(task => {
               const cl = clients.find(c => c.id === task.client_id);
               const cfg = getTypeConfig(task.content_type);
+              // Card pego por agente de IA: com sinal recente não abre a bancada (ele está renderizando);
+              // parado (sem sinal), dá para abrir e devolver à fila
+              const work = agentWorkState(task, { agentIds });
+              const agentName = work ? (users.find(u => u.id === task.assigned_to)?.name || 'Agente').trim().split(/\s+/)[0] : '';
               return (
                 <motion.div key={task.id} whileTap={{ scale: 0.97 }}
-                  onClick={() => { setActiveEditTask(task); setShowUpload(false); setShowScript(false); setVideoLink(task.edited_video_link || ''); }}
+                  onClick={() => {
+                    if (work?.state === 'working') {
+                      toast.info(`🤖 ${agentName} está com este card (${work.step}). Ele entrega pela fila; acompanhe pelo Kanban.`);
+                      return;
+                    }
+                    setActiveEditTask(task); setShowUpload(false); setShowScript(false); setVideoLink(task.edited_video_link || '');
+                  }}
                   className="bg-card border border-primary/20 rounded-xl p-3 flex items-center justify-between gap-3 cursor-pointer hover:border-primary/40 transition-colors">
                   <div className="flex items-center gap-2 min-w-0">
                     {cl && <ClientLogo client={cl as any} size="sm" />}
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-foreground truncate">{task.title}</p>
                       <Badge className={`text-[9px] px-1 py-0 ${cfg.color} border-0`}>{cfg.label}</Badge>
+                      {work && (
+                        <span className={`ml-1 text-[9px] font-bold ${work.state === 'working' ? 'text-indigo-600 dark:text-indigo-300' : 'text-slate-500'}`}>
+                          {work.state === 'working'
+                            ? `🤖 ${agentName} · ${work.step}`
+                            : `⏸ ${agentName} sem sinal${work.minutes !== null ? ` há ${formatSince(work.minutes)}` : ''}`}
+                        </span>
+                      )}
                     </div>
                   </div>
                   {task.editing_started_at && (
@@ -1134,11 +1174,13 @@ export default function EditorDashboard() {
                       )}
                     </div>
                   )}
-                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
-                    onClick={(e) => { e.stopPropagation(); setConfirmReturnTask(task); }}
-                    title="Devolver à fila">
-                    <ArrowRight size={12} className="rotate-180" />
-                  </Button>
+                  {work?.state !== 'working' && (
+                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
+                      onClick={(e) => { e.stopPropagation(); setConfirmReturnTask(task); }}
+                      title="Devolver à fila">
+                      <ArrowRight size={12} className="rotate-180" />
+                    </Button>
+                  )}
                 </motion.div>
               );
             })}
@@ -1258,7 +1300,7 @@ export default function EditorDashboard() {
                 onClaimTask={() => handleClaimTask(task)}
                 onUnclaimTask={() => handleUnclaimTask(task)}
                 currentUserIds={profile?.identity_ids?.length ? profile.identity_ids : (user?.id ? [user.id] : [])}
-                users={users} />
+                users={users} agentIds={agentIds} />
             ))}
           </div>
         )}
@@ -1350,15 +1392,20 @@ export default function EditorDashboard() {
 }
 
 /* ─── Queue Card ──────────────────────────────────────────── */
-function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTask, onUnclaimTask, currentUserIds, users }: {
+function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTask, onUnclaimTask, currentUserIds, users, agentIds }: {
   task: EditorTask; clients: any[]; recordings: any[]; index: number;
   onStartEditing: () => void; onClaimTask: () => void; onUnclaimTask: () => void; currentUserIds: string[]; users?: any[];
+  agentIds?: ReadonlySet<string>;
 }) {
   const client = clients.find(c => c.id === task.client_id);
   const recording = task.recording_id ? recordings.find((r: any) => r.id === task.recording_id) : null;
   const displayName = client?.companyName || (recording?.prospectName ? `📹 ${recording.prospectName}` : 'Cliente');
   const cfg = getTypeConfig(task.content_type);
-  const deadline = getDeadlineStatus(task.editing_deadline);
+  const isAlteration = task.kanban_column === 'alteracao';
+  const queueDeadline = queueDeadlineOf(task);
+  const deadline = getDeadlineStatus(queueDeadline);
+  // Agente de IA com o card agora: o selo mostra a etapa e o botão some (a guarda recusaria)
+  const agentBusy = !!agentWorkState(task, { agentIds });
   const clientColor = client?.color || (recording?.prospectName ? '200 80% 55%' : '217 91% 60%');
   const isMine = !!task.assigned_to && currentUserIds.includes(task.assigned_to);
   const claimedUser = task.assigned_to && users ? users.find((u: any) => u.id === task.assigned_to) : null;
@@ -1381,6 +1428,7 @@ function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTa
         </div>
       )}
 
+      <AgentWorkBadge task={task} users={users || []} agentIds={agentIds} />
       <div className="h-1" style={{ backgroundColor: `hsl(${clientColor})` }} />
       <div className="p-3 space-y-2.5">
         <div className="flex items-start justify-between gap-2">
@@ -1402,7 +1450,18 @@ function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTa
 
         <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
 
-        {task.editing_deadline && <DeadlineBadge deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} totalHours={48} />}
+        {queueDeadline && (
+          <DeadlineBadge deadline={queueDeadline} label={isAlteration ? 'Alteração' : 'Edição'}
+            startedAt={task.editing_started_at} totalHours={isAlteration ? 24 : 48} />
+        )}
+
+        {/* O que mudar já na fila (antes só aparecia depois de iniciar a alteração) */}
+        {isAlteration && task.adjustment_notes && (
+          <div className="bg-amber-500/10 border border-amber-500/25 rounded-md px-2 py-1.5">
+            <p className="text-[10px] font-bold text-amber-600">Ajustes pedidos</p>
+            <p className="text-[11px] text-foreground/80 line-clamp-3 whitespace-pre-wrap">{task.adjustment_notes}</p>
+          </div>
+        )}
 
         {task.assigned_to && claimedUser && (
           <AnimatePresence>
@@ -1453,7 +1512,7 @@ function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTa
           {recording?.prospectName && <span className="flex items-center gap-0.5"><Video size={10} /> Avulso</span>}
         </div>
 
-        {task.kanban_column === 'alteracao' ? (
+        {agentBusy ? null : task.kanban_column === 'alteracao' ? (
           <motion.div whileTap={{ scale: 0.95 }}>
             <Button size="sm" className="w-full gap-1.5 h-8 text-xs bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md"
               onClick={(e) => { e.stopPropagation(); onStartEditing(); }}>

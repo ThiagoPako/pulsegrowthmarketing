@@ -13074,9 +13074,24 @@ if (process.env.PERF_INDEXES !== 'off') {
   }, PERFORMANCE_INDEX_DELAY_MS).unref?.();
 }
 
+// ?campos=app (carga inicial do sistema): só as colunas que o app lê (rowToRecording). Sem o
+// parâmetro, continua vindo r.* para qualquer outro uso.
+const RECORDINGS_APP_COLUMNS = ['id', 'client_id', 'videomaker_id', 'date', 'start_time', 'type', 'status', 'confirmation_status', 'prospect_name', 'source'];
+const SCRIPTS_APP_COLUMNS = ['id', 'client_id', 'title', 'video_type', 'content_format', 'content', 'recorded', 'priority', 'created_at', 'updated_at',
+  'is_endomarketing', 'endo_client_id', 'scheduled_date', 'created_by', 'direct_to_editing', 'recording_id', 'client_edited', 'client_edited_at', 'campaign_slot_id'];
+
+/** Lista de colunas para o SELECT (só as que existem no banco), ou null para usar `*`. */
+async function appViewColumns(req, tableName, wanted, alias) {
+  if (req.query?.campos !== 'app') return null;
+  const existing = await getExistingColumns(tableName).catch(() => null);
+  if (!existing || !existing.has('id')) return null;
+  return wanted.filter((column) => existing.has(column)).map((column) => `${alias}${column}`).join(', ');
+}
+
 app.get('/api/recordings', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
+    const columns = (await appViewColumns(req, 'recordings', RECORDINGS_APP_COLUMNS, 'r.')) || 'r.*';
     // Período opcional (?from=AAAA-MM-DD&to=AAAA-MM-DD) para telas que não precisam do histórico todo.
     // Sem os parâmetros, continua vindo tudo (relatórios dependem do histórico completo).
     const params = [];
@@ -13088,7 +13103,7 @@ app.get('/api/recordings', async (req, res) => {
     if (to) { params.push(to); where.push(`r.date <= $${params.length}::date`); }
     const { rows } = await pool.query(`
       SELECT
-        r.*,
+        ${columns},
         CASE
           WHEN r.status IN ('concluida', 'cancelada', 'organizando_material') THEN r.status
           WHEN EXISTS (
@@ -13435,8 +13450,9 @@ app.delete('/api/kanban-tasks/:id', async (req, res) => {
 app.get('/api/scripts', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'scripts');
+    const columns = (await appViewColumns(req, 'scripts', SCRIPTS_APP_COLUMNS, '')) || '*';
     const { rows } = await pool.query(
-      `SELECT * FROM scripts${scopeCity ? ` WHERE ${cityVisibilityExpression('city', '$1')}` : ''} ORDER BY created_at DESC`,
+      `SELECT ${columns} FROM scripts${scopeCity ? ` WHERE ${cityVisibilityExpression('city', '$1')}` : ''} ORDER BY created_at DESC`,
       scopeCity ? [activeCity] : []
     );
     res.json(rows);

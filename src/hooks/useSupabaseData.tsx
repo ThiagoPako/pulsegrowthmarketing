@@ -358,11 +358,22 @@ export function useSupabaseData() {
     if (!token) { setLoading(false); return; }
     setLoading(true);
 
-    // Fase 1 (crítica): clientes + configurações — libera a UI o quanto antes.
-    const [cRes, setRes] = await Promise.all([
+    // As 6 rotas saem juntas (antes a fase 2 só começava depois da 1). Clientes e
+    // configurações continuam sendo aplicados assim que chegam.
+    // campos=app: gravações e roteiros vêm só com as colunas que os mapeadores abaixo leem.
+    const phase1 = Promise.all([
       invokeVpsFunction('clients', { method: 'GET' }),
       invokeVpsFunction('company-settings', { method: 'GET' }),
     ]);
+    const phase2 = Promise.all([
+      invokeVpsFunction('recordings', { method: 'GET', body: { campos: 'app' } }),
+      invokeVpsFunction('kanban-tasks', { method: 'GET' }),
+      invokeVpsFunction('scripts', { method: 'GET', body: { campos: 'app' } }),
+      invokeVpsFunction('active-recordings', { method: 'GET' }),
+    ]);
+
+    // Fase 1 (crítica): clientes + configurações — libera a UI o quanto antes.
+    const [cRes, setRes] = await phase1;
     if (isStale()) return;
 
     if (setRes.data && !setRes.error) {
@@ -383,12 +394,7 @@ export function useSupabaseData() {
     hasFetched.current = true;
 
     // Fase 2 (secundária): dados pesados carregam em background, sem travar a tela.
-    const [rRes, tRes, sRes, arRes] = await Promise.all([
-      invokeVpsFunction('recordings', { method: 'GET' }),
-      invokeVpsFunction('kanban-tasks', { method: 'GET' }),
-      invokeVpsFunction('scripts', { method: 'GET' }),
-      invokeVpsFunction('active-recordings', { method: 'GET' }),
-    ]);
+    const [rRes, tRes, sRes, arRes] = await phase2;
     if (isStale()) return;
     const hasClientsPayload = hasClients;
     const allClientRows: any[] = hasClientsPayload ? (cRes.data as any[]) : [];

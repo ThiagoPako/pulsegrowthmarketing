@@ -4090,6 +4090,67 @@ app.get('/api/team/least-busy-editor', async (req, res) => {
   }
 });
 
+// ─── Copy ao vivo (painel da TV) ───
+// A Copy gravava copy_active_sessions pelo /api/db/query, que recusa a tabela: a TV
+// nunca mostrava quem está escrevendo. Cada pessoa só grava e apaga a própria sessão.
+const COPY_LIVE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const copyLiveUuid = (value) => (typeof value === 'string' && COPY_LIVE_UUID.test(value) ? value : null);
+
+app.post('/api/copy-live', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    await ensureCopyActiveSessionsTable();
+    const city = await resolveActiveCity(req, user.id, user).catch(() => null);
+    const body = req.body || {};
+    const batchSize = Array.isArray(body.batchTaskIds) ? Math.min(body.batchTaskIds.length, 500) : 0;
+    const { rows: [profileRow] } = await pool.query(
+      `SELECT COALESCE(NULLIF(btrim(display_name), ''), name) AS name FROM profiles WHERE id::text = $1 LIMIT 1`,
+      [String(user.id)]
+    ).catch(() => ({ rows: [] }));
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM copy_active_sessions WHERE copywriter_id::text = $1', [String(user.id)]);
+      await client.query(
+        `INSERT INTO copy_active_sessions
+           (copywriter_id, copywriter_name, task_id, request_id, client_id, topic, content_format, batch_size, started_at, city)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9)`,
+        [
+          user.id,
+          String(profileRow?.name || user.name || user.email || 'Copywriter').slice(0, 200),
+          copyLiveUuid(body.taskId),
+          copyLiveUuid(body.requestId),
+          copyLiveUuid(body.clientId),
+          body.topic ? String(body.topic).slice(0, 300) : null,
+          body.contentFormat ? String(body.contentFormat).slice(0, 40) : null,
+          batchSize,
+          city,
+        ]
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => null);
+      throw error;
+    } finally {
+      client.release();
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : (error.statusCode || 500)).json({ error: error.message });
+  }
+});
+
+app.delete('/api/copy-live', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    await ensureCopyActiveSessionsTable();
+    await pool.query('DELETE FROM copy_active_sessions WHERE copywriter_id::text = $1', [String(user.id)]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : (error.statusCode || 500)).json({ error: error.message });
+  }
+});
+
 // ─── Admin: Atualizar cidades de um usuário ─────────────────
 app.post('/api/admin/user-cities', async (req, res) => {
   try {

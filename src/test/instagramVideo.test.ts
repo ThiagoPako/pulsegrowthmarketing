@@ -6,6 +6,7 @@ import {
   IG_SCALE_FILTER,
   buildIgFfmpegArgs,
   checkMetaSpec,
+  createInstagramVideo,
   decideIgVariant,
   editListKind,
   igBitrateCap,
@@ -16,6 +17,7 @@ import {
   parseMetaProbe,
   planPostMedia,
   postMediaUrls,
+  readyVariantPath,
 } from '../../vps-api-server/lib/instagramVideo.mjs';
 import {
   HDR_TO_SDR,
@@ -283,6 +285,10 @@ describe('escolha da URL na hora de publicar', () => {
     expect(late.fallback).toBe('O vídeo não ficou pronto no formato do Instagram a tempo e foi enviado o original: vídeo de 40.0 Mbps (máximo 25 Mbps).');
   });
 
+  it('sem como converter (disco, fila cheia, ffmpeg ausente): vai o original na hora, sem motivo (novas tentativas normais)', () => {
+    expect(planPostMedia([{ url: orig, status: 'unavailable', check: reason }], { delayMs: 0 })).toMatchObject({ wait: false, urls: [orig], fallback: null });
+  });
+
   it('conversão que falhou não espera: vai o original na hora, com o motivo', () => {
     const plan = planPostMedia([{ url: orig, status: 'failed', check: reason }], { delayMs: 0 });
     expect(plan.wait).toBe(false);
@@ -350,5 +356,111 @@ describe('nomes: a .ig.mp4 e a .web.mp4 não se misturam', () => {
       expect(instagramUrlFor('https://outro.site/uploads/content/pronto.mov', opts)).toBe('https://outro.site/uploads/content/pronto.mov');
       expect(instagramUrlFor('https://agenciapulse.tech/uploads/content/pronto.ig.mp4', opts)).toBe('https://agenciapulse.tech/uploads/content/pronto.ig.mp4');
     });
+  });
+});
+
+describe('instância: conversão impossível, tipo do post e varredura', () => {
+  const ORIGIN = 'https://agenciapulse.tech';
+  let root = '';
+  let seq = 0;
+  // MP4 mínimo com o moov no começo e sem edit list (o ffprobe é falso: 40 Mbps)
+  const box = (type: string, payload: Buffer = Buffer.alloc(0)) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(8 + payload.length, 0);
+    head.write(type, 4, 'latin1');
+    return Buffer.concat([head, payload]);
+  };
+  const mp4 = Buffer.concat([box('ftyp', Buffer.alloc(12)), box('moov', box('trak', box('tkhd', Buffer.alloc(20)))), box('mdat', Buffer.alloc(64))]);
+  const heavyProbe = probe({ video: { bit_rate: '40000000' }, format: { bit_rate: '40130000', size: '1000' } });
+  const place = () => {
+    seq += 1;
+    const rel = `content/c/176200000000${seq}_ab${seq}.mp4`;
+    const full = path.join(root, rel);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, mp4);
+    return { rel, full, url: `${ORIGIN}/uploads/${rel}`, ig: igVariantPath(full) as string };
+  };
+  type Item = { key: string; run: unknown };
+  const make = ({ disk = true, queue = 'queued', probeFile = async () => heavyProbe, pool = null as unknown }: {
+    disk?: boolean; queue?: string; probeFile?: () => Promise<unknown>; pool?: unknown;
+  } = {}) => {
+    const enqueued: Item[] = [];
+    const warnings: string[] = [];
+    const webVideo = {
+      infra: {
+        settings: {}, roots: () => [root], runSlot: (t: () => unknown) => t(), lowPriority: (b: string, a: string[]) => [b, a],
+        diskHasRoom: () => ({ ok: disk, free: disk ? 9e9 : 1e9, total: 1e10 }), hasZscale: async () => false, resetTools: () => {},
+      },
+      enqueueTask: (item: Item) => { enqueued.push(item); return queue; },
+      taskState: () => null,
+    };
+    const logger = { log: () => {}, warn: (m: string) => warnings.push(m), error: () => {} };
+    const ig = createInstagramVideo({ pool, webVideo, logger, env: {}, allowedOrigins: [ORIGIN], probeFile });
+    return { ig, enqueued, warnings };
+  };
+
+  beforeAll(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'igvideo-inst-')); });
+  afterAll(() => { fs.rmSync(root, { recursive: true, force: true }); });
+
+  it('com espaço e fila livre: vai para a fila (pendente) e o post espera', async () => {
+    const f = place();
+    const { ig, enqueued } = make();
+    expect((await ig.prepare(f.url, 'reels')).status).toBe('pending');
+    expect(enqueued.map((i) => i.key)).toEqual([`ig:${fs.realpathSync(f.full)}`]);
+    expect((await ig.chooseMedia([f.url], { publishType: 'reels', scheduledAt: new Date() })).wait).toBe(true);
+  });
+
+  it('disco abaixo do limite: "unavailable", o original vai na hora e o aviso sai uma vez só', async () => {
+    const f = place();
+    const { ig, enqueued, warnings } = make({ disk: false });
+    expect((await ig.prepare(f.url, 'reels')).status).toBe('unavailable');
+    const plan = await ig.chooseMedia([f.url], { publishType: 'reels', scheduledAt: new Date() });
+    expect(plan).toMatchObject({ wait: false, urls: [f.url], fallback: null });
+    expect(enqueued).toEqual([]);
+    expect(warnings.filter((w) => w.includes('pouco espaço livre'))).toHaveLength(1);
+  });
+
+  it('fila cheia: "unavailable" e o original vai na hora', async () => {
+    const f = place();
+    const { ig } = make({ queue: 'full' });
+    expect((await ig.prepare(f.url, 'reels')).status).toBe('unavailable');
+    expect(await ig.chooseMedia([f.url], { publishType: 'reels', scheduledAt: new Date() })).toMatchObject({ wait: false, fallback: null });
+  });
+
+  it('ffprobe/ffmpeg ausente: "unavailable" (e não tenta de novo por alguns minutos)', async () => {
+    const f = place();
+    const missing = Object.assign(new Error('spawn ffprobe ENOENT'), { syscall: 'spawn ffprobe' });
+    const { ig, warnings } = make({ probeFile: async () => { throw missing; } });
+    expect((await ig.prepare(f.url, 'reels')).status).toBe('unavailable');
+    expect((await ig.prepare(f.url, 'reels')).status).toBe('unavailable');
+    expect(warnings.filter((w) => w.includes('indisponível'))).toHaveLength(1);
+  });
+
+  it('.ig.mp4 acima de 100 MB serve para reels, mas não para story: é refeita para o story', async () => {
+    const f = place();
+    fs.writeFileSync(f.ig, '');
+    fs.truncateSync(f.ig, 120_000_000); // arquivo esparso de 120 MB
+    expect(readyVariantPath(f.full, 'reels')).toBe(f.ig);
+    expect(readyVariantPath(f.full, 'stories')).toBeNull();
+    expect(readyVariantPath(f.full)).toBe(f.ig);
+    expect(instagramUrlFor(f.url, { roots: [root] })).toBe(igVariantUrl(f.url));
+    expect(instagramUrlFor(f.url, { roots: [root], kind: 'stories' })).toBe(f.url);
+    const { ig, enqueued } = make();
+    expect((await ig.prepare(f.url, 'reels')).status).toBe('ready');
+    expect((await ig.prepare(f.url, 'stories')).status).toBe('pending');
+    expect(enqueued).toHaveLength(1);
+    expect((await ig.chooseMedia([f.url], { publishType: 'stories', scheduledAt: new Date() })).wait).toBe(true);
+    expect((await ig.chooseMedia([f.url], { publishType: 'reels', scheduledAt: new Date() })).urls).toEqual([igVariantUrl(f.url)]);
+  });
+
+  it('varredura: sem lembrete de story, sem post só do Facebook e no máximo 1 dia para trás', async () => {
+    const queries: string[] = [];
+    const pool = { query: async (sql: string) => { queries.push(sql); return { rows: [] }; } };
+    const { ig } = make({ pool });
+    await ig.scan();
+    const select = queries.find((q) => q.includes("status = 'agendado'")) || '';
+    expect(select).toContain("story_mode IS DISTINCT FROM 'lembrete'");
+    expect(select).toContain("platform IS DISTINCT FROM 'facebook'");
+    expect(select).toContain("scheduled_at >= now() - interval '1 day'");
   });
 });

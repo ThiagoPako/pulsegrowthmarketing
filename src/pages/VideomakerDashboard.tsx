@@ -254,6 +254,7 @@ export default function VideomakerDashboard() {
           season_month: new Date().getMonth() + 1,
           season_year: new Date().getFullYear(),
           uploaded_by: vmId,
+          content_task_id: taskId, // vínculo com o card (o título do portal não tem o prefixo do card)
         } as any);
       }
 
@@ -1248,6 +1249,7 @@ export default function VideomakerDashboard() {
         season_month: now.getMonth() + 1,
         season_year: now.getFullYear(),
         uploaded_by: vmId,
+        content_task_id: taskId, // vínculo com o card (o portal deixa de depender do título)
       } as any);
 
       // 5. Portal notification
@@ -1418,6 +1420,7 @@ export default function VideomakerDashboard() {
           season_month: now.getMonth() + 1,
           season_year: now.getFullYear(),
           uploaded_by: vmId,
+          content_task_id: taskId, // vínculo com o card (o portal deixa de depender do título)
         } as any);
 
         ok++;

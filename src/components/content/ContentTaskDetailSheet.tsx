@@ -28,7 +28,7 @@ import InlineVideoPlayer from '@/components/content/InlineVideoPlayer';
 import ClientLogo from '@/components/ClientLogo';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { syncContentTaskColumnChange, buildSyncContext, insertChildContentTask, finishContentTaskSplit } from '@/lib/contentTaskSync';
+import { syncContentTaskColumnChange, buildSyncContext, insertChildContentTask, finishContentTaskSplit, findPortalContentForTask } from '@/lib/contentTaskSync';
 import { sendWhatsAppMessage, getWhatsAppConfig } from '@/services/whatsappService';
 import type { Client, Script } from '@/types';
 import { sanitizeScriptHtml } from '@/lib/highlightQuotes';
@@ -819,24 +819,22 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       'arte': 'arte',
     };
 
-    // Check if already exists in portal (só o conteúdo em aberto: um aprovado/agendado/publicado
-    // de outro mês com o mesmo título não pode ser sobrescrito)
-    const { data: existing } = await supabase
-      .from('client_portal_contents')
-      .select('id')
-      .eq('client_id', task.client_id)
-      .eq('title', task.title)
-      .not('status', 'in', '(aprovado,agendado,publicado)')
-      .order('created_at', { ascending: false })
-      .limit(1);
+    // Check if already exists in portal: pelo vínculo com o card (ou pelo título, em conteúdo
+    // antigo), só o conteúdo em aberto — um aprovado/agendado/publicado de outro mês com o mesmo
+    // título não pode ser sobrescrito
+    const existing = await findPortalContentForTask(
+      { taskId: task.id, clientId: task.client_id, title: task.title },
+      { openOnly: true }
+    );
 
-    if (existing && existing.length > 0) {
+    if (existing) {
       // Update existing
       await supabase.from('client_portal_contents').update({
         file_url: task.edited_video_link,
         status: 'pendente',
+        content_task_id: task.id,
         updated_at: now.toISOString(),
-      } as any).eq('id', existing[0].id);
+      } as any).eq('id', existing.id);
     } else {
       // Create new
       await supabase.from('client_portal_contents').insert({
@@ -848,6 +846,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
         season_month: now.getMonth() + 1,
         season_year: now.getFullYear(),
         uploaded_by: user?.id || null,
+        content_task_id: task.id,
       } as any);
     }
   };
@@ -923,11 +922,18 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       status: 'entregue',
     } as any).eq('content_task_id', task.id);
 
-    // Update portal content status to approved
-    await supabase.from('client_portal_contents').update({
-      status: 'aprovado',
-      approved_at: new Date().toISOString(),
-    } as any).eq('client_id', task.client_id).eq('title', task.title);
+    // Update portal content status to approved (só o conteúdo deste card; antes aprovava todos
+    // os conteúdos do cliente com o mesmo título, inclusive de outros meses)
+    const portalContent = await findPortalContentForTask(
+      { taskId: task.id, clientId: task.client_id, title: task.title },
+      { openOnly: true }
+    );
+    if (portalContent) {
+      await supabase.from('client_portal_contents').update({
+        status: 'aprovado',
+        approved_at: new Date().toISOString(),
+      } as any).eq('id', portalContent.id);
+    }
 
     await syncTask('agendamentos');
     toast.success('👍 Aprovado pelo cliente! Pronto para agendar');

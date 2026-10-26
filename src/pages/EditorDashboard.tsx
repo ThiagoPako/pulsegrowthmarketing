@@ -715,6 +715,7 @@ export default function EditorDashboard() {
         season_month: now.getMonth() + 1,
         season_year: now.getFullYear(),
         uploaded_by: user.id,
+        content_task_id: taskId, // vínculo com o card (o portal deixa de depender do título)
       } as any);
 
       // 5. Portal notification

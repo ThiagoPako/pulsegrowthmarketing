@@ -4561,11 +4561,66 @@ async function insertPortalTaskHistory(taskId, action, details, userId) {
   }
 }
 
-async function syncPortalApprovalToKanban(content, teamUser = null) {
-  const { rows: [task] } = await pool.query(
-    `SELECT id FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'agendamentos') ORDER BY created_at DESC LIMIT 1`,
-    [content.client_id, content.title]
+// ── Vínculo conteúdo do portal ↔ card do Kanban (client_portal_contents.content_task_id) ──
+// Antes o vínculo era só pelo título: dois vídeos com o mesmo título se sobrescreviam, e
+// aprovar/excluir um mexia no outro. Coluna aditiva e idempotente, criada na subida. Linhas
+// antigas ficam com NULL e continuam casando pelo título (só entre as sem vínculo).
+let portalContentTaskLinkPromise = null;
+function ensurePortalContentTaskLink() {
+  if (!portalContentTaskLinkPromise) {
+    portalContentTaskLinkPromise = (async () => {
+      const { rowCount } = await pool.query(
+        `SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'client_portal_contents' AND column_name = 'content_task_id'`
+      );
+      if (!rowCount) {
+        const client = await pool.connect();
+        try {
+          await client.query(`SET lock_timeout = '2s'`);
+          await client.query('ALTER TABLE client_portal_contents ADD COLUMN IF NOT EXISTS content_task_id uuid');
+        } finally {
+          await client.query('RESET lock_timeout').catch(() => {});
+          client.release();
+        }
+        tableColumnsPromiseCache.delete('client_portal_contents');
+      }
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_client_portal_contents_task ON client_portal_contents(content_task_id)');
+      return true;
+    })().catch((error) => {
+      // Tenta de novo na próxima chamada; enquanto isso, o vínculo segue só pelo título
+      portalContentTaskLinkPromise = null;
+      console.warn('[portal] client_portal_contents.content_task_id indisponível:', error?.message || error);
+      return false;
+    });
+  }
+  return portalContentTaskLinkPromise;
+}
+// Na subida: cria a coluna (uma vez)
+ensurePortalContentTaskLink();
+
+/**
+ * Card do Kanban ligado ao conteúdo do portal: primeiro pelo vínculo; sem vínculo (conteúdo
+ * antigo), pelo título, como antes.
+ */
+async function findKanbanTaskForPortalContent(content, columns, extraFields = '') {
+  const fields = `id${extraFields ? `, ${extraFields}` : ''}`;
+  if (content.content_task_id) {
+    const { rows: [linked] } = await pool.query(
+      `SELECT ${fields} FROM content_tasks WHERE id = $1 AND kanban_column = ANY($2::text[])`,
+      [content.content_task_id, columns]
+    );
+    // Card ligado mas fora dessas colunas: não cai no título (seria outro card com o mesmo nome)
+    return linked || null;
+  }
+  const { rows: [byTitle] } = await pool.query(
+    `SELECT ${fields} FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column = ANY($3::text[]) ORDER BY created_at DESC LIMIT 1`,
+    [content.client_id, content.title, columns]
   );
+  return byTitle || null;
+}
+
+async function syncPortalApprovalToKanban(content, teamUser = null) {
+  const task = await findKanbanTaskForPortalContent(content, ['envio', 'agendamentos']);
   if (task) {
     await pool.query(`UPDATE content_tasks SET kanban_column = 'agendamentos', approved_at = NOW(), updated_at = NOW() WHERE id = $1`, [task.id]);
     await insertPortalTaskHistory(task.id, teamUser ? '✅ Aprovado pela equipe em nome do cliente (Pulse Club)' : '✅ Aprovado pelo cliente via Pulse Club', null, teamUser?.id);
@@ -4577,16 +4632,15 @@ async function syncPortalApprovalToKanban(content, teamUser = null) {
 }
 
 async function syncPortalAdjustmentToKanban(content, note, teamUser = null) {
-  const { rows: [task] } = await pool.query(
-    `SELECT id, assigned_to FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'agendamentos') ORDER BY created_at DESC LIMIT 1`,
-    [content.client_id, content.title]
-  );
+  const task = await findKanbanTaskForPortalContent(content, ['envio', 'agendamentos'], 'assigned_to, edited_by');
   const shortNote = String(note || '').substring(0, 80);
   if (task) {
     await pool.query(`UPDATE content_tasks SET kanban_column = 'alteracao', adjustment_notes = $1, updated_at = NOW() WHERE id = $2`, [note, task.id]);
     await insertPortalTaskHistory(task.id, teamUser ? '🔧 Ajuste solicitado pela equipe no Pulse Club' : '🔧 Ajuste solicitado pelo cliente via Pulse Club', note, teamUser?.id);
-    if (task.assigned_to) {
-      await insertPortalTeamNotifications(await getPortalClientCity(content.client_id), [task.assigned_to],
+    // Quem corrige é o editor do vídeo (edited_by): o assigned_to chega zerado do envio
+    const editorToNotify = task.edited_by || task.assigned_to;
+    if (editorToNotify) {
+      await insertPortalTeamNotifications(await getPortalClientCity(content.client_id), [editorToNotify],
         teamUser ? '🔧 Ajuste solicitado pela equipe' : '🔧 Ajuste solicitado pelo cliente',
         `"${content.title}" precisa de ajustes: ${shortNote}`, 'adjustment', '/edicao/kanban');
     }
@@ -5242,7 +5296,7 @@ app.post('/api/portal-actions', async (req, res) => {
       const { rows: [approvedContent] } = await pool.query(
         `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW()
           WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND status NOT IN ('aprovado', 'revisao_interna')
-          RETURNING id, client_id, title`,
+          RETURNING *`,
         [content_id, scopeClientId]
       );
       if (!approvedContent) {
@@ -5269,7 +5323,7 @@ app.post('/api/portal-actions', async (req, res) => {
       const { rows: [adjustedContent] } = await pool.query(
         `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW()
           WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND status <> 'revisao_interna'
-          RETURNING id, client_id, title`,
+          RETURNING *`,
         [content_id, scopeClientId]
       );
       if (!adjustedContent) {

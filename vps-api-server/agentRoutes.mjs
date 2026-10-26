@@ -1142,6 +1142,20 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
 
   // ── Organização (chefe): buscar e mover cards do fluxo de edição ──
   const MOVABLE = new Set(['edicao', 'revisao', 'alteracao']);
+
+  // client_portal_contents.content_task_id (criada pelo server.mjs na subida): liga o conteúdo do
+  // portal ao card. Só memoriza o "sim", porque a coluna pode surgir depois desta checagem.
+  // db: dentro de uma transação, passe o client dela (não pega outra conexão do pool).
+  let portalTaskLinkReady = false;
+  async function hasPortalTaskLink(db = pool) {
+    if (portalTaskLinkReady) return true;
+    const { rowCount } = await db.query(
+      `SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'client_portal_contents' AND column_name = 'content_task_id'`
+    ).catch(() => ({ rowCount: 0 }));
+    portalTaskLinkReady = rowCount > 0;
+    return portalTaskLinkReady;
+  }
   const SOCIAL_STATUS = { revisao: 'revisao', alteracao: 'ajuste' };
   const MOVE_ACTION = { edicao: 'Movido para Edição', revisao: 'Enviado para Revisão', alteracao: 'Solicitado Alteração' };
   const PORTAL_NOTIF = {
@@ -1273,23 +1287,33 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           await client.query('DELETE FROM social_media_deliveries WHERE content_task_id = $1', [task.id]);
         }
         if (column === 'revisao' && task.edited_video_link) {
-          // Vínculo pelo título: ignora conteúdos já fechados (aprovado/agendado/publicado), como o
-          // contentTaskSync — senão o vídeo novo sobrescreveria o de um mês anterior com o mesmo título.
+          // Pelo vínculo com o card (conteúdo antigo, sem vínculo, pelo título), ignorando conteúdos
+          // já fechados (aprovado/agendado/publicado), como o contentTaskSync — senão o vídeo novo
+          // sobrescreveria o de um mês anterior com o mesmo título.
+          const linked = await hasPortalTaskLink(client);
           const { rows: portalRows } = await client.query(
-            `SELECT id FROM client_portal_contents WHERE client_id = $1 AND title = $2
-               AND status NOT IN ('aprovado', 'agendado', 'publicado') ORDER BY created_at DESC LIMIT 1`,
-            [task.client_id, task.title]
+            linked
+              ? `SELECT id FROM client_portal_contents WHERE client_id = $1
+                   AND (content_task_id = $3 OR (content_task_id IS NULL AND title = $2))
+                   AND status NOT IN ('aprovado', 'agendado', 'publicado')
+                 ORDER BY (content_task_id IS NOT NULL) DESC, created_at DESC LIMIT 1`
+              : `SELECT id FROM client_portal_contents WHERE client_id = $1 AND title = $2
+                   AND status NOT IN ('aprovado', 'agendado', 'publicado') ORDER BY created_at DESC LIMIT 1`,
+            linked ? [task.client_id, task.title, task.id] : [task.client_id, task.title]
           );
           if (portalRows.length) {
-            await client.query(`UPDATE client_portal_contents SET file_url = $2, status = 'revisao_interna', updated_at = now() WHERE id = $1`,
-              [portalRows[0].id, task.edited_video_link]);
+            await client.query(
+              `UPDATE client_portal_contents SET file_url = $2, status = 'revisao_interna'${linked ? ', content_task_id = $3' : ''}, updated_at = now() WHERE id = $1`,
+              linked ? [portalRows[0].id, task.edited_video_link, task.id] : [portalRows[0].id, task.edited_video_link]
+            );
           } else {
             const month = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'numeric' }).format(now));
             const year = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, year: 'numeric' }).format(now));
             await client.query(
-              `INSERT INTO client_portal_contents (client_id, title, content_type, file_url, status, season_month, season_year, uploaded_by)
-               VALUES ($1, $2, $3, $4, 'revisao_interna', $5, $6, $7)`,
-              [task.client_id, task.title, task.content_type, task.edited_video_link, month, year, task.edited_by || agent.userId]
+              `INSERT INTO client_portal_contents (client_id, title, content_type, file_url, status, season_month, season_year, uploaded_by${linked ? ', content_task_id' : ''})
+               VALUES ($1, $2, $3, $4, 'revisao_interna', $5, $6, $7${linked ? ', $8' : ''})`,
+              [task.client_id, task.title, task.content_type, task.edited_video_link, month, year, task.edited_by || agent.userId,
+                ...(linked ? [task.id] : [])]
             );
           }
         }

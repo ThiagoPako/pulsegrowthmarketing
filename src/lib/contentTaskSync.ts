@@ -67,6 +67,34 @@ function addBusinessHours(from: Date, hours: number, workDays: string[]): Date {
   return current;
 }
 
+/**
+ * Conteúdo do portal ligado a um card. Primeiro pelo vínculo (client_portal_contents.content_task_id);
+ * conteúdos antigos, sem vínculo, continuam casando pelo título (só entre os que não têm vínculo,
+ * para não pegar o vídeo de outro card com o mesmo nome).
+ * openOnly: ignora conteúdos já fechados (aprovado/agendado/publicado). status: só esse status.
+ */
+export async function findPortalContentForTask(
+  task: { taskId: string; clientId: string | null; title: string },
+  opts: { openOnly?: boolean; status?: string } = {}
+): Promise<{ id: string; linked: boolean } | null> {
+  if (!task.clientId) return null;
+  const withStatus = (query: any) => {
+    let q = query;
+    if (opts.status) q = q.eq('status', opts.status);
+    if (opts.openOnly) q = q.not('status', 'in', '(aprovado,agendado,publicado)');
+    return q.order('created_at', { ascending: false }).limit(1);
+  };
+  const byLink = await withStatus(
+    supabase.from('client_portal_contents').select('id').eq('client_id', task.clientId).eq('content_task_id', task.taskId)
+  );
+  if (!byLink.error && byLink.data?.length) return { id: byLink.data[0].id, linked: true };
+  let byTitle = supabase.from('client_portal_contents').select('id').eq('client_id', task.clientId).eq('title', task.title);
+  // Servidor sem a coluna nova: o filtro do vínculo dá erro e fica só o título (como antes)
+  if (!byLink.error) byTitle = byTitle.is('content_task_id', null);
+  const { data } = await withStatus(byTitle);
+  return data?.length ? { id: data[0].id, linked: false } : null;
+}
+
 export async function syncContentTaskColumnChange(
   newColumn: string,
   ctx: SyncContext
@@ -257,23 +285,17 @@ export async function syncContentTaskColumnChange(
     // Skip for avulso (no client_id)
     if (ctx.editedVideoLink && ctx.clientId) {
       const now = new Date();
-      // O vínculo é pelo título: ignora conteúdos já fechados (aprovado/agendado/publicado),
-      // senão o vídeo novo sobrescrevia o de um mês anterior com o mesmo título.
-      const { data: existing } = await supabase
-        .from('client_portal_contents')
-        .select('id')
-        .eq('client_id', ctx.clientId)
-        .eq('title', ctx.title)
-        .not('status', 'in', '(aprovado,agendado,publicado)')
-        .order('created_at', { ascending: false })
-        .limit(1);
+      // Pelo vínculo com o card (ou, em conteúdo antigo, pelo título), ignorando conteúdos já
+      // fechados (aprovado/agendado/publicado): um vídeo de outro mês não pode ser sobrescrito.
+      const existing = await findPortalContentForTask(ctx, { openOnly: true });
 
-      if (existing?.length) {
+      if (existing) {
         await supabase.from('client_portal_contents').update({
           file_url: ctx.editedVideoLink,
           status: 'revisao_interna',
+          content_task_id: ctx.taskId,
           updated_at: now.toISOString(),
-        } as any).eq('id', existing[0].id);
+        } as any).eq('id', existing.id);
       } else {
         await supabase.from('client_portal_contents').insert({
           client_id: ctx.clientId,
@@ -284,6 +306,7 @@ export async function syncContentTaskColumnChange(
           season_month: now.getMonth() + 1,
           season_year: now.getFullYear(),
           uploaded_by: ctx.userId || null,
+          content_task_id: ctx.taskId,
         } as any);
       }
     }
@@ -310,20 +333,13 @@ export async function syncContentTaskColumnChange(
     if (ctx.clientId) {
       // Update portal content from revisao_interna → pendente (now visible to client)
       try {
-        const { data: portalContentToPublish } = await supabase
-          .from('client_portal_contents')
-          .select('id')
-          .eq('client_id', ctx.clientId)
-          .eq('title', ctx.title)
-          .eq('status', 'revisao_interna')
-          .order('created_at', { ascending: false })
-          .limit(1);
+        const portalContentToPublish = await findPortalContentForTask(ctx, { status: 'revisao_interna' });
 
-        if (portalContentToPublish?.length) {
+        if (portalContentToPublish) {
           await supabase.from('client_portal_contents').update({
             status: 'pendente',
             updated_at: new Date().toISOString(),
-          } as any).eq('id', portalContentToPublish[0].id);
+          } as any).eq('id', portalContentToPublish.id);
         }
       } catch (err) {
         console.error('Portal content publish error:', err);
@@ -333,21 +349,14 @@ export async function syncContentTaskColumnChange(
 
       // Create portal notification for the client (o conteúdo em aberto, não um antigo já fechado)
       try {
-        const { data: portalContent } = await supabase
-          .from('client_portal_contents')
-          .select('id')
-          .eq('client_id', ctx.clientId)
-          .eq('title', ctx.title)
-          .not('status', 'in', '(aprovado,agendado,publicado)')
-          .order('created_at', { ascending: false })
-          .limit(1);
+        const portalContent = await findPortalContentForTask(ctx, { openOnly: true });
 
         await supabase.from('client_portal_notifications').insert({
           client_id: ctx.clientId,
           title: '🎬 Novo vídeo para aprovação',
           message: `"${ctx.title}" está pronto para sua análise e aprovação.`,
           type: 'video_approval',
-          link_content_id: portalContent?.[0]?.id || null,
+          link_content_id: portalContent?.id || null,
         } as any);
       } catch (err) {
         console.error('Portal notification error:', err);

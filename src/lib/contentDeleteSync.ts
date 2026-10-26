@@ -3,18 +3,25 @@ import { deleteFileFromVps } from '@/services/vpsApi';
 
 /**
  * Centralized cascading delete for content across all modules.
- * Ensures deleting from any module cleans up ALL related records:
- * task_history, social_media_deliveries, client_portal_contents,
- * client_portal_comments, client_portal_notifications,
- * delivery_records, active_recordings, recordings, VPS files.
+ * Deleting a card from any module cleans up the records that only exist for it:
+ * task_history, social_media_deliveries, client_portal_contents (with comments and
+ * notifications) and VPS files. A gravação (recordings, delivery_records, active_recordings)
+ * NÃO é apagada: ela alimenta a agenda, os relatórios e as métricas do videomaker.
  */
 
-/** Helper: delete VPS file if URL points to agenciapulse.tech */
+/** Helper: delete VPS file if URL points to agenciapulse.tech (e não está em uso por outro card/portal) */
 async function tryDeleteVpsFile(url: string | null | undefined) {
   if (!url?.includes('agenciapulse.tech')) return;
   try {
-    const path = url.replace('https://agenciapulse.tech/uploads/', '');
-    await deleteFileFromVps(path);
+    // Outro card (ex.: duplicado) ainda usa o mesmo vídeo: mantém o arquivo
+    const { data: otherTasks } = await supabase
+      .from('content_tasks')
+      .select('id')
+      .eq('edited_video_link', url)
+      .limit(1);
+    if (otherTasks?.length) return;
+    // keepIfReferenced: o servidor mantém o arquivo se ainda estiver publicado no portal
+    await deleteFileFromVps(url, { keepIfReferenced: true });
   } catch (err) {
     console.error('VPS file delete error:', err);
   }
@@ -34,60 +41,13 @@ export async function deleteContentTask(taskId: string) {
     console.error('[deleteContentTask] fetch error:', fetchError);
   }
 
-  // Even if we can't fetch task metadata, still attempt the hard delete of the task itself.
   const clientId = task?.client_id;
   const title = task?.title;
-  const recordingId = task?.recording_id;
   const editedVideoLink = task?.edited_video_link;
 
-  // 1. Delete task_history
-  await supabase.from('task_history').delete().eq('task_id', taskId);
-
-  // 2. Delete social_media_deliveries linked to this task
-  await supabase.from('social_media_deliveries').delete().eq('content_task_id', taskId);
-
-  // 3. Delete matching client_portal_contents + their comments/notifications
-  if (clientId && title) {
-    const { data: portalContents } = await supabase
-      .from('client_portal_contents')
-      .select('id, file_url, thumbnail_url')
-      .eq('client_id', clientId)
-      .eq('title', title);
-
-    if (portalContents?.length) {
-      for (const pc of portalContents) {
-        await supabase.from('client_portal_comments').delete().eq('content_id', pc.id);
-        await supabase.from('client_portal_notifications').delete().eq('link_content_id', pc.id);
-        await tryDeleteVpsFile(pc.file_url);
-        await tryDeleteVpsFile(pc.thumbnail_url);
-      }
-      await supabase
-        .from('client_portal_contents')
-        .delete()
-        .eq('client_id', clientId)
-        .eq('title', title);
-    }
-  }
-
-  // 4. Delete VPS file for edited video
-  await tryDeleteVpsFile(editedVideoLink);
-
-  // 5. Clean up recording if this was the only task using it
-  if (recordingId) {
-    const { count } = await supabase
-      .from('content_tasks')
-      .select('id', { count: 'exact', head: true })
-      .eq('recording_id', recordingId)
-      .neq('id', taskId);
-
-    if (count === 0) {
-      await supabase.from('active_recordings').delete().eq('recording_id', recordingId);
-      await supabase.from('delivery_records').delete().eq('recording_id', recordingId);
-      await supabase.from('recordings').delete().eq('id', recordingId);
-    }
-  }
-
-  // 6. Delete the content_task itself — verify a row was actually removed
+  // 1. Delete the content_task itself FIRST — verify a row was actually removed.
+  // Antes o histórico, o Social Media, o portal e os arquivos eram apagados antes, e um card
+  // de outra cidade (ou sem permissão) perdia tudo isso mesmo sem ser excluído.
   const { data: deleted, error: delError } = await supabase
     .from('content_tasks')
     .delete()
@@ -101,6 +61,56 @@ export async function deleteContentTask(taskId: string) {
   if (!deleted || (Array.isArray(deleted) && deleted.length === 0)) {
     throw new Error('Tarefa não encontrada ou sem permissão para excluir');
   }
+
+  // 2. Delete task_history
+  await supabase.from('task_history').delete().eq('task_id', taskId);
+
+  // 3. Delete social_media_deliveries linked to this task
+  await supabase.from('social_media_deliveries').delete().eq('content_task_id', taskId);
+
+  // 4. Delete the client_portal_contents of this card + their comments/notifications.
+  // Pelo vínculo (content_task_id). Conteúdo antigo, sem vínculo, casa pelo título — mas só se
+  // nenhum outro card do cliente tiver o mesmo título (senão apagava o vídeo do outro card).
+  if (clientId) {
+    const portalContents: Array<{ id: string; file_url: string | null; thumbnail_url: string | null }> = [];
+    const byLink = await supabase
+      .from('client_portal_contents')
+      .select('id, file_url, thumbnail_url')
+      .eq('client_id', clientId)
+      .eq('content_task_id', taskId);
+    if (!byLink.error && byLink.data?.length) portalContents.push(...(byLink.data as any[]));
+
+    if (title) {
+      const { data: sameTitleTasks } = await supabase
+        .from('content_tasks')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('title', title)
+        .limit(1);
+      if (!sameTitleTasks?.length) {
+        let legacy = supabase
+          .from('client_portal_contents')
+          .select('id, file_url, thumbnail_url')
+          .eq('client_id', clientId)
+          .eq('title', title);
+        // Servidor sem a coluna nova: o filtro do vínculo dá erro e vale só o título (como antes)
+        if (!byLink.error) legacy = legacy.is('content_task_id', null);
+        const { data: legacyRows } = await legacy;
+        if (legacyRows?.length) portalContents.push(...(legacyRows as any[]));
+      }
+    }
+
+    for (const pc of portalContents) {
+      await supabase.from('client_portal_comments').delete().eq('content_id', pc.id);
+      await supabase.from('client_portal_notifications').delete().eq('link_content_id', pc.id);
+      await supabase.from('client_portal_contents').delete().eq('id', pc.id);
+      await tryDeleteVpsFile(pc.file_url);
+      await tryDeleteVpsFile(pc.thumbnail_url);
+    }
+  }
+
+  // 5. Delete VPS file for edited video
+  await tryDeleteVpsFile(editedVideoLink);
 }
 
 /**
@@ -125,7 +135,7 @@ export async function deleteSocialDelivery(deliveryId: string) {
 export async function deletePortalContent(contentId: string) {
   const { data: content } = await supabase
     .from('client_portal_contents')
-    .select('id, client_id, title, file_url, thumbnail_url')
+    .select('*')
     .eq('id', contentId)
     .single();
 
@@ -137,17 +147,15 @@ export async function deletePortalContent(contentId: string) {
   // 2. Delete related portal notifications
   await supabase.from('client_portal_notifications').delete().eq('link_content_id', contentId);
 
-  // 3. Delete VPS files
-  await tryDeleteVpsFile(content.file_url);
-  await tryDeleteVpsFile(content.thumbnail_url);
-
-  // 4. Remove edited_video_link from matching content_task
-  const { data: matchingTask } = await supabase
+  // 3. Remove edited_video_link from the matching content_task (pelo vínculo; sem vínculo, pelo título)
+  let matchingTaskQuery = supabase
     .from('content_tasks')
     .select('id, edited_video_link')
-    .eq('client_id', content.client_id)
-    .eq('title', content.title)
-    .limit(1);
+    .eq('client_id', content.client_id);
+  matchingTaskQuery = content.content_task_id
+    ? matchingTaskQuery.eq('id', content.content_task_id)
+    : matchingTaskQuery.eq('title', content.title);
+  const { data: matchingTask } = await matchingTaskQuery.limit(1);
 
   if (matchingTask?.[0]?.edited_video_link === content.file_url) {
     await supabase.from('content_tasks').update({
@@ -156,6 +164,10 @@ export async function deletePortalContent(contentId: string) {
     } as any).eq('id', matchingTask[0].id);
   }
 
-  // 5. Delete the portal content
+  // 4. Delete the portal content
   await supabase.from('client_portal_contents').delete().eq('id', contentId);
+
+  // 5. Delete VPS files (depois de soltar o card e o portal: arquivo ainda usado por outro fica)
+  await tryDeleteVpsFile(content.file_url);
+  await tryDeleteVpsFile(content.thumbnail_url);
 }

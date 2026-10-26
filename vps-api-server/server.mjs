@@ -754,6 +754,51 @@ app.get('/api/public/plan-offer/:leadId', async (req, res) => {
   }
 });
 
+// CRM: transferir um lead (e as notas dele) para a outra cidade. O botão 'Transferir' usava a
+// rota de clientes com o id do lead ('Cliente não encontrado') e o update genérico força a
+// cidade ativa, então não havia como mudar a cidade de um lead. Só admin/social_media.
+app.patch('/api/crm/leads/:id/city', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+  } catch (e) {
+    const forbidden = e.message === 'Admin access required';
+    return res.status(forbidden ? 403 : 401).json({ error: forbidden ? 'Apenas admin ou social_media podem transferir leads.' : e.message });
+  }
+  const id = String(req.params.id || '');
+  if (!PUBLIC_UUID_RE.test(id)) return res.status(400).json({ error: 'Lead inválido' });
+  const target = normalizeCityValue(req.body?.city);
+  if (!target || !ALLOWED_CITIES.has(target)) return res.status(400).json({ error: 'Cidade de destino inválida' });
+  let db;
+  try {
+    await ensureCrmLeadsColumns();
+    const notesHaveCity = await tableHasCityColumn('crm_notes');
+    db = await pool.connect();
+    await db.query('BEGIN');
+    const { rows } = await db.query('SELECT id, city FROM crm_leads WHERE id = $1 FOR UPDATE', [id]);
+    if (!rows.length) {
+      await db.query('ROLLBACK');
+      return res.status(404).json({ error: 'Lead não encontrado' });
+    }
+    const from = normalizeCityValue(rows[0].city) || 'minacu';
+    if (from === target) {
+      await db.query('ROLLBACK');
+      return res.json({ ok: true, same_city: true, from, to: target, notes_moved: 0 });
+    }
+    await db.query('UPDATE crm_leads SET city = $2 WHERE id = $1', [id, target]);
+    const notes = notesHaveCity
+      ? await db.query('UPDATE crm_notes SET city = $2 WHERE lead_id = $1', [id, target])
+      : { rowCount: 0 };
+    await db.query('COMMIT');
+    res.json({ ok: true, from, to: target, notes_moved: notes.rowCount || 0 });
+  } catch (e) {
+    if (db) await db.query('ROLLBACK').catch(() => {});
+    console.error('[crm] transfer lead error:', e?.message || e);
+    res.status(500).json({ error: e.message || 'Erro ao transferir o lead' });
+  } finally {
+    db?.release();
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════
 // LINK SHORTENER TABLES
 // ═══════════════════════════════════════════════════════════════

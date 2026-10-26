@@ -1643,7 +1643,6 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
             email: formData.get('email') as string,
             phone: formData.get('phone') as string,
             contract_value: Number(formData.get('value')),
-            city: formData.get('city') as string,
             description: formData.get('description') as string,
             status: formData.get('status') as LeadStatus,
             source_tag: sourceTag || null,
@@ -1669,15 +1668,9 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
           </div>
           <div className="grid gap-2">
             <Label htmlFor="edit-city">Cidade</Label>
-            <Select name="city" defaultValue={lead.city || 'Minaçu'}>
-              <SelectTrigger className="bg-muted/50">
-                <SelectValue placeholder="Selecione a cidade" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Minaçu">Minaçu</SelectItem>
-                <SelectItem value="Uruaçu">Uruaçu</SelectItem>
-              </SelectContent>
-            </Select>
+            {/* O servidor grava sempre a cidade ativa: a troca de cidade é pelo botão 'Transferir'. */}
+            <Input id="edit-city" value={CITY_LABELS[cityCodeFrom(lead.city) || 'minacu']} disabled className="bg-muted/50" />
+            <p className="text-[10px] text-muted-foreground">Para mudar a cidade, use o botão Transferir.</p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="edit-description">Descrição / Observações</Label>
@@ -1803,76 +1796,37 @@ function DeleteLeadDialog({ leadName, onDelete }: { leadName: string; onDelete: 
   );
 }
 
-interface TransferPreviewRow {
-  table: string;
-  label: string;
-  count: number;
-}
-
-interface TransferPreview {
-  client: { id: string; name: string };
-  from: string;
-  to: string;
-  same_city: boolean;
-  total_records: number;
-  tables_affected: number;
-  details: TransferPreviewRow[];
-}
-
 const CITY_LABELS: Record<string, string> = { minacu: 'Minaçu', uruacu: 'Uruaçu' };
 
+// Transferir o lead para a outra cidade (rota própria do CRM; antes usava a de clientes
+// com o id do lead e sempre dava 'Cliente não encontrado').
 function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) {
+  const currentCity = cityCodeFrom(lead.city) || 'minacu';
   const [open, setOpen] = useState(false);
-  const [targetCity, setTargetCity] = useState(lead.city?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c') === 'minacu' ? 'Uruaçu' : 'Minaçu');
+  const [targetCity, setTargetCity] = useState<'minacu' | 'uruacu'>(currentCity === 'minacu' ? 'uruacu' : 'minacu');
   const [isBusy, setIsBusy] = useState(false);
-  const [step, setStep] = useState<'confirm' | 'validating' | 'preview' | 'preparing' | 'done'>('confirm');
-  const [preview, setPreview] = useState<TransferPreview | null>(null);
+  const [step, setStep] = useState<'confirm' | 'preparing' | 'done'>('confirm');
 
   const resetState = () => {
     setStep('confirm');
-    setPreview(null);
+    setTargetCity(currentCity === 'minacu' ? 'uruacu' : 'minacu');
   };
 
-  // Etapa 1: pré-validação (dry-run) — apenas contagem, nada é alterado no banco.
-  const handleValidate = async () => {
-    setIsBusy(true);
-    setStep('validating');
-    try {
-      const normalizedCity = targetCity.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
-      const res = await vpsAuthedFetch(
-        `/api/clients/${lead.id}/transfer-preview?city=${encodeURIComponent(normalizedCity)}`
-      );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Erro ao validar a transferência');
-      }
-      const data: TransferPreview = await res.json();
-      setPreview(data);
-      setStep('preview');
-    } catch (error: any) {
-      toast.error(error.message);
-      setStep('confirm');
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
-  // Etapa 2: execução real da transferência (cascata atômica no backend).
   const handleTransfer = async () => {
     setIsBusy(true);
     setStep('preparing');
     try {
-      const res = await vpsAuthedFetch(`/api/clients/${lead.id}`, {
-        method: 'PUT',
+      const res = await vpsAuthedFetch(`/crm/leads/${lead.id}/city`, {
+        method: 'PATCH',
         body: JSON.stringify({ city: targetCity }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Erro ao transferir cliente');
-      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Erro ao transferir o lead');
 
       setStep('done');
-      toast.success(`Cliente ${lead.name} transferido para ${targetCity} com sucesso!`);
+      toast.success(data.same_city
+        ? `${lead.name} já está em ${CITY_LABELS[targetCity]}.`
+        : `Lead ${lead.name} transferido para ${CITY_LABELS[targetCity]}!`);
       setTimeout(() => {
         setOpen(false);
         onUpdate();
@@ -1880,7 +1834,7 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
       }, 1500);
     } catch (error: any) {
       toast.error(error.message);
-      setStep('preview');
+      setStep('confirm');
     } finally {
       setIsBusy(false);
     }
@@ -1911,13 +1865,13 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
           {step === 'confirm' && (
             <>
               <div className="p-3 bg-orange-50 border border-orange-100 rounded-lg text-xs text-orange-800 space-y-2">
-                <p><strong>Atenção:</strong> Ao transferir este cliente, todos os dados vinculados (histórico, tarefas, roteiros, financeiro) serão movidos para a cidade selecionada.</p>
-                <p>O card sairá da pipeline de <strong>{lead.city}</strong> e aparecerá apenas em <strong>{targetCity}</strong>.</p>
+                <p><strong>Atenção:</strong> O lead e o histórico de notas dele vão para a cidade selecionada.</p>
+                <p>O card sairá da pipeline de <strong>{CITY_LABELS[currentCity]}</strong> e aparecerá apenas em <strong>{CITY_LABELS[targetCity]}</strong>.</p>
               </div>
 
               <div className="space-y-2">
                 <Label>Cidade de Destino</Label>
-                <Select value={targetCity} onValueChange={setTargetCity}>
+                <Select value={targetCity} onValueChange={(v) => setTargetCity(v as 'minacu' | 'uruacu')}>
                   <SelectTrigger className="bg-muted/50">
                     <SelectValue />
                   </SelectTrigger>
@@ -1932,70 +1886,10 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
                 <Button variant="outline" onClick={() => setOpen(false)} disabled={isBusy}>Cancelar</Button>
                 <Button
                   className="bg-orange-500 hover:bg-orange-600 text-white"
-                  onClick={handleValidate}
-                  disabled={isBusy}
-                >
-                  Validar transferência
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-
-          {step === 'validating' && (
-            <div className="flex flex-col items-center justify-center py-10 space-y-4">
-              <Loader2 className="h-10 w-10 text-orange-500 animate-spin" />
-              <div className="text-center space-y-1">
-                <p className="font-bold">Analisando registros...</p>
-                <p className="text-xs text-muted-foreground">Nenhum dado foi alterado ainda</p>
-              </div>
-            </div>
-          )}
-
-          {step === 'preview' && preview && (
-            <>
-              <div className="flex items-center justify-center gap-3 text-sm font-bold">
-                <Badge variant="outline">{CITY_LABELS[preview.from.toLowerCase()] || preview.from}</Badge>
-                <ArrowRightLeft className="h-4 w-4 text-orange-500" />
-                <Badge className="bg-orange-500 text-white border-none">{CITY_LABELS[preview.to.toLowerCase()] || preview.to}</Badge>
-              </div>
-
-              {preview.same_city && (
-                <div className="p-3 rounded-lg bg-muted text-xs text-muted-foreground">
-                  Este cliente já pertence a esta cidade. Nenhuma mudança será feita.
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg border bg-muted/40 text-center">
-                  <p className="text-2xl font-bold text-orange-500">{preview.total_records}</p>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Registros afetados</p>
-                </div>
-                <div className="p-3 rounded-lg border bg-muted/40 text-center">
-                  <p className="text-2xl font-bold text-orange-500">{preview.tables_affected}</p>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Módulos envolvidos</p>
-                </div>
-              </div>
-
-              <div className="max-h-52 overflow-y-auto rounded-lg border divide-y">
-                {preview.details.length === 0 && (
-                  <p className="p-3 text-xs text-muted-foreground">Nenhum registro vinculado encontrado além do cadastro do cliente.</p>
-                )}
-                {preview.details.map((row) => (
-                  <div key={row.table} className="flex items-center justify-between px-3 py-2 text-xs">
-                    <span className="font-medium">{row.label}</span>
-                    <Badge variant="secondary" className="text-[10px]">{row.count}</Badge>
-                  </div>
-                ))}
-              </div>
-
-              <DialogFooter className="pt-2">
-                <Button variant="outline" onClick={resetState} disabled={isBusy}>Voltar</Button>
-                <Button
-                  className="bg-orange-500 hover:bg-orange-600 text-white"
                   onClick={handleTransfer}
-                  disabled={isBusy || preview.same_city}
+                  disabled={isBusy || targetCity === currentCity}
                 >
-                  OK, transferir agora
+                  Transferir agora
                 </Button>
               </DialogFooter>
             </>
@@ -2005,8 +1899,8 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
             <div className="flex flex-col items-center justify-center py-10 space-y-4">
               <Loader2 className="h-10 w-10 text-orange-500 animate-spin" />
               <div className="text-center space-y-1">
-                <p className="font-bold">Organizando dados...</p>
-                <p className="text-xs text-muted-foreground">Movendo histórico e registros para {targetCity}</p>
+                <p className="font-bold">Transferindo...</p>
+                <p className="text-xs text-muted-foreground">Movendo o lead e as notas para {CITY_LABELS[targetCity]}</p>
               </div>
             </div>
           )}
@@ -2018,7 +1912,7 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
               </div>
               <div className="text-center space-y-1">
                 <p className="font-bold text-green-600">Transferência Concluída!</p>
-                <p className="text-xs text-muted-foreground">O cliente agora pertence à unidade {targetCity}</p>
+                <p className="text-xs text-muted-foreground">O lead agora pertence à unidade {CITY_LABELS[targetCity]}</p>
               </div>
             </div>
           )}

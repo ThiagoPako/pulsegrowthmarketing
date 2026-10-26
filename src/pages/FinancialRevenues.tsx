@@ -22,7 +22,8 @@ import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { generateDeliveryReport, resolvePaymentInfo, groupRevenuesByClient, buildBillingBreakdown } from '@/lib/billingReport';
 import { isRevenueReceived, isRevenueOverdue, PLACEHOLDER_CLIENT_ID, todayLocal } from '@/lib/financialCalc';
 import BulkBillingConfirmDialog from '@/components/financial/BulkBillingConfirmDialog';
-import cobrarTodosImg from '@/assets/cobrar_todos.png';
+// Quadrado central (768 px) do original 1376x768 em WebP: 107 kB em vez de 2,1 MB; as telas usam object-cover em caixa quadrada, o recorte é o mesmo que aparecia
+import cobrarTodosImg from '@/assets/cobrar_todos.webp';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import ClientLogo from '@/components/ClientLogo';

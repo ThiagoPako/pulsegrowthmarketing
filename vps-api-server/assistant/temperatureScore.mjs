@@ -127,11 +127,10 @@ export function dataScore(s = {}) {
     }
   }
   if (s.gravacoes) {
-    const { atual = 0, anterior, canceladas = 0, remarcadas = 0 } = s.gravacoes;
+    const { atual = 0, anterior } = s.gravacoes;
     if (atual > 0) {
-      const parts = [canceladas ? `cancelou ${canceladas}` : null, remarcadas ? `remarcou ${remarcadas}` : null].filter(Boolean).join(' e ');
       add('gravacoes', Math.min(WEIGHTS.gravacaoTeto, atual * WEIGHTS.gravacaoPorVez) + (worsened(atual, anterior) ? WEIGHTS.piora : 0),
-        `${parts ? parts.charAt(0).toUpperCase() + parts.slice(1) : `Mexeu em ${atual}`} ${atual === 1 ? 'gravação' : 'gravações'}${before(atual, anterior)}`);
+        `${plural(atual, 'gravação cancelada ou remarcada', 'gravações canceladas ou remarcadas')}${before(atual, anterior)}`);
     }
   }
   if (s.entregas && s.entregas.avaliar && s.entregas.previsto > 0) {

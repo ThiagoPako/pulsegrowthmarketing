@@ -117,6 +117,8 @@ export interface ClientTemperatureDetail {
   historico: { dia: string; nota: number; nota_dados: number; nota_conversa: number | null }[];
   conversas: TemperatureReading[];
   alertas: { id: string; motivo: string; nota: number | null; notificado: boolean; whatsapp: number; created_at: string }[];
+  /** "Atualizar agora" ainda terminando no servidor. */
+  pendente?: boolean;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

@@ -75,8 +75,8 @@ function Trend({ value }: { value: number | null }) {
 function ClientRow({ item, onOpen }: { item: ClientTemperatureItem; onOpen: () => void }) {
   return (
     <button type="button" onClick={onOpen}
-      className="w-full text-left glass-card px-4 py-3 flex flex-col gap-2 md:grid md:grid-cols-[minmax(0,14rem)_13rem_7.5rem_minmax(0,1fr)_6.5rem_1rem] md:items-center md:gap-4 hover:bg-accent/30 transition-colors">
-      <div className="flex items-center gap-3 min-w-0">
+      className="w-full text-left glass-card px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 md:grid md:grid-cols-[minmax(0,14rem)_13rem_7.5rem_minmax(0,1fr)_6.5rem_1rem] md:gap-4 hover:bg-accent/30 transition-colors">
+      <div className="flex items-center gap-3 min-w-0 basis-full md:basis-auto">
         <ClientMark name={item.company_name} logo={item.logo_url} color={item.color} />
         <p className="font-semibold truncate">{item.company_name}</p>
       </div>
@@ -88,7 +88,7 @@ function ClientRow({ item, onOpen }: { item: ClientTemperatureItem; onOpen: () =
         <Trend value={item.variacao} />
         <Sparkline values={item.serie || []} />
       </div>
-      <p className="text-sm text-muted-foreground min-w-0 md:truncate">{item.motivo || '—'}</p>
+      <p className="text-sm text-muted-foreground min-w-0 basis-full md:basis-auto md:truncate">{item.motivo || '—'}</p>
       <span className="text-xs text-muted-foreground whitespace-nowrap">{when(item.analisado_em)}</span>
       <ChevronRight size={16} className="hidden md:block text-muted-foreground" aria-hidden="true" />
     </button>
@@ -203,7 +203,8 @@ function TemperatureDetail({ clientId, onClose }: { clientId: string | null; onC
     onSuccess: (fresh) => {
       queryClient.setQueryData(detailKey, fresh);
       queryClient.invalidateQueries({ queryKey: ['client-temperature'] });
-      toast.success('Temperatura atualizada');
+      if (fresh.pendente) toast.info('Atualizando. Confira de novo em alguns minutos.');
+      else toast.success('Temperatura atualizada');
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -225,7 +226,7 @@ function TemperatureDetail({ clientId, onClose }: { clientId: string | null; onC
           </div>
         ) : (
           <div className="space-y-6">
-            <SheetHeader className="space-y-3 pr-6">
+            <SheetHeader className="space-y-3 pr-6 text-left">
               <div className="flex items-center gap-3">
                 <ClientMark name={data.client.company_name} logo={data.client.logo_url} color={data.client.color} />
                 <div className="min-w-0">
@@ -262,7 +263,9 @@ function TemperatureDetail({ clientId, onClose }: { clientId: string | null; onC
                   {atual.motivos.map((m) => (
                     <li key={`${m.chave}-${m.texto}`} className="flex items-start justify-between gap-3 text-sm">
                       <span>{m.texto}</span>
-                      {m.pontos > 0 && <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">−{m.pontos}</span>}
+                      {m.pontos > 0 && m.chave !== 'ameaca_cancelar' && (
+                        <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">−{m.pontos}</span>
+                      )}
                     </li>
                   ))}
                 </ul>

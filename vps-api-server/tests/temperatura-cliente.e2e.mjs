@@ -439,6 +439,8 @@ try {
   if (warnings.length) console.log('\n--- avisos do servidor ---\n' + warnings.slice(-30).join('\n'));
   stop();
   fake.close();
+  // a conexão "PULSE" de teste não fica no banco (o teste do assistente escolhe a dele pela ordem de criação)
+  await pool.query(`DELETE FROM wa_connections WHERE id = $1`, [ids.conn]).catch(() => {});
   await pool.end();
 }
 if (!process.exitCode) console.log('\nTESTE DA TEMPERATURA DO CLIENTE PASSOU');

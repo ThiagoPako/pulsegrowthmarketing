@@ -13,6 +13,8 @@ const ROLES = ['admin', 'social_media', 'gestor_projetos', 'socio_gestor'];
 // valor da inadimplência: só para quem vê o financeiro (o resto vê parcelas e dias)
 const FINANCE_ROLES = ['admin', 'socio_gestor'];
 const CLIENT_COOLDOWN_MS = 10 * 60_000;
+// a leitura do grupo pode demorar: passou disso, responde com o que já há e a análise termina sozinha
+const REFRESH_WAIT_MS = 60_000;
 const USER_LIMIT_PER_HOUR = 20;
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
@@ -139,8 +141,15 @@ export function registerTemperatureRoutes(app, { pool, temperature, verifyUser, 
       }
       clientCooldown.set(client.id, now);
       userHits.set(user.id, [...hits, now]);
-      await temperature.refreshClient(client.id, { fonte: 'manual', analyze: true });
-      res.json(await detail(client, { finance }));
+      const run = temperature.refreshClient(client.id, { fonte: 'manual', analyze: true })
+        .catch((error) => console.error('[temperatura] atualizar agora:', error.message));
+      let timer;
+      const finished = await Promise.race([
+        run.then(() => true),
+        new Promise((resolve) => { timer = setTimeout(() => resolve(false), REFRESH_WAIT_MS); }),
+      ]);
+      clearTimeout(timer);
+      res.json({ ...(await detail(client, { finance })), pendente: !finished });
     } catch (error) {
       fail(res, error);
     }

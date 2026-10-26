@@ -22,15 +22,22 @@ import { exportReportPDF } from '@/lib/pdfExport';
 import type { UserRole } from '@/types';
 import { ROLE_LABELS } from '@/types';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  DESIGNER_COMPLETED_COLUMNS, EDITOR_APPROVED_COLUMNS, dedupeDeliveryRecords,
+  getDesignTaskReferenceDate, getEditorTaskOwnerId, getEditorTaskReferenceDate,
+} from '@/lib/scoringSystem';
 
 interface EditorTask {
   id: string;
   client_id: string;
   edited_by: string | null;
+  assigned_to?: string | null;
   content_type: string;
   kanban_column: string;
   approved_at: string | null;
+  approval_sent_at?: string | null;
   updated_at: string;
+  created_at?: string | null;
 }
 
 interface DesignTask {
@@ -39,8 +46,17 @@ interface DesignTask {
   assigned_to: string | null;
   kanban_column: string;
   completed_at: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
   format_type: string;
 }
+
+// Conteúdo aprovado pela edição (o kanban de conteúdo não tem coluna 'aprovado') e arte
+// concluída (o kanban de design não tem 'concluido'): os mesmos critérios da pontuação.
+const isEditorTaskApproved = (t: EditorTask) =>
+  !!t.approved_at || (EDITOR_APPROVED_COLUMNS as readonly string[]).includes(t.kanban_column);
+const isDesignTaskCompleted = (t: DesignTask) =>
+  (DESIGNER_COMPLETED_COLUMNS as readonly string[]).includes(t.kanban_column);
 
 interface DeliveryRecord {
   id: string;
@@ -124,10 +140,11 @@ export default function Reports() {
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
       supabase.from('recording_wait_logs').select('*'),
       supabase.from('expense_categories').select('id, name').or('name.ilike.%salário%,name.ilike.%salario%'),
-      supabase.from('content_tasks').select('id, client_id, edited_by, content_type, kanban_column, approved_at, updated_at'),
-      supabase.from('design_tasks').select('id, client_id, assigned_to, kanban_column, completed_at, format_type'),
+      supabase.from('content_tasks').select('id, client_id, edited_by, assigned_to, content_type, kanban_column, approved_at, approval_sent_at, updated_at, created_at'),
+      supabase.from('design_tasks').select('id, client_id, assigned_to, kanban_column, completed_at, updated_at, created_at, format_type'),
     ]);
-    if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
+    // Uma gravação com dois registros de entrega contava em dobro (como no Dashboard e no Desempenho)
+    if (rRes.data) setRecords(dedupeDeliveryRecords(rRes.data as DeliveryRecord[]));
     if (pRes.data) setPlans(pRes.data as Plan[]);
     if (edRes.data) setEditorTasks(edRes.data as EditorTask[]);
     if (dsRes.data) setDesignTasks(dsRes.data as DesignTask[]);
@@ -270,12 +287,12 @@ export default function Reports() {
     const totalSalaries = monthlyTotal * months;
     // Denominator: content produced in period from multiple sources
     const editorApproved = editorTasks.filter(t => {
-      const d = (t.approved_at || t.updated_at || '').slice(0, 10);
-      return  (t.kanban_column === 'aprovado' || t.kanban_column === 'agendamentos' || t.kanban_column === 'acompanhamento' || t.kanban_column === 'arquivado' || !!t.approved_at) && d >= dateRange.start && d <= dateRange.end;
+      const d = (getEditorTaskReferenceDate(t) || '').slice(0, 10);
+      return isEditorTaskApproved(t) && d >= dateRange.start && d <= dateRange.end;
     }).length;
     const designCompleted = designTasks.filter(t => {
-      const d = (t.completed_at || '').slice(0, 10);
-      return t.kanban_column === 'concluido' && d >= dateRange.start && d <= dateRange.end;
+      const d = (getDesignTaskReferenceDate(t) || '').slice(0, 10);
+      return isDesignTaskCompleted(t) && d >= dateRange.start && d <= dateRange.end;
     }).length;
     const socialDelivered = filteredSocial.length;
     const recordedContent = stats.totalContent;
@@ -305,16 +322,16 @@ export default function Reports() {
           vmRecs.forEach(r => { clientUnits[r.client_id] = (clientUnits[r.client_id] || 0) + 1; });
         } else if (user.role === 'editor') {
           const edTasks = editorTasks.filter(t => {
-            if (t.edited_by !== user.id || t.kanban_column !== 'aprovado') return false;
-            const day = (t.approved_at || t.updated_at || '').slice(0, 10);
+            if (getEditorTaskOwnerId(t) !== user.id || !isEditorTaskApproved(t)) return false;
+            const day = (getEditorTaskReferenceDate(t) || '').slice(0, 10);
             return day >= dateRange.start && day <= dateRange.end;
           });
           units = edTasks.length;
           edTasks.forEach(t => { clientUnits[t.client_id] = (clientUnits[t.client_id] || 0) + 1; });
         } else if (user.role === 'designer') {
           const dTasks = designTasks.filter(t => {
-            if (t.assigned_to !== user.id || t.kanban_column !== 'aprovado' || !t.completed_at) return false;
-            const day = t.completed_at.slice(0, 10);
+            if (t.assigned_to !== user.id || !isDesignTaskCompleted(t)) return false;
+            const day = (getDesignTaskReferenceDate(t) || '').slice(0, 10);
             return day >= dateRange.start && day <= dateRange.end;
           });
           units = dTasks.length;
@@ -363,7 +380,7 @@ export default function Reports() {
     }).filter(c => c.totalCost > 0).sort((a, b) => b.totalCost - a.totalCost);
 
     return { collaboratorData: collaboratorData.filter(c => c.salary > 0 || c.units > 0), roleCosts, clientCosts };
-  }, [users, filteredRecords, editorTasks, designTasks, filteredSocial, dateRange, clients]);
+  }, [users, filteredRecords, editorTasks, designTasks, filteredSocial, dateRange, clients, settings.costAllocationRule]);
 
   const comparison = useMemo(() => {
     if (selectedClient === 'all') return null;
@@ -594,7 +611,6 @@ export default function Reports() {
       y += Math.max(splitComp.length * 4, 10);
     });
 
-    doc.save(`relatorio-custos-detalhado-${format(new Date(), 'yyyy-MM-dd')}.csv`); // Fixed extension in logic below but let's keep it pdf here for simplicity in doc.save call
     doc.save(`relatorio-custos-detalhado-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
     toast.success('PDF de custos gerado!');
   };

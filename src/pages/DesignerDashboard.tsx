@@ -458,6 +458,24 @@ export default function DesignerDashboard() {
     }
   };
 
+  // ═══ Modo Foco × detalhe/copy ═══
+  // O overlay do Modo Foco (z-[100]) fica acima do Sheet e do Dialog (z-50): abrir o detalhe
+  // ou a copy dentro do foco deixava a tela escondida e sem clique. Sai do foco para abrir
+  // e volta a ele quando o detalhe/copy fechar.
+  const [returnToZen, setReturnToZen] = useState(false);
+  const openOutsideZen = (open: () => void) => {
+    if (zenMode) {
+      setZenMode(false);
+      setReturnToZen(true);
+    }
+    open();
+  };
+  useEffect(() => {
+    if (!returnToZen || selectedTaskId || copyDialogTask) return;
+    setReturnToZen(false);
+    if (activeTask) setZenMode(true);
+  }, [returnToZen, selectedTaskId, copyDialogTask, activeTask]);
+
   // ═══ Atalhos de teclado ═══
   useEffect(() => {
     const isTyping = (el: EventTarget | null) => {
@@ -468,25 +486,27 @@ export default function DesignerDashboard() {
     };
     const handler = (e: KeyboardEvent) => {
       if (isTyping(e.target)) return;
+      // Com o detalhe ou a copy abertos, as teclas são deles (Esc fecha o que está aberto)
+      if (selectedTaskId || copyDialogTask) return;
       if (e.key === 'Escape' && zenMode) { setZenMode(false); e.preventDefault(); return; }
       if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && activeTask) {
         setZenMode(v => !v); e.preventDefault(); return;
       }
       if (e.code === 'Space' && activeTask) { handleTogglePause(); e.preventDefault(); return; }
       if ((e.key === 'c' || e.key === 'C') && activeTask && !e.metaKey && !e.ctrlKey) {
-        setCopyDialogTask(activeTask); e.preventDefault(); return;
+        openOutsideZen(() => setCopyDialogTask(activeTask)); e.preventDefault(); return;
       }
       if ((e.key === 'n' || e.key === 'N') && nextSuggested && !activeTask && !e.metaKey && !e.ctrlKey) {
         handleAcceptSuggestion(); e.preventDefault(); return;
       }
       if ((e.key === 'e' || e.key === 'E') && activeTask && !e.metaKey && !e.ctrlKey) {
-        setSelectedTaskId(activeTask.id); e.preventDefault(); return;
+        openOutsideZen(() => setSelectedTaskId(activeTask.id)); e.preventDefault(); return;
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTask?.id, nextSuggested?.id, zenMode]);
+  }, [activeTask?.id, nextSuggested?.id, zenMode, selectedTaskId, copyDialogTask]);
 
 
 
@@ -558,8 +578,8 @@ export default function DesignerDashboard() {
                   elapsed={activeElapsed}
                   effectiveRunning={effectiveRunning}
                   onTogglePause={handleTogglePause}
-                  onOpenDetail={() => setSelectedTaskId(activeTask.id)}
-                  onOpenCopy={() => setCopyDialogTask(activeTask)}
+                  onOpenDetail={() => openOutsideZen(() => setSelectedTaskId(activeTask.id))}
+                  onOpenCopy={() => openOutsideZen(() => setCopyDialogTask(activeTask))}
                 />
               </div>
             </div>

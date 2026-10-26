@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/vpsDb';
+import { deleteCampaignWithSlots } from '@/lib/campaignDelete';
 import { useApp } from '@/contexts/AppContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -79,9 +80,7 @@ export default function Campaigns() {
 
   const handleDelete = async (campaignId: string, name: string) => {
     try {
-      await supabase.from('campaign_slots').delete().eq('campaign_id', campaignId);
-      const { error } = await supabase.from('campaigns').delete().eq('id', campaignId);
-      if (error) throw error;
+      await deleteCampaignWithSlots(campaignId);
       toast.success(`Campanha "${name}" apagada`);
       setCampaigns(prev => prev.filter(c => c.id !== campaignId));
     } catch (e: any) {

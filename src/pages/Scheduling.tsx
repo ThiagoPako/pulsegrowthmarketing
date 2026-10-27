@@ -411,14 +411,15 @@ export default function Scheduling() {
             )}
           </div>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-            {calendar}
+          // lista dos não agendados à esquerda: arraste um material até o dia do calendário
+          <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
             <UnscheduledPanel
               items={unscheduled}
               onPick={(item) => pickMaterial(item)}
               draggable
               className="self-start"
             />
+            {calendar}
           </div>
         )}
       </DragDropContext>

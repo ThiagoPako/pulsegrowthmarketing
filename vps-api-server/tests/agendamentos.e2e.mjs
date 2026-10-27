@@ -10,7 +10,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import http from 'node:http';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import jwt from 'jsonwebtoken';
@@ -44,6 +45,7 @@ const ids = {
   portalOld: '00000000-0000-0000-0000-00000000a643', portalSolo: '00000000-0000-0000-0000-00000000a644',
   portalA: '00000000-0000-0000-0000-00000000a645', design3: '00000000-0000-0000-0000-00000000a633',
   design4: '00000000-0000-0000-0000-00000000a634',
+  taskCap: '00000000-0000-0000-0000-00000000a627', scriptCap: '00000000-0000-0000-0000-00000000a652',
 };
 const CLIENTS = [ids.cliMin, ids.cliNoAcc, ids.cliUru];
 const PEOPLE = [ids.thiago, ids.other, ids.social];
@@ -155,6 +157,25 @@ async function fixtures() {
   );
 }
 
+// ── API falsa do Claude (só a legenda usa IA neste teste) ───────
+const aiRequests = [];
+const fakeAi = http.createServer((req, res) => {
+  let raw = '';
+  req.on('data', (c) => { raw += c; });
+  req.on('end', () => {
+    const body = JSON.parse(raw || '{}');
+    aiRequests.push(body);
+    const images = body.messages[0].content.filter((b) => b.type === 'image').length;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({
+      id: `msg_${aiRequests.length}`, type: 'message', role: 'assistant', model: body.model,
+      content: [{ type: 'text', text: JSON.stringify({ legenda: `Legenda gerada ${aiRequests.length} (${images} imagens)\n\n#odontologia #minacu` }) }],
+      stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 },
+    }));
+  });
+});
+await new Promise((r) => fakeAi.listen(0, '127.0.0.1', r));
+
 // ── Sobe o servidor ────────────────────────────────────────────
 // O módulo agora é liberado pelo Pulse Plus (pulsePlus.mjs), semeado a partir da lista dos Agendamentos
 await pool.query(`DELETE FROM module_access WHERE module IN ('agendamentos', 'pulse_plus')`).catch(() => {});
@@ -166,7 +187,9 @@ const server = spawn('node', [path.join(API_DIR, 'server.mjs')], {
   cwd: API_DIR,
   env: {
     ...process.env, DATABASE_URL: DB, JWT_SECRET: SECRET, API_PORT: String(PORT),
-    ANTHROPIC_API_KEY: '', GOOGLE_GEMINI_API_KEY: '', OPENAI_API_KEY: '',
+    ANTHROPIC_API_KEY: 'sk-ant-teste-falsa', ANTHROPIC_BASE_URL: `http://127.0.0.1:${fakeAi.address().port}`,
+    GOOGLE_GEMINI_API_KEY: '', OPENAI_API_KEY: '', ASSISTANT_DISABLED: '1', TEMPERATURE_DISABLED: '1',
+    WHISPER_BIN: path.join(TMP, 'sem-whisper'), WHISPER_MODEL: path.join(TMP, 'sem-modelo.bin'), WEB_VIDEO_DISABLED: '1',
     UPLOAD_ROOT: path.join(TMP, 'uploads'), PUBLIC_UPLOADS_URL: 'https://agenciapulse.tech/uploads',
     WA_PRIVATE_DIR: path.join(TMP, 'wa'),
   },
@@ -601,6 +624,94 @@ try {
   assert.equal(r.status, 200);
   ok('POST /api/social-posts com as mesmas regras e mensagens; post do Estúdio arrasta no calendário');
 
+  // ── Legenda (guardar e gerar com IA) e miniatura do vídeo ──
+  const uploads = path.join(TMP, 'uploads');
+  fs.mkdirSync(path.join(uploads, 'videos'), { recursive: true });
+  const videoPath = path.join(uploads, 'videos', 'clareamento.mp4');
+  const made = spawnSync('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc=size=360x640:rate=10:duration=4', '-pix_fmt', 'yuv420p', videoPath]);
+  assert.equal(made.status, 0, 'ffmpeg gerou o vídeo de teste');
+  const videoUrl = 'https://agenciapulse.tech/uploads/videos/clareamento.mp4';
+  await pool.query(`UPDATE clients SET niche = 'Odontologia', editorial = 'Tom acolhedor, foco em prevenção' WHERE id = $1`, [ids.cliMin]);
+  await pool.query(`DELETE FROM scheduling_captions WHERE material_id = $1`, [ids.taskCap]);
+  await pool.query(`DELETE FROM content_tasks WHERE id = $1`, [ids.taskCap]);
+  await pool.query(`DELETE FROM scripts WHERE id = $1`, [ids.scriptCap]);
+  await pool.query(`INSERT INTO scripts (id, client_id, title, content, caption) VALUES ($1, $2, 'Roteiro clareamento', 'Cena 1: paciente sorrindo. Fala: clareamento em uma sessão, sem dor.', '')`, [ids.scriptCap, ids.cliMin]);
+  await pool.query(
+    `INSERT INTO content_tasks (id, client_id, title, content_type, kanban_column, edited_video_link, approved_at, script_id)
+     VALUES ($1, $2, 'Clareamento', 'reels', 'agendamentos', $3, now(), $4)`, [ids.taskCap, ids.cliMin, videoUrl, ids.scriptCap]);
+
+  // miniatura: quadro JPEG gerado uma vez e guardado em .thumbs; só vídeos de /uploads
+  r = await materials(ids.cliMin);
+  const capItem = r.json.unscheduled.find((i) => i.key === `conteudo:${ids.taskCap}`);
+  assert.ok(capItem, 'card novo em não agendados');
+  assert.equal(capItem.thumb_url, `https://agenciapulse.tech/api/scheduling/thumb?src=${encodeURIComponent('/uploads/videos/clareamento.mp4')}`);
+  let thumb = await fetch(`${BASE}/scheduling/thumb?src=${encodeURIComponent('/uploads/videos/clareamento.mp4')}`);
+  assert.equal(thumb.status, 200, 'miniatura sem login (o vídeo já é público)');
+  assert.equal(thumb.headers.get('content-type'), 'image/jpeg');
+  const jpeg = Buffer.from(await thumb.arrayBuffer());
+  assert.deepEqual([...jpeg.subarray(0, 2)], [0xff, 0xd8], 'é um JPEG');
+  assert.match(thumb.headers.get('cache-control') || '', /max-age=604800/);
+  assert.equal(fs.readdirSync(path.join(uploads, '.thumbs')).filter((f) => f.endsWith('.jpg')).length, 1, 'guardada em .thumbs');
+  thumb = await fetch(`${BASE}/scheduling/thumb?src=${encodeURIComponent('/uploads/videos/clareamento.mp4')}`);
+  assert.equal(thumb.status, 200, 'segunda vez sai do cache');
+  assert.equal((await fetch(`${BASE}/scheduling/thumb?src=${encodeURIComponent('/etc/passwd')}`)).status, 400);
+  assert.equal((await fetch(`${BASE}/scheduling/thumb?src=${encodeURIComponent('/uploads/../server.mjs')}`)).status, 404);
+  assert.equal((await fetch(`${BASE}/scheduling/thumb?src=${encodeURIComponent('/uploads/videos/nao-existe.mp4')}`)).status, 404);
+
+  // gerar com roteiro: o texto do roteiro, o nicho e a linha editorial vão para a IA; nada de imagem
+  let before = aiRequests.length;
+  r = await api('POST', '/scheduling/caption/generate', { client_id: ids.cliMin, kind: 'conteudo', id: ids.taskCap });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.fonte, 'roteiro');
+  assert.match(r.json.caption, /^Legenda gerada \d+ \(0 imagens\)/);
+  let sent = aiRequests[before];
+  let sentText = sent.messages[0].content.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+  assert.match(sentText, /clareamento em uma sessão, sem dor/);
+  assert.match(sentText, /Nicho: Odontologia/);
+  assert.match(sentText, /Tom acolhedor, foco em prevenção/);
+  assert.equal(sent.output_config.format.type, 'json_schema', 'saída JSON');
+  assert.match(sent.system, /não invente preço/i);
+
+  // sem roteiro: a IA recebe 3 quadros do vídeo (sem Whisper, sem fala)
+  await pool.query(`UPDATE content_tasks SET script_id = NULL WHERE id = $1`, [ids.taskCap]);
+  before = aiRequests.length;
+  r = await api('POST', '/scheduling/caption/generate', { client_id: ids.cliMin, kind: 'conteudo', id: ids.taskCap });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.fonte, 'video');
+  sent = aiRequests[before];
+  const imgs = sent.messages[0].content.filter((b) => b.type === 'image');
+  assert.equal(imgs.length, 3, 'início, meio e fim do vídeo');
+  assert.equal(imgs[0].source.media_type, 'image/jpeg');
+  assert.match(sent.messages[0].content.map((b) => b.text || '').join(''), /Duração do vídeo: 4 s/);
+  r = await api('POST', '/scheduling/caption/generate', { client_id: ids.cliMin, kind: 'conteudo', id: ids.taskCap }, { auth: otherToken });
+  assert.equal(r.status, 403, 'quem não tem o módulo não gera');
+  r = await api('POST', '/scheduling/caption/generate', { client_id: ids.cliMin, kind: 'conteudo', id: ids.taskCap }, { city: 'uruacu' });
+  assert.equal(r.status, 404, 'cliente de outra cidade');
+
+  // guardar a legenda sem data: aparece no material; agendar manual leva a legenda junto
+  r = await api('POST', '/scheduling/caption', { client_id: ids.cliMin, kind: 'conteudo', id: ids.taskCap, caption: 'Legenda revisada ✨' });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  r = await materials(ids.cliMin);
+  assert.equal(r.json.unscheduled.find((i) => i.key === `conteudo:${ids.taskCap}`).caption, 'Legenda revisada ✨');
+  r = await api('POST', '/scheduling/caption', { client_id: ids.cliMin, kind: 'conteudo', id: ids.taskCap, caption: 'x'.repeat(2201) });
+  assert.equal(r.status, 400, 'limite do Instagram');
+  r = await api('POST', '/scheduling/schedule', { client_id: ids.cliNoAcc, kind: 'conteudo', id: ids.taskCap, date: addDays(today, 4), time: '11:00', mode: 'manual', caption: 'x' });
+  assert.equal(r.status, 404, 'material de outro cliente');
+  r = await api('POST', '/scheduling/schedule', { client_id: ids.cliMin, kind: 'conteudo', id: ids.taskCap, date: addDays(today, 4), time: '11:00', mode: 'manual', platform: 'instagram', publish_type: 'reels', caption: 'Legenda final do manual' });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  r = await materials(ids.cliMin);
+  const capScheduled = r.json.scheduled.find((i) => i.key === `conteudo:${ids.taskCap}`);
+  assert.equal(capScheduled.mode, 'manual');
+  assert.equal(capScheduled.caption, 'Legenda final do manual', 'legenda do manual guardada');
+  // automático: a legenda vai para o post; mudar a legenda depois atualiza o post pendente
+  r = await api('POST', '/scheduling/schedule', { client_id: ids.cliMin, kind: 'conteudo', id: ids.taskCap, date: addDays(today, 4), time: '11:00', mode: 'auto', platform: 'instagram', publish_type: 'reels', caption: 'Legenda do automático', media_url: MEDIA('clareamento.mp4') });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  r = await api('POST', '/scheduling/caption', { client_id: ids.cliMin, kind: 'conteudo', id: ids.taskCap, caption: 'Legenda corrigida depois' });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal((await row(`SELECT caption FROM scheduled_posts WHERE content_task_id = $1 AND status = 'agendado'`, [ids.taskCap])).caption, 'Legenda corrigida depois');
+  await api('POST', '/scheduling/cancel', { client_id: ids.cliMin, kind: 'conteudo', id: ids.taskCap });
+  ok('legenda: guardar (manual e automático), gerar com IA pelo roteiro ou pelos quadros do vídeo; miniatura do vídeo no calendário');
+
   console.log('\nTodos os testes de agendamentos passaram.');
 } catch (error) {
   console.error('\nFALHOU:', error);
@@ -608,5 +719,6 @@ try {
   process.exitCode = 1;
 } finally {
   stop();
+  fakeAi.close();
   await pool.end();
 }

@@ -26,6 +26,7 @@ import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerSchedulingRoutes } from './scheduling.mjs';
+import { createPostCaption } from './lib/postCaption.mjs';
 import { createPulsePlus, neutralizeAvatars } from './pulsePlus.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
 import { registerAssistant } from './assistant/index.mjs';
@@ -20382,6 +20383,8 @@ registerAgentDesignRoutes(app, {
 // ─── Agendamentos (calendário de postagem por cliente; acesso: Pulse Plus) ──
 const scheduling = registerSchedulingRoutes(app, {
   pool,
+  // legenda pela IA (roteiro, quadros e fala do vídeo, arte) e miniatura dos vídeos do calendário
+  postCaption: createPostCaption({ resolveAiConfig, resolveAiModel, uploadRoots, allowedOrigins: MEDIA_ALLOWED_ORIGINS }),
   verifyUser,
   getLinkedUserIds,
   hasPulsePlus: pulsePlus.hasPulsePlus,

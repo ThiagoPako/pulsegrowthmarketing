@@ -78,7 +78,7 @@ const SchedulingItemChip = forwardRef<HTMLDivElement, Props>(({ item, variant = 
         {...rest}
         title={`${time} · ${item.title} · ${stateLabel}${item.series ? ` · ${item.series.label}` : ''}`}
         className={cn(
-          'group flex w-full min-w-0 items-center gap-1.5 rounded-md border border-l-[3px] border-border/70 bg-card px-1 py-0.5 text-left shadow-sm transition-shadow',
+          'group flex w-full min-w-0 items-center gap-1.5 rounded-md border border-l-[3px] border-border/70 bg-card p-0.5 pr-1 text-left shadow-sm transition-shadow',
           type.border,
           item.ghost && 'opacity-50',
           virtual && 'border-dashed opacity-70 shadow-none',
@@ -86,7 +86,8 @@ const SchedulingItemChip = forwardRef<HTMLDivElement, Props>(({ item, variant = 
           className,
         )}
       >
-        <MaterialThumb item={item} className="h-6 w-6 rounded" />
+        {/* miniatura em pé (formato do reels), grande o bastante para reconhecer o vídeo no mês */}
+        <MaterialThumb item={item} className="h-10 w-8 rounded" />
         <div className="min-w-0 flex-1 leading-tight">
           <div className={cn('truncate text-[11px] font-medium text-foreground', item.ghost && 'line-through')}>{item.title}</div>
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground">

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, BellRing, CalendarClock, Copy, Facebook, Instagram, Loader2, Repeat2, Trash2 } from 'lucide-react';
+import { AlertTriangle, BellRing, CalendarClock, Check, Copy, Facebook, Instagram, Loader2, Repeat2, Sparkles, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,9 @@ import {
 import {
   DEFAULT_BUTTON_TEXTS, defaultRepeat, rememberTime, repeatFromRule, repeatPayload, repeatProblem, type RepeatDraft,
 } from '@/lib/storySeries';
-import { cancelSchedule, rescheduleMaterial, scheduleMaterial, SchedulingApiError } from '@/services/schedulingApi';
+import {
+  cancelSchedule, generateCaption, rescheduleMaterial, saveCaption, scheduleMaterial, SchedulingApiError, type CaptionSource,
+} from '@/services/schedulingApi';
 import {
   cancelStoryOccurrence, cancelStorySeries, createStorySeries, updateStoryOccurrence, updateStorySeries,
 } from '@/services/storiesApi';
@@ -85,6 +87,13 @@ function Segmented<T extends string>({ value, options, onChange, disabled, label
   );
 }
 
+const CAPTION_SOURCES: Record<CaptionSource, string> = {
+  roteiro: 'a partir do roteiro',
+  video: 'a partir do vídeo (imagens e fala)',
+  arte: 'a partir da arte',
+  titulo: 'a partir do título e do nicho do cliente',
+};
+
 async function copyText(text: string) {
   try {
     await navigator.clipboard.writeText(text);
@@ -118,6 +127,9 @@ export default function ScheduleDialog({
   const [repeat, setRepeat] = useState<RepeatDraft>(defaultRepeat(''));
   const [scope, setScope] = useState<Scope>('one');
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [savingCaption, setSavingCaption] = useState(false);
+  const [savedCaption, setSavedCaption] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
 
   const initial = useMemo(() => {
@@ -161,7 +173,37 @@ export default function ScheduleDialog({
     setRepeat(initial.repeat);
     setScope(initial.scope);
     setSaving(false);
+    setSavedCaption(initial.caption);
   }, [initial]);
+
+  const generate = async () => {
+    if (!item) return;
+    setGenerating(true);
+    try {
+      const result = await generateCaption({ client_id: clientId, kind: item.kind, id: item.id });
+      setCaption(result.caption);
+      toast.success(`Legenda criada ${CAPTION_SOURCES[result.fonte] || ''}`.trim(), { description: 'Revise antes de salvar.' });
+    } catch (err) {
+      toast.error((err as Error).message || 'Não foi possível gerar a legenda');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Guarda só a legenda (sem mexer na data): serve para o material ainda sem data e para o manual
+  const storeCaption = async () => {
+    if (!item) return;
+    setSavingCaption(true);
+    try {
+      await saveCaption({ client_id: clientId, kind: item.kind, id: item.id, caption });
+      setSavedCaption(caption);
+      toast.success('Legenda salva');
+    } catch (err) {
+      toast.error((err as Error).message || 'Não foi possível salvar a legenda');
+    } finally {
+      setSavingCaption(false);
+    }
+  };
 
   // Link do cliente salvo com o diálogo aberto: entra no story que ainda não tinha link próprio
   useEffect(() => {
@@ -466,31 +508,52 @@ export default function ScheduleDialog({
               <StorySeriesRepeat value={repeat} onChange={setRepeat} startDate={date} time={time} forced={following} />
             )}
 
-            {!isSeriesItem && (mode !== 'manual' || caption) && (
+            {!isSeriesItem && !isStory && (
               <div className="space-y-1">
                 <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="sched-caption" className={cn('text-xs', isStory && 'text-muted-foreground')}>Legenda</Label>
+                  <Label htmlFor="sched-caption" className="text-xs">Legenda</Label>
                   <div className="flex items-center gap-1">
-                    {mode === 'manual' && caption && (
+                    {caption && (
                       <Button type="button" variant="ghost" size="sm" className="h-6 gap-1 px-1.5 text-[11px]" onClick={() => copyText(caption)}>
                         <Copy size={11} /> Copiar
                       </Button>
                     )}
-                    {!isStory && (
-                      <span className={cn('text-[10px] tabular-nums', caption.length > 2200 ? 'text-destructive' : 'text-muted-foreground')}>{caption.length}/2200</span>
+                    {!readOnly && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={generate}
+                        disabled={generating}
+                        className="h-6 gap-1 border-primary/40 px-2 text-[11px] text-primary hover:bg-primary/10 hover:text-primary"
+                        title="A IA lê o roteiro; sem roteiro, assiste ao vídeo (ou olha a arte) e escreve no tom do nicho do cliente"
+                      >
+                        {generating ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                        {generating ? 'Gerando…' : caption ? 'Gerar outra' : 'Gerar com IA'}
+                      </Button>
                     )}
+                    <span className={cn('text-[10px] tabular-nums', caption.length > 2200 ? 'text-destructive' : 'text-muted-foreground')}>{caption.length}/2200</span>
                   </div>
                 </div>
                 <Textarea
                   id="sched-caption"
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
-                  rows={isStory ? 2 : 5}
-                  disabled={readOnly || isStory}
-                  readOnly={mode === 'manual'}
-                  placeholder={isStory ? '' : 'Escreva a legenda'}
-                  className={cn('text-sm', isStory && 'resize-none opacity-60')}
+                  rows={6}
+                  disabled={readOnly || generating}
+                  placeholder="Escreva a legenda ou clique em Gerar com IA"
+                  className={cn('text-sm', generating && 'animate-pulse')}
                 />
+                {generating && (
+                  <p className="text-[11px] text-muted-foreground">Lendo o roteiro ou assistindo ao vídeo… pode levar até 1 minuto.</p>
+                )}
+                {!readOnly && savedCaption !== null && caption !== savedCaption && (
+                  <div className="flex justify-end">
+                    <Button type="button" variant="ghost" size="sm" onClick={storeCaption} disabled={savingCaption || caption.length > 2200} className="h-6 gap-1 px-2 text-[11px]">
+                      {savingCaption ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Salvar só a legenda
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 

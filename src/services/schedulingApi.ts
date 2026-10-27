@@ -69,3 +69,15 @@ export async function rescheduleMaterial(input: {
 export async function cancelSchedule(input: { client_id: string; kind: SchedulingKind; id: string }): Promise<void> {
   await call('scheduling/cancel', { body: input });
 }
+
+/** Guarda a legenda do material (vale também no modo manual e para o post automático pendente). */
+export async function saveCaption(input: { client_id: string; kind: SchedulingKind; id: string; caption: string; generated?: boolean }): Promise<void> {
+  await call('scheduling/caption', { body: input });
+}
+
+export type CaptionSource = 'roteiro' | 'video' | 'arte' | 'titulo';
+
+/** Legenda escrita pela IA a partir do roteiro, do próprio vídeo (quadros e fala) ou da arte. */
+export async function generateCaption(input: { client_id: string; kind: SchedulingKind; id: string }): Promise<{ caption: string; fonte: CaptionSource }> {
+  return call('scheduling/caption/generate', { body: input });
+}

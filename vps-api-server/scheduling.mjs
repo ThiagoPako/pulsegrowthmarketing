@@ -15,12 +15,16 @@
 //   POST /api/scheduling/schedule    { client_id, kind, id, date, time, mode, platform, publish_type, caption, story_link, ... }
 //   POST /api/scheduling/reschedule  { client_id, kind, id, date, time?, allow_past? }  sem time: mantém a hora
 //   POST /api/scheduling/cancel      { client_id, kind, id }
+//   POST /api/scheduling/caption     { client_id, kind, id, caption }  guarda a legenda (também no modo manual)
+//   POST /api/scheduling/caption/generate { client_id, kind, id }      legenda pela IA (roteiro, vídeo ou arte: lib/postCaption.mjs)
+//   GET  /api/scheduling/thumb?src=/uploads/…   miniatura (quadro JPEG) de um vídeo de /uploads, sem login (o vídeo já é público)
 // kind: conteudo (content_tasks) | arte (design_tasks) | portal (client_portal_contents) | post (scheduled_posts sem material)
 // Stories (link do cliente, "Lembrete com link" e repetição): storySeries.mjs, registrado no fim deste arquivo.
 // As ocorrências de uma repetição aparecem como itens 'post' (cada uma arrasta sozinha); as datas além da janela
 // já gerada aparecem como 'serie' (previstas, só abrem a repetição).
 //
-// Banco (aditivo): posting_at em content_tasks, design_tasks e client_portal_contents; design_task_id e
+// Banco (aditivo): scheduling_captions (legenda escrita ou gerada antes de existir o post, por material);
+// posting_at em content_tasks, design_tasks e client_portal_contents; design_task_id e
 // portal_content_id em scheduled_posts; gatilhos que mantêm posting_at igual ao que as outras telas
 // gravam (Entregas Social, Kanban de Conteúdo, Estúdio e a fila de postagem).
 
@@ -94,6 +98,10 @@ function makeMediaHelpers(publicAppUrl) {
     const u = absolute(url);
     if (!u) return null;
     if (IMAGE_RE.test(u)) return u;
+    // vídeo das nossas pastas: um quadro gerado no servidor (GET /api/scheduling/thumb)
+    if (VIDEO_RE.test(u) && u.startsWith(`${base}/uploads/`)) {
+      return `${base}/api/scheduling/thumb?src=${encodeURIComponent(u.slice(base.length))}`;
+    }
     const id = driveFileId(u);
     return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w320` : null;
   };
@@ -207,7 +215,8 @@ export function seriesInfo(series, slotAt) {
  * Período em dias de Brasília (from/to inclusivos).
  */
 export function buildMaterials(rows, { from, to, publicAppUrl, now = Date.now() } = {}) {
-  const { tasks = [], designs = [], portals = [], deliveries = [], posts = [], scripts = [], series = [] } = rows;
+  const { tasks = [], designs = [], portals = [], deliveries = [], posts = [], scripts = [], series = [], captions = [] } = rows;
+  const savedCaption = new Map(captions.map((c) => [`${c.kind}:${c.material_id}`, c.caption || '']));
   const media = makeMediaHelpers(publicAppUrl);
   const inRange = (when) => !!when && when.date >= from && when.date <= to;
 
@@ -317,7 +326,7 @@ export function buildMaterials(rows, { from, to, publicAppUrl, now = Date.now() 
       media_url: mediaUrl,
       media_kind: media.kindOf(mediaUrl) || 'video',
       media_items: mediaUrl ? [mediaUrl] : [],
-      caption: current?.caption || scriptCaption.get(String(t.script_id)) || '',
+      caption: current?.caption || savedCaption.get(`conteudo:${id}`) || scriptCaption.get(String(t.script_id)) || '',
       platform_label: delivery?.platform || null,
     };
     materialInfo.set(base.key, { thumb_url: base.thumb_url, media_kind: base.media_kind });
@@ -374,7 +383,7 @@ export function buildMaterials(rows, { from, to, publicAppUrl, now = Date.now() 
       media_url: urls[0] || null,
       media_kind: 'image',
       media_items: urls,
-      caption: current?.caption || '',
+      caption: current?.caption || savedCaption.get(`arte:${id}`) || '',
       platform_label: null,
     };
     materialInfo.set(base.key, { thumb_url: base.thumb_url, media_kind: base.media_kind });
@@ -422,7 +431,7 @@ export function buildMaterials(rows, { from, to, publicAppUrl, now = Date.now() 
       media_url: fileUrl,
       media_kind: kind || 'video',
       media_items: fileUrl ? [fileUrl] : [],
-      caption: current?.caption || '',
+      caption: current?.caption || savedCaption.get(`portal:${id}`) || '',
       platform_label: null,
     };
     materialInfo.set(base.key, { thumb_url: base.thumb_url, media_kind: base.media_kind });
@@ -534,7 +543,7 @@ export function registerSchedulingRoutes(app, deps) {
   const {
     pool, verifyUser, getLinkedUserIds, resolveActiveCity, cityVisibilityExpression,
     ensureSocialPostsSchema, getConnectedAccounts, sanitizeAccount, duplicatedPlatformAccounts,
-    prepareScheduledPost, onSchemaChange, publicAppUrl, logger = console, hasPulsePlus,
+    prepareScheduledPost, onSchemaChange, publicAppUrl, logger = console, hasPulsePlus, postCaption = null,
   } = deps;
   let stories = null; // storySeries.mjs (registrado no fim)
   const historyHasCity = { task_history: false, design_task_history: false };
@@ -578,6 +587,19 @@ export function registerSchedulingRoutes(app, deps) {
         PRIMARY KEY (module, user_id)
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS scheduling_captions (
+        kind TEXT NOT NULL,
+        material_id UUID NOT NULL,
+        client_id UUID NOT NULL,
+        caption TEXT NOT NULL DEFAULT '',
+        generated BOOLEAN NOT NULL DEFAULT false,
+        updated_by UUID,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (kind, material_id)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_scheduling_captions_client ON scheduling_captions (client_id)`);
     const changed = new Set();
     for (const [table, column, type] of [
       ['content_tasks', 'posting_at', 'TIMESTAMPTZ'],
@@ -931,7 +953,7 @@ export function registerSchedulingRoutes(app, deps) {
     const designIds = designs.rows.map((d) => d.id);
     const portalIds = portals.rows.map((p) => p.id);
     const scriptIds = [...new Set(tasks.rows.map((t) => t.script_id).filter(Boolean))];
-    const [deliveries, posts, scripts, series] = await Promise.all([
+    const [deliveries, posts, scripts, series, captions] = await Promise.all([
       taskIds.length
         ? pool.query(
           `SELECT id, content_task_id, status, posted_at, scheduled_time, platform, created_at, updated_at
@@ -958,10 +980,11 @@ export function registerSchedulingRoutes(app, deps) {
         ? pool.query(`SELECT id, caption FROM scripts WHERE id = ANY($1::uuid[])`, [scriptIds])
         : { rows: [] },
       pool.query(`SELECT * FROM story_series WHERE client_id = $1 ORDER BY created_at`, [clientId]),
+      pool.query(`SELECT kind, material_id, caption FROM scheduling_captions WHERE client_id = $1`, [clientId]).catch(() => ({ rows: [] })),
     ]);
     return {
       tasks: tasks.rows, designs: designs.rows, portals: portals.rows,
-      deliveries: deliveries.rows, posts: posts.rows, scripts: scripts.rows, series: series.rows,
+      deliveries: deliveries.rows, posts: posts.rows, scripts: scripts.rows, series: series.rows, captions: captions.rows,
     };
   }
 
@@ -1364,12 +1387,135 @@ export function registerSchedulingRoutes(app, deps) {
         const modeLabel = mode !== 'auto' ? 'manual'
           : storyMode === 'lembrete' ? `${platformLabel(prepared.platform)} (lembrete de story)`
             : `${platformLabel(prepared.platform)} (automático)`;
+        // a legenda fica guardada no material também (o manual não cria post; o auto volta a ela se cancelar)
+        if (kind !== 'post' && body.publish_type !== 'stories' && typeof body.caption === 'string') {
+          await saveCaption(db, { kind, id: material.id, clientId: client.id, caption: body.caption, userId: user?.id });
+        }
         await markScheduled(db, { kind, material, client, user, date, time, whenIso, detail: `${formatBrt(date, time)} · ${modeLabel}` });
         return { post: postSummary(post), when: { at: whenIso, date, time }, mode };
       });
       res.json({ success: true, ...result });
     } catch (error) {
       sendError(res, error, logger);
+    }
+  });
+
+  // ── Legenda: guardar e gerar ──
+  async function saveCaption(db, { kind, id, clientId, caption, userId, generated = false }) {
+    await db.query(
+      `INSERT INTO scheduling_captions (kind, material_id, client_id, caption, generated, updated_by, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, now())
+       ON CONFLICT (kind, material_id) DO UPDATE
+         SET caption = EXCLUDED.caption, generated = EXCLUDED.generated, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+      [kind, id, clientId, String(caption || '').slice(0, 2200), generated, userId || null]
+    );
+  }
+
+  app.post('/api/scheduling/caption', async (req, res) => {
+    try {
+      const { user, city } = await requireModule(req);
+      const body = req.body || {};
+      const client = await loadClient(body.client_id, city);
+      const { kind, id } = readTarget(body);
+      const caption = String(body.caption ?? '');
+      if (caption.length > 2200) throw httpError(400, 'A legenda passou de 2.200 caracteres (limite do Instagram)');
+      await withTransaction(async (db) => {
+        const material = await lockMaterial(db, kind, id, client.id);
+        if (kind === 'post') {
+          if (!['agendado', 'erro'].includes(material.status)) throw httpError(409, 'Só dá para mudar a legenda de posts agendados ou com erro.');
+          await db.query(`UPDATE scheduled_posts SET caption = $2, updated_at = now() WHERE id = $1`, [material.id, caption]);
+          return;
+        }
+        await saveCaption(db, { kind, id: material.id, clientId: client.id, caption, userId: user?.id, generated: !!body.generated });
+        // post automático pendente do material: a legenda nova vale para ele também
+        const posts = withoutSeries(await lockLinkedPosts(db, await linksOf(db, kind, material)));
+        const pending = posts.filter((p) => ['agendado', 'erro'].includes(p.status) && p.publish_type !== 'stories').map((p) => p.id);
+        if (pending.length) await db.query(`UPDATE scheduled_posts SET caption = $2, updated_at = now() WHERE id = ANY($1::uuid[])`, [pending, caption]);
+      });
+      res.json({ success: true, caption });
+    } catch (error) {
+      sendError(res, error, logger);
+    }
+  });
+
+  /** Tudo que a IA precisa saber do material (roteiro, textos e a mídia) e do cliente. */
+  async function captionContext(kind, id, clientId) {
+    const media = makeMediaHelpers(publicAppUrl);
+    const { rows: [client] } = await pool.query(
+      `SELECT c.company_name, c.niche, c.editorial, c.city,
+              (SELECT sa.username FROM social_accounts sa WHERE sa.client_id = c.id AND sa.platform = 'instagram' AND sa.username IS NOT NULL LIMIT 1) AS instagram
+         FROM clients c WHERE c.id = $1`, [clientId]
+    ).catch(() => pool.query(`SELECT company_name, niche, editorial, city FROM clients WHERE id = $1`, [clientId]));
+    if (kind === 'conteudo') {
+      const { rows: [t] } = await pool.query(
+        `SELECT t.title, t.description, t.content_type, t.edited_video_link, s.title AS s_title, s.content AS s_content, s.caption AS s_caption,
+                (SELECT pc.file_url FROM client_portal_contents pc WHERE pc.content_task_id = t.id AND pc.file_url IS NOT NULL ORDER BY pc.created_at DESC LIMIT 1) AS portal_file
+           FROM content_tasks t LEFT JOIN scripts s ON s.id = t.script_id WHERE t.id = $1 AND t.client_id = $2`, [id, clientId]
+      ).catch(() => pool.query(
+        `SELECT t.title, t.description, t.content_type, t.edited_video_link, s.title AS s_title, s.content AS s_content, s.caption AS s_caption, NULL AS portal_file
+           FROM content_tasks t LEFT JOIN scripts s ON s.id = t.script_id WHERE t.id = $1 AND t.client_id = $2`, [id, clientId]));
+      if (!t) throw httpError(404, 'Material não encontrado para este cliente');
+      const portalFile = media.absolute(t.portal_file);
+      return {
+        client,
+        material: {
+          kind, title: t.title, description: t.description, content_type: t.content_type,
+          script: t.s_content ? { title: t.s_title, content: t.s_content, caption: t.s_caption } : null,
+          media_url: portalFile && media.kindOf(portalFile) ? portalFile : media.absolute(t.edited_video_link) || portalFile,
+        },
+      };
+    }
+    if (kind === 'arte') {
+      const { rows: [d] } = await pool.query(
+        `SELECT title, description, format_type, copy_text, attachment_url, mockup_url FROM design_tasks WHERE id = $1 AND client_id = $2`, [id, clientId]
+      );
+      if (!d) throw httpError(404, 'Material não encontrado para este cliente');
+      return { client, material: { kind, title: d.title, description: d.description, format: d.format_type, copy_text: d.copy_text, media_url: media.absolute(d.attachment_url || d.mockup_url) } };
+    }
+    if (kind === 'portal') {
+      const { rows: [p] } = await pool.query(`SELECT title, content_type, file_url FROM client_portal_contents WHERE id = $1 AND client_id = $2`, [id, clientId]);
+      if (!p) throw httpError(404, 'Material não encontrado para este cliente');
+      return { client, material: { kind, title: p.title, content_type: p.content_type, media_url: media.absolute(p.file_url) } };
+    }
+    const { rows: [sp] } = await pool.query(`SELECT publish_type, media_url, caption FROM scheduled_posts WHERE id = $1 AND client_id = $2`, [id, clientId]);
+    if (!sp) throw httpError(404, 'Material não encontrado para este cliente');
+    return { client, material: { kind, title: (String(sp.caption || '').split('\n')[0] || 'Post').slice(0, 80), format: sp.publish_type, media_url: media.absolute(sp.media_url) } };
+  }
+
+  app.post('/api/scheduling/caption/generate', async (req, res) => {
+    try {
+      const { city } = await requireModule(req);
+      if (!postCaption) throw httpError(503, 'Gerar legenda não está disponível neste servidor');
+      const body = req.body || {};
+      const client = await loadClient(body.client_id, city);
+      const { kind, id } = readTarget(body);
+      const ctx = await captionContext(kind, id, client.id);
+      const result = await postCaption.generate(ctx);
+      res.json({ success: true, ...result });
+    } catch (error) {
+      // erro da API do Claude (chave, saldo, fora do ar): mensagem curta para a tela; o detalhe vai para o log
+      if (error?.status && error?.error && !error.statusCode) {
+        logger.error('[agendamentos] legenda (Claude):', error.message);
+        return sendError(res, httpError(502, `A IA não respondeu (${error.status}). Confira a chave do Claude em Integrações → APIs.`), logger);
+      }
+      if (error?.status && !error.statusCode) error.statusCode = error.status;
+      sendError(res, error, logger);
+    }
+  });
+
+  // Miniatura de vídeo de /uploads (o <img> não manda login; o vídeo em si já é público)
+  app.get('/api/scheduling/thumb', async (req, res) => {
+    try {
+      if (!postCaption) return res.status(404).end();
+      const src = String(req.query?.src || '');
+      if (!src.startsWith('/uploads/') || src.length > 1024) return res.status(400).end();
+      const file = await postCaption.thumbnail(src);
+      if (!file) return res.status(404).end();
+      res.set('Cache-Control', 'public, max-age=604800, immutable');
+      res.type('image/jpeg').sendFile(file);
+    } catch (error) {
+      logger.warn?.('[agendamentos] miniatura:', error.message);
+      if (!res.headersSent) res.status(404).end();
     }
   });
 

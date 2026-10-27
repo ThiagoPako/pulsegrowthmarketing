@@ -70,6 +70,9 @@ export default function UnscheduledPanel({ items, onPick, draggable, className }
           <h2 className="text-sm font-bold text-foreground">Não agendados</h2>
           <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-bold tabular-nums text-amber-700 dark:text-amber-300">{items.length}</span>
         </div>
+        {draggable && items.length > 0 && (
+          <p className="text-[11px] text-muted-foreground">Arraste até um dia do calendário para agendar.</p>
+        )}
         {items.length > 4 && (
           <div className="relative">
             <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />

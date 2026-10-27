@@ -1265,33 +1265,19 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     }
   });
 
-  app.post('/api/agent/tasks/:id/move', async (req, res) => {
-    // Autentica e valida ANTES de pegar a conexão da transação: o verifyAgent usa outra conexão
-    // do mesmo pool, e 10 pedidos simultâneos (até com chave falsa) travavam a API inteira.
-    let agent;
-    let column;
-    let reason;
-    let notes;
-    try {
-      agent = await verifyAgent(req);
-      if (agent.role !== 'chefe') return res.status(403).json({ error: 'Apenas a chefe move cards' });
-      column = String(req.body?.column || '');
-      if (!MOVABLE.has(column)) {
-        return res.status(400).json({ error: 'Coluna permitida: edicao, revisao ou alteracao (enviar ao cliente é decisão humana)' });
-      }
-      reason = String(req.body?.reason || '').slice(0, 500) || null;
-      notes = req.body?.adjustment_notes != null ? String(req.body.adjustment_notes).slice(0, 4000) : null;
-    } catch (error) {
-      return sendError(res, error);
+  // Move um card do fluxo de edição (Edição, Revisão, Alteração) gravando o mesmo que src/lib/contentTaskSync.ts.
+  // Usado pela chefe (rota abaixo) e pelo Assistente PULSE (ordem pelo WhatsApp). userId = quem fica no histórico.
+  async function moveEditCard(taskId, column, { userId = null, reason = null, notes = null } = {}) {
+    if (!MOVABLE.has(column)) {
+      throw Object.assign(new Error('Coluna permitida: edicao, revisao ou alteracao (enviar ao cliente é decisão humana)'), { status: 400 });
     }
-
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       const { rows } = await client.query(
         `SELECT t.*, c.company_name AS client_name FROM content_tasks t LEFT JOIN clients c ON c.id = t.client_id
           WHERE t.id = $1 FOR UPDATE OF t`,
-        [req.params.id]
+        [taskId]
       );
       const task = rows[0];
       if (!task) throw Object.assign(new Error('Card não encontrado'), { status: 404 });
@@ -1367,7 +1353,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
                  (client_id, content_type, title, description, status, delivered_at, recording_id, script_id, created_by, content_task_id)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
               [task.client_id, task.content_type, task.title, task.description || null, social, brazilDateString(now),
-                task.recording_id || null, task.script_id || null, agent.userId, task.id]
+                task.recording_id || null, task.script_id || null, userId, task.id]
             );
           }
         } else {
@@ -1399,7 +1385,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             await client.query(
               `INSERT INTO client_portal_contents (client_id, title, content_type, file_url, status, season_month, season_year, uploaded_by${linked ? ', content_task_id' : ''})
                VALUES ($1, $2, $3, $4, 'revisao_interna', $5, $6, $7${linked ? ', $8' : ''})`,
-              [task.client_id, task.title, task.content_type, task.edited_video_link, month, year, task.edited_by || agent.userId,
+              [task.client_id, task.title, task.content_type, task.edited_video_link, month, year, task.edited_by || userId,
                 ...(linked ? [task.id] : [])]
             );
           }
@@ -1418,14 +1404,41 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           [task.edited_by, `${urgent}Ajuste solicitado`, `"${task.title}" (${task.client_name || ''}) precisa de ajustes`]);
       }
       await client.query('INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, $3, $4)',
-        [task.id, agent.userId, MOVE_ACTION[column], [reason, notes ? `Ajustes: ${notes}` : null].filter(Boolean).join(' · ') || null]);
+        [task.id, userId, MOVE_ACTION[column], [reason, notes ? `Ajustes: ${notes}` : null].filter(Boolean).join(' · ') || null]);
       await client.query('COMMIT');
-      res.json({ ok: true, from: task.kanban_column, to: column });
+      return { from: task.kanban_column, to: column, title: task.title, client_name: task.client_name || null };
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
-      sendError(res, error);
+      throw error;
     } finally {
       client.release();
+    }
+  }
+
+  app.post('/api/agent/tasks/:id/move', async (req, res) => {
+    // Autentica e valida ANTES de pegar a conexão da transação: o verifyAgent usa outra conexão
+    // do mesmo pool, e 10 pedidos simultâneos (até com chave falsa) travavam a API inteira.
+    let agent;
+    let column;
+    let reason;
+    let notes;
+    try {
+      agent = await verifyAgent(req);
+      if (agent.role !== 'chefe') return res.status(403).json({ error: 'Apenas a chefe move cards' });
+      column = String(req.body?.column || '');
+      if (!MOVABLE.has(column)) {
+        return res.status(400).json({ error: 'Coluna permitida: edicao, revisao ou alteracao (enviar ao cliente é decisão humana)' });
+      }
+      reason = String(req.body?.reason || '').slice(0, 500) || null;
+      notes = req.body?.adjustment_notes != null ? String(req.body.adjustment_notes).slice(0, 4000) : null;
+    } catch (error) {
+      return sendError(res, error);
+    }
+
+    try {
+      res.json({ ok: true, ...(await moveEditCard(req.params.id, column, { userId: agent.userId, reason, notes })) });
+    } catch (error) {
+      sendError(res, error);
     }
   });
 
@@ -1922,5 +1935,5 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
   });
 
   // usado pelas rotas de design (agentDesignRoutes.mjs): mesma chave, pausa e esquema
-  return { verifyAgent, pauseStateFor, ensureAgentSchema, agentSlug };
+  return { verifyAgent, pauseStateFor, ensureAgentSchema, agentSlug, moveEditCard };
 }

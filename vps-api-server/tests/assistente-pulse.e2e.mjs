@@ -56,9 +56,17 @@ async function waitFor(fn, label, timeout = 20_000) {
 const received = [];
 let classification = { demandas: [] };
 let seq = 0;
+// a mensagem do usuário vem como texto ou, a última (ponto de cache), como bloco de texto
+const userText = (m) => {
+  if (m.role !== 'user') return null;
+  if (typeof m.content === 'string') return m.content;
+  const blocks = Array.isArray(m.content) ? m.content : [];
+  return blocks.length && blocks.every((b) => b.type === 'text') ? blocks.map((b) => b.text).join('') : null;
+};
 const lastCommand = (messages) => {
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'user' && typeof messages[i].content === 'string') return { index: i, text: messages[i].content };
+    const text = userText(messages[i]);
+    if (text != null) return { index: i, text };
   }
   return { index: -1, text: '' };
 };
@@ -75,6 +83,71 @@ function script(body) {
   const use = (name, input) => [{ type: 'tool_use', id: `toolu_${++seq}`, name, input }, 'tool_use'];
   const say = (msg) => [{ type: 'text', text: msg }, 'end_turn'];
   const lastResult = results.at(-1);
+  const useMany = (calls) => [calls.map(([name, input]) => ({ type: 'tool_use', id: `toolu_${++seq}`, name, input })), 'tool_use'];
+  if (t.includes('marceli')) {
+    if (step === 0) return use('mandar_recado_agente', { agentes: ['Marceli'], recado: 'Prioriza hoje o card Clareamento em 1 sessão da Clínica Sorriso.', clareza: 'clara' });
+    return say(parse(lastResult.content)?.status === 'feito' ? 'Pronto, mandei para a Marcely.' : 'Não consegui mandar.');
+  }
+  if (t.includes('pausa os agentes')) {
+    if (step === 0) return use('pausar_retomar_agentes', { pausar: true, motivo: 'reunião', clareza: 'clara' });
+    return say('Agentes pausados.');
+  }
+  if (t.includes('ajuste no clareamento')) {
+    if (step === 0) return use('buscar_cards', { kanban: 'conteudo', texto: 'clareamento' });
+    if (step === 1) {
+      const card = parse(lastResult.content)?.cards?.[0];
+      return use('mover_card_video', { card_id: card.card_id, coluna: 'alteracao', ajustes: 'Cortar os 3 primeiros segundos e trocar a música.', clareza: 'clara' });
+    }
+    const r = parse(lastResult.content);
+    return say(r.status === 'feito' ? `✅ ${r.mensagem}` : `Não deu: ${r.erro}`);
+  }
+  if (t.includes('whatsapp da clinica e marca')) {
+    if (step === 0) return use('buscar_cliente', { nome: 'clinica sorriso' });
+    if (step === 1) {
+      const found = parse(lastResult.content)?.encontrados?.[0];
+      return useMany([
+        ['atualizar_cliente', { cliente_id: found.id, whatsapp: '(62) 98888-7777', nicho: 'Odontologia', clareza: 'duvida' }],
+        ['marcar_gravacao', { cliente_id: found.id, data: '2026-11-06', hora: '9h', tipo: 'extra', clareza: 'duvida' }],
+      ]);
+    }
+    return say('Preparei as duas.');
+  }
+  if (t.includes('outra gravação da clinica')) {
+    if (step === 0) return use('buscar_cliente', { nome: 'clinica sorriso' });
+    if (step === 1) return use('marcar_gravacao', { cliente_id: parse(lastResult.content).encontrados[0].id, data: '2026-11-06', hora: '15:00', tipo: 'extra', clareza: 'clara' });
+    const r = parse(lastResult.content);
+    return say(lastResult.is_error ? `Não deu: ${r.erro}` : 'Marcado.');
+  }
+  if (t.includes('cadastra a padaria')) {
+    if (step === 0) return use('cadastrar_cliente', { nome: 'Padaria Pão Quente', cidade: 'uruacu', responsavel: 'Joana', whatsapp: '62 97777-1111', nicho: 'Padaria', clareza: 'clara' });
+    return say(parse(lastResult.content).mensagem);
+  }
+  if (t.includes('arte da clinica')) {
+    if (step === 0) return use('buscar_cards', { kanban: 'design', texto: 'promo' });
+    if (step === 1) {
+      const card = parse(lastResult.content).cards[0];
+      return useMany([
+        ['mover_card_design', { card_id: card.card_id, coluna: 'ajustes', ajustes: 'Logo maior e fundo azul.', clareza: 'clara' }],
+        ['editar_card_design', { card_id: card.card_id, prioridade: 'urgente', prazo: '2026-11-03', responsavel: 'designa', clareza: 'clara' }],
+      ]);
+    }
+    return say(results.slice(-2).map((x) => parse(x.content).mensagem || parse(x.content).erro).join('\n'));
+  }
+  if (t.includes('remarca a gravação')) {
+    if (step === 0) return use('agenda_gravacoes', { cidade: 'minacu', data_inicio: '2026-11-06', dias: 1 });
+    if (step === 1) return use('remarcar_gravacao', { gravacao_id: parse(lastResult.content).gravacoes[0].gravacao_id, data: '2026-11-09', hora: '10:30', clareza: 'clara' });
+    return say(parse(lastResult.content).mensagem || parse(lastResult.content).erro);
+  }
+  if (t.includes('cancela a gravação')) {
+    if (step === 0) return use('agenda_gravacoes', { cidade: 'minacu', data_inicio: '2026-11-09', dias: 1 });
+    if (step === 1) return use('cancelar_gravacao', { gravacao_id: parse(lastResult.content).gravacoes[0].gravacao_id, clareza: 'duvida' });
+    return say('Ok.');
+  }
+  if (t.includes('como estão os agentes')) {
+    if (step === 0) return use('ver_agentes', {});
+    const r = parse(lastResult.content);
+    return say(r.agentes.map((a) => `${a.nome}: ${a.funcao}${a.pausado ? ' (pausado)' : ''}`).join('\n'));
+  }
   if (t.includes('resumo financeiro')) {
     if (step === 0) return use('resumo_financeiro', { cidade: 'minacu', mes: null });
     const r = parse(lastResult.content);
@@ -110,7 +183,7 @@ const fake = http.createServer((req, res) => {
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({
       id: `msg_${received.length}`, type: 'message', role: 'assistant', model: body.model,
-      content: [{ type: 'thinking', thinking: '', signature: `assinatura-${received.length}` }, block],
+      content: [{ type: 'thinking', thinking: '', signature: `assinatura-${received.length}` }, ...(Array.isArray(block) ? block : [block])],
       stop_reason: stop, stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 },
     }));
   });
@@ -278,14 +351,25 @@ try {
   const q2 = received[before + 1];
   assert.equal(q1.url, '/v1/messages?beta=true');
   assert.equal(q1.body.model, 'claude-opus-5-5');
-  assert.deepEqual(q1.body.output_config, { effort: 'medium' });
+  assert.deepEqual(q1.body.output_config, { effort: 'low' }, 'esforço baixo nos comandos: responde mais rápido');
   assert.equal(q1.body.temperature, undefined, 'sem temperature');
   assert.equal(q1.body.thinking, undefined, 'pensamento adaptativo (campo omitido)');
   assert.deepEqual(q1.body.tool_choice, { type: 'auto' });
-  assert.ok(q1.body.tools.every((t) => t.strict === true && t.input_schema.additionalProperties === false), 'ferramentas strict');
+  assert.ok(q1.body.tools.every((t) => t.input_schema.additionalProperties === false), 'esquemas fechados');
+  assert.ok(q1.body.tools.filter((t) => t.strict === true).length <= 20, 'no máximo 20 ferramentas strict por pedido');
+  assert.ok(q1.body.tools.some((t) => t.name === 'lancar_despesa' && t.strict === true), 'as ferramentas antigas seguem strict');
+  // cache do prompt: instruções e a última mensagem marcadas
+  assert.deepEqual(q1.body.system.at(-1).cache_control, { type: 'ephemeral' }, 'instruções em cache');
+  assert.deepEqual(q1.body.messages.at(-1).content.at(-1).cache_control, { type: 'ephemeral' }, 'mensagem em cache');
+  assert.equal(q2.body.messages.at(-1).content.at(-1).type, 'tool_result');
+  assert.deepEqual(q2.body.messages.at(-1).content.at(-1).cache_control, { type: 'ephemeral' }, 'resultado da ferramenta em cache na rodada seguinte');
+  assert.equal(q2.body.messages.filter((m) => Array.isArray(m.content) && m.content.some((b) => b.cache_control)).length, 1, 'um ponto de cache móvel só');
   assert.equal(q1.body.fallbacks, 'default');
   assert.match(String(q1.headers['anthropic-beta']), /server-side-fallback-2026-07-01/);
-  assert.ok(q1.body.system.includes('PULSE') && q1.body.system.includes('IA'), 'system do PULSE');
+  const systemText = q1.body.system.map((b) => b.text).join('');
+  assert.ok(systemText.includes('PULSE') && systemText.includes('IA'), 'system do PULSE');
+  assert.match(systemText, /Kanban de conteúdo/, 'o PULSE conhece o fluxo da agência');
+  assert.match(systemText, /Agentes de IA conectados agora: .*Agente Relatórios \(chefe\)/, 'e os agentes conectados');
   const echoed = q2.body.messages.at(-2);
   assert.equal(echoed.role, 'assistant');
   assert.deepEqual(echoed.content[0], { type: 'thinking', thinking: '', signature: `assinatura-${before + 1}` }, 'bloco de pensamento devolvido inteiro');
@@ -295,7 +379,7 @@ try {
   assert.equal(res.replies[0].connection_id, ids.pulseConn, 'responde pela conexão do PULSE');
   assert.equal(res.replies[0].log_id, null, 'resposta interna (com financeiro) fora do histórico geral do WhatsApp');
   assert.equal((await pool.query(`SELECT count(*)::int AS n FROM assistant_pending_actions`)).rows[0].n, 0, 'consulta não pede confirmação');
-  ok('consulta direta: Opus 5.5, esforço medium, sem temperature, strict, reserva, thinking devolvido intacto, resposta pela fila');
+  ok('consulta direta: Opus 5.5, esforço low, cache do prompt, sem temperature, strict, reserva, thinking devolvido intacto, resposta pela fila');
 
   // ── 4. ação com confirmação: sim executa o payload guardado ──
   res = await say(PHONES.thiago, 'lança uma despesa de 350 de combustível, gasolina do carro da gravação');
@@ -472,7 +556,7 @@ try {
     before = received.length;
     res = await say(PHONES.thiago, '', { mediaType: 'audio', mediaPath: realVoice });
     assert.match(res.last, /^Despesa R\$ 350,00 · Minaçu · Combustível/, res.last);
-    assert.match(received[before].body.messages.at(-1).content, /mensagem de voz transcrita\)\nLança uma despesa de combustível\./);
+    assert.match(userText(received[before].body.messages.at(-1)), /mensagem de voz transcrita\)\nLança uma despesa de combustível\./);
     assert.equal(res.row.result.includes('lancar_despesa'), true);
     assert.equal((await pool.query(`SELECT transcript FROM wa_inbound WHERE media_type = 'audio' ORDER BY received_at DESC LIMIT 1`)).rows[0].transcript, 'Lança uma despesa de combustível.');
     assert.ok(!fs.existsSync(realVoice), 'áudio apagado depois de transcrever');
@@ -481,6 +565,116 @@ try {
   } else {
     console.log('… sem ffmpeg nesta máquina: pulei o teste do áudio com Whisper');
   }
+
+  // ── 10b. PULSE turbinado: ordem para agente, cards, cadastro, agenda; pedido claro executa na hora ──
+  const { rows: [thiagoNumber] } = await pool.query(`SELECT id FROM assistant_numbers WHERE phone = $1`, [PHONES.thiago]);
+  r = await api('PATCH', `/assistant/numbers/${thiagoNumber.id}`, {
+    permissions: ['consultar_financeiro', 'lancar_financeiro', 'inadimplentes', 'relatorios', 'enviar_cliente', 'criar_cards', 'alertas_grupos',
+      'consultar_producao', 'editar_cards', 'agenda', 'cadastro_clientes', 'comandar_agentes'],
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  r = await api('GET', '/assistant/overview');
+  for (const p of ['editar_cards', 'agenda', 'cadastro_clientes', 'comandar_agentes']) assert.ok(r.json.permissions[p], `permissão nova na tela: ${p}`);
+  await pool.query(`UPDATE profiles SET name = 'Marcely Chefe' WHERE id = $1`, [ids.agent1]);
+  await pool.query(`DELETE FROM agent_messages WHERE to_user = ANY($1)`, [[ids.agent1, ids.agent2]]).catch(() => {});
+
+  // ordem para a Marcely (nome mal transcrito): pedido claro → recado entregue na hora, sem "sim"
+  before = received.length;
+  res = await say(PHONES.thiago, 'manda a marceli priorizar o clareamento da clinica');
+  assert.ok(received[before].body.tools.some((t) => t.name === 'mandar_recado_agente' && t.strict === undefined), 'ferramenta nova sem strict');
+  assert.match(res.last, /Pronto, mandei para a Marcely/);
+  const { rows: inbox } = await pool.query(`SELECT * FROM agent_messages WHERE to_user = $1`, [ids.agent1]);
+  assert.equal(inbox.length, 1, 'recado na caixa da Marcely');
+  assert.equal(inbox[0].from_user, ids.admin, 'de quem pediu');
+  assert.match(inbox[0].body, /^\[Ordem pelo WhatsApp · Thiago Admin\] Prioriza hoje o card Clareamento/);
+  const marcelyMail = await agentApi('GET', '/agent/messages');
+  assert.equal(marcelyMail.json.messages.length, 1, 'a Marcely lê pelo "esperar" dela');
+  assert.equal((await pool.query(`SELECT count(*)::int AS n FROM assistant_pending_actions WHERE status = 'pendente'`)).rows[0].n, 0, 'pedido claro não pede sim');
+  assert.ok((await pool.query(`SELECT 1 FROM assistant_pending_actions WHERE kind = 'recado_agente' AND status = 'executada'`)).rows.length, 'fica registrado como ação executada');
+
+  // pausar todos e ver os agentes
+  res = await say(PHONES.thiago, 'pausa os agentes que vamos ter reunião');
+  assert.ok((await pool.query(`SELECT 1 FROM agent_pauses WHERE scope = 'all' AND reason = 'reunião'`)).rows.length, 'pausa gravada');
+  res = await say(PHONES.thiago, 'como estão os agentes?');
+  assert.match(res.last, /Marcely Chefe: chefe .*\(pausado\)/);
+  await pool.query(`DELETE FROM agent_pauses`);
+
+  // pedir alteração num card de vídeo: mesma movimentação da chefe (histórico, prazo, aviso)
+  await pool.query(`UPDATE content_tasks SET kanban_column = 'revisao', edited_video_link = 'https://drive.google.com/x', edited_by = $2, drive_link = 'https://drive.google.com/brutos' WHERE id = $1`, [card.id, ids.agent2]);
+  res = await say(PHONES.thiago, 'pede ajuste no clareamento: cortar o começo e trocar a música');
+  assert.match(res.last, /✅ 'Clareamento em 1 sessão' foi para Alteração/);
+  const { rows: [altered] } = await pool.query(`SELECT * FROM content_tasks WHERE id = $1`, [card.id]);
+  assert.equal(altered.kanban_column, 'alteracao');
+  assert.equal(altered.adjustment_notes, 'Cortar os 3 primeiros segundos e trocar a música.');
+  assert.ok(altered.alteration_deadline, 'prazo de alteração pela regra da empresa');
+  assert.equal(altered.assigned_to, null, 'volta para a fila');
+  const { rows: altHistory } = await pool.query(`SELECT user_id, details FROM task_history WHERE task_id = $1 ORDER BY created_at DESC LIMIT 1`, [card.id]);
+  assert.equal(altHistory[0].user_id, ids.admin, 'histórico no nome de quem pediu');
+  assert.match(altHistory[0].details, /Pelo WhatsApp \(PULSE\) — Thiago Admin · Ajustes: Cortar/);
+  // a rota da chefe usa a mesma função (moveEditCard) e segue respondendo igual
+  r = await agentApi('POST', `/agent/tasks/${card.id}/move`, { body: { column: 'revisao', reason: 'teste da rota da chefe' } });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.from, 'alteracao');
+  assert.equal(r.json.to, 'revisao');
+  r = await agentApi('POST', `/agent/tasks/${card.id}/move`, { body: { column: 'envio' } });
+  assert.equal(r.status, 400, 'coluna fora do fluxo de edição continua recusada');
+  r = await agentApi('POST', `/agent/tasks/${card.id}/move`, { key: KEYS.agent2, body: { column: 'edicao' } });
+  assert.equal(r.status, 403, 'só a chefe move');
+
+  // duas ações com dúvida no mesmo pedido → um resumo só, um "sim" executa as duas
+  await pool.query(`INSERT INTO profiles (id, name, email, role) VALUES ('00000000-0000-0000-0000-00000000a005', 'Vini Videomaker', 'vini@teste.local', 'videomaker') ON CONFLICT (id) DO NOTHING`);
+  await pool.query(`UPDATE clients SET videomaker_id = '00000000-0000-0000-0000-00000000a005' WHERE id = $1`, [ids.clinic]);
+  await pool.query(`DELETE FROM recordings WHERE client_id = $1`, [ids.clinic]);
+  res = await say(PHONES.thiago, 'atualiza o whatsapp da clinica e marca uma gravação extra sexta 9h');
+  assert.match(res.last, /\*1\.\* Cadastro de Clínica Sorriso: nicho 'Odontologia' · WhatsApp 62988887777/);
+  assert.match(res.last, /\*2\.\* Gravação Extra · Clínica Sorriso · 06\/11\/2026 às 09:00 · videomaker Vini Videomaker/);
+  assert.match(res.last, /Confirma tudo\? \(sim\/não\)$/);
+  assert.equal((await pool.query(`SELECT count(*)::int AS n FROM recordings WHERE client_id = $1`, [ids.clinic])).rows[0].n, 0, 'nada antes do sim');
+  res = await say(PHONES.thiago, 'sim');
+  assert.match(res.last, /✅ Cadastro de Clínica Sorriso atualizado[\s\S]*✅ Gravação marcada: Clínica Sorriso · 06\/11\/2026 às 09:00/);
+  const { rows: [clinicNow] } = await pool.query(`SELECT whatsapp, niche FROM clients WHERE id = $1`, [ids.clinic]);
+  assert.deepEqual(clinicNow, { whatsapp: '62988887777', niche: 'Odontologia' });
+  const { rows: [rec] } = await pool.query(`SELECT *, date::text AS day FROM recordings WHERE client_id = $1`, [ids.clinic]);
+  assert.deepEqual([rec.day, rec.start_time, rec.type, rec.status, rec.city], ['2026-11-06', '09:00', 'extra', 'agendada', 'minacu']);
+
+  // mesma regra da tela: uma gravação por dia por cliente
+  res = await say(PHONES.thiago, 'marca outra gravação da clinica sexta 15h');
+  assert.match(res.last, /Não deu: Esse cliente já tem gravação nesse dia/);
+  assert.equal((await pool.query(`SELECT count(*)::int AS n FROM recordings WHERE client_id = $1`, [ids.clinic])).rows[0].n, 1);
+  // remarcar (pedido claro) e cancelar (com dúvida → pede sim)
+  await pool.query(`DELETE FROM recordings WHERE client_id = $1 AND start_time <> '09:00'`, [ids.clinic]);
+  res = await say(PHONES.thiago, 'remarca a gravação da clinica de sexta para segunda 10:30');
+  assert.match(res.last, /✅ Gravação de Clínica Sorriso remarcada para 09\/11\/2026 às 10:30/);
+  res = await say(PHONES.thiago, 'cancela a gravação da clinica de segunda');
+  assert.match(res.last, /^Cancelar gravação de Clínica Sorriso · 09\/11\/2026 às 10:30 · Vini Videomaker\n\nConfirma\? \(sim\/não\)$/);
+  res = await say(PHONES.thiago, 'sim');
+  assert.match(res.last, /✅ Gravação de Clínica Sorriso de 09\/11\/2026 às 10:30 cancelada/);
+  assert.equal((await pool.query(`SELECT status FROM recordings WHERE client_id = $1`, [ids.clinic])).rows[0].status, 'cancelada');
+  await pool.query(`DELETE FROM recordings WHERE client_id = $1`, [ids.clinic]);
+
+  // pré-cadastro de cliente
+  res = await say(PHONES.thiago, 'cadastra a padaria pão quente de uruaçu, responsável joana');
+  assert.match(res.last, /✅ Padaria Pão Quente pré-cadastrado em Uruaçu/);
+  const { rows: [bakery] } = await pool.query(`SELECT * FROM clients WHERE company_name = 'Padaria Pão Quente'`);
+  assert.deepEqual([bakery.city, bakery.responsible_person, bakery.whatsapp, bakery.niche, bakery.client_type], ['uruacu', 'Joana', '62977771111', 'Padaria', 'novo']);
+  await pool.query(`DELETE FROM clients WHERE id = $1`, [bakery.id]);
+
+  // card de design: pedir ajuste e mudar prioridade/prazo/responsável na mesma mensagem (em paralelo)
+  await pool.query(`INSERT INTO profiles (id, name, email, role) VALUES ('00000000-0000-0000-0000-00000000a006', 'Designa Arte', 'designa@teste.local', 'designer') ON CONFLICT (id) DO NOTHING`);
+  const { rows: [promoArt] } = await pool.query(
+    `INSERT INTO design_tasks (client_id, title, format_type, kanban_column, priority, attachment_url, timer_running, timer_started_at, time_spent_seconds)
+     VALUES ($1, 'Promo de novembro', 'feed', 'executando', 'media', 'https://agenciapulse.tech/uploads/a.png', true, now() - interval '10 minutes', 60) RETURNING id`, [ids.clinic]);
+  res = await say(PHONES.thiago, 'a arte da clinica precisa de ajuste: logo maior e fundo azul, urgente pra terça com a designa');
+  assert.match(res.last, /✅ 'Promo de novembro' foi para Ajustes/);
+  assert.match(res.last, /✅ Card 'Promo de novembro' atualizado: prioridade Urgente · prazo 03\/11\/2026 · responsável Designa Arte/);
+  const { rows: [artNow] } = await pool.query(`SELECT * FROM design_tasks WHERE id = $1`, [promoArt.id]);
+  assert.equal(artNow.kanban_column, 'ajustes');
+  assert.equal(artNow.timer_running, false, 'cronômetro fechado ao sair de Executando');
+  assert.ok(artNow.time_spent_seconds >= 660, 'tempo corrido somado');
+  assert.match(artNow.observations, /Ajustes pedidos pelo WhatsApp \(Thiago Admin\): Logo maior e fundo azul\./);
+  assert.equal(artNow.priority, 'urgente');
+  assert.equal(artNow.assigned_to, '00000000-0000-0000-0000-00000000a006');
+  ok('PULSE turbinado: ordem para a Marcely, pausa, alteração de card, várias ações num "sim", cadastro e agenda com as regras da tela');
 
   // ── 11. limite por hora e PULSE desligado ─────────────────────
   const { rows: [maria] } = await pool.query(`SELECT id FROM assistant_numbers WHERE phone = $1`, [PHONES.maria]);

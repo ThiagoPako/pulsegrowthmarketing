@@ -6,6 +6,9 @@
 // recusam forçar ferramenta) e ferramentas com strict: true. Opus/Sonnet com o modelo de reserva do servidor.
 // O texto é lido pelos blocos "text"; os blocos de pensamento e de ferramenta voltam inteiros, sem mudança, no
 // histórico do laço (laço manual de tool use, como na documentação do SDK).
+// Cache do prompt: ferramentas + instruções (iguais em todo pedido do mesmo número) e o histórico até a última
+// mensagem ficam em cache entre as rodadas do laço e entre mensagens seguidas — a resposta sai bem mais rápido.
+// Ferramentas pedidas juntas na mesma rodada rodam em paralelo.
 
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -43,6 +46,20 @@ export function createClaude({ pool, resolveAiConfig, resolveAiModel }) {
     });
   }
 
+  /** Marca o fim das instruções e a última mensagem como pontos de cache (no máximo 2 dos 4 permitidos). */
+  function withCache(system, messages) {
+    const sys = typeof system === 'string' ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] : system;
+    const last = messages.at(-1);
+    if (!last) return { system: sys, messages };
+    const blocks = typeof last.content === 'string' ? [{ type: 'text', text: last.content }] : [...last.content];
+    const end = blocks.length - 1;
+    // blocos de pensamento não aceitam cache_control; só a mensagem do usuário (texto ou tool_result) é marcada
+    if (last.role === 'user' && end >= 0 && ['text', 'tool_result'].includes(blocks[end].type)) {
+      blocks[end] = { ...blocks[end], cache_control: { type: 'ephemeral' } };
+    }
+    return { system: sys, messages: [...messages.slice(0, -1), { ...last, content: blocks }] };
+  }
+
   const textOf = (message) => message.content.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
 
   /**
@@ -56,10 +73,9 @@ export function createClaude({ pool, resolveAiConfig, resolveAiModel }) {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const response = await create(conn.client, conn.model, {
         max_tokens: 16000,
-        system,
+        ...withCache(system, history),
         tools,
         tool_choice: { type: 'auto' },
-        messages: history,
         output_config: { effort },
       });
       if (response.stop_reason === 'refusal') return { refusal: true, category: response.stop_details?.category || null, model: conn.model };
@@ -73,11 +89,10 @@ export function createClaude({ pool, resolveAiConfig, resolveAiModel }) {
       }
       // blocos devolvidos inteiros (thinking, texto e tool_use), sem mexer
       history.push({ role: 'assistant', content: response.content });
-      const results = [];
-      for (const toolUse of toolUses) {
+      const results = await Promise.all(toolUses.map(async (toolUse) => {
         const { content, is_error } = await execute(toolUse);
-        results.push({ type: 'tool_result', tool_use_id: toolUse.id, content, ...(is_error ? { is_error: true } : {}) });
-      }
+        return { type: 'tool_result', tool_use_id: toolUse.id, content, ...(is_error ? { is_error: true } : {}) };
+      }));
       history.push({ role: 'user', content: results });
     }
     return { text: '', exhausted: true, model: conn.model };

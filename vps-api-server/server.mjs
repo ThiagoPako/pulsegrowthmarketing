@@ -20360,6 +20360,8 @@ registerAssistant(app, {
   userHasAnyRole,
   resolveActiveCity,
   notifyTeam: notifyPortalTeam,
+  // ordens do PULSE no fluxo de edição: mesma movimentação de card que a chefe faz
+  moveEditCard: agentApi.moveEditCard,
 });
 
 // ─── Agentes de design (artes, Análise IA, aprendizado) ─────

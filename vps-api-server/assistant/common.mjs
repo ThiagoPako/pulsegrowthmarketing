@@ -16,6 +16,10 @@ export const PERMISSIONS = {
   alertas_satisfacao: 'Receber os avisos de cliente insatisfeito (temperatura do cliente)',
   lembretes_stories: 'Receber os lembretes de story para postar com link (Agendamentos)',
   consultar_producao: 'Ver andamento de cards e agenda',
+  editar_cards: 'Mudar cards (mover, pedir alteração, prazo, prioridade, responsável, dados do card)',
+  agenda: 'Marcar, remarcar e cancelar gravações',
+  cadastro_clientes: 'Ver e atualizar o cadastro dos clientes (e pré-cadastrar cliente novo)',
+  comandar_agentes: 'Dar ordens aos agentes de IA (Marcely, Uriel, editores, designers), pausar e retomar',
 };
 
 export const CITIES = { minacu: 'Minaçu', uruacu: 'Uruaçu' };

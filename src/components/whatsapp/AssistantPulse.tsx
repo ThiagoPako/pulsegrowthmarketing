@@ -37,7 +37,7 @@ interface Overview {
   team: { id: string; name: string }[];
   whisper: { available: boolean };
   claude: { configured: boolean; model: string | null };
-  log: { id: string; kind: string; tool: string | null; text: string | null; phone: string | null; created_at: string; number_name: string | null }[];
+  log: { id: string; kind: string; tool: string | null; text: string | null; phone: string | null; created_at: string; number_name: string | null; error?: string | null }[];
   actions: { id: string; kind: string; summary: string; status: string; source: string; created_at: string; number_name: string | null }[];
   demands: { id: string; kind: string; summary: string; status: string; cidade: string | null; alerted_count: number; created_at: string; company_name: string | null }[];
   jobs: { id: string; status: string; params: { month?: string }; requested_by_name: string | null; claimed_by_name: string | null; created_at: string; delivered_at: string | null; fail_reason: string | null; sent_to_client_at: string | null; company_name: string | null }[];
@@ -236,6 +236,7 @@ export default function AssistantPulse() {
                       <span className="text-xs">{l.number_name || (l.phone ? formatPhone(l.phone) : '')}</span>
                       {l.tool && <span className="text-[11px] text-muted-foreground">{l.tool}</span>}
                       {l.text && <span className="text-xs text-muted-foreground basis-full whitespace-pre-line">{l.text}</span>}
+                      {l.error && <span className="text-[11px] text-destructive basis-full break-all">{l.error}</span>}
                     </div>
                   ))}
                 </TabsContent>

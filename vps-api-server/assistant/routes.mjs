@@ -66,7 +66,8 @@ export function registerAdminRoutes(app, { pool, verifyAdmin, isStrictAdmin, cla
         pool.query('SELECT enabled, group_monitor_enabled, monitor_since, updated_at FROM assistant_settings WHERE id = 1'),
         pool.query(`SELECT n.*, p.name AS user_name FROM assistant_numbers n LEFT JOIN profiles p ON p.id = n.user_id ORDER BY n.active DESC, n.name`),
         pool.query(
-          `SELECT l.id, l.kind, l.tool, l.text, l.phone, l.created_at, n.name AS number_name FROM assistant_log l
+          `SELECT l.id, l.kind, l.tool, l.text, l.phone, l.created_at, n.name AS number_name,
+                  CASE WHEN l.kind = 'erro' THEN left(l.detail->>'error', 300) END AS error FROM assistant_log l
              LEFT JOIN assistant_numbers n ON n.id = l.number_id
             WHERE l.kind <> 'ferramenta' ORDER BY l.created_at DESC LIMIT 40`),
         pool.query(

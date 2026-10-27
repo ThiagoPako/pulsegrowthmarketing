@@ -1,6 +1,8 @@
 # Assistente PULSE
 
-O PULSE é o assistente de IA da agência no WhatsApp. Ele roda no Claude e recebe comandos da equipe em texto ou áudio, mas só de números autorizados. Com esses comandos ele consulta e prepara ações no sistema: financeiro, cards, agenda, relatório mensal e mensagens ao cliente. Ele também lê os grupos dos clientes e avisa a equipe quando um cliente pede alguma coisa.
+O PULSE é o assistente de IA da agência no WhatsApp. Ele roda no Claude e recebe comandos da equipe em texto ou áudio, mas só de números autorizados. Com esses comandos ele consulta e age no sistema: financeiro, cards de vídeo e de design, cadastro de clientes, agenda de gravações, relatório mensal, mensagens ao cliente e ordens para os agentes de IA (Marcely, Uriel, editores, designers). Ele também lê os grupos dos clientes e avisa a equipe quando um cliente pede alguma coisa.
+
+O prompt explica como a agência funciona (fluxo dos Kanbans, papel de cada agente, regras da agenda) e lista os agentes conectados e a equipe, para o PULSE entender pedidos por áudio sem perguntar o óbvio.
 
 O código fica em `vps-api-server/assistant/`. O `index.mjs` de lá lista os arquivos e as variáveis de ambiente. A tela fica em **Configurações → WhatsApp → Assistente PULSE**, só para admin.
 
@@ -22,21 +24,32 @@ O código fica em `vps-api-server/assistant/`. O `index.mjs` de lá lista os arq
    | `enviar_cliente` | mandar mensagem ou arquivo ao cliente, inclusive o relatório pronto |
    | `criar_cards` | card de conteúdo/vídeo (Kanban de conteúdo, coluna Ideias) ou de design (Nova tarefa) |
    | `alertas_grupos` | receber os avisos de demanda detectada nos grupos |
-   | `consultar_producao` | andamento dos cards de um cliente e agenda de gravações |
+   | `consultar_producao` | andamento dos cards de um cliente, busca de cards, agenda de gravações, cadastro do cliente e situação dos agentes |
+   | `editar_cards` | card de vídeo: Edição, Revisão ou Alteração (com os ajustes), pela mesma função da chefe (`moveEditCard`); título, descrição, brutos, prazo, prioridade, alteração imediata. Card de design: mover (menos Executando e Análise IA), prioridade, prazo, responsável, texto da arte |
+   | `agenda` | marcar, remarcar e cancelar gravação (uma por dia por cliente; videomaker sem horário encavalado) |
+   | `cadastro_clientes` | ver e atualizar o cadastro (contatos, nicho, linha editorial, Drive, metas); pré-cadastrar cliente novo. Dia/hora fixos, plano, contrato, cidade e cancelamento seguem pela tela |
+   | `comandar_agentes` | ordem/recado para um agente ou para todos (vai para `agent_messages`, que o agente lê no `esperar`), pausar e retomar |
 
-3. **Confirmação.** Toda ação que muda algo pede "sim" antes de executar.
-   - O PULSE manda um resumo montado pelo servidor, por exemplo: `Despesa R$ 350,00 · Minaçu · Combustível · 26/10/2026 · 'gasolina do carro da gravação'` seguido de `Confirma? (sim/não)`.
-   - No "sim", o servidor executa o **payload guardado**. O modelo não roda de novo. Antes de executar, o servidor confere outra vez a permissão e a cidade.
-   - "não" cancela.
-   - A confirmação vale 30 minutos.
-   - Consultas respondem direto, sem confirmação.
+3. **Confirmação pela clareza do pedido.** Cada ação traz o campo `clareza`, preenchido pelo modelo:
+   - `clara`: a pessoa disse sem ambiguidade o que fazer, em quem/qual card e com os valores. A ação **roda na hora**, e o resultado volta ao modelo, que pode encadear a próxima ação.
+   - `duvida`: o modelo deduziu algo, havia opções parecidas ou o áudio pode ter sido mal entendido. O servidor manda o resumo, montado por ele mesmo, seguido de `Confirma? (sim/não)`.
+   - Várias ações com dúvida no mesmo pedido vão num resumo numerado só (`Confirma tudo?`). Um "sim" executa todas e um "não" cancela todas.
+   - **O que sai para o cliente** (`enviar_cliente`, `enviar_relatorio`) pede "sim" sempre.
+   - Nos dois casos a ação passa por `assistant_pending_actions` e pelos mesmos executores. No "sim", o servidor executa o **payload guardado**, sem chamar o modelo de novo, e confere outra vez a permissão e a cidade.
+   - A confirmação vale 30 minutos. Consultas respondem direto.
 4. **Áudio.**
    - O pulse-wa baixa a mensagem de voz para a pasta privada `~/pulse-wa-private/audio`, fora de /uploads.
    - O ffmpeg converte para wav 16 kHz mono e o whisper.cpp transcreve em português.
    - O áudio é apagado depois.
    - Sem Whisper instalado, o PULSE responde "Não consegui ouvir o áudio, manda por escrito".
 5. **Limite.** Cada número pode fazer 30 comandos por hora (`ASSISTANT_RATE_LIMIT_HOUR`).
-6. **Monitor dos grupos.** Liga e desliga na tela. Funciona assim:
+6. **Velocidade.**
+   - Cache do prompt: as ferramentas e as instruções ficam em cache (`cache_control` no fim do system), assim como o histórico até a última mensagem, que é um ponto de cache móvel a cada rodada.
+   - Ferramentas pedidas juntas na mesma rodada rodam em paralelo.
+   - O esforço padrão dos comandos é `low` (`ASSISTANT_EFFORT`).
+   - O laço lê mensagens novas a cada 1,5 s (`ASSISTANT_TICK_MS`).
+   - As ferramentas novas não usam `strict`: o servidor confere tudo em `run()`. Isso mantém o pedido abaixo do limite de 20 ferramentas `strict`.
+7. **Monitor dos grupos.** Liga e desliga na tela. Funciona assim:
    - Ele espera o grupo ficar 3 minutos sem mensagem nova.
    - Ignora as mensagens da equipe, dos números autorizados e dos números conectados.
    - Pergunta ao Claude, com esforço `low`, saída JSON e sem ferramentas, se o cliente pediu algo: post, arte, vídeo, ajuste, gravação ou uma dúvida que precisa de resposta.
@@ -165,7 +178,8 @@ Todas são opcionais.
 | `FFMPEG_BIN` | `ffmpeg` |
 | `WA_PRIVATE_DIR` | `~/pulse-wa-private`, igual para a API e para o pulse-wa |
 | `ASSISTANT_RATE_LIMIT_HOUR` | `30` |
-| `ASSISTANT_TICK_MS` | `3000` |
+| `ASSISTANT_TICK_MS` | `1500` |
+| `ASSISTANT_EFFORT` | `low` (`medium`/`high` pensam mais e demoram mais) |
 | `ASSISTANT_MONITOR_TICK_MS` | `30000` |
 | `ASSISTANT_GROUP_DEBOUNCE_S` | `180` |
 | `ASSISTANT_DISABLED=1` | desliga os laços (as rotas continuam no ar) |
@@ -174,7 +188,7 @@ O Whisper é instalado pelo `update_vps.sh`, que chama `scripts/install-whisper.
 
 ## Teste
 
-O teste é `vps-api-server/tests/assistente-pulse.e2e.mjs`. Ele usa um Postgres de teste e uma API falsa do Claude. Rode da pasta `vps-api-server`:
+O teste é `vps-api-server/tests/assistente-pulse.e2e.mjs`. Ele usa um Postgres de teste e uma API falsa do Claude. A seção "PULSE turbinado" cobre a ordem para a Marcely, a pausa dos agentes, a alteração de card, várias ações num "sim", o cadastro, a agenda e o card de design. Rode da pasta `vps-api-server`:
 
 ```
 TEST_DATABASE_URL=postgres://postgres:teste@localhost:55432/pulse_assistente node tests/assistente-pulse.e2e.mjs

@@ -8,6 +8,13 @@
 //   card     → content_tasks em "ideias" (ContentKanban) ou design_tasks em "nova_tarefa" (DesignTaskCreateDialog)
 //   relatório→ agent_jobs (o agente do PC pega pela API /api/agent/jobs)
 //   envio    → fila do WhatsApp para o grupo do cliente (clientTarget); cobrança sempre no privado
+//   agentes  → agent_messages (recado que o agente lê no "esperar") e agent_pauses (pausar/retomar), como a tela de Agentes
+//   cards    → fluxo de edição pela mesma função da chefe (moveEditCard); campos do card e Kanban de design como a tela
+//   cliente  → clients (campos da edição do cadastro; pré-cadastro com o padrão da tela)
+//   agenda   → recordings (marcar, remarcar, cancelar), como /api/recordings
+//
+// Confirmação pela clareza do pedido: a ferramenta diz se o pedido veio claro ou com dúvida. Claro → executa na hora;
+// dúvida → resumo pedindo "sim". O que sai para o cliente (ALWAYS_CONFIRM) pede "sim" sempre.
 
 import { enqueueWhatsApp, clientTarget } from '../whatsapp/shared.mjs';
 import {
@@ -20,6 +27,23 @@ export const REPORT_TEMPLATE_PATH = 'clientes/labo-vitta/design/apresentacoes/20
 export const CONTENT_TYPES = { reels: 'Reels', criativo: 'Criativo', story: 'Story', arte: 'Arte', otimizacao: 'Otimização' };
 export const DESIGN_FORMATS = { feed: 'Feed', story: 'Story', logomarca: 'Logomarca', midia_fisica: 'Mídia física', carrossel: 'Carrossel', capa: 'Capa', thumbnail: 'Thumbnail' };
 export const DESIGN_PRIORITIES = { baixa: 'Baixa', media: 'Média', alta: 'Alta', urgente: 'Urgente' };
+export const CONTENT_COLUMNS = {
+  ideias: 'Ideias', captacao: 'Captação', edicao: 'Edição', pre_revisao: 'Pré-revisão', revisao: 'Revisão',
+  alteracao: 'Alteração', envio: 'Envio', agendamentos: 'Agendamentos', acompanhamento: 'Acompanhamento',
+};
+export const DESIGN_COLUMNS = {
+  nova_tarefa: 'Nova tarefa', executando: 'Executando', fila_baixa_prioridade: 'Fila de baixa prioridade', ajustes: 'Ajustes',
+  analise_ia: 'Análise IA', em_analise: 'Em análise', enviar_cliente: 'Enviar ao cliente', aprovado: 'Aprovado', postado: 'Postado',
+};
+export const RECORDING_TYPES = { fixa: 'Fixa', extra: 'Extra', avulso: 'Avulsa' };
+
+/** Sai para o cliente: pede "sim" mesmo com pedido claro. */
+export const ALWAYS_CONFIRM = new Set(['enviar_cliente', 'enviar_relatorio']);
+
+// Dependências do servidor (registerAssistant): movimentação de card do fluxo de edição
+let deps = {};
+export function configureActions(next) { deps = { ...deps, ...next }; }
+
 export const REVENUE_CATEGORIES = {
   contrato: '📋 Contrato Mensal', video_unitario: '🎬 Vídeo Unitário', edicao_videos: '🎞️ Edição de Vídeos',
   evento: '🎉 Evento', site_sistemas: '🌐 Site e Sistemas', outros: '📦 Outros',
@@ -81,18 +105,32 @@ export const SUMMARIES = {
   pedir_relatorio: (p) => `Pedir o relatório mensal de ${p.cliente} (${cityLabel(p.cidade)}) · ${monthLabel(p.mes)} · tema Novembro Azul (Labovitta) · gerado pelo agente do PC`,
   enviar_cliente: (p) => `${p.cobranca ? 'Cobrança no privado' : 'Mensagem no grupo'} de ${p.cliente} (${cityLabel(p.cidade)}):\n"${clip(p.mensagem, 600)}"${p.arquivo_url ? `\n📎 ${p.arquivo_nome || p.arquivo_url}` : ''}`,
   enviar_relatorio: (p) => `Enviar o relatório de ${monthLabel(p.mes)} no WhatsApp de ${p.cliente} (${cityLabel(p.cidade)})`,
+  recado_agente: (p) => `Recado para ${p.agentes.join(', ')}:\n"${clip(p.recado, 600)}"`,
+  pausar_agentes: (p) => `${p.pausar ? 'Pausar' : 'Retomar'} ${p.agente || 'todos os agentes'}${p.motivo ? ` · '${clip(p.motivo, 200)}'` : ''}`,
+  mover_card_video: (p) => `Card de vídeo '${p.titulo}' (${p.cliente || 'sem cliente'}) · ${CONTENT_COLUMNS[p.de] || p.de} → ${CONTENT_COLUMNS[p.coluna]}${p.ajustes ? `\n📝 Ajustes: ${clip(p.ajustes, 400)}` : ''}`,
+  editar_card_video: (p) => `Card de vídeo '${p.titulo}' (${p.cliente || 'sem cliente'}): ${p.mudancas.join(' · ')}`,
+  mover_card_design: (p) => `Card de design '${p.titulo}' (${p.cliente}) · ${DESIGN_COLUMNS[p.de] || p.de} → ${DESIGN_COLUMNS[p.coluna]}${p.ajustes ? `\n📝 Ajustes: ${clip(p.ajustes, 400)}` : ''}`,
+  editar_card_design: (p) => `Card de design '${p.titulo}' (${p.cliente}): ${p.mudancas.join(' · ')}`,
+  atualizar_cliente: (p) => `Cadastro de ${p.cliente}: ${p.mudancas.join(' · ')}`,
+  cadastrar_cliente: (p) => `Pré-cadastro de cliente: ${p.nome} · ${cityLabel(p.cidade)}${p.responsavel ? ` · resp. ${p.responsavel}` : ''}${p.whatsapp ? ` · WhatsApp ${p.whatsapp}` : ''}${p.nicho ? ` · ${p.nicho}` : ''}`,
+  marcar_gravacao: (p) => `Gravação ${RECORDING_TYPES[p.tipo] || p.tipo} · ${p.cliente} · ${fmtDate(p.data)} às ${p.hora} · videomaker ${p.videomaker}`,
+  remarcar_gravacao: (p) => `Remarcar gravação de ${p.cliente}: ${fmtDate(p.de_data)} ${p.de_hora} → ${fmtDate(p.data)} às ${p.hora}${p.videomaker_mudou ? ` · videomaker ${p.videomaker}` : ''}`,
+  cancelar_gravacao: (p) => `Cancelar gravação de ${p.cliente} · ${fmtDate(p.data)} às ${p.hora}${p.videomaker ? ` · ${p.videomaker}` : ''}`,
 };
 
 /**
  * Guarda uma ação esperando o "sim" (substitui a que estava esperando, se houver). Devolve a ação.
  * source: comando (pedido pelo WhatsApp), alerta (sugestão do monitor de grupos), entrega (relatório pronto)
  */
-export async function proposeAction(pool, number, kind, payload, { source = 'comando' } = {}) {
+export async function proposeAction(pool, number, kind, payload, { source = 'comando', supersede = true } = {}) {
   const summary = SUMMARIES[kind](payload);
-  await pool.query(
-    `UPDATE assistant_pending_actions SET status = 'substituida', decided_at = now() WHERE number_id = $1 AND status = 'pendente'`,
-    [number.id]
-  );
+  // supersede = false: outra ação do mesmo pedido (várias esperando o mesmo "sim") ou ação clara que já vai rodar
+  if (supersede) {
+    await pool.query(
+      `UPDATE assistant_pending_actions SET status = 'substituida', decided_at = now() WHERE number_id = $1 AND status = 'pendente'`,
+      [number.id]
+    );
+  }
   const { rows } = await pool.query(
     `INSERT INTO assistant_pending_actions (number_id, kind, payload, summary, source, expires_at)
      VALUES ($1, $2, $3, $4, $5, now() + ($6 || ' minutes')::interval) RETURNING *`,
@@ -103,6 +141,7 @@ export async function proposeAction(pool, number, kind, payload, { source = 'com
 }
 
 export const confirmQuestion = (summary) => `${summary}\n\nConfirma? (sim/não)`;
+export const confirmManyQuestion = (summaries) => `${summaries.map((s, i) => `*${i + 1}.* ${s}`).join('\n\n')}\n\nConfirma tudo? (sim/não)`;
 
 // ── Execução do payload guardado ──
 const EXECUTORS = {
@@ -248,7 +287,210 @@ const EXECUTORS = {
     await pool.query(`UPDATE agent_jobs SET sent_to_client_at = now(), updated_at = now() WHERE id = $1`, [job.id]);
     return { message: `✅ Relatório na fila para ${client.company_name} (${client.whatsapp_group ? 'no grupo' : 'no WhatsApp'}).`, result: { outbox_id: queued.id } };
   },
+
+  async recado_agente(pool, action) {
+    const p = action.payload;
+    const { number } = await recheck(pool, action.number_id, 'comandar_agentes');
+    const { rows: active } = await pool.query(
+      `SELECT DISTINCT user_id FROM agent_keys WHERE revoked_at IS NULL AND user_id = ANY($1::uuid[])`, [p.agente_ids]
+    );
+    if (!active.length) throw new Error('Esse agente não está mais conectado (chave revogada).');
+    const body = `[Ordem pelo WhatsApp · ${requesterName(number)}] ${p.recado}`;
+    for (const { user_id } of active) {
+      await pool.query('INSERT INTO agent_messages (from_user, to_user, body) VALUES ($1, $2, $3)', [number.user_id || null, user_id, body]);
+    }
+    return { message: `✅ Recado entregue para ${p.agentes.join(', ')}. ${active.length > 1 ? 'Eles leem' : 'Lê'} na próxima checagem da caixa de recados.`, result: { agentes: p.agente_ids } };
+  },
+
+  async pausar_agentes(pool, action) {
+    const p = action.payload;
+    const { number } = await recheck(pool, action.number_id, 'comandar_agentes');
+    if (p.pausar) {
+      await pool.query(
+        `INSERT INTO agent_pauses (scope, paused_by, reason) VALUES ($1, $2, $3)
+         ON CONFLICT (scope) DO UPDATE SET paused_by = EXCLUDED.paused_by, reason = EXCLUDED.reason, paused_at = now()`,
+        [p.scope, number.user_id || null, p.motivo || `Pausado pelo WhatsApp (${requesterName(number)})`]
+      );
+      return { message: `⏸️ ${p.agente || 'Todos os agentes'} ${p.scope === 'all' ? 'pausados' : 'pausado'}: não pegam card novo até retomar.`, result: { scope: p.scope } };
+    }
+    await pool.query('DELETE FROM agent_pauses WHERE scope = $1', [p.scope]);
+    return { message: `▶️ ${p.agente || 'Todos os agentes'} ${p.scope === 'all' ? 'retomados' : 'retomado'}.`, result: { scope: p.scope } };
+  },
+
+  async mover_card_video(pool, action) {
+    const p = action.payload;
+    const { number } = await recheck(pool, action.number_id, 'editar_cards', p.client_id ? { clientId: p.client_id } : {});
+    if (!deps.moveEditCard) throw new Error('Movimentação de card indisponível no servidor.');
+    let moved;
+    try {
+      moved = await deps.moveEditCard(p.task_id, p.coluna, {
+        userId: number.user_id || null, reason: `Pelo WhatsApp (PULSE) — ${requesterName(number)}${p.motivo ? `: ${p.motivo}` : ''}`, notes: p.ajustes || null,
+      });
+    } catch (error) {
+      if (error.status && error.status < 500) throw new Error(error.message);
+      throw error;
+    }
+    return { message: `✅ '${p.titulo}' foi para ${CONTENT_COLUMNS[p.coluna]}.`, result: moved };
+  },
+
+  async editar_card_video(pool, action) {
+    const p = action.payload;
+    const { number } = await recheck(pool, action.number_id, 'editar_cards', p.client_id ? { clientId: p.client_id } : {});
+    const keys = Object.keys(p.set);
+    const { rowCount } = await pool.query(
+      `UPDATE content_tasks SET ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')}, updated_at = now() WHERE id = $1`,
+      [p.task_id, ...keys.map((k) => p.set[k])]
+    );
+    if (!rowCount) throw new Error('O card não existe mais.');
+    await pool.query('INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+      [p.task_id, number.user_id || null, 'Card atualizado pelo WhatsApp', `${p.mudancas.join(' · ')} — ${requesterName(number)}`]).catch(() => {});
+    return { message: `✅ Card '${p.titulo}' atualizado: ${p.mudancas.join(' · ')}.`, result: { content_task_id: p.task_id } };
+  },
+
+  async mover_card_design(pool, action) {
+    const p = action.payload;
+    const { number, client } = await recheck(pool, action.number_id, 'editar_cards', { clientId: p.client_id });
+    return inTransaction(pool, async (db) => {
+      const { rows: [task] } = await db.query('SELECT * FROM design_tasks WHERE id = $1 FOR UPDATE', [p.task_id]);
+      if (!task) throw new Error('O card não existe mais.');
+      if (task.kanban_column === p.coluna && !p.ajustes) return { message: `O card '${p.titulo}' já está em ${DESIGN_COLUMNS[p.coluna]}.`, result: { design_task_id: task.id } };
+      // mesmos efeitos de src/pages/DesignerKanban.tsx ao mover
+      const set = { kanban_column: p.coluna };
+      if ('agent_step' in task && task.agent_step) { set.agent_step = null; set.agent_heartbeat_at = null; }
+      if (task.timer_running && task.timer_started_at) {
+        set.time_spent_seconds = (task.time_spent_seconds || 0) + Math.max(0, Math.floor((Date.now() - new Date(task.timer_started_at).getTime()) / 1000));
+        set.timer_running = false;
+        set.timer_started_at = null;
+      }
+      const hasArt = !!(task.attachment_url || task.mockup_url);
+      if (p.coluna === 'em_analise') {
+        if (!hasArt) throw new Error('A arte ou o mockup precisa estar anexado antes de ir para Em análise.');
+        set.due_date = null;
+      }
+      if (p.coluna === 'enviar_cliente' && !task.sent_to_client_at) set.sent_to_client_at = new Date().toISOString();
+      if (p.coluna === 'aprovado') {
+        set.completed_at = new Date().toISOString();
+        set.client_approved_at = new Date().toISOString();
+        if (task.format_type === 'logomarca' && hasArt) {
+          await db.query('UPDATE clients SET drive_identidade_visual = $2 WHERE id = $1', [client.id, task.attachment_url || task.mockup_url]);
+        }
+      }
+      if (p.ajustes) {
+        const line = `✏️ ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} — Ajustes pedidos pelo WhatsApp (${requesterName(number)}): ${p.ajustes}`;
+        set.observations = `${task.observations ? `${task.observations}\n\n` : ''}${line}`;
+      }
+      const keys = Object.keys(set);
+      await db.query(
+        `UPDATE design_tasks SET ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')}, updated_at = now() WHERE id = $1`,
+        [task.id, ...keys.map((k) => set[k])]
+      );
+      await db.query('INSERT INTO design_task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)',
+        [task.id, `Movido para ${DESIGN_COLUMNS[p.coluna]}`, [`Pelo WhatsApp — ${requesterName(number)}`, p.ajustes ? `Ajustes: ${p.ajustes}` : null].filter(Boolean).join(' · '), number.user_id || null]);
+      if (p.coluna === 'ajustes' && task.assigned_to) {
+        await db.query(`SELECT notify_user($1, $2, $3, 'adjustment', '/designer')`, [task.assigned_to, 'Ajuste na arte', `"${task.title}" precisa de ajustes`]).catch(() => {});
+      }
+      return { message: `✅ '${p.titulo}' foi para ${DESIGN_COLUMNS[p.coluna]}.`, result: { design_task_id: task.id } };
+    });
+  },
+
+  async editar_card_design(pool, action) {
+    const p = action.payload;
+    const { number } = await recheck(pool, action.number_id, 'editar_cards', { clientId: p.client_id });
+    const keys = Object.keys(p.set);
+    const { rowCount } = await pool.query(
+      `UPDATE design_tasks SET ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')}, updated_at = now() WHERE id = $1`,
+      [p.task_id, ...keys.map((k) => p.set[k])]
+    );
+    if (!rowCount) throw new Error('O card não existe mais.');
+    await pool.query('INSERT INTO design_task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)',
+      [p.task_id, 'Card atualizado pelo WhatsApp', `${p.mudancas.join(' · ')} — ${requesterName(number)}`, number.user_id || null]).catch(() => {});
+    if (p.set.assigned_to) {
+      await pool.query(`SELECT notify_user($1, $2, $3, 'design', '/designer')`, [p.set.assigned_to, 'Tarefa de design para você', `"${p.titulo}"`]).catch(() => {});
+    }
+    return { message: `✅ Card '${p.titulo}' atualizado: ${p.mudancas.join(' · ')}.`, result: { design_task_id: p.task_id } };
+  },
+
+  async atualizar_cliente(pool, action) {
+    const p = action.payload;
+    await recheck(pool, action.number_id, 'cadastro_clientes', { clientId: p.client_id });
+    const keys = Object.keys(p.set);
+    await pool.query(
+      `UPDATE clients SET ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')}, updated_at = now() WHERE id = $1`,
+      [p.client_id, ...keys.map((k) => p.set[k])]
+    );
+    return { message: `✅ Cadastro de ${p.cliente} atualizado: ${p.mudancas.join(' · ')}.`, result: { client_id: p.client_id } };
+  },
+
+  async cadastrar_cliente(pool, action) {
+    const p = action.payload;
+    await recheck(pool, action.number_id, 'cadastro_clientes', { city: p.cidade });
+    const { rows: [dup] } = await pool.query(`SELECT id FROM clients WHERE lower(btrim(company_name)) = lower(btrim($1)) LIMIT 1`, [p.nome]);
+    if (dup) throw new Error(`Já existe um cliente chamado "${p.nome}".`);
+    const { rows: [client] } = await pool.query(
+      `INSERT INTO clients (company_name, responsible_person, phone, whatsapp, email, city, niche, client_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'novo') RETURNING id`,
+      [p.nome, p.responsavel || '', p.whatsapp || '', p.whatsapp || '', p.email || '', p.cidade, p.nicho || '']
+    );
+    return { message: `✅ ${p.nome} pré-cadastrado em ${cityLabel(p.cidade)}. Plano, contrato, dias de gravação e metas: complete na tela de Clientes.`, result: { client_id: client.id } };
+  },
+
+  async marcar_gravacao(pool, action) {
+    const p = action.payload;
+    await recheck(pool, action.number_id, 'agenda', { clientId: p.client_id });
+    const conflict = await recordingConflict(pool, p);
+    if (conflict) throw new Error(conflict);
+    const { rows: [rec] } = await pool.query(
+      `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status, city)
+       VALUES ($1, $2, $3, $4, $5, 'agendada', 'pendente', $6) RETURNING id`,
+      [p.client_id, p.videomaker_id, p.data, p.hora, p.tipo, p.cidade]
+    );
+    return { message: `✅ Gravação marcada: ${p.cliente} · ${fmtDate(p.data)} às ${p.hora} · ${p.videomaker}.`, result: { recording_id: rec.id } };
+  },
+
+  async remarcar_gravacao(pool, action) {
+    const p = action.payload;
+    await recheck(pool, action.number_id, 'agenda', { clientId: p.client_id });
+    const conflict = await recordingConflict(pool, { ...p, excludeId: p.recording_id });
+    if (conflict) throw new Error(conflict);
+    const { rowCount } = await pool.query(
+      `UPDATE recordings SET date = $2, start_time = $3, videomaker_id = $4, confirmation_status = 'pendente'
+        WHERE id = $1 AND status NOT IN ('cancelada', 'concluida')`,
+      [p.recording_id, p.data, p.hora, p.videomaker_id]
+    );
+    if (!rowCount) throw new Error('A gravação não está mais agendada (foi cancelada ou já aconteceu).');
+    return { message: `✅ Gravação de ${p.cliente} remarcada para ${fmtDate(p.data)} às ${p.hora}${p.videomaker_mudou ? ` com ${p.videomaker}` : ''}.`, result: { recording_id: p.recording_id } };
+  },
+
+  async cancelar_gravacao(pool, action) {
+    const p = action.payload;
+    await recheck(pool, action.number_id, 'agenda', { clientId: p.client_id });
+    const { rowCount } = await pool.query(
+      `UPDATE recordings SET status = 'cancelada' WHERE id = $1 AND status NOT IN ('cancelada', 'concluida')`, [p.recording_id]
+    );
+    if (!rowCount) throw new Error('A gravação já estava cancelada ou já aconteceu.');
+    return { message: `✅ Gravação de ${p.cliente} de ${fmtDate(p.data)} às ${p.hora} cancelada.`, result: { recording_id: p.recording_id } };
+  },
 };
+
+/** Mesmas regras da tela (AppContext.hasConflict): cliente com uma gravação por dia e videomaker sem horário encavalado. */
+export async function recordingConflict(pool, { client_id, videomaker_id, data, hora, excludeId = null }) {
+  const { rows: [settings] } = await pool.query('SELECT recording_duration FROM company_settings LIMIT 1').catch(() => ({ rows: [] }));
+  const raw = Number(settings?.recording_duration) || 2;
+  const duration = raw > 10 ? raw : raw * 60; // horas (2) ou minutos (90), como o check_availability do servidor
+  const toMin = (t) => { const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0); };
+  const start = toMin(hora);
+  const { rows } = await pool.query(
+    `SELECT r.id, r.client_id, r.videomaker_id, r.start_time, c.company_name FROM recordings r LEFT JOIN clients c ON c.id = r.client_id
+      WHERE r.date = $1::date AND r.status <> 'cancelada' AND ($2::uuid IS NULL OR r.id <> $2) AND (r.client_id = $3 OR r.videomaker_id = $4)`,
+    [data, excludeId, client_id, videomaker_id]
+  );
+  const sameClient = rows.find((r) => r.client_id === client_id);
+  if (sameClient) return `Esse cliente já tem gravação nesse dia (às ${sameClient.start_time}).`;
+  const clash = rows.find((r) => r.videomaker_id === videomaker_id && Math.abs(toMin(r.start_time) - start) < duration);
+  if (clash) return `O videomaker já tem gravação às ${clash.start_time} nesse dia (${clash.company_name || 'avulsa'}).`;
+  return null;
+}
+
 
 async function linkDemand(pool, demandId, kind, cardId) {
   if (!isUuid(demandId)) return;

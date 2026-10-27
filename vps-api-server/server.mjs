@@ -34,7 +34,7 @@ import { recordPortalAccess } from './assistant/temperature.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
 import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOption } from './lib/portalSession.mjs';
 import { cleanupOldEditVersions } from './lib/versionCleanup.mjs';
-import { createWebVideo, captureVideoUploads, isDerivedVariantName, originalNamesForVariant, WEB_TMP_DIR } from './lib/webVideo.mjs';
+import { createWebVideo, captureVideoUploads, isDerivedVariantName, originalNamesForVariant, WEB_TMP_DIR, resolveUploadFile, webVariantUrl } from './lib/webVideo.mjs';
 import { createInstagramVideo } from './lib/instagramVideo.mjs';
 import { buildProposalRevenueSchedule, stripRevenueMark } from './lib/proposalRevenues.mjs';
 import pg from 'pg';
@@ -20346,6 +20346,47 @@ const agentApi = registerAgentRoutes(app, {
   publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
 });
 
+// ─── Portal: equipe manda o vídeo/arte direto no WhatsApp do cliente (grupo ou privado) ──
+// Vai pela fila do WhatsApp (conexão com a função "geral"), com o arquivo anexado e uma mensagem.
+// Vídeo com versão leve (.web.mp4) vai na versão leve: chega mais rápido e cabe no limite do WhatsApp.
+app.post('/api/portal-contents/:id/send-whatsapp', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    if (!(await userHasAnyRole(user, ['admin', 'social_media', 'gestor_projetos']))) {
+      return res.status(403).json({ error: 'Só a gestão manda conteúdo ao cliente' });
+    }
+    const target = req.body?.target === 'privado' ? 'privado' : 'grupo';
+    const { rows: [content] } = await pool.query(
+      `SELECT pc.id, pc.title, pc.file_url, pc.content_type, c.id AS client_id, c.company_name, c.whatsapp, c.whatsapp_group
+         FROM client_portal_contents pc JOIN clients c ON c.id = pc.client_id WHERE pc.id = $1`, [req.params.id]
+    );
+    if (!content) return res.status(404).json({ error: 'Conteúdo não encontrado' });
+    if (!content.file_url) return res.status(400).json({ error: 'O conteúdo não tem arquivo' });
+    const to = target === 'grupo'
+      ? String(content.whatsapp_group || '').trim()
+      : String(content.whatsapp || '').replace(/\D/g, '');
+    if (!to) {
+      return res.status(400).json({ error: target === 'grupo' ? 'O cliente não tem grupo de WhatsApp cadastrado' : 'O cliente não tem WhatsApp cadastrado' });
+    }
+    const base = String(process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech').replace(/\/+$/, '');
+    let mediaUrl = content.file_url.startsWith('/') ? `${base}${content.file_url}` : content.file_url;
+    const light = webVariantUrl(mediaUrl);
+    if (light && light !== mediaUrl && resolveUploadFile(light, uploadRoots(), { allowedOrigins: MEDIA_ALLOWED_ORIGINS })) mediaUrl = light;
+    const ext = (String(content.file_url).match(/\.[a-z0-9]{2,4}(?=$|\?)/i) || ['.mp4'])[0];
+    const message = String(req.body?.message || '').trim().slice(0, 1500)
+      || `Olá! Segue o conteúdo "${content.title}" da ${content.company_name}. 🎬`;
+    const queued = await enqueueWhatsApp(pool, {
+      to, body: message, purpose: 'geral', triggerType: 'portal_envio', clientId: content.client_id, sentBy: user.id,
+      mediaUrl, mediaName: `${String(content.title || 'conteudo').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80)}${/\.web\.mp4$/i.test(mediaUrl) ? '.mp4' : ext}`,
+    });
+    res.json({ success: true, target, outbox_id: queued.id });
+  } catch (error) {
+    const status = error?.message === 'Unauthorized' ? 401 : 500;
+    if (status === 500) console.error('[portal] enviar no WhatsApp:', error.message);
+    res.status(status).json({ error: error.message || 'Erro ao enviar' });
+  }
+});
+
 // ─── Assistente PULSE (comandos da equipe pelo WhatsApp) e pedidos para os agentes dos PCs ──
 registerAssistant(app, {
   pool,
@@ -20381,10 +20422,12 @@ registerAgentDesignRoutes(app, {
 });
 
 // ─── Agendamentos (calendário de postagem por cliente; acesso: Pulse Plus) ──
+// legenda pela IA (roteiro, quadros e fala do vídeo, arte), miniatura e prévia animada dos vídeos
+const postCaption = createPostCaption({ resolveAiConfig, resolveAiModel, uploadRoots, allowedOrigins: MEDIA_ALLOWED_ORIGINS });
+postCaption.registerMediaRoutes(app);
 const scheduling = registerSchedulingRoutes(app, {
   pool,
-  // legenda pela IA (roteiro, quadros e fala do vídeo, arte) e miniatura dos vídeos do calendário
-  postCaption: createPostCaption({ resolveAiConfig, resolveAiModel, uploadRoots, allowedOrigins: MEDIA_ALLOWED_ORIGINS }),
+  postCaption,
   verifyUser,
   getLinkedUserIds,
   hasPulsePlus: pulsePlus.hasPulsePlus,

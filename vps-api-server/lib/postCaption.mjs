@@ -7,6 +7,11 @@
 //   4. sempre: título, descrição, nicho, linha editorial e nome do cliente.
 // Miniatura: um quadro do vídeo (JPEG 360 px) gerado uma vez e guardado em <raiz de uploads>/.thumbs
 // (pasta oculta, fora do que /uploads serve direto); a rota pública só aceita vídeos de /uploads.
+// Prévia animada: 5 s do vídeo, 320 px, sem áudio, ~200 KB (.thumbs/<hash>.preview.mp4). Os cards do portal
+// tocavam o vídeo inteiro em loop (dezenas de MB por card): agora tocam essa prévia. Gerada em segundo plano,
+// uma por vez; enquanto não existe a rota responde 404 e o card fica na miniatura.
+//   GET /api/media/thumb?src=/uploads/…    JPEG (gera na hora, ~1 s)
+//   GET /api/media/preview?src=/uploads/…  MP4 curto (404 + gera em segundo plano quando ainda não existe)
 
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -212,5 +217,88 @@ Regras da legenda:
     });
   }
 
-  return { generate, thumbnail };
+  // ── Prévia animada ──
+  const previewQueue = makeQueue(1);
+  const pendingPreviews = new Set();
+  const failedPreviews = new Map(); // destino → quando falhou (não tenta de novo por 6 h)
+
+  async function previewPaths(url) {
+    const file = localFile(url);
+    if (!file || !VIDEO_RE.test(file.localPath)) return null;
+    const stat = await fsp.stat(file.localPath);
+    const dir = path.join(file.root, '.thumbs');
+    const hash = crypto.createHash('sha1').update(`${file.relative}|${stat.size}|${stat.mtimeMs}`).digest('hex');
+    return { file, dir, dest: path.join(dir, `${hash}.preview.mp4`) };
+  }
+
+  /** Caminho da prévia pronta, ou null (e agenda a geração). */
+  async function preview(url) {
+    const paths = await previewPaths(url);
+    if (!paths) return null;
+    const { file, dir, dest } = paths;
+    if (fs.existsSync(dest)) return dest;
+    const failedAt = failedPreviews.get(dest);
+    if (pendingPreviews.has(dest) || (failedAt && Date.now() - failedAt < 6 * 3600_000)) return null;
+    pendingPreviews.add(dest);
+    previewQueue(async () => {
+      const tmpDest = `${dest}.${process.pid}.tmp.mp4`;
+      try {
+        await fsp.mkdir(dir, { recursive: true });
+        const total = await duration(file.localPath);
+        const start = total && total > 8 ? 1 : 0;
+        await runProcess(ffmpeg, [
+          '-nostdin', '-hide_banner', '-loglevel', 'error', '-y', '-ss', String(start), '-t', '5', '-i', file.localPath,
+          '-an', '-vf', 'scale=320:-2,fps=24', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '30', '-pix_fmt', 'yuv420p',
+          '-movflags', '+faststart', '-threads', '1', tmpDest,
+        ], { timeoutMs: 120_000 });
+        await fsp.rename(tmpDest, dest);
+      } catch (error) {
+        failedPreviews.set(dest, Date.now());
+        await fsp.rm(tmpDest, { force: true }).catch(() => {});
+        logger.warn?.('[prévia] não gerou:', error.message);
+      } finally {
+        pendingPreviews.delete(dest);
+      }
+    }).catch(() => {});
+    return null;
+  }
+
+  /** Rotas públicas (o <img>/<video> do card não manda login; os vídeos de /uploads já são públicos). */
+  function registerMediaRoutes(app) {
+    const srcOf = (req) => {
+      const src = String(req.query?.src || '');
+      try { return new URL(src, 'https://agenciapulse.tech').pathname.startsWith('/uploads/') && src.length <= 1024 ? src : null; } catch { return null; }
+    };
+    app.get('/api/media/thumb', async (req, res) => {
+      const src = srcOf(req);
+      if (!src) return res.status(400).end();
+      try {
+        const file = await thumbnail(src);
+        if (!file) return res.status(404).end();
+        res.set('Cache-Control', 'public, max-age=604800, immutable');
+        res.type('image/jpeg').sendFile(file);
+      } catch (error) {
+        logger.warn?.('[miniatura]', error.message);
+        if (!res.headersSent) res.status(404).end();
+      }
+    });
+    app.get('/api/media/preview', async (req, res) => {
+      const src = srcOf(req);
+      if (!src) return res.status(400).end();
+      try {
+        const file = await preview(src);
+        if (!file) {
+          res.set('Cache-Control', 'no-store').set('Retry-After', '60');
+          return res.status(404).end();
+        }
+        res.set('Cache-Control', 'public, max-age=604800, immutable');
+        res.type('video/mp4').sendFile(file);
+      } catch (error) {
+        logger.warn?.('[prévia]', error.message);
+        if (!res.headersSent) res.status(404).end();
+      }
+    });
+  }
+
+  return { generate, thumbnail, preview, registerMediaRoutes };
 }

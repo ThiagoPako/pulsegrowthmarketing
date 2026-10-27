@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/vpsDb';
+import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
 import { portalAction, hasPortalSession, clearPortalSession } from '@/lib/portalApi';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Play, Pause, Maximize, Check, MessageSquare, X, ChevronLeft, ChevronRight,
   BarChart3, Send, Clock, Film, Image, Palette, Video, Award, Bell, Volume2,
   VolumeX, Eye, TrendingUp, Sparkles, ChevronDown, Loader2, LogOut, Shield, Download, Rocket,
-  Trash2, Settings
+  Trash2, Settings, Users, MessageCircle
 } from 'lucide-react';
 import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 import { Progress } from '@/components/ui/progress';
@@ -31,6 +31,7 @@ import PortalEvents from '@/components/portal/PortalEvents';
 import PortalTraining from '@/components/portal/PortalTraining';
 import { PortalInsightsTab } from '@/components/portal/PortalInsightsTab';
 import { peekPlayback, resolvePlayback } from '@/lib/playbackUrl';
+import { videoPreviewUrl, videoThumbUrl } from '@/lib/mediaPreview';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte', otimizacao: 'Otimizado',
@@ -137,6 +138,8 @@ export default function ClientPortal() {
   const [showAdjustment, setShowAdjustment] = useState(false);
   // Envio em andamento (aprovar / pedir ajuste / comentar): trava o botão e o Enter
   const [sendingAction, setSendingAction] = useState<null | 'approve' | 'adjustment' | 'comment'>(null);
+  // Equipe: mandar o conteúdo aberto no WhatsApp do cliente (grupo ou privado)
+  const [whatsSending, setWhatsSending] = useState<null | 'grupo' | 'privado'>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -164,6 +167,27 @@ export default function ClientPortal() {
       return { name: profile.display_name || profile.name, type: 'team', id: profile.id };
     }
     return { name: portalUserName || client?.company_name || 'Cliente', type: 'client', id: null };
+  };
+
+  const sendToWhatsApp = async (target: 'grupo' | 'privado') => {
+    if (!selectedContent || whatsSending) return;
+    const where = target === 'grupo' ? 'no grupo do cliente' : 'no WhatsApp privado do cliente';
+    if (!window.confirm(`Enviar "${selectedContent.title}" ${where}?`)) return;
+    setWhatsSending(target);
+    try {
+      const res = await vpsAuthedFetch(`/portal-contents/${selectedContent.id}/send-whatsapp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Não foi possível enviar');
+      toast.success(target === 'grupo' ? 'Na fila para o grupo do cliente 📲' : 'Na fila para o WhatsApp do cliente 📲');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível enviar');
+    } finally {
+      setWhatsSending(null);
+    }
   };
 
   const handleLogout = () => {
@@ -1150,9 +1174,13 @@ export default function ClientPortal() {
                 ) : selectedContent.file_url ? (
                   <div className="relative group">
                     {videoLoading ? (
-                      <div className="aspect-video flex flex-col items-center justify-center gap-3 bg-[#0c0c14] text-white/60">
-                        <Loader2 className="w-8 h-8 animate-spin" />
-                        <p className="text-sm">Carregando{videoQuality === '480p' ? ' em 480p' : ''}...</p>
+                      // quadro do vídeo por trás do "carregando": a espera parece menor
+                      <div className="relative aspect-video flex flex-col items-center justify-center gap-3 bg-[#0c0c14] text-white/70 overflow-hidden">
+                        {(selectedContent.thumbnail_url || videoThumbUrl(selectedContent.file_url)) && (
+                          <img src={selectedContent.thumbnail_url || videoThumbUrl(selectedContent.file_url)!} alt="" className="absolute inset-0 w-full h-full object-contain opacity-40" />
+                        )}
+                        <Loader2 className="relative w-8 h-8 animate-spin" />
+                        <p className="relative text-sm">Carregando{videoQuality === '480p' ? ' em 480p' : ''}...</p>
                       </div>
                     ) : videoLoadError ? (
                       <div className="aspect-video flex flex-col items-center justify-center gap-3 bg-[#0c0c14] text-center px-6 text-white/60">
@@ -1184,7 +1212,9 @@ export default function ClientPortal() {
                           ref={videoRef}
                           src={resolvedVideoUrl}
                           playsInline
-                          preload="metadata"
+                          // vídeo aberto: já começa a baixar (versão leve) e mostra um quadro enquanto isso
+                          preload="auto"
+                          poster={selectedContent.thumbnail_url || videoThumbUrl(selectedContent.file_url) || undefined}
                           className="w-full aspect-video object-contain bg-black"
                           onPlay={() => setIsPlaying(true)}
                           onPause={() => setIsPlaying(false)}
@@ -1304,6 +1334,32 @@ export default function ClientPortal() {
                     {STATUS_LABELS[selectedContent.status]}
                   </div>
                 </div>
+
+                {/* Equipe: enviar o arquivo direto no WhatsApp do cliente */}
+                {isTeamMember && selectedContent.file_url && selectedContent.status !== 'revisao_interna' && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-white/40 w-full sm:w-auto">Enviar ao cliente pelo WhatsApp:</span>
+                    {/* o grupo não vem na API do portal (é pública): o servidor avisa se faltar */}
+                    {(
+                      <button
+                        onClick={() => void sendToWhatsApp('grupo')}
+                        disabled={!!whatsSending}
+                        className="inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold bg-[#25D366] hover:bg-[#1ebe5b] text-white transition-colors disabled:opacity-50"
+                      >
+                        {whatsSending === 'grupo' ? <Loader2 size={15} className="animate-spin" /> : <Users size={15} />} No grupo
+                      </button>
+                    )}
+                    {(
+                      <button
+                        onClick={() => void sendToWhatsApp('privado')}
+                        disabled={!!whatsSending}
+                        className="inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-semibold border border-[#25D366]/60 text-[#25D366] hover:bg-[#25D366]/10 transition-colors disabled:opacity-50"
+                      >
+                        {whatsSending === 'privado' ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={15} />} No privado
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Actions — em revisão interna o vídeo ainda não foi liberado: sem aprovar/ajuste */}
                 {selectedContent.status === 'revisao_interna' && (
@@ -1526,9 +1582,16 @@ const ContentRow = memo(function ContentRow({ label, items, clientColor, onSelec
   );
 });
 
-/* ── Reels Card with always-on 6s loop preview ── */
-// Prévia direto do nginx (sem o 480p do proxy: cada card subia um ffmpeg na VPS), só
-// enquanto o card está na tela e pausada com um conteúdo aberto no player.
+/* ── Card do conteúdo: miniatura na hora e prévia animada leve (5 s, ~200 KB) ── */
+// Antes cada card tocava o vídeo inteiro em loop (dezenas de MB por card): com vários na tela a página
+// travava e o vídeo aberto demorava. Agora: miniatura JPEG gerada no servidor e, só com o card na tela,
+// a prévia curta de /api/media/preview. Sem prévia pronta (gerando), fica a miniatura.
+const prefersReducedData = () => {
+  if (typeof navigator === 'undefined') return false;
+  const conn = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+  return !!conn?.saveData || /(^|-)2g$/.test(conn?.effectiveType || '');
+};
+
 const ReelsCard = memo(function ReelsCard({ content, clientColor, onSelect, paused = false }: {
   content: PortalContent;
   clientColor: string;
@@ -1538,43 +1601,31 @@ const ReelsCard = memo(function ReelsCard({ content, clientColor, onSelect, paus
   const isVideo = isPortalVideo(content);
   const Icon = CONTENT_TYPE_ICONS[content.content_type] || Film;
   const statusStyle = STATUS_COLORS[content.status];
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const thumbSrc = content.thumbnail_url || (isVideo ? videoThumbUrl(content.file_url) : null);
+  const clipSrc = isVideo && !prefersReducedData() ? videoPreviewUrl(content.file_url) : null;
+  const [thumbFailed, setThumbFailed] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const cardRef = useRef<HTMLButtonElement>(null);
   const previewRef = useRef<HTMLVideoElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
   const [inView, setInView] = useState(false);
+  const [everSeen, setEverSeen] = useState(false);
 
-  // IntersectionObserver: carrega a prévia quando o card aparece e pausa quando sai da tela
+  // Só carrega a prévia com o card na tela; pausa quando sai
   useEffect(() => {
-    if (!isVideo || !content.file_url) return;
+    if (!clipSrc) return;
     const el = cardRef.current;
     if (!el) return;
-
     const observer = new IntersectionObserver(
       ([entry]) => {
         setInView(entry.isIntersecting);
-        if (entry.isIntersecting) setIsVisible(true);
+        if (entry.isIntersecting) setEverSeen(true);
       },
-      { rootMargin: '200px' }
+      { rootMargin: '100px' }
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [isVideo, content.file_url]);
-
-  // URL da prévia: a versão leve (ou o original) direto do nginx, sem passar pelo proxy/ffmpeg.
-  // Os cards que aparecem juntos perguntam num pedido só.
-  useEffect(() => {
-    if (!isVisible || !isVideo || !content.file_url || previewUrl || previewFailed) return;
-    let cancelled = false;
-    resolvePlayback(content.file_url).then((playback) => {
-      if (!cancelled) setPreviewUrl(playback.url);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isVisible, isVideo, content.file_url, previewUrl, previewFailed]);
+  }, [clipSrc]);
 
   // Pausa com o player aberto ou fora da tela; volta a tocar quando reaparece
   useEffect(() => {
@@ -1582,51 +1633,47 @@ const ReelsCard = memo(function ReelsCard({ content, clientColor, onSelect, paus
     if (!vid) return;
     if (paused || !inView) vid.pause();
     else vid.play().catch(() => {});
-  }, [paused, inView, previewUrl]);
+  }, [paused, inView, previewVisible]);
 
-  const showPreview = isVideo && !!previewUrl;
+  const showPreview = !!clipSrc && everSeen && !previewFailed;
 
   return (
     <button
       ref={cardRef}
       onClick={() => onSelect(content)}
-      className="group relative shrink-0 w-[120px] sm:w-[170px] snap-start rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.04] hover:ring-1 focus:outline-none bg-white/[0.03]"
-      style={{ '--tw-ring-color': `hsl(${clientColor} / 0.5)` } as any}
+      className="group relative shrink-0 w-[132px] sm:w-[170px] snap-start rounded-xl overflow-hidden transition-transform duration-200 sm:hover:scale-[1.03] hover:ring-1 focus-visible:ring-2 focus:outline-none bg-white/[0.03] active:scale-[0.98]"
+      style={{ '--tw-ring-color': `hsl(${clientColor} / 0.5)` } as React.CSSProperties}
     >
       <div className="aspect-[9/16] relative overflow-hidden">
-        {/* Static fallback — fades out once video preview loads */}
-        {content.thumbnail_url ? (
-          <img src={content.thumbnail_url} alt={content.title} loading="lazy" className={`w-full h-full object-cover transition-opacity duration-500 ${previewVisible ? 'opacity-0' : 'opacity-100'}`} />
+        {/* Miniatura: aparece na hora e fica por baixo da prévia */}
+        {thumbSrc && !thumbFailed ? (
+          <img src={thumbSrc} alt={content.title} loading="lazy" decoding="async" onError={() => setThumbFailed(true)}
+            className={`w-full h-full object-cover transition-opacity duration-300 ${previewVisible ? 'opacity-0' : 'opacity-100'}`} />
         ) : content.file_url && content.content_type === 'arte' ? (
-          <img src={content.file_url} alt={content.title} loading="lazy" className="w-full h-full object-cover" />
+          <img src={content.file_url} alt={content.title} loading="lazy" decoding="async" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-white/[0.04]">
             <Icon size={32} className="text-white/10" />
           </div>
         )}
 
-        {/* Always-on 6s loop video preview */}
+        {/* Prévia animada curta (5 s em loop) */}
         {showPreview && (
           <video
             ref={previewRef}
-            src={previewUrl!}
+            src={clipSrc!}
             muted
+            loop
             playsInline
             autoPlay={!paused}
-            preload="metadata"
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${previewVisible ? 'opacity-100' : 'opacity-0'}`}
+            preload="auto"
+            disablePictureInPicture
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${previewVisible ? 'opacity-100' : 'opacity-0'}`}
             onLoadedData={() => setPreviewVisible(true)}
             onError={() => {
-              // sem prévia (fica a capa); não tenta de novo em loop
+              // ainda gerando no servidor (404): fica a miniatura nesta visita
               setPreviewVisible(false);
-              setPreviewUrl(null);
               setPreviewFailed(true);
-            }}
-            onTimeUpdate={(e) => {
-              const vid = e.currentTarget;
-              if (vid.currentTime >= 6) {
-                vid.currentTime = 0;
-              }
             }}
           />
         )}

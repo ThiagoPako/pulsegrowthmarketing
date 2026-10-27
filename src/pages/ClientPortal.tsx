@@ -19,6 +19,7 @@ import PortalNotifications from '@/components/portal/PortalNotifications';
 import ZonaCriativa from '@/components/portal/ZonaCriativa';
 import PortalTutorial from '@/components/portal/PortalTutorial';
 import PortalRecordingCalendar from '@/components/portal/PortalRecordingCalendar';
+import PortalPostCalendar from '@/components/portal/PortalPostCalendar';
 import PortalPanfletagem from '@/components/portal/PortalPanfletagem';
 import PortalDesigner from '@/components/portal/PortalDesigner';
 import { syncPortalComment } from '@/lib/portalSync';
@@ -78,7 +79,7 @@ interface ClientData {
   client_type?: string;
 }
 
-type TabView = 'library' | 'metrics' | 'insights' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento' | 'otimizados' | 'admin';
+type TabView = 'library' | 'metrics' | 'insights' | 'criativa' | 'agenda' | 'posts' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento' | 'otimizados' | 'admin';
 
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
@@ -584,7 +585,7 @@ export default function ClientPortal() {
   };
 
   return (
-    <div className="min-h-screen bg-[#080810] text-white selection:bg-white/20 overflow-x-hidden">
+    <div className="min-h-screen bg-[#080810] text-white selection:bg-white/20 overflow-x-clip">
       {/* Welcome / News video overlay */}
       <PortalWelcomeOverlay
         clientId={client.id}
@@ -652,10 +653,16 @@ export default function ClientPortal() {
                 Zona Criativa
               </button>
               <button
+                onClick={() => setActiveTab('posts')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'posts' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                📅 Posts
+              </button>
+              <button
                 onClick={() => setActiveTab('agenda')}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'agenda' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
               >
-                Agenda
+                Gravações
               </button>
               {client.client_type === 'sem_contrato' && (
               <button
@@ -772,50 +779,53 @@ export default function ClientPortal() {
       </header>
 
       {/* Mobile tab bar */}
-      <div className="sm:hidden flex overflow-x-auto border-b border-white/[0.06]" style={{ scrollbarWidth: 'none' }}>
-        <button onClick={() => setActiveTab('library')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'library' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'library' ? { borderColor: `hsl(${clientColor})` } : {}}>
+      <div className="sm:hidden sticky top-16 z-40 flex overflow-x-auto border-b border-white/[0.06] bg-[#080810]/95 backdrop-blur-xl" style={{ scrollbarWidth: 'none' }}>
+        <button onClick={() => setActiveTab('library')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'library' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'library' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Biblioteca
         </button>
         {optimizedContents.length > 0 && (
-          <button onClick={() => setActiveTab('otimizados')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap inline-flex items-center gap-1 ${activeTab === 'otimizados' ? 'text-fuchsia-300 border-b-2 border-fuchsia-400' : 'text-fuchsia-300/70'}`}>
+          <button onClick={() => setActiveTab('otimizados')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap inline-flex items-center gap-1 ${activeTab === 'otimizados' ? 'text-fuchsia-300 border-b-2 border-fuchsia-400' : 'text-fuchsia-300/70'}`}>
             <Rocket size={11} className="animate-pulse" /> Stories
           </button>
         )}
-        <button onClick={() => setActiveTab('criativa')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'criativa' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'criativa' ? { borderColor: `hsl(${clientColor})` } : {}}>
+        <button onClick={() => setActiveTab('criativa')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'criativa' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'criativa' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Zona Criativa
         </button>
-        <button onClick={() => setActiveTab('agenda')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'agenda' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'agenda' ? { borderColor: `hsl(${clientColor})` } : {}}>
-          Agenda
+        <button onClick={() => setActiveTab('posts')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'posts' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'posts' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          📅 Posts
+        </button>
+        <button onClick={() => setActiveTab('agenda')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'agenda' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'agenda' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          Gravações
         </button>
         {client.client_type === 'sem_contrato' && (
-        <button onClick={() => setActiveTab('entregas')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'entregas' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'entregas' ? { borderColor: `hsl(${clientColor})` } : {}}>
+        <button onClick={() => setActiveTab('entregas')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'entregas' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'entregas' ? { borderColor: `hsl(${clientColor})` } : {}}>
           📋 Entregas
         </button>
         )}
         {(client.show_metrics || isTeamMember) && (
-          <button onClick={() => setActiveTab('metrics')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          <button onClick={() => setActiveTab('metrics')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
             Métricas
           </button>
         )}
-        <button onClick={() => setActiveTab('designer')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'designer' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'designer' ? { borderColor: `hsl(${clientColor})` } : {}}>
+        <button onClick={() => setActiveTab('designer')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'designer' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'designer' ? { borderColor: `hsl(${clientColor})` } : {}}>
           🎨 Designer
         </button>
         {client.has_vehicle_flyer && (
-          <button onClick={() => setActiveTab('panfletagem')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'panfletagem' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'panfletagem' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          <button onClick={() => setActiveTab('panfletagem')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'panfletagem' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'panfletagem' ? { borderColor: `hsl(${clientColor})` } : {}}>
             🚗 Panfleto
           </button>
         )}
-        <button onClick={() => setActiveTab('descontos')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'descontos' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'descontos' ? { borderColor: `hsl(${clientColor})` } : {}}>
+        <button onClick={() => setActiveTab('descontos')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'descontos' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'descontos' ? { borderColor: `hsl(${clientColor})` } : {}}>
           🎟️ Descontos
         </button>
-        <button onClick={() => setActiveTab('eventos')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'eventos' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'eventos' ? { borderColor: `hsl(${clientColor})` } : {}}>
+        <button onClick={() => setActiveTab('eventos')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'eventos' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'eventos' ? { borderColor: `hsl(${clientColor})` } : {}}>
           🎪 Eventos
         </button>
-        <button onClick={() => setActiveTab('treinamento')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'treinamento' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'treinamento' ? { borderColor: `hsl(${clientColor})` } : {}}>
+        <button onClick={() => setActiveTab('treinamento')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'treinamento' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'treinamento' ? { borderColor: `hsl(${clientColor})` } : {}}>
           📚 Treinamento
         </button>
         {client.company_name?.toLowerCase().includes('super brasil') && (
-          <button onClick={() => setActiveTab('rendimento')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'rendimento' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'rendimento' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          <button onClick={() => setActiveTab('rendimento')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'rendimento' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'rendimento' ? { borderColor: `hsl(${clientColor})` } : {}}>
             🥩 Rendimento
           </button>
         )}
@@ -987,6 +997,8 @@ export default function ClientPortal() {
           <ZonaCriativa clientId={client.id} clientColor={clientColor} isAuthenticated={isAuthenticated} />
         ) : activeTab === 'designer' ? (
           <PortalDesigner clientId={client.id} clientColor={clientColor} />
+        ) : activeTab === 'posts' ? (
+          <PortalPostCalendar clientId={client.id} clientColor={clientColor} />
         ) : activeTab === 'agenda' ? (
           <PortalRecordingCalendar clientId={client.id} clientColor={clientColor} />
         ) : activeTab === 'panfletagem' && client.has_vehicle_flyer ? (

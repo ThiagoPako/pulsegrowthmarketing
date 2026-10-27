@@ -6219,6 +6219,23 @@ app.post('/api/portal-actions', async (req, res) => {
     }
 
     // ── Get portal contents ──
+    // Calendário de postagem do cliente (só leitura): o que está agendado ou já foi publicado no mês
+    if (action === 'get_post_calendar') {
+      // client_id já é o do token quando é o cliente (effectiveClientId no começo desta rota)
+      const calendarClientId = client_id;
+      if (!caller) return res.status(401).json({ error: 'Unauthorized' });
+      if (!calendarClientId) return res.status(400).json({ error: 'client_id required' });
+      const from = String(req.body?.from || '');
+      const to = String(req.body?.to || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < from) {
+        return res.status(400).json({ error: 'Período inválido' });
+      }
+      const days = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000;
+      if (days > 62) return res.status(400).json({ error: 'Período muito longo' });
+      const posts = await scheduling.postCalendar(calendarClientId, from, to);
+      return res.json({ posts });
+    }
+
     if (action === 'get_contents') {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
       // 'revisao_interna' (vídeo ainda não liberado) só vai para a equipe.

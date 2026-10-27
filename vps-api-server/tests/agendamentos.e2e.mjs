@@ -711,6 +711,74 @@ try {
   assert.equal((await row(`SELECT caption FROM scheduled_posts WHERE content_task_id = $1 AND status = 'agendado'`, [ids.taskCap])).caption, 'Legenda corrigida depois');
   await api('POST', '/scheduling/cancel', { client_id: ids.cliMin, kind: 'conteudo', id: ids.taskCap });
   ok('legenda: guardar (manual e automático), gerar com IA pelo roteiro ou pelos quadros do vídeo; miniatura do vídeo no calendário');
+  // ── Portal: calendário de postagem do cliente (só leitura) ──
+  r = await api('POST', '/scheduling/schedule', { client_id: ids.cliMin, kind: 'conteudo', id: ids.taskCap, date: addDays(today, 4), time: '11:00', mode: 'manual', platform: 'instagram', publish_type: 'reels', caption: 'Legenda que o cliente vê' });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const calFrom = addDays(today, 0);
+  const calTo = addDays(today, 30);
+  let cal = await portalAction(ids.cliMin, { action: 'get_post_calendar', client_id: ids.cliMin, from: calFrom, to: calTo });
+  assert.equal(cal.status, 200, JSON.stringify(cal.json));
+  const calItem = cal.json.posts.find((p) => p.key === `conteudo:${ids.taskCap}`);
+  assert.ok(calItem, 'post agendado aparece no calendário do portal');
+  assert.deepEqual([calItem.date, calItem.time, calItem.state, calItem.caption, calItem.type], [addDays(today, 4), '11:00', 'agendado', 'Legenda que o cliente vê', 'reels']);
+  assert.match(calItem.thumb_url, /\/api\/scheduling\/thumb\?src=/, 'com miniatura');
+  assert.ok(!('post' in calItem) && !('id' in calItem), 'sem dados internos');
+  cal = await portalAction(ids.cliMin, { action: 'get_post_calendar', client_id: ids.cliUru, from: calFrom, to: calTo });
+  assert.ok(!cal.json.posts.some((p) => p.key === `conteudo:${ids.taskCap}`) || cal.json.posts.every((p) => p.key !== `conteudo:${ids.taskUru}`), 'cliente só vê o próprio calendário');
+  assert.ok(cal.json.posts.some((p) => p.key === `conteudo:${ids.taskCap}`), 'o client_id do corpo é ignorado: vale o do token');
+  cal = await portalAction(ids.cliMin, { action: 'get_post_calendar', client_id: ids.cliMin, from: calFrom, to: addDays(today, 90) });
+  assert.equal(cal.status, 400, 'período longo recusado');
+  r = await fetch(`${BASE}/portal-actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_post_calendar', client_id: ids.cliMin, from: calFrom, to: calTo }) });
+  assert.equal(r.status, 401, 'sem sessão não vê');
+  await api('POST', '/scheduling/cancel', { client_id: ids.cliMin, kind: 'conteudo', id: ids.taskCap });
+
+  // ── Prévia animada leve (5 s, sem áudio) e miniatura pela rota geral ──
+  let pv = await fetch(`${BASE}/media/preview?src=${encodeURIComponent('/uploads/videos/clareamento.mp4')}`);
+  assert.equal(pv.status, 404, 'primeira vez: gera em segundo plano');
+  const previewReady = await waitFor(async () => (await fetch(`${BASE}/media/preview?src=${encodeURIComponent('/uploads/videos/clareamento.mp4')}`)).status === 200, 'prévia gerada', 60_000);
+  assert.ok(previewReady);
+  pv = await fetch(`${BASE}/media/preview?src=${encodeURIComponent('/uploads/videos/clareamento.mp4')}`);
+  assert.equal(pv.headers.get('content-type'), 'video/mp4');
+  const pvBytes = Buffer.from(await pv.arrayBuffer());
+  assert.ok(pvBytes.length > 1000 && pvBytes.length < 1_500_000, `prévia leve (${pvBytes.length} bytes)`);
+  const pvFile = path.join(uploads, '.thumbs', fs.readdirSync(path.join(uploads, '.thumbs')).find((f) => f.endsWith('.preview.mp4')));
+  const probe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width', '-of', 'json', pvFile]);
+  const pj = JSON.parse(probe.stdout.toString());
+  assert.ok(Number(pj.format.duration) <= 5.2, 'até 5 s');
+  assert.ok(pj.streams.every((st) => st.codec_type === 'video'), 'sem áudio');
+  assert.equal(pj.streams[0].width, 320, '320 px');
+  assert.equal((await fetch(`${BASE}/media/thumb?src=${encodeURIComponent('/uploads/videos/clareamento.mp4')}`)).status, 200);
+  assert.equal((await fetch(`${BASE}/media/preview?src=${encodeURIComponent('/etc/passwd')}`)).status, 400);
+  assert.equal((await fetch(`${BASE}/media/preview?src=${encodeURIComponent('/uploads/../server.mjs')}`)).status, 400);
+
+  // ── Portal: a equipe manda o conteúdo no WhatsApp do cliente ──
+  const portalVideo = '00000000-0000-0000-0000-00000000a646';
+  await pool.query(`DELETE FROM client_portal_contents WHERE id = $1`, [portalVideo]);
+  await pool.query(
+    `INSERT INTO client_portal_contents (id, client_id, title, content_type, file_url, status, season_month, season_year)
+     VALUES ($1, $2, 'Clareamento', 'reel', '/uploads/videos/clareamento.mp4', 'pendente', 10, 2026)`, [portalVideo, ids.cliMin]);
+  await pool.query(`UPDATE clients SET whatsapp = '62999998888', whatsapp_group = '120363000000000001@g.us' WHERE id = $1`, [ids.cliMin]);
+  await pool.query(`DELETE FROM wa_outbox WHERE client_id = $1`, [ids.cliMin]).catch(() => {});
+  r = await api('POST', `/portal-contents/${portalVideo}/send-whatsapp`, { target: 'grupo' });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  let out = await row(`SELECT * FROM wa_outbox WHERE id = $1`, [r.json.outbox_id]);
+  assert.equal(out.to_number, '120363000000000001@g.us');
+  assert.equal(out.media_url, 'https://agenciapulse.tech/uploads/videos/clareamento.mp4');
+  assert.match(out.body, /Clareamento/);
+  r = await api('POST', `/portal-contents/${portalVideo}/send-whatsapp`, { target: 'privado' });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  out = await row(`SELECT * FROM wa_outbox WHERE id = $1`, [r.json.outbox_id]);
+  assert.equal(out.to_number, '62999998888');
+  r = await portalAction(ids.cliMin, { action: 'get_contents', client_id: ids.cliMin });
+  const asClient = await fetch(`${BASE}/portal-contents/${portalVideo}/send-whatsapp`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-portal-token': jwt.sign({ typ: 'portal', cid: ids.cliMin, puid: null }, PORTAL_SECRET, { expiresIn: '1h' }) }, body: '{"target":"grupo"}' });
+  assert.equal(asClient.status, 401, 'cliente não manda pela rota da equipe');
+  await pool.query(`UPDATE clients SET whatsapp_group = NULL WHERE id = $1`, [ids.cliMin]);
+  r = await api('POST', `/portal-contents/${portalVideo}/send-whatsapp`, { target: 'grupo' });
+  assert.equal(r.status, 400);
+  assert.match(r.json.error, /grupo/);
+  await pool.query(`DELETE FROM client_portal_contents WHERE id = $1`, [portalVideo]);
+  ok('portal: calendário de posts do cliente (só o dele, sem dados internos), prévia animada leve e envio ao WhatsApp pela equipe');
+
 
   console.log('\nTodos os testes de agendamentos passaram.');
 } catch (error) {

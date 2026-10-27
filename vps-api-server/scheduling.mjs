@@ -1650,5 +1650,31 @@ export function registerSchedulingRoutes(app, deps) {
     upsertDelivery, markScheduled, markUnscheduled, insertHistory, platformLabel, makeMediaHelpers,
   });
 
-  return { ready, userModules, stories };
+  /**
+   * Calendário de postagem que o cliente vê no portal (só leitura): o que está agendado ou já saiu no período,
+   * sem dados internos (ids da fila, erros técnicos, quem agendou). Cancelados e datas só previstas ficam de fora.
+   */
+  async function postCalendar(clientId, from, to) {
+    if (!isUuid(clientId) || !DATE_KEY_RE.test(from) || !DATE_KEY_RE.test(to) || to < from) return [];
+    const rows = await loadMaterialRows(clientId, from, to);
+    const { scheduled } = buildMaterials(rows, { from, to, publicAppUrl });
+    return scheduled
+      .filter((i) => !i.ghost && !i.virtual && i.when?.date && ['agendado', 'manual', 'publicando', 'publicado'].includes(i.state))
+      .map((i) => ({
+        key: i.key,
+        title: i.title,
+        type: i.type,
+        state: i.state === 'publicado' ? 'publicado' : 'agendado',
+        date: i.when.date,
+        time: i.when.time || null,
+        thumb_url: i.thumb_url || null,
+        media_url: i.media_url || null,
+        media_kind: i.media_kind,
+        caption: i.post?.caption || i.caption || '',
+        platform: i.post?.platform || null,
+      }))
+      .sort((a, b) => `${a.date} ${a.time || ''}`.localeCompare(`${b.date} ${b.time || ''}`));
+  }
+
+  return { ready, userModules, stories, postCalendar };
 }

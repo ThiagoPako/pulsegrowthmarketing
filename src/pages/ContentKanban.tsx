@@ -30,7 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, ArrowLeft, Send, Eye, Maximize2, Rocket, Download, ChevronLeft, ChevronRight, ArrowDownUp } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, ArrowLeft, Send, Eye, Maximize2, Rocket, Download, ChevronLeft, ChevronRight, ArrowDownUp, Lightbulb, Video } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -149,6 +149,11 @@ const KANBAN_COLUMNS = [
 ] as const;
 
 type KanbanColumnId = typeof KANBAN_COLUMNS[number]['id'];
+
+const COLUMN_ICONS: Record<string, typeof Rocket> = {
+  ideias: Lightbulb, captacao: Video, edicao: Film, pre_revisao: Eye, revisao: Eye,
+  alteracao: Edit, envio: Send, agendamentos: Calendar, acompanhamento: Rocket,
+};
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-700 bg-blue-50 border border-blue-200/60 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800' },
@@ -1328,67 +1333,49 @@ export default function ContentKanban() {
 
       {/* Kanban Board */}
       <DragScrollContainer className="flex-1">
-        <div className="flex gap-3 h-full min-w-max pb-2">
+        <div className="flex gap-3 h-full min-w-max pb-2 items-stretch">
           {visibleColumns.map((col, colIdx) => {
             const colTasks = tasksByColumn[col.id] || [];
             const isDragOver = dragOverColumn === col.id;
 
             return (
-              <motion.div
+              <div
                 key={col.id}
                 id={kanbanColumnDomId(col.id)}
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: colIdx * 0.06, duration: 0.4, ease: 'easeOut' }}
-                className={`flex flex-col w-[85vw] max-w-[280px] sm:w-[280px] shrink-0 rounded-2xl transition-all duration-200 ${
+                className={`flex flex-col w-[85vw] max-w-[288px] sm:w-[288px] shrink-0 min-h-0 rounded-2xl border border-border/40 transition-colors duration-150 ${
                   !isColumnInteractive(col.id) ? 'opacity-75' : ''
                 } ${
-                  isDragOver && isColumnInteractive(col.id) ? 'ring-2 ring-primary/40 bg-accent/20 scale-[1.01]' : 'bg-muted/10'
+                  isDragOver && isColumnInteractive(col.id) ? 'ring-2 ring-primary/50 bg-primary/5' : 'bg-muted/30'
                 }`}
                 onDragOver={e => isColumnInteractive(col.id) ? handleDragOver(e, col.id) : e.preventDefault()}
                 onDragLeave={handleDragLeave}
                 onDrop={e => isColumnInteractive(col.id) ? handleDrop(e, col.id) : e.preventDefault()}
               >
-                {/* Column header - gradient bar */}
-                <motion.div
-                  className={`flex items-center gap-2 px-3.5 py-2.5 rounded-t-2xl bg-gradient-to-r ${col.gradient} relative overflow-hidden`}
-                  whileHover={{ scale: 1.01 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <MiniRocket size={16} />
-                  <span className="text-[13px] font-bold text-white flex-1 truncate">{col.label}</span>
-                  <motion.span
-                    className="text-[11px] font-bold text-white/90 bg-white/25 backdrop-blur-sm rounded-full px-2.5 py-0.5 min-w-[26px] text-center shadow-sm"
-                    key={colTasks.length}
-                    initial={{ scale: 1.3 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-                  >
+                {/* Cabeçalho da coluna: cor da etapa, ícone, total e "+" (sem animação contínua: o quadro fica leve) */}
+                <div className={`flex items-center gap-2 pl-3 pr-1.5 h-10 rounded-t-2xl bg-gradient-to-r ${col.gradient} shadow-sm ${col.glow}`}>
+                  {(() => { const Icon = COLUMN_ICONS[col.id] || Rocket; return <Icon size={15} className="text-white/90 shrink-0" />; })()}
+                  <span className="text-[13px] font-semibold text-white flex-1 truncate">{col.label}</span>
+                  <span className="text-[11px] font-bold text-white bg-white/20 rounded-full px-2 py-0.5 min-w-[24px] text-center tabular-nums">
                     {colTasks.length}
-                  </motion.span>
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
-                    initial={{ x: '-100%' }}
-                    animate={{ x: '200%' }}
-                    transition={{ duration: 3, repeat: Infinity, repeatDelay: 8 + colIdx * 2, ease: 'linear' }}
-                  />
-                </motion.div>
+                  </span>
+                  {isColumnInteractive(col.id) && (
+                    <button
+                      type="button"
+                      onClick={() => openNew(col.id)}
+                      title={`Novo cartão em ${col.label}`}
+                      aria-label={`Novo cartão em ${col.label}`}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-white/90 hover:text-white hover:bg-white/20 transition-colors"
+                    >
+                      <Plus size={15} />
+                    </button>
+                  )}
+                </div>
 
                 {/* Cards */}
-                <div className="flex-1 px-2 py-2 overflow-y-auto max-h-[calc(100vh-18rem)]">
-                  <AnimatePresence mode="popLayout">
-                    <div className="space-y-2.5">
+                <div className="flex-1 px-2 py-2 overflow-y-auto min-h-0 [scrollbar-width:thin]">
+                    <div className="space-y-2">
                       {colTasks.map((task, taskIdx) => (
-                        <motion.div
-                          id={`task-card-${task.id}`}
-                          key={task.id}
-                          layout
-                          initial={{ opacity: 0, scale: 0.92, y: 10 }}
-                          animate={{ opacity: 1, scale: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.9, x: 40 }}
-                          transition={{ delay: taskIdx * 0.03, duration: 0.25, ease: 'easeOut' }}
-                          whileHover={{ y: -3, transition: { duration: 0.15 } }}
-                        >
+                        <div id={`task-card-${task.id}`} key={task.id}>
                           <TaskCard
                             viewOnly={!isColumnInteractive(col.id) || isForeignTask(task)}
                             cityLabel={isForeignTask(task) ? CITY_LABELS[normalizeCity(task.city) as CityCode] || undefined : undefined}
@@ -1480,39 +1467,31 @@ export default function ContentKanban() {
                             // Card de outra praça ou coluna em que o papel não atua: só consulta
                             {...(isForeignTask(task) || !isColumnInteractive(col.id) ? FOREIGN_TASK_NO_ACTIONS : {})}
                           />
-                        </motion.div>
+                        </div>
                       ))}
                       {colTasks.length === 0 && (
-                        <motion.div
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="text-center py-10 text-xs text-muted-foreground/50 italic flex flex-col items-center gap-3"
-                        >
-                          <MiniRocket size={24} />
-                          <span>Arraste cartões para cá</span>
-                        </motion.div>
+                        <div className="mx-1 py-8 rounded-xl border border-dashed border-border/60 text-center text-[11px] text-muted-foreground/70">
+                          {isColumnInteractive(col.id) ? 'Nenhum cartão. Arraste um para cá.' : 'Nenhum cartão'}
+                        </div>
                       )}
                     </div>
-                  </AnimatePresence>
                 </div>
 
                 {/* Add button at bottom */}
                 {isColumnInteractive(col.id) && (
-                  <motion.button
+                  <button
                     onClick={() => openNew(col.id)}
-                    className="mx-2 mb-2 py-2 rounded-xl border border-dashed border-border/60 text-xs text-muted-foreground/70 hover:text-foreground hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 flex items-center justify-center gap-1.5 font-medium"
-                    whileHover={{ scale: 1.02, borderColor: 'hsl(var(--primary))' }}
-                    whileTap={{ scale: 0.97 }}
+                    className="mx-2 mb-2 h-8 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-background/70 transition-colors flex items-center justify-center gap-1.5 font-medium"
                   >
-                    <Plus size={12} /> Adicionar
-                  </motion.button>
+                    <Plus size={13} /> Adicionar cartão
+                  </button>
                 )}
                 {!isColumnInteractive(col.id) && (
                   <div className="mx-2 mb-2 py-1.5 text-center text-[10px] text-muted-foreground/50 italic flex items-center justify-center gap-1">
                     <Eye size={10} /> Visualização
                   </div>
                 )}
-              </motion.div>
+              </div>
             );
           })}
         </div>
@@ -1877,396 +1856,277 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
     (Date.now() - reviewHeartbeatAt.getTime()) < 60000
   );
 
+  // Selos de exceção (o que pede atenção). Os que só repetiam a coluna (Gravando, Agendar,
+  // Para Postar, enviado/aguarda) saíram: o cabeçalho da coluna já diz isso.
+  const pills: { key: string; label: string; tone: string; dot?: boolean; title?: string }[] = [];
+  if (task.immediate_alteration && task.kanban_column === 'alteracao') pills.push({ key: 'imediato', label: 'Imediato', tone: 'bg-red-600 text-white', dot: true });
+  if (task.editing_priority) pills.push({ key: 'prioridade', label: 'Prioridade', tone: 'bg-red-500/10 text-red-700 border-red-500/30 dark:text-red-300' });
+  if (isOverdue) pills.push({ key: 'vence', label: 'Vence hoje', tone: 'bg-red-500/10 text-red-700 border-red-500/30 dark:text-red-300' });
+  if (isAwaitingLink) pills.push({ key: 'material', label: 'Aguardando material', tone: 'bg-amber-400/20 text-amber-800 border-amber-400/50 dark:text-amber-200', dot: true, title: `Status da gravação: ${recordingStatus ?? 'desconhecido'}` });
+  if (isBeingReviewed) pills.push({ key: 'revisando', label: `${task.reviewing_by_name} revisando`, tone: 'bg-teal-500/10 text-teal-700 border-teal-500/30 dark:text-teal-300', dot: true });
+  if (task.content_type === 'otimizacao') pills.push({ key: 'otimizar', label: 'Otimizar', tone: 'bg-fuchsia-500/10 text-fuchsia-700 border-fuchsia-500/30 dark:text-fuchsia-300' });
+  if (task.adjustment_notes && !task.immediate_alteration) pills.push({ key: 'alterado', label: 'Já teve ajuste', tone: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:text-amber-300' });
+
+  const clientName = client?.companyName || task.prospect_name || 'Cliente';
+  const secondaryBtn = 'inline-flex items-center justify-center gap-1.5 h-7 px-2 rounded-lg border text-[11px] font-semibold transition-colors';
+  const primaryBtn = 'inline-flex items-center justify-center gap-1.5 w-full h-8 px-3 rounded-lg text-[11px] font-semibold transition-colors';
+
   return (
     <>
       <div
         draggable={!viewOnly}
         onDragStart={viewOnly ? undefined : onDragStart}
         onClick={onCardClick}
-        className={`group relative rounded-xl transition-all duration-500 overflow-hidden border ${
-          isAwaitingLink
-            ? 'bg-yellow-50/70 dark:bg-yellow-950/30 border-yellow-300/60 dark:border-yellow-500/40 ring-1 ring-yellow-300/50 animate-soft-pulse'
-            : 'bg-card border-border/40'
+        style={{ borderLeftColor: `hsl(${clientColor})` }}
+        className={`group relative rounded-xl overflow-hidden border border-l-[3px] bg-card transition-[box-shadow,transform,border-color] duration-150 ${
+          isAwaitingLink ? 'border-amber-300/70 dark:border-amber-500/40' : isOverdue ? 'border-red-400/60' : 'border-border/60 hover:border-primary/30'
         } ${
           viewOnly ? 'cursor-default opacity-80' : 'cursor-grab active:cursor-grabbing'
         } ${
-          isDragging ? 'opacity-40 scale-95 shadow-none' : 'shadow-sm hover:shadow-lg'
-        } ${isOverdue ? 'ring-1 ring-destructive/40' : ''} hover:-translate-y-0.5`}
+          isDragging ? 'opacity-40 scale-[0.97] shadow-none' : 'shadow-sm hover:shadow-md hover:-translate-y-px'
+        }`}
       >
-        {/* Selo de praça: identifica cartões de outra cidade (somente leitura) */}
+        {/* Selo de praça: cartões de outra cidade (somente leitura) */}
         {cityLabel && (
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-secondary/80 border-b border-border/50">
-            <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
-              {cityLabel} · somente leitura
-            </span>
+          <div className="px-3 py-1 bg-secondary/80 border-b border-border/50 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {cityLabel} · somente leitura
           </div>
         )}
-        {/* Status tag banner (top) */}
 
-        {isCaptacao && !isAwaitingLink && (
-          <div className="flex items-center gap-2 px-3 py-1 bg-orange-500">
-            <span className="relative flex h-1.5 w-1.5 shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
-            </span>
-            <span className="text-[9px] font-bold text-white uppercase tracking-widest">Gravando</span>
-          </div>
-        )}
-        {isAwaitingLink && (
-          <TooltipProvider delayDuration={150}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <motion.div
-                  className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-300 cursor-help"
-                  animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-                  transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                  style={{ backgroundSize: '200% 100%' }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Link2 size={10} className="text-white shrink-0 animate-soft-glow" />
-                  <span className="text-[9px] font-bold text-white uppercase tracking-widest">Aguardando Material</span>
-                  <span className="ml-auto relative flex h-2 w-2 shrink-0">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-white/70 opacity-60 animate-soft-glow"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-                  </span>
-                </motion.div>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-xs space-y-1.5 p-3">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold">
-                  <span className="text-foreground">Status da gravação:</span>
-                  <code className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 font-mono text-[10px]">
-                    {recordingStatus ?? 'desconhecido'}
-                  </code>
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-        {isOverdue && (
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-destructive">
-            <AlertTriangle size={10} className="text-white shrink-0" />
-            <span className="text-[9px] font-bold text-white uppercase tracking-widest">Vence Hoje !</span>
-          </div>
-        )}
-        {isBeingReviewed && (
-          <div className="flex items-center gap-2 px-3 py-1 bg-teal-500">
-            <Eye size={10} className="text-white shrink-0" />
-            <span className="text-[9px] font-bold text-white truncate">{task.reviewing_by_name} revisando</span>
-          </div>
-        )}
-        {task.kanban_column === 'envio' && (
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500">
-            <Send size={10} className="text-white shrink-0" />
-            <span className="text-[9px] font-bold text-white uppercase tracking-widest">enviado/aguarda</span>
-          </div>
-        )}
-        {task.kanban_column === 'agendamentos' && (
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-rose-500">
-            <Calendar size={10} className="text-white shrink-0" />
-            <span className="text-[9px] font-bold text-white uppercase tracking-widest">Agendar</span>
-          </div>
-        )}
-        {task.kanban_column === 'acompanhamento' && !isOverdue && (
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-sky-500">
-            <Rocket size={10} className="text-white shrink-0" />
-            <span className="text-[9px] font-bold text-white uppercase tracking-widest">Para Postar</span>
-          </div>
-        )}
-        {task.editing_priority && (
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-red-600">
-            <span className="text-[9px] font-bold text-white uppercase tracking-widest">⚡ Prioridade</span>
-          </div>
-        )}
-        {task.immediate_alteration && task.kanban_column === 'alteracao' && (
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-red-600 animate-pulse">
-            <span className="text-[9px] font-bold text-white uppercase tracking-widest">🚨 Imediato</span>
-          </div>
-        )}
         {/* Agente de IA com o card (Edição/Alteração) e parecer da Análise */}
         <AgentWorkBadge task={task} users={users} agentIds={agentIds} />
         <AgentReviewBadge task={task} users={users} />
-        {task.content_type === 'otimizacao' && (
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-fuchsia-500 via-pink-500 to-violet-500 animate-pulse shadow-lg shadow-fuchsia-500/40">
-            <Rocket size={11} className="text-white animate-bounce" />
-            <span className="text-[9px] font-black text-white uppercase tracking-[0.2em]">Otimizar</span>
-          </div>
-        )}
 
-        {/* Editar/Excluir: no hover no computador; sempre visíveis no celular (não há hover) */}
-        {!viewOnly && (
-          <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-200 z-10">
-            <button onClick={e => { e.stopPropagation(); onEdit(); }} title="Editar cartão" aria-label="Editar cartão" className="w-6 h-6 sm:w-5 sm:h-5 rounded-md flex items-center justify-center bg-card/95 backdrop-blur text-muted-foreground hover:text-foreground border border-border/60 shadow-sm transition-colors">
-              <Edit size={10} />
-            </button>
-            {onDelete && (
-              <button onClick={e => { e.stopPropagation(); onDelete(); }} title="Excluir cartão" aria-label="Excluir cartão" className="w-6 h-6 sm:w-5 sm:h-5 rounded-md flex items-center justify-center bg-card/95 backdrop-blur text-muted-foreground hover:text-destructive border border-border/60 shadow-sm transition-colors">
-                <Trash2 size={10} />
-              </button>
-            )}
-          </div>
-        )}
-
-        <div className="p-3 space-y-2">
-          {/* Content type badge */}
-          <div className="flex flex-wrap gap-1.5">
-            <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-md ${typeConfig.color}`}>
-              <TypeIcon size={9} /> {typeConfig.label}
+        <div className="p-3 space-y-2.5">
+          {/* Cliente + ações rápidas (sempre visíveis no celular; no hover no computador) */}
+          <div className="flex items-center gap-2 min-w-0">
+            <ClientLogo client={{ companyName: clientName, color: clientColor, logoUrl: client?.logoUrl }} size="sm" className="!w-6 !h-6" />
+            <span className="text-[11px] font-semibold text-muted-foreground truncate flex-1">{clientName}</span>
+            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md shrink-0 ${typeConfig.color}`}>
+              <TypeIcon size={10} /> {typeConfig.label}
             </span>
-            {task.adjustment_notes && !task.immediate_alteration && (
-              <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-400">
-                🔄 Alterado
-              </span>
+            {!viewOnly && (
+              <div className="flex gap-0.5 shrink-0 sm:w-0 sm:overflow-hidden sm:group-hover:w-auto sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <button onClick={e => { e.stopPropagation(); onEdit(); }} title="Editar cartão" aria-label="Editar cartão" className="w-7 h-7 sm:w-6 sm:h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                  <Edit size={12} />
+                </button>
+                {onDelete && (
+                  <button onClick={e => { e.stopPropagation(); onDelete(); }} title="Excluir cartão" aria-label="Excluir cartão" className="w-7 h-7 sm:w-6 sm:h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
             )}
-            {/* Deadline badges */}
-            {task.kanban_column === 'edicao' && task.editing_deadline && (
-              <DeadlineBadge showAudit={false} deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} totalHours={48} />
-            )}
-            {task.kanban_column === 'revisao' && task.review_deadline && (
-              <DeadlineBadge showAudit={false} deadline={task.review_deadline} label="Revisão" totalHours={24} />
-            )}
-            {task.kanban_column === 'alteracao' && task.alteration_deadline && !task.immediate_alteration && (
-              <DeadlineBadge showAudit={false} deadline={task.alteration_deadline} label="Alteração" totalHours={24} />
-            )}
-            {task.kanban_column === 'envio' && task.approval_deadline && (
-              <DeadlineBadge showAudit={false} deadline={task.approval_deadline} label="Aprovação" startedAt={task.approval_sent_at} totalHours={24} />
-            )}
-            {/* Fila dos agentes: pronto para a IA ou o que falta */}
-            <AgentReadinessBadge task={task} agentIds={agentIds} />
           </div>
 
-          {/* Cliente (o tipo já está no selo acima; antes cliente e tipo apareciam duas vezes) */}
-          <h3 className="text-sm font-bold text-foreground leading-tight pr-8" style={{ fontFamily: 'var(--font-display)' }}>
-            {client?.companyName || task.prospect_name || 'Cliente'}
+          {/* Título do conteúdo: o que mais importa, em destaque */}
+          <h3 className="text-[13px] font-semibold text-foreground leading-snug line-clamp-2" title={task.title || undefined}>
+            {task.title || 'Sem título'}
           </h3>
 
-          {/* Structured fields — Pipefy style */}
-          <div className="space-y-1.5">
-            <div className="flex items-start gap-2">
-              <FileText size={10} className="text-muted-foreground mt-0.5 shrink-0" />
-              <div className="min-w-0">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-primary/60 block leading-none">Título do Conteúdo</span>
-                <span className="text-[11px] text-foreground/80 leading-snug block line-clamp-2 uppercase font-medium">{task.title || '—'}</span>
-              </div>
+          {/* Selos de atenção + prazo da etapa + fila dos agentes */}
+          {(pills.length > 0 || task.editing_deadline || task.review_deadline || task.alteration_deadline || task.approval_deadline) && (
+            <div className="flex flex-wrap gap-1">
+              {pills.map(pl => (
+                <span key={pl.key} title={pl.title} className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border border-transparent ${pl.tone}`}>
+                  {pl.dot && <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />}
+                  {pl.label}
+                </span>
+              ))}
+              {task.kanban_column === 'edicao' && task.editing_deadline && (
+                <DeadlineBadge showAudit={false} deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} totalHours={48} />
+              )}
+              {task.kanban_column === 'revisao' && task.review_deadline && (
+                <DeadlineBadge showAudit={false} deadline={task.review_deadline} label="Revisão" totalHours={24} />
+              )}
+              {task.kanban_column === 'alteracao' && task.alteration_deadline && !task.immediate_alteration && (
+                <DeadlineBadge showAudit={false} deadline={task.alteration_deadline} label="Alteração" totalHours={24} />
+              )}
+              {task.kanban_column === 'envio' && task.approval_deadline && (
+                <DeadlineBadge showAudit={false} deadline={task.approval_deadline} label="Aprovação" startedAt={task.approval_sent_at} totalHours={24} />
+              )}
             </div>
-            {task.scheduled_recording_date && (
-              <div className="flex items-start gap-2">
-                <Calendar size={10} className="text-muted-foreground mt-0.5 shrink-0" />
-                <div className="min-w-0">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-primary/60 block leading-none">
-                    {task.kanban_column === 'acompanhamento' || task.kanban_column === 'agendamentos' ? 'Postagem Programada' : 'Gravação Programada'}
-                  </span>
-                  <span className={`text-[11px] leading-snug block font-medium ${isOverdue ? 'text-destructive' : 'text-foreground/80'}`}>
-                    {safeFormatDate(task.scheduled_recording_date)}
-                    {task.scheduled_recording_time ? ` às ${task.scheduled_recording_time}` : ''}
+          )}
+          <AgentReadinessBadge task={task} agentIds={agentIds} />
+
+          {/* Data, roteiro e responsável numa linha de metadados */}
+          {(task.scheduled_recording_date || linkedScript || assignedUser) && (
+            <div className="space-y-1.5">
+              {task.scheduled_recording_date && (
+                <div className={`flex items-center gap-1.5 text-[11px] ${isOverdue ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
+                  <Calendar size={12} className="shrink-0" />
+                  <span>
+                    {task.kanban_column === 'acompanhamento' || task.kanban_column === 'agendamentos' ? 'Postagem' : 'Gravação'}:{' '}
+                    <span className="text-foreground/85 font-medium">
+                      {safeFormatDate(task.scheduled_recording_date)}{task.scheduled_recording_time ? ` · ${task.scheduled_recording_time}` : ''}
+                    </span>
                   </span>
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* Script link */}
-          {linkedScript && (
-            <button
-              onClick={e => { e.stopPropagation(); setScriptPreviewOpen(true); }}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5 hover:bg-primary/10 border border-primary/15 transition-colors w-full text-left"
-            >
-              <FileText size={10} className="text-primary shrink-0" />
-              <span className="text-[10px] font-medium text-primary truncate">
-                Roteiro: {linkedScript.title}
-              </span>
-            </button>
-          )}
-
-          {/* Responsável / quem editou / quem corrige (a bolinha verde "online" saiu: não indicava presença) */}
-          {assignedUser && (
-            <div className="flex items-center gap-2 pt-0.5">
-              <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" />
-              <div className="min-w-0">
-                <span className="text-[8.5px] font-bold uppercase tracking-wider text-primary/60 block leading-none">
-                  {responsibleLabel}
-                </span>
-                <span className="text-[10px] text-muted-foreground truncate block">{assignedUser.name}</span>
-              </div>
+              )}
+              {linkedScript && (
+                <button
+                  onClick={e => { e.stopPropagation(); setScriptPreviewOpen(true); }}
+                  className="flex items-center gap-1.5 text-[11px] text-primary hover:underline max-w-full text-left"
+                >
+                  <FileText size={12} className="shrink-0" />
+                  <span className="truncate">Roteiro: {linkedScript.title}</span>
+                </button>
+              )}
+              {assignedUser && (
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground min-w-0">
+                  <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" />
+                  <span className="truncate"><span className="text-muted-foreground/80">{responsibleLabel}:</span> <span className="text-foreground/85 font-medium">{assignedUser.name}</span></span>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Videomaker badge (em Captação) */}
+          {/* Videomaker (em Captação) */}
           {isCaptacao && videomaker && (
-            <div className="flex items-center gap-2 pt-0.5 px-2 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/25">
-              <div className="relative shrink-0">
-                <UserAvatar user={{ name: videomaker.name, avatarUrl: videomaker.avatarUrl }} size="sm" />
-                <span className="absolute -bottom-0.5 -right-0.5 flex h-2 w-2">
-                  <span className={`absolute inline-flex h-full w-full rounded-full ${isAwaitingLink ? 'bg-yellow-400 animate-soft-glow' : 'bg-orange-400 animate-ping'} opacity-75`}></span>
-                  <span className={`relative inline-flex rounded-full h-2 w-2 ${isAwaitingLink ? 'bg-yellow-500' : 'bg-orange-500'} border border-card`}></span>
-                </span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <span className="text-[8.5px] font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400 block leading-none">Videomaker</span>
-                <span className="text-[10.5px] text-foreground/85 leading-snug block truncate font-medium">{videomaker.name}</span>
+            <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border ${isAwaitingLink ? 'bg-amber-400/10 border-amber-400/40' : 'bg-orange-500/5 border-orange-500/25'}`}>
+              <UserAvatar user={{ name: videomaker.name, avatarUrl: videomaker.avatarUrl }} size="sm" />
+              <div className="min-w-0 flex-1 leading-tight">
+                <span className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 block">{isAwaitingLink ? 'Gravado · falta o link' : 'Gravando'}</span>
+                <span className="text-[11px] text-foreground/85 truncate block font-medium">{videomaker.name}</span>
               </div>
             </div>
           )}
 
-          {/* Watch/Download video (revisão/alteração) */}
-          {isRevisao && task.edited_video_link && (
-            <div className="flex gap-1.5">
-              <a href={task.client_id ? `/portal/${task.client_id}` : `/video-avulso/${task.id}`}
-                onClick={e => e.stopPropagation()}
-                className="flex items-center gap-1 flex-1 justify-center px-2 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 text-teal-600 transition-all text-[9px] font-bold">
-                <Eye size={10} /> Portal
-              </a>
-              <a href={task.edited_video_link} download target="_blank" rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                className="flex items-center gap-1 flex-1 justify-center px-2 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-violet-600 transition-all text-[9px] font-bold">
-                <Download size={10} /> Baixar
-              </a>
+          {/* Pedido de ajuste (Alteração) */}
+          {task.adjustment_notes && task.kanban_column === 'alteracao' && (
+            <div className="px-2.5 py-2 rounded-lg bg-amber-500/5 border border-amber-500/20 text-[11px] leading-snug text-amber-800 dark:text-amber-300">
+              <span className="font-semibold">Ajustes:</span> <span className="line-clamp-3">{task.adjustment_notes}</span>
             </div>
           )}
-          {/* Análise: o vídeo ainda não está no portal, só o arquivo */}
-          {!isRevisao && ['pre_revisao', 'envio', 'agendamentos', 'acompanhamento'].includes(task.kanban_column) && task.edited_video_link && (
-            <a href={task.edited_video_link} download target="_blank" rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
-              className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-violet-600 transition-all text-[9px] font-bold">
-              <Download size={10} /> Baixar Vídeo
-            </a>
-          )}
 
-          {/* Approve / Adjustments */}
+          {/* Links do material e do vídeo */}
+          {(() => {
+            const links: JSX.Element[] = [];
+            if (task.drive_link && ['captacao', 'edicao', 'pre_revisao', 'alteracao'].includes(task.kanban_column)) {
+              links.push(
+                <a key="drive" href={task.drive_link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                  className={`${secondaryBtn} border-blue-500/25 bg-blue-500/5 text-blue-700 hover:bg-blue-500/10 dark:text-blue-300`}>
+                  <Link2 size={12} /> Brutos <ExternalLink size={10} className="opacity-60" />
+                </a>
+              );
+            }
+            if (isRevisao && task.edited_video_link) {
+              links.push(
+                <a key="portal" href={task.client_id ? `/portal/${task.client_id}` : `/video-avulso/${task.id}`} onClick={e => e.stopPropagation()}
+                  className={`${secondaryBtn} border-teal-500/25 bg-teal-500/5 text-teal-700 hover:bg-teal-500/10 dark:text-teal-300`}>
+                  <Eye size={12} /> Portal
+                </a>
+              );
+            }
+            if (task.edited_video_link && (isRevisao || ['pre_revisao', 'envio', 'agendamentos', 'acompanhamento'].includes(task.kanban_column))) {
+              links.push(
+                <a key="baixar" href={task.edited_video_link} download target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                  className={`${secondaryBtn} border-violet-500/25 bg-violet-500/5 text-violet-700 hover:bg-violet-500/10 dark:text-violet-300`}>
+                  <Download size={12} /> Baixar vídeo
+                </a>
+              );
+            }
+            if (onAddDriveLink && !task.drive_link) {
+              links.push(
+                <button key="add-drive" onClick={e => { e.stopPropagation(); onAddDriveLink(); }}
+                  className={`${secondaryBtn} border-dashed border-blue-500/40 text-blue-700 hover:bg-blue-500/5 dark:text-blue-300`}>
+                  <Plus size={12} /> Link dos brutos
+                </button>
+              );
+            }
+            if (onAddVideoLink && !task.edited_video_link) {
+              links.push(
+                <button key="add-video" onClick={e => { e.stopPropagation(); onAddVideoLink(); }}
+                  className={`${secondaryBtn} border-dashed border-teal-500/40 text-teal-700 hover:bg-teal-500/5 dark:text-teal-300`}>
+                  <Plus size={12} /> Link do vídeo
+                </button>
+              );
+            }
+            return links.length ? <div className="grid grid-cols-2 gap-1.5 [&>*:only-child]:col-span-2">{links}</div> : null;
+          })()}
+
+          {/* Decisão da Revisão / da Análise */}
           {task.kanban_column === 'revisao' && (onApprove || onRequestAdjustments) && (
             <div className="grid grid-cols-2 gap-1.5">
               {onApprove && (
-                <motion.button whileTap={{ scale: 0.9 }}
-                  onClick={e => { e.stopPropagation(); onApprove(); }}
-                  className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-green-500/10 hover:bg-green-500/20 border border-green-500/25 text-green-600 text-[9px] font-bold">
-                  <ThumbsUp size={10} /> Aprovar e enviar
-                </motion.button>
+                <button onClick={e => { e.stopPropagation(); onApprove(); }}
+                  className={`${primaryBtn} bg-emerald-600 text-white hover:bg-emerald-700`}>
+                  <ThumbsUp size={12} /> Aprovar
+                </button>
               )}
               {onRequestAdjustments && (
-                <motion.button whileTap={{ scale: 0.9 }}
-                  onClick={e => { e.stopPropagation(); onRequestAdjustments(); }}
-                  className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-600 text-[9px] font-bold">
-                  <MessageSquareWarning size={10} /> Ajustes
-                </motion.button>
+                <button onClick={e => { e.stopPropagation(); onRequestAdjustments(); }}
+                  className={`${primaryBtn} border border-amber-500/40 bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 dark:text-amber-200`}>
+                  <MessageSquareWarning size={12} /> Ajustes
+                </button>
               )}
             </div>
           )}
-
-          {/* Análise (admin): liberar a entrega do agente para a Revisão ou devolver com o ajuste */}
           {task.kanban_column === 'pre_revisao' && (onReleaseAnalysis || onReturnAnalysis) && (
             <div className="grid grid-cols-2 gap-1.5">
               {onReleaseAnalysis && (
-                <motion.button whileTap={{ scale: 0.9 }}
-                  onClick={e => { e.stopPropagation(); onReleaseAnalysis(); }}
-                  className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/25 text-teal-600 text-[9px] font-bold">
-                  <CheckCircle2 size={10} /> Liberar p/ Revisão
-                </motion.button>
+                <button onClick={e => { e.stopPropagation(); onReleaseAnalysis(); }}
+                  className={`${primaryBtn} bg-teal-600 text-white hover:bg-teal-700`}>
+                  <CheckCircle2 size={12} /> Liberar
+                </button>
               )}
               {onReturnAnalysis && (
-                <motion.button whileTap={{ scale: 0.9 }}
-                  onClick={e => { e.stopPropagation(); onReturnAnalysis(); }}
-                  className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-600 text-[9px] font-bold">
-                  <ArrowLeft size={10} /> Devolver
-                </motion.button>
+                <button onClick={e => { e.stopPropagation(); onReturnAnalysis(); }}
+                  className={`${primaryBtn} border border-amber-500/40 bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 dark:text-amber-200`}>
+                  <ArrowLeft size={12} /> Devolver
+                </button>
               )}
             </div>
           )}
 
-          {/* Quick actions */}
-          <div className="space-y-1">
-            {onAddDriveLink && !task.drive_link && (
-              <motion.button whileTap={{ scale: 0.95 }}
-                onClick={e => { e.stopPropagation(); onAddDriveLink(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-600 text-[9px] font-bold">
-                <Link2 size={10} /> Link Drive
-              </motion.button>
-            )}
-            {/* Brutos: também na Análise e na Alteração (quem corrige precisa do material) */}
-            {task.drive_link && ['captacao', 'edicao', 'pre_revisao', 'alteracao'].includes(task.kanban_column) && (
-              <a href={task.drive_link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 w-full text-left text-[9px] font-bold text-blue-700">
-                <Link2 size={10} className="shrink-0" />
-                <span className="truncate flex-1">Materiais (Drive)</span>
-                <ExternalLink size={9} className="text-blue-500/60 shrink-0" />
-              </a>
-            )}
-            {onAddVideoLink && !task.edited_video_link && (
-              <motion.button whileTap={{ scale: 0.95 }}
-                onClick={e => { e.stopPropagation(); onAddVideoLink(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 text-teal-600 text-[9px] font-bold">
-                <Film size={10} /> Link Vídeo
-              </motion.button>
-            )}
-            {onMoveToNext && (
-              <motion.button whileTap={{ scale: 0.93 }}
-                onClick={e => { e.stopPropagation(); onMoveToNext(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/25 text-primary text-[9px] font-bold">
-                <Rocket size={10} /> {nextColumnLabel}
-              </motion.button>
-            )}
-            {onSchedule && (
-              <motion.button whileTap={{ scale: 0.95 }}
-                onClick={e => { e.stopPropagation(); onSchedule(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/25 text-primary text-[9px] font-bold">
-                <Calendar size={10} /> Agendar
-              </motion.button>
-            )}
-            {onResubmit && (
-              <motion.button whileTap={{ scale: 0.93 }}
-                onClick={e => { e.stopPropagation(); onResubmit(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 text-teal-600 text-[9px] font-bold">
-                <Send size={10} /> Reenviar Revisão
-              </motion.button>
-            )}
-            {task.adjustment_notes && task.kanban_column === 'alteracao' && (
-              <div className="px-2 py-1.5 rounded-lg bg-amber-500/5 border border-amber-500/15 text-[9px] text-amber-700 dark:text-amber-400">
-                <span className="font-bold">Ajustes:</span> {task.adjustment_notes}
-              </div>
-            )}
-            {onConfirmPosted && !isOverdue && (
-              <motion.button whileTap={{ scale: 0.93 }}
-                onClick={e => { e.stopPropagation(); onConfirmPosted(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-600 text-[9px] font-bold">
-                <CheckCircle2 size={10} /> Confirmar Postagem
-              </motion.button>
-            )}
-          </div>
-
-          {/* Overdue confirm (prominent) */}
-          {isOverdue && onConfirmPosted && (
-            <motion.button whileTap={{ scale: 0.93 }}
-              onClick={e => { e.stopPropagation(); onConfirmPosted(); }}
-              className="flex items-center justify-center gap-1.5 w-full px-3 py-2 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground text-[10px] font-bold shadow-md">
-              <Rocket size={12} /> Confirmar Postagem
-            </motion.button>
+          {/* Ação principal da coluna */}
+          {onMoveToNext && (
+            <button onClick={e => { e.stopPropagation(); onMoveToNext(); }}
+              className={`${primaryBtn} bg-primary text-primary-foreground hover:bg-primary/90`}>
+              <ArrowRight size={12} /> Mover para {nextColumnLabel}
+            </button>
+          )}
+          {onSchedule && (
+            <button onClick={e => { e.stopPropagation(); onSchedule(); }}
+              className={`${primaryBtn} bg-primary text-primary-foreground hover:bg-primary/90`}>
+              <Calendar size={12} /> Agendar postagem
+            </button>
+          )}
+          {onResubmit && (
+            <button onClick={e => { e.stopPropagation(); onResubmit(); }}
+              className={`${primaryBtn} bg-teal-600 text-white hover:bg-teal-700`}>
+              <Send size={12} /> Reenviar para revisão
+            </button>
+          )}
+          {onConfirmPosted && (
+            <button onClick={e => { e.stopPropagation(); onConfirmPosted(); }}
+              className={`${primaryBtn} ${isOverdue ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-800 hover:bg-emerald-500/20 dark:text-emerald-200'}`}>
+              <CheckCircle2 size={12} /> Confirmar postagem
+            </button>
           )}
 
-          {/* Move arrows */}
+          {/* Setas do fluxo */}
           {(onMoveBackward || onMoveForward) && (
-            <div className="flex items-center gap-1 pt-0.5">
+            <div className="flex items-center gap-1.5 pt-0.5">
               {onMoveBackward && (
-                <motion.button whileTap={{ scale: 0.9 }}
-                  onClick={e => { e.stopPropagation(); onMoveBackward(); }}
-                  className="flex items-center gap-0.5 flex-1 justify-center px-1.5 py-1 rounded-md bg-secondary/60 hover:bg-secondary border border-border/50 text-muted-foreground hover:text-foreground text-[8px] font-semibold"
+                <button onClick={e => { e.stopPropagation(); onMoveBackward(); }}
+                  className="flex items-center gap-1 flex-1 min-w-0 justify-center h-7 px-2 rounded-lg border border-border/60 bg-secondary/40 hover:bg-secondary text-muted-foreground hover:text-foreground text-[11px] font-medium transition-colors"
                   title={`Mover para ${backwardLabel}`}>
-                  <ChevronLeft size={10} />
+                  <ChevronLeft size={12} className="shrink-0" />
                   <span className="truncate">{backwardLabel}</span>
-                </motion.button>
+                </button>
               )}
               {onMoveForward && (
-                <motion.button whileTap={{ scale: 0.9 }}
-                  onClick={e => { e.stopPropagation(); onMoveForward(); }}
-                  className="flex items-center gap-0.5 flex-1 justify-center px-1.5 py-1 rounded-md bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary text-[8px] font-semibold"
+                <button onClick={e => { e.stopPropagation(); onMoveForward(); }}
+                  className="flex items-center gap-1 flex-1 min-w-0 justify-center h-7 px-2 rounded-lg border border-primary/25 bg-primary/5 hover:bg-primary/10 text-primary text-[11px] font-semibold transition-colors"
                   title={`Mover para ${forwardLabel}`}>
                   <span className="truncate">{forwardLabel}</span>
-                  <ChevronRight size={10} />
-                </motion.button>
+                  <ChevronRight size={12} className="shrink-0" />
+                </button>
               )}
             </div>
           )}
         </div>
-
-        {/* Bottom color bar — client color like Pipefy */}
-        <div className="h-1 w-full" style={{ backgroundColor: `hsl(${clientColor})` }} />
       </div>
 
       {/* Script Preview Dialog */}

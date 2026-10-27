@@ -18,7 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame, Pause, AlertTriangle, Timer, Filter, X, ArrowRightLeft, FolderOpen, ClipboardList, ScanSearch, UserCog } from 'lucide-react';
+import { Plus, Kanban, List, Clock, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame, Pause, AlertTriangle, Timer, Filter, X, ArrowRightLeft, FolderOpen, ClipboardList, ScanSearch, UserCog } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
@@ -870,8 +870,8 @@ export default function DesignerKanban() {
                 <div
                   key={col.key}
                   ref={el => { columnRefs.current[col.key] = el; }}
-                  className={`min-w-[85vw] w-[85vw] sm:min-w-[270px] sm:w-[270px] snap-start flex-shrink-0 rounded-xl transition-all duration-200 flex flex-col ${
-                    dragOverColumn === col.key ? 'ring-2 ring-primary/40 bg-primary/5' : ''
+                  className={`min-w-[85vw] w-[85vw] sm:min-w-[284px] sm:w-[284px] snap-start flex-shrink-0 rounded-2xl border border-border/40 p-1.5 transition-colors duration-150 flex flex-col ${
+                    dragOverColumn === col.key ? 'ring-2 ring-primary/50 bg-primary/5' : 'bg-muted/30'
                   }`}
                   onDragOver={e => handleDragOver(e, col.key)}
                   onDragLeave={handleDragLeave}
@@ -879,13 +879,13 @@ export default function DesignerKanban() {
                 >
                   {/* Column header (sem animações contínuas — economiza CPU) */}
                   <div
-                    className={`relative overflow-hidden rounded-xl p-3 mb-3 bg-gradient-to-r ${cfg.gradient} border border-border/50 shrink-0`}
+                    className={`relative overflow-hidden rounded-xl px-3 h-10 flex items-center mb-2 bg-gradient-to-r ${cfg.gradient} border border-border/50 shrink-0`}
                   >
-                    <div className="flex items-center gap-2 relative z-10">
+                    <div className="flex items-center gap-2 relative z-10 w-full">
                       <span className="text-foreground/80">
                         {cfg.icon}
                       </span>
-                      <span className="text-xs font-bold uppercase tracking-wider text-foreground/90">{col.label}</span>
+                      <span className="text-[13px] font-semibold text-foreground/90 truncate">{col.label}</span>
                       <div
                         className="ml-auto flex items-center gap-1"
                       >
@@ -990,9 +990,9 @@ export default function DesignerKanban() {
                       </div>
                     ))}
                     {colTasks.length === 0 && (
-                      <div className="flex flex-col items-center justify-center py-8 text-muted-foreground/40">
-                        <div>{cfg.icon}</div>
-                        <span className="text-[10px] mt-2">Nenhuma tarefa</span>
+                      <div className="mx-1 py-8 rounded-xl border border-dashed border-border/60 flex flex-col items-center justify-center text-muted-foreground/60">
+                        <div className="opacity-60">{cfg.icon}</div>
+                        <span className="text-[11px] mt-2">Nenhuma tarefa</span>
                       </div>
                     )}
                     {isPaginated && hiddenCount > 0 && (
@@ -1477,169 +1477,155 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
   const formattedDueDate = task.due_date && !COMPLETED_COLS.includes(task.kanban_column) ? formatDueDate(task.due_date) || null : null;
   const isNext = queueIndex === 1 && columnKey === 'nova_tarefa';
 
+  const clientName = task.clients?.company_name || task.prospect_name || 'Cliente';
+  const clientColor = task.clients?.color || '217 91% 60%';
+  // Selos de atenção (vermelho/âmbar) primeiro; informação neutra depois. Sem card inteiro piscando.
+  const sla = COMPLETED_COLS.includes(task.kanban_column) ? null : getDesignSlaStatus(task);
+  const idle = COMPLETED_COLS.includes(task.kanban_column) || task.timer_running ? null : getIdleStatus(task);
+  const chip = 'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border';
+
   return (
     <div
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onClick}
-      className={`relative bg-card border border-border/60 rounded-xl p-3 cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 space-y-2.5 group ${
-        isDragging ? 'opacity-40 scale-95 ring-2 ring-primary/40' : ''
-      } ${isOverdue ? 'border-red-500/50 bg-red-50/10 dark:bg-red-950/5 animate-[pulse_2s_infinite]' : ''} ${
-        isNext ? 'ring-2 ring-amber-400/70 shadow-lg shadow-amber-500/10' : ''
+      style={{ borderLeftColor: `hsl(${clientColor})` }}
+      className={`relative bg-card border border-l-[3px] rounded-xl p-3 cursor-grab active:cursor-grabbing transition-[box-shadow,transform,border-color] duration-150 space-y-2.5 group ${
+        isDragging ? 'opacity-40 scale-[0.97] ring-2 ring-primary/40' : 'shadow-sm hover:shadow-md hover:-translate-y-px'
+      } ${isOverdue ? 'border-red-400/60 bg-red-500/[0.03]' : 'border-border/60 hover:border-primary/30'} ${
+        isNext ? 'ring-2 ring-amber-400/70' : ''
       }`}
     >
       {/* Agente de IA: criando / em correção / parada / Análise IA */}
       <DesignAgentBadge task={task} agents={agents} className="-mx-3 !-mt-3 mb-1 rounded-t-xl" />
 
-      {/* Queue order badge */}
+      {/* Posição na fila */}
       {queueIndex != null && (
         <div
-          className={`absolute -top-2 -left-2 z-20 min-w-[26px] h-[26px] px-1.5 flex items-center justify-center rounded-full text-[11px] font-bold shadow-md ${
-            isNext
-              ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white ring-2 ring-background animate-pulse'
-              : 'bg-primary text-primary-foreground ring-2 ring-background'
+          className={`absolute -top-2 -left-2 z-20 min-w-[24px] h-6 px-1.5 flex items-center justify-center rounded-full text-[11px] font-bold shadow ring-2 ring-background ${
+            isNext ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white' : 'bg-primary text-primary-foreground'
           }`}
           title={isNext ? 'Próxima a executar' : `Posição ${queueIndex} na fila`}
         >
           {isNext ? <Flame size={11} /> : `#${queueIndex}`}
         </div>
       )}
-      {/* Quick action buttons - positioned away from top-right close area */}
-      <div className="absolute top-2 right-2 flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
-        <button
-          onClick={(e) => { e.stopPropagation(); onOpenDetail(); }}
-          className="w-6 h-6 flex items-center justify-center rounded-md bg-muted/80 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
-          title="Detalhes"
-        >
-          <Pencil size={12} />
-        </button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              onClick={(e) => e.stopPropagation()}
-              className="w-6 h-6 flex items-center justify-center rounded-md bg-muted/80 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
-              title="Mover para…"
-            >
-              <ArrowRightLeft size={12} />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
-            {DESIGN_COLUMNS.filter(c => c.key !== task.kanban_column).map(c => (
-              <DropdownMenuItem key={c.key} className="text-xs" onClick={(e) => { e.stopPropagation(); onMove(c.key); }}>
-                <span className="w-2 h-2 rounded-full mr-2 shrink-0" style={{ background: `hsl(${c.color})` }} /> {c.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        {canDelete && (
+
+      {/* Cliente + ações (sempre visíveis no celular; no hover no computador) */}
+      <div className="flex items-center gap-2 min-w-0">
+        <ClientLogo client={{ companyName: clientName, color: clientColor, logoUrl: task.clients?.logo_url }} size="sm" className="!w-6 !h-6" />
+        <span className="text-[11px] font-semibold text-muted-foreground truncate flex-1">{clientName}</span>
+        <div className="flex items-center gap-0.5 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
           <button
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="w-6 h-6 flex items-center justify-center rounded-md bg-muted/80 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-            title="Excluir"
+            onClick={(e) => { e.stopPropagation(); onOpenDetail(); }}
+            className="w-7 h-7 sm:w-6 sm:h-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+            title="Detalhes" aria-label="Detalhes"
           >
-            <Trash2 size={12} />
+            <Pencil size={12} />
           </button>
-        )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="w-7 h-7 sm:w-6 sm:h-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                title="Mover para…" aria-label="Mover para"
+              >
+                <ArrowRightLeft size={12} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
+              {DESIGN_COLUMNS.filter(c => c.key !== task.kanban_column).map(c => (
+                <DropdownMenuItem key={c.key} className="text-xs" onClick={(e) => { e.stopPropagation(); onMove(c.key); }}>
+                  <span className="w-2 h-2 rounded-full mr-2 shrink-0" style={{ background: `hsl(${c.color})` }} /> {c.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {canDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="w-7 h-7 sm:w-6 sm:h-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title="Excluir" aria-label="Excluir"
+            >
+              <Trash2 size={12} />
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <GripVertical size={12} className="text-muted-foreground/30 shrink-0 group-hover:text-muted-foreground/60 transition-colors" />
-        <ClientLogo client={{ companyName: task.clients?.company_name || task.prospect_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
-        <span className="text-[11px] text-muted-foreground truncate">{task.clients?.company_name || task.prospect_name}</span>
-      </div>
-      <p className="text-sm font-medium line-clamp-2 group-hover:text-primary/90 transition-colors pr-14 sm:pr-0">{task.title}</p>
+      <p className="text-[13px] font-semibold leading-snug line-clamp-2 text-foreground">{task.title}</p>
 
-      {/* Copy preview snippet */}
+      {/* Texto da arte */}
       {(headline || task.copy_text) && (
-        <p className="text-[10px] text-muted-foreground line-clamp-2 italic bg-muted/30 rounded px-2 py-1">
-          📝 {headline || task.copy_text}
+        <p className="text-[11px] text-muted-foreground line-clamp-2 border-l-2 border-border pl-2">
+          {headline || task.copy_text}
         </p>
       )}
 
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <Badge variant="outline" className="text-[10px]">{taskFormatLabel(task)}</Badge>
-        <Badge className={`text-[10px] ${priorityCfg.color}`}>{priorityCfg.label}</Badge>
+      {/* Atenção */}
+      {(isOverdue || sla?.isOverdue || sla?.isCritical || idle?.isStuck || briefMissing.length > 0 || (clientWithoutDrive && !['aprovado', 'postado'].includes(task.kanban_column))) && (
+        <div className="flex items-center gap-1 flex-wrap">
+          {sla?.isOverdue && (
+            <span className={`${chip} border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300`}>
+              <AlertTriangle size={10} /> SLA vencido {Math.floor(Math.abs(sla.hours))}h
+            </span>
+          )}
+          {sla && !sla.isOverdue && sla.isCritical && (
+            <span className={`${chip} border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200`}>
+              <Clock size={10} /> {Math.ceil(sla.hours)}h restantes
+            </span>
+          )}
+          {idle?.isStuck && (
+            <span className={`${chip} ${idle.isSevere ? 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300' : 'border-yellow-500/30 bg-yellow-500/10 text-yellow-800 dark:text-yellow-200'}`}
+              title={`Sem atualização desde ${new Date(task.updated_at).toLocaleString('pt-BR')}`}>
+              <Pause size={10} /> Parada há {formatIdleLabel(idle.hoursIdle)}
+            </span>
+          )}
+          {briefMissing.length > 0 && (
+            <span className={`${chip} border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200`} title={`Falta: ${briefMissing.join(', ')}`}>
+              <ClipboardList size={10} /> Brief incompleto
+            </span>
+          )}
+          {clientWithoutDrive && !['aprovado', 'postado'].includes(task.kanban_column) && (
+            <span className={`${chip} border-amber-400/50 text-amber-700 dark:text-amber-300`} title="O cliente não tem a pasta do Drive cadastrada (identidade, logos e fotos)">
+              <FolderOpen size={10} /> Sem Drive
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Informação */}
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className={`${chip} border-border bg-secondary/50 text-foreground/80`}>{taskFormatLabel(task)}</span>
+        <span className={`${chip} border-transparent ${priorityCfg.color}`}>{priorityCfg.label}</span>
         {isAgentTask && (
-          <Badge className="text-[10px] gap-0.5 bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300" title="Arte de agente">
+          <span className={`${chip} border-transparent bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300`} title="Arte de agente">
             <UserCog size={10} /> Agente
-          </Badge>
-        )}
-        {briefMissing.length > 0 && (
-          <Badge className="text-[10px] gap-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" title={`Falta: ${briefMissing.join(', ')}`}>
-            <ClipboardList size={10} /> Brief incompleto
-          </Badge>
-        )}
-        {clientWithoutDrive && !['aprovado', 'postado'].includes(task.kanban_column) && (
-          <Badge variant="outline" className="text-[10px] gap-0.5 border-amber-400/60 text-amber-700 dark:text-amber-300" title="O cliente não tem a pasta do Drive cadastrada (identidade, logos e fotos)">
-            <FolderOpen size={10} /> Sem Drive
-          </Badge>
+          </span>
         )}
         {formattedDueDate && (
-          <Badge variant="outline" className={`text-[10px] gap-1 ${isOverdue ? 'border-red-500 text-red-600 bg-red-50 dark:bg-red-950/30' : ''}`}>
+          <span className={`${chip} ${isOverdue ? 'border-red-500/50 bg-red-500/10 text-red-700 dark:text-red-300' : 'border-border text-muted-foreground'}`}>
             <Calendar size={10} /> {formattedDueDate}
-          </Badge>
+          </span>
+        )}
+        {sla && !sla.isOverdue && !sla.isCritical && (
+          <span className={`${chip} border-border text-muted-foreground`}><Clock size={10} /> {Math.ceil(sla.hours)}h SLA</span>
         )}
         {(task.kanban_column === 'executando' || (task.time_spent_seconds || 0) > 0) && (
-          <Badge
-            variant="secondary"
-            className={`text-[10px] gap-1 ${task.timer_running ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 animate-pulse' : ''}`}
+          <span
+            className={`${chip} ${task.timer_running ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border text-muted-foreground'}`}
             title={task.timer_running ? 'Cronômetro rodando' : 'Cronômetro pausado'}
           >
-            <Timer size={10} />
+            {task.timer_running ? <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> : <Timer size={10} />}
             <LiveTimer startedAt={task.timer_started_at} baseSeconds={task.time_spent_seconds || 0} running={!!task.timer_running} />
-          </Badge>
+          </span>
         )}
         {task.kanban_column === 'fila_baixa_prioridade' && (
-          <Badge className="text-[10px] gap-0.5 bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-            <Pause size={10} /> Pausada
-          </Badge>
+          <span className={`${chip} border-transparent bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200`}><Pause size={10} /> Pausada</span>
         )}
-        {(() => {
-          if (COMPLETED_COLS.includes(task.kanban_column)) return null;
-          const sla = getDesignSlaStatus(task);
-          if (!sla) return null;
-          if (sla.isOverdue) {
-            const hoursOver = Math.floor(Math.abs(sla.hours));
-            return (
-              <Badge className="text-[10px] gap-0.5 bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 animate-pulse">
-                <AlertTriangle size={10} /> SLA vencido {hoursOver}h
-              </Badge>
-            );
-          }
-          if (sla.isCritical) {
-            return (
-              <Badge className="text-[10px] gap-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                <Clock size={10} /> {Math.ceil(sla.hours)}h restantes
-              </Badge>
-            );
-          }
-          return (
-            <Badge variant="outline" className="text-[10px] gap-0.5 text-muted-foreground">
-              <Clock size={10} /> {Math.ceil(sla.hours)}h SLA
-            </Badge>
-          );
-        })()}
-        {(() => {
-          if (COMPLETED_COLS.includes(task.kanban_column)) return null;
-          // Não sinaliza "parada" enquanto o cronômetro está rodando (designer trabalhando)
-          if (task.timer_running) return null;
-          const idle = getIdleStatus(task);
-          if (!idle || !idle.isStuck) return null;
-          const label = formatIdleLabel(idle.hoursIdle);
-          const cls = idle.isSevere
-            ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 animate-pulse'
-            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200';
-          return (
-            <Badge className={`text-[10px] gap-0.5 ${cls}`} title={`Sem atualização desde ${new Date(task.updated_at).toLocaleString('pt-BR')}`}>
-              <Pause size={10} /> Parada há {label}
-            </Badge>
-          );
-        })()}
         {task.attachment_url && (
-          <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-            <CheckCircle2 size={9} className="mr-0.5" /> Arte ✓
-          </Badge>
+          <span className={`${chip} border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300`}><CheckCircle2 size={10} /> Arte</span>
         )}
       </div>
 
@@ -1651,7 +1637,7 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
       {onQuickStart && (
         <Button
           size="sm"
-          className="w-full h-8 text-xs gap-1.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white rounded-lg"
+          className="w-full h-8 text-xs font-semibold gap-1.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white rounded-lg"
           onClick={(e) => { e.stopPropagation(); onQuickStart(); }}
         >
           <Play size={12} fill="currentColor" /> {task.kanban_column === 'fila_baixa_prioridade' ? 'Retomar Tarefa' : 'Iniciar Tarefa'}

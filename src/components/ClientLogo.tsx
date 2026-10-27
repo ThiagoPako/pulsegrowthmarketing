@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, useEffect, useState } from 'react';
 import type { Client } from '@/types';
 
 interface ClientLogoProps {
@@ -16,13 +16,18 @@ const SIZES = {
 const ClientLogo = forwardRef<HTMLDivElement, ClientLogoProps>(
   ({ client, size = 'md', className = '' }, ref) => {
     const sizeClass = SIZES[size];
+    // Link de logo que não abre (arquivo apagado, storage antigo) cai nas iniciais em vez de imagem quebrada
+    const [failed, setFailed] = useState(false);
+    useEffect(() => setFailed(false), [client.logoUrl]);
 
-    if (client.logoUrl) {
+    if (client.logoUrl && !failed) {
       return (
         <img
           src={client.logoUrl}
           alt={client.companyName}
-          className={`${sizeClass} object-cover shrink-0 border border-border ${className}`}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className={`${sizeClass} object-contain bg-white shrink-0 border border-border ${className}`}
         />
       );
     }

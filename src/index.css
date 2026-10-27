@@ -270,3 +270,21 @@ html.font-scale-victor1 { font-size: 26px; }
 .goog-te-banner-frame, .skiptranslate iframe, #goog-gt-tt, .goog-te-balloon-frame, .VIpgJd-ZVi9od-ORHb-OEVmcd { display: none !important; }
 body { top: 0 !important; }
 .goog-text-highlight { background: transparent !important; box-shadow: none !important; }
+
+
+/* ── Toque (celular e iPad) ─────────────────────────────────────────────
+   - sem o atraso de 300 ms e sem o flash cinza ao tocar;
+   - campo com fonte 16px no celular/iPad: o Safari não dá zoom ao focar;
+   - sem hover (toque), os botões que só apareciam ao passar o mouse ficam visíveis. */
+button, a, [role="button"], label, summary { touch-action: manipulation; }
+html { -webkit-tap-highlight-color: transparent; }
+@media (max-width: 1023px) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { font-size: 16px; }
+}
+@media (hover: none) {
+  .group-hover\:opacity-100:where(button, a, [role="button"], :has(button, a, [role="button"])),
+  .group-hover\/card\:opacity-100:where(button, a, [role="button"], :has(button, a, [role="button"])) {
+    opacity: 1;
+  }
+  .group-hover\/card\:pointer-events-auto { pointer-events: auto; }
+}

@@ -256,6 +256,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   });
   const [sidebarHover, setSidebarHover] = useState(false);
   const sidebarExpanded = sidebarPinned || sidebarHover;
+  // Toque (iPad): o "hover" vem do toque e abria o menu por cima da tela; lá ele só abre fixando
+  const canHover = typeof window !== 'undefined' && window.matchMedia?.('(hover: hover)').matches;
   const setSidebarExpanded = setSidebarHover; // legacy no-op alias (não usado após refactor)
   useEffect(() => {
     localStorage.setItem('pulse:sidebarPinned', sidebarPinned ? '1' : '0');
@@ -643,19 +645,27 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen h-[100dvh] overflow-hidden bg-background">
       <BirthdayOverlay />
       <ClientAnniversaryAlert />
 
 
       {/* Desktop sidebar */}
       <aside
-        className={`hidden md:flex flex-col bg-sidebar border-r border-sidebar-border shrink-0 transition-all duration-300 ease-in-out ${sidebarExpanded ? 'w-[210px]' : 'w-[60px]'}`}
-        onMouseEnter={() => !sidebarPinned && setSidebarHover(true)}
+        // iPad em pé e celular usam a gaveta (lg:hidden no topo); no toque o menu não abre "por hover"
+        className={`hidden lg:flex flex-col bg-sidebar border-r border-sidebar-border shrink-0 transition-all duration-300 ease-in-out ${sidebarExpanded ? 'w-[210px]' : 'w-[60px]'}`}
+        onMouseEnter={() => !sidebarPinned && canHover && setSidebarHover(true)}
         onMouseLeave={() => !sidebarPinned && setSidebarHover(false)}
       >
         <div className={`p-3 flex items-center border-b border-sidebar-border gap-2 ${sidebarExpanded ? 'px-4' : 'justify-center'}`}>
-          <img src={pulseLogo} alt="Pulse" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+          {/* No toque (sem hover), o logo abre e fecha o menu */}
+          {canHover ? (
+            <img src={pulseLogo} alt="Pulse" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+          ) : (
+            <button type="button" onClick={() => setSidebarPinned(p => !p)} aria-label={sidebarPinned ? 'Recolher menu' : 'Abrir menu'} className="shrink-0 rounded-lg">
+              <img src={pulseLogo} alt="Pulse" className="w-8 h-8 rounded-lg object-cover" />
+            </button>
+          )}
           {sidebarExpanded && (
             <>
               <span className="font-display font-bold text-sm text-foreground whitespace-nowrap overflow-hidden flex-1">Pulse</span>
@@ -712,7 +722,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {/* Mobile hamburger */}
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
-              <button className="md:hidden p-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0">
+              <button className="lg:hidden p-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0" aria-label="Abrir menu">
                 <Menu size={22} />
               </button>
             </SheetTrigger>
@@ -846,8 +856,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </Popover>
             <LanguageToggle />
             <NotificationBell />
-            {/* Mobile avatar */}
-            <div className="md:hidden">
+            {/* Avatar no celular e no iPad em pé (o menu lateral, com o avatar, só aparece no computador) */}
+            <div className="lg:hidden">
               <ProfileDialog>
                 <button className="rounded-full overflow-hidden">
                   {currentUser && <UserAvatar user={currentUser} size="sm" />}

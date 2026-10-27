@@ -163,7 +163,7 @@ export default function FinancialChat() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-7rem)]">
+    <div className="flex flex-col h-[calc(100dvh-7rem)]">
       <FinancialQuickNav />
       {/* Header */}
       <div className="flex items-center justify-between pb-4">

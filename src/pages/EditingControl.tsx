@@ -398,7 +398,7 @@ export default function EditingControl() {
             </Badge>
           </div>
 
-          <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-420px)]">
+          <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100dvh-420px)]">
             {queueTasks.length === 0 && (
               <div className="py-8 text-center">
                 <Film size={24} className="mx-auto mb-2 text-muted-foreground/30" />
@@ -466,7 +466,7 @@ export default function EditingControl() {
                 </Badge>
               </div>
 
-              <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-420px)]">
+              <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100dvh-420px)]">
                 {editorTasks.length === 0 && (
                   <div className="py-8 text-center">
                     <Scissors size={24} className="mx-auto mb-2 text-muted-foreground/30" />

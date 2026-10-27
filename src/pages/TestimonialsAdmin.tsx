@@ -120,7 +120,7 @@ export default function TestimonialsAdmin() {
           </CardContent>
         </Card>
       ) : (
-        <ScrollArea className="h-[calc(100vh-200px)]">
+        <ScrollArea className="h-[calc(100dvh-200px)]">
           <div className="grid gap-4">
             <AnimatePresence>
               {items.map(t => {

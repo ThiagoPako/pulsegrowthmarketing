@@ -1232,7 +1232,7 @@ export default function ContentKanban() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-7rem)]">
+    <div className="flex flex-col h-[calc(100dvh-7rem)]">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -1906,12 +1906,12 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
               <TypeIcon size={10} /> {typeConfig.label}
             </span>
             {!viewOnly && (
-              <div className="flex gap-0.5 shrink-0 sm:w-0 sm:overflow-hidden sm:group-hover:w-auto sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                <button onClick={e => { e.stopPropagation(); onEdit(); }} title="Editar cartão" aria-label="Editar cartão" className="w-7 h-7 sm:w-6 sm:h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+              <div className="flex gap-0.5 shrink-0 [@media(hover:hover)]:w-0 [@media(hover:hover)]:overflow-hidden [@media(hover:hover)]:group-hover:w-auto [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity">
+                <button onClick={e => { e.stopPropagation(); onEdit(); }} title="Editar cartão" aria-label="Editar cartão" className="w-8 h-8 [@media(hover:hover)]:w-6 [@media(hover:hover)]:h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
                   <Edit size={12} />
                 </button>
                 {onDelete && (
-                  <button onClick={e => { e.stopPropagation(); onDelete(); }} title="Excluir cartão" aria-label="Excluir cartão" className="w-7 h-7 sm:w-6 sm:h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                  <button onClick={e => { e.stopPropagation(); onDelete(); }} title="Excluir cartão" aria-label="Excluir cartão" className="w-8 h-8 [@media(hover:hover)]:w-6 [@media(hover:hover)]:h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
                     <Trash2 size={12} />
                   </button>
                 )}
@@ -1975,7 +1975,7 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
               {assignedUser && (
                 <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground min-w-0">
                   <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" />
-                  <span className="truncate"><span className="text-muted-foreground/80">{responsibleLabel}:</span> <span className="text-foreground/85 font-medium">{assignedUser.name}</span></span>
+                  <span className="truncate"><span className="text-muted-foreground/80">{responsibleLabel}</span> · <span className="text-foreground/85 font-medium">{assignedUser.name}</span></span>
                 </div>
               )}
             </div>
@@ -2051,7 +2051,7 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
               {onApprove && (
                 <button onClick={e => { e.stopPropagation(); onApprove(); }}
                   className={`${primaryBtn} bg-emerald-600 text-white hover:bg-emerald-700`}>
-                  <ThumbsUp size={12} /> Aprovar
+                  <ThumbsUp size={12} /> Aprovar e enviar
                 </button>
               )}
               {onRequestAdjustments && (
@@ -2067,7 +2067,7 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
               {onReleaseAnalysis && (
                 <button onClick={e => { e.stopPropagation(); onReleaseAnalysis(); }}
                   className={`${primaryBtn} bg-teal-600 text-white hover:bg-teal-700`}>
-                  <CheckCircle2 size={12} /> Liberar
+                  <CheckCircle2 size={12} /> Liberar p/ Revisão
                 </button>
               )}
               {onReturnAnalysis && (
@@ -2095,7 +2095,7 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
           {onResubmit && (
             <button onClick={e => { e.stopPropagation(); onResubmit(); }}
               className={`${primaryBtn} bg-teal-600 text-white hover:bg-teal-700`}>
-              <Send size={12} /> Reenviar para revisão
+              <Send size={12} /> Reenviar Revisão
             </button>
           )}
           {onConfirmPosted && (

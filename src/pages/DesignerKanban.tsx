@@ -857,7 +857,7 @@ export default function DesignerKanban() {
 
       {view === 'kanban' ? (
         <DragScrollContainer className="pb-4 snap-x snap-mandatory sm:snap-none">
-          <div className="flex gap-3 min-w-max h-[calc(100dvh-230px)] sm:h-[calc(100vh-180px)]">
+          <div className="flex gap-3 min-w-max h-[calc(100dvh-230px)] sm:h-[calc(100dvh-180px)]">
             {DESIGN_COLUMNS.map((col, colIdx) => {
               const cfg = COLUMN_CONFIG[col.key];
               const allColTasks = tasksByColumn[col.key] || [];
@@ -1516,10 +1516,10 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
       <div className="flex items-center gap-2 min-w-0">
         <ClientLogo client={{ companyName: clientName, color: clientColor, logoUrl: task.clients?.logo_url }} size="sm" className="!w-6 !h-6" />
         <span className="text-[11px] font-semibold text-muted-foreground truncate flex-1">{clientName}</span>
-        <div className="flex items-center gap-0.5 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-0.5 shrink-0 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity">
           <button
             onClick={(e) => { e.stopPropagation(); onOpenDetail(); }}
-            className="w-7 h-7 sm:w-6 sm:h-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+            className="w-8 h-8 [@media(hover:hover)]:w-6 [@media(hover:hover)]:h-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
             title="Detalhes" aria-label="Detalhes"
           >
             <Pencil size={12} />
@@ -1528,7 +1528,7 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
             <DropdownMenuTrigger asChild>
               <button
                 onClick={(e) => e.stopPropagation()}
-                className="w-7 h-7 sm:w-6 sm:h-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                className="w-8 h-8 [@media(hover:hover)]:w-6 [@media(hover:hover)]:h-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                 title="Mover para…" aria-label="Mover para"
               >
                 <ArrowRightLeft size={12} />
@@ -1545,7 +1545,7 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
           {canDelete && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="w-7 h-7 sm:w-6 sm:h-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              className="w-8 h-8 [@media(hover:hover)]:w-6 [@media(hover:hover)]:h-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
               title="Excluir" aria-label="Excluir"
             >
               <Trash2 size={12} />

@@ -964,7 +964,7 @@ export default function EditorKanban() {
   if (loading) return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Carregando...</p></div>;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-7rem)]">
+    <div className="flex flex-col h-[calc(100dvh-7rem)]">
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">

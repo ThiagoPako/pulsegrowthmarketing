@@ -335,7 +335,7 @@ export default function ApresentacaoPlano() {
 
           {/* SIDEBAR DIREITA — cards dos planos (desktop) */}
           <aside className="hidden lg:block w-72 xl:w-80 shrink-0 border-l border-border bg-card/40 backdrop-blur">
-            <div className="sticky top-14 p-4 max-h-[calc(100vh-3.5rem)] overflow-y-auto">
+            <div className="sticky top-14 p-4 max-h-[calc(100dvh-3.5rem)] overflow-y-auto">
               <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-3 px-1">
                 Outros planos
               </p>
@@ -599,7 +599,7 @@ function StageIntro() {
   ];
   return (
     <Slide>
-      <div className="w-full max-h-[calc(100vh-9rem)] overflow-y-auto pr-1">
+      <div className="w-full max-h-[calc(100dvh-9rem)] overflow-y-auto pr-1">
         <div className="text-center max-w-6xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
             <Badge className="mb-4 bg-primary/10 text-primary border-primary/30 px-3 py-1">
@@ -887,7 +887,7 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
 
   return (
     <Slide>
-      <div className="w-full max-h-[calc(100vh-10rem)] overflow-y-auto pr-2">
+      <div className="w-full max-h-[calc(100dvh-10rem)] overflow-y-auto pr-2">
         <div className="text-center mb-5">
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 }}>
             <Badge className="bg-primary text-primary-foreground mb-3 text-sm px-4 py-1.5">

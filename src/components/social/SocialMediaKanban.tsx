@@ -414,7 +414,7 @@ export default function SocialMediaKanban({
                 </div>
 
                 {/* Column Body */}
-                <div className={`flex-1 rounded-b-xl border ${col.borderColor} border-t-0 bg-card/50 min-h-[200px] max-h-[calc(100vh-380px)] overflow-y-auto p-2 space-y-2 transition-colors ${
+                <div className={`flex-1 rounded-b-xl border ${col.borderColor} border-t-0 bg-card/50 min-h-[200px] max-h-[calc(100dvh-380px)] overflow-y-auto p-2 space-y-2 transition-colors ${
                   isDragOver ? 'bg-primary/5' : ''
                 }`}>
                   <AnimatePresence mode="popLayout">

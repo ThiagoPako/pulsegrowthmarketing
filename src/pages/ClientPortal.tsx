@@ -1352,7 +1352,6 @@ export default function ClientPortal() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs text-white/40 w-full sm:w-auto">Enviar ao cliente pelo WhatsApp:</span>
                     {/* o grupo não vem na API do portal (é pública): o servidor avisa se faltar */}
-                    {(
                       <button
                         onClick={() => void sendToWhatsApp('grupo')}
                         disabled={!!whatsSending}
@@ -1360,8 +1359,6 @@ export default function ClientPortal() {
                       >
                         {whatsSending === 'grupo' ? <Loader2 size={15} className="animate-spin" /> : <Users size={15} />} No grupo
                       </button>
-                    )}
-                    {(
                       <button
                         onClick={() => void sendToWhatsApp('privado')}
                         disabled={!!whatsSending}
@@ -1369,7 +1366,6 @@ export default function ClientPortal() {
                       >
                         {whatsSending === 'privado' ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={15} />} No privado
                       </button>
-                    )}
                   </div>
                 )}
 

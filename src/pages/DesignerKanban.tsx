@@ -230,6 +230,15 @@ export default function DesignerKanban() {
   const [createOpen, setCreateOpen] = useState(false);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  // Card que acabou de mudar de coluna: brilha e a tela rola até ele
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const flashCard = useCallback((id: string) => {
+    setFlashId(id);
+    window.setTimeout(() => setFlashId(cur => (cur === id ? null : cur)), 1500);
+    window.setTimeout(() => {
+      document.getElementById(`design-card-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }, 80);
+  }, []);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string>('all');
   // Filtros de data: criação (de/até), prazo (de/até) e somente atrasadas.
@@ -393,6 +402,7 @@ export default function DesignerKanban() {
     // Em outra ordenação, o card solto em outra coluna vai para o fim da ordem manual.
     const overId = sortMode === 'default' && isChangingPosition ? overTaskId : undefined;
 
+    if (isChangingColumn) flashCard(taskId);
     const targetLabel = DESIGN_COLUMNS.find(c => c.key === targetColumn)?.label || targetColumn;
     const extraFields: Record<string, any> = {};
     // Saiu da mão do agente (a equipe moveu): o selo "Criando/Em correção" some
@@ -889,7 +899,7 @@ export default function DesignerKanban() {
                       <div
                         className="ml-auto flex items-center gap-1"
                       >
-                        <Badge variant="secondary" className="text-[10px] h-5">{allColTasks.length}</Badge>
+                        <Badge key={allColTasks.length} variant="secondary" className="text-[10px] h-5 animate-kanban-bump">{allColTasks.length}</Badge>
                         {col.key === 'aprovado' && allColTasks.some(t => getTaskArtUrls(t).length > 0) && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -957,9 +967,18 @@ export default function DesignerKanban() {
 
                   {/* Cards - scrollable. Sem AnimatePresence/layout — enormes ganhos de perf com muitos cards. */}
                   <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 space-y-2 min-h-[100px] px-1 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+                    {/* Arrastando por cima: mostra onde o card vai cair */}
+                    {dragOverColumn === col.key && draggingTaskId && tasks.find(t => t.id === draggingTaskId)?.kanban_column !== col.key && (
+                      <div className="animate-kanban-in h-14 rounded-xl border-2 border-dashed border-primary/60 bg-primary/5 flex items-center justify-center text-[11px] font-semibold text-primary">
+                        Solte aqui para mover para {col.label}
+                      </div>
+                    )}
                     {colTasks.map((task, i) => (
                       <div
                         key={task.id}
+                        id={`design-card-${task.id}`}
+                        className={`rounded-xl animate-kanban-in ${flashId === task.id ? 'animate-kanban-flash' : ''}`}
+                        style={{ animationDelay: flashId === task.id ? undefined : `${Math.min(i, 8) * 25}ms` }}
                         onDragOver={e => handleDragOver(e, col.key)}
                         onDrop={e => { e.stopPropagation(); handleDrop(e, col.key, task.id); }}
                       >
@@ -1491,8 +1510,8 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
       onDragEnd={onDragEnd}
       onClick={onClick}
       style={{ borderLeftColor: `hsl(${clientColor})` }}
-      className={`relative bg-card border border-l-[3px] rounded-xl p-3 cursor-grab active:cursor-grabbing transition-[box-shadow,transform,border-color] duration-150 space-y-2.5 group ${
-        isDragging ? 'opacity-40 scale-[0.97] ring-2 ring-primary/40' : 'shadow-sm hover:shadow-md hover:-translate-y-px'
+      className={`relative bg-card border border-l-[3px] rounded-xl p-3 cursor-grab active:cursor-grabbing transition-[box-shadow,transform,border-color,opacity] duration-200 ease-out space-y-2.5 group ${
+        isDragging ? 'opacity-40 scale-[0.97] rotate-1 ring-2 ring-primary/40' : 'shadow-sm hover:shadow-lg hover:-translate-y-0.5'
       } ${isOverdue ? 'border-red-400/60 bg-red-500/[0.03]' : 'border-border/60 hover:border-primary/30'} ${
         isNext ? 'ring-2 ring-amber-400/70' : ''
       }`}
@@ -1637,7 +1656,7 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
       {onQuickStart && (
         <Button
           size="sm"
-          className="w-full h-8 text-xs font-semibold gap-1.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white rounded-lg"
+          className="w-full h-8 text-xs font-semibold gap-1.5 whitespace-nowrap active:scale-[0.97] transition-transform bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white rounded-lg"
           onClick={(e) => { e.stopPropagation(); onQuickStart(); }}
         >
           <Play size={12} fill="currentColor" /> {task.kanban_column === 'fila_baixa_prioridade' ? 'Retomar Tarefa' : 'Iniciar Tarefa'}

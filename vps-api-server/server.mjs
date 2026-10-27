@@ -27,6 +27,7 @@ import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerSchedulingRoutes } from './scheduling.mjs';
 import { createPostCaption } from './lib/postCaption.mjs';
+import { migrateInlineAvatars } from './lib/avatarFiles.mjs';
 import { createPulsePlus, neutralizeAvatars } from './pulsePlus.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
 import { registerAssistant } from './assistant/index.mjs';
@@ -20439,6 +20440,13 @@ registerAgentDesignRoutes(app, {
 });
 
 // ─── Agendamentos (calendário de postagem por cliente; acesso: Pulse Plus) ──
+// Fotos de perfil gravadas dentro do banco viram arquivo (deixavam o Kanban de Design com ~18 MB por abertura)
+if (process.env.AVATAR_MIGRATION_DISABLED !== '1') {
+  const runAvatarMigration = () => migrateInlineAvatars({ pool, uploadRoot: UPLOAD_ROOT, publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL })
+    .catch((error) => console.error('[avatares]', error.message));
+  setTimeout(runAvatarMigration, 15_000).unref?.();
+  setInterval(runAvatarMigration, 60 * 60_000).unref?.();
+}
 // legenda pela IA (roteiro, quadros e fala do vídeo, arte), miniatura e prévia animada dos vídeos
 const postCaption = createPostCaption({ resolveAiConfig, resolveAiModel, uploadRoots, allowedOrigins: MEDIA_ALLOWED_ORIGINS });
 postCaption.registerMediaRoutes(app);

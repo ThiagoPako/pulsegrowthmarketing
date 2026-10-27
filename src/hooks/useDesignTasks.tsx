@@ -156,7 +156,7 @@ export function formatDueDate(value?: string | null): string {
 // Guarda por cidade e limita ao que é útil pro kanban/painel.
 const LS_KEY = (city: string) => `pulse:design-tasks:${city || 'default'}`;
 const LS_LAST_CITY = 'pulse:design-tasks:last-city';
-const LS_MAX_AGE_MS = 60 * 60 * 1000; // 1h — cache local mais generoso; refetch em background mantém fresco
+const LS_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 h: o quadro abre na hora com o último estado e atualiza em segundo plano
 
 function readLocalTasks(city: string): DesignTask[] | undefined {
   try {
@@ -349,7 +349,8 @@ export function useDesignTasks() {
     gcTime: 30 * 60_000,
     refetchInterval: 120_000,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    // abriu a tela com o quadro guardado: atualiza em segundo plano (sem esperar para mostrar)
+    refetchOnMount: true,
     refetchOnReconnect: false,
     structuralSharing: true,
     notifyOnChangeProps: ['data', 'error'],

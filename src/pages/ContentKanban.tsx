@@ -262,6 +262,15 @@ export default function ContentKanban() {
   // Clientes de outras cidades (somente leitura) para exibir o nome no cartão.
   const [foreignClients, setForeignClients] = useState<Record<string, { id: string; companyName: string; color: string; logoUrl?: string }>>({});
   const [loading, setLoading] = useState(true);
+  // Card que acabou de mudar de coluna: brilha e a tela rola até ele (o usuário vê para onde foi)
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const flashCard = useCallback((id: string) => {
+    setFlashId(id);
+    window.setTimeout(() => setFlashId(cur => (cur === id ? null : cur)), 1500);
+    window.requestAnimationFrame(() => window.setTimeout(() => {
+      document.getElementById(`task-card-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }, 60));
+  }, []);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightId = searchParams.get('highlight');
@@ -825,6 +834,7 @@ export default function ContentKanban() {
     setTasks(prev => prev.map(t =>
       t.id === draggedTask.id ? { ...t, kanban_column: targetColumn } : t
     ));
+    flashCard(draggedTask.id);
 
     const result = await updateTaskRow(draggedTask.id, {
       kanban_column: targetColumn,
@@ -1078,6 +1088,7 @@ export default function ContentKanban() {
     const oldColumn = task.kanban_column;
     // Optimistic
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, kanban_column: targetColumn } : t));
+    flashCard(task.id);
 
     const result = await updateTaskRow(task.id, updatePayload);
     if (result.status !== 'ok') {
@@ -1355,7 +1366,7 @@ export default function ContentKanban() {
                 <div className={`flex items-center gap-2 pl-3 pr-1.5 h-10 rounded-t-2xl bg-gradient-to-r ${col.gradient} shadow-sm ${col.glow}`}>
                   {(() => { const Icon = COLUMN_ICONS[col.id] || Rocket; return <Icon size={15} className="text-white/90 shrink-0" />; })()}
                   <span className="text-[13px] font-semibold text-white flex-1 truncate">{col.label}</span>
-                  <span className="text-[11px] font-bold text-white bg-white/20 rounded-full px-2 py-0.5 min-w-[24px] text-center tabular-nums">
+                  <span key={colTasks.length} className="animate-kanban-bump text-[11px] font-bold text-white bg-white/20 rounded-full px-2 py-0.5 min-w-[24px] text-center tabular-nums">
                     {colTasks.length}
                   </span>
                   {isColumnInteractive(col.id) && (
@@ -1374,8 +1385,20 @@ export default function ContentKanban() {
                 {/* Cards */}
                 <div className="flex-1 px-2 py-2 overflow-y-auto min-h-0 [scrollbar-width:thin]">
                     <div className="space-y-2">
+                      {/* Arrastando por cima: mostra onde o card vai cair */}
+                      {isDragOver && isColumnInteractive(col.id) && draggedTask && draggedTask.kanban_column !== col.id && (
+                        <div className="animate-kanban-in h-14 rounded-xl border-2 border-dashed border-primary/60 bg-primary/5 flex items-center justify-center text-[11px] font-semibold text-primary">
+                          Solte aqui para mover para {col.label}
+                        </div>
+                      )}
                       {colTasks.map((task, taskIdx) => (
-                        <div id={`task-card-${task.id}`} key={task.id}>
+                        <div
+                          id={`task-card-${task.id}`}
+                          key={task.id}
+                          // entra de leve (só quando aparece) e brilha quando acabou de chegar de outra coluna
+                          className={`rounded-xl animate-kanban-in ${flashId === task.id ? 'animate-kanban-flash' : ''}`}
+                          style={{ animationDelay: flashId === task.id ? undefined : `${Math.min(taskIdx, 8) * 25}ms` }}
+                        >
                           <TaskCard
                             viewOnly={!isColumnInteractive(col.id) || isForeignTask(task)}
                             cityLabel={isForeignTask(task) ? CITY_LABELS[normalizeCity(task.city) as CityCode] || undefined : undefined}
@@ -1868,8 +1891,10 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
   if (task.adjustment_notes && !task.immediate_alteration) pills.push({ key: 'alterado', label: 'Já teve ajuste', tone: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:text-amber-300' });
 
   const clientName = client?.companyName || task.prospect_name || 'Cliente';
-  const secondaryBtn = 'inline-flex items-center justify-center gap-1.5 h-7 px-2 rounded-lg border text-[11px] font-semibold transition-colors';
-  const primaryBtn = 'inline-flex items-center justify-center gap-1.5 w-full h-8 px-3 rounded-lg text-[11px] font-semibold transition-colors';
+  // Links (brutos, portal, baixar): discretos, ícone colorido, sem quebrar linha
+  const secondaryBtn = 'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-secondary/60 hover:bg-secondary text-[11px] font-medium text-foreground/80 hover:text-foreground whitespace-nowrap transition-[background-color,transform] active:scale-95';
+  // Ações: uma linha só, nunca quebra; o texto encolhe com reticências se faltar espaço
+  const primaryBtn = 'inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-semibold whitespace-nowrap min-w-0 transition-[background-color,transform,box-shadow] active:scale-[0.97] [&>span]:truncate';
 
   return (
     <>
@@ -1878,12 +1903,12 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
         onDragStart={viewOnly ? undefined : onDragStart}
         onClick={onCardClick}
         style={{ borderLeftColor: `hsl(${clientColor})` }}
-        className={`group relative rounded-xl overflow-hidden border border-l-[3px] bg-card transition-[box-shadow,transform,border-color] duration-150 ${
+        className={`group relative rounded-xl overflow-hidden border border-l-[3px] bg-card transition-[box-shadow,transform,border-color,opacity] duration-200 ease-out ${
           isAwaitingLink ? 'border-amber-300/70 dark:border-amber-500/40' : isOverdue ? 'border-red-400/60' : 'border-border/60 hover:border-primary/30'
         } ${
           viewOnly ? 'cursor-default opacity-80' : 'cursor-grab active:cursor-grabbing'
         } ${
-          isDragging ? 'opacity-40 scale-[0.97] shadow-none' : 'shadow-sm hover:shadow-md hover:-translate-y-px'
+          isDragging ? 'opacity-40 scale-[0.97] rotate-1 shadow-none' : 'shadow-sm hover:shadow-lg hover:-translate-y-0.5'
         }`}
       >
         {/* Selo de praça: cartões de outra cidade (somente leitura) */}
@@ -2005,75 +2030,75 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
             if (task.drive_link && ['captacao', 'edicao', 'pre_revisao', 'alteracao'].includes(task.kanban_column)) {
               links.push(
                 <a key="drive" href={task.drive_link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                  className={`${secondaryBtn} border-blue-500/25 bg-blue-500/5 text-blue-700 hover:bg-blue-500/10 dark:text-blue-300`}>
-                  <Link2 size={12} /> Brutos <ExternalLink size={10} className="opacity-60" />
+                  className={secondaryBtn}>
+                  <Link2 size={12} className="text-blue-500" /> Brutos <ExternalLink size={10} className="opacity-50" />
                 </a>
               );
             }
             if (isRevisao && task.edited_video_link) {
               links.push(
                 <a key="portal" href={task.client_id ? `/portal/${task.client_id}` : `/video-avulso/${task.id}`} onClick={e => e.stopPropagation()}
-                  className={`${secondaryBtn} border-teal-500/25 bg-teal-500/5 text-teal-700 hover:bg-teal-500/10 dark:text-teal-300`}>
-                  <Eye size={12} /> Portal
+                  className={secondaryBtn}>
+                  <Eye size={12} className="text-teal-500" /> Portal
                 </a>
               );
             }
             if (task.edited_video_link && (isRevisao || ['pre_revisao', 'envio', 'agendamentos', 'acompanhamento'].includes(task.kanban_column))) {
               links.push(
                 <a key="baixar" href={task.edited_video_link} download target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                  className={`${secondaryBtn} border-violet-500/25 bg-violet-500/5 text-violet-700 hover:bg-violet-500/10 dark:text-violet-300`}>
-                  <Download size={12} /> Baixar vídeo
+                  className={secondaryBtn}>
+                  <Download size={12} className="text-violet-500" /> Baixar
                 </a>
               );
             }
             if (onAddDriveLink && !task.drive_link) {
               links.push(
                 <button key="add-drive" onClick={e => { e.stopPropagation(); onAddDriveLink(); }}
-                  className={`${secondaryBtn} border-dashed border-blue-500/40 text-blue-700 hover:bg-blue-500/5 dark:text-blue-300`}>
-                  <Plus size={12} /> Link dos brutos
+                  className={`${secondaryBtn} border border-dashed border-blue-500/40 bg-transparent`}>
+                  <Plus size={12} className="text-blue-500" /> Brutos
                 </button>
               );
             }
             if (onAddVideoLink && !task.edited_video_link) {
               links.push(
                 <button key="add-video" onClick={e => { e.stopPropagation(); onAddVideoLink(); }}
-                  className={`${secondaryBtn} border-dashed border-teal-500/40 text-teal-700 hover:bg-teal-500/5 dark:text-teal-300`}>
-                  <Plus size={12} /> Link do vídeo
+                  className={`${secondaryBtn} border border-dashed border-teal-500/40 bg-transparent`}>
+                  <Plus size={12} className="text-teal-500" /> Vídeo
                 </button>
               );
             }
-            return links.length ? <div className="grid grid-cols-2 gap-1.5 [&>*:only-child]:col-span-2">{links}</div> : null;
+            return links.length ? <div className="flex flex-wrap gap-1.5">{links}</div> : null;
           })()}
 
           {/* Decisão da Revisão / da Análise */}
           {task.kanban_column === 'revisao' && (onApprove || onRequestAdjustments) && (
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="flex gap-1.5 [&>button:first-child]:flex-1">
               {onApprove && (
                 <button onClick={e => { e.stopPropagation(); onApprove(); }}
-                  className={`${primaryBtn} bg-emerald-600 text-white hover:bg-emerald-700`}>
-                  <ThumbsUp size={12} /> Aprovar e enviar
+                  className={`${primaryBtn} bg-emerald-600 text-white hover:bg-emerald-500 shadow-sm shadow-emerald-600/20`}>
+                  <ThumbsUp size={12} className="shrink-0" /> <span>Aprovar e enviar</span>
                 </button>
               )}
               {onRequestAdjustments && (
                 <button onClick={e => { e.stopPropagation(); onRequestAdjustments(); }}
-                  className={`${primaryBtn} border border-amber-500/40 bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 dark:text-amber-200`}>
-                  <MessageSquareWarning size={12} /> Ajustes
+                  className={`${primaryBtn} shrink-0 border border-amber-500/40 bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 dark:text-amber-200`}>
+                  <MessageSquareWarning size={12} className="shrink-0" /> <span>Ajustes</span>
                 </button>
               )}
             </div>
           )}
           {task.kanban_column === 'pre_revisao' && (onReleaseAnalysis || onReturnAnalysis) && (
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="flex gap-1.5 [&>button:first-child]:flex-1">
               {onReleaseAnalysis && (
                 <button onClick={e => { e.stopPropagation(); onReleaseAnalysis(); }}
-                  className={`${primaryBtn} bg-teal-600 text-white hover:bg-teal-700`}>
-                  <CheckCircle2 size={12} /> Liberar p/ Revisão
+                  className={`${primaryBtn} bg-teal-600 text-white hover:bg-teal-500 shadow-sm shadow-teal-600/20`}>
+                  <CheckCircle2 size={12} className="shrink-0" /> <span>Liberar p/ Revisão</span>
                 </button>
               )}
               {onReturnAnalysis && (
                 <button onClick={e => { e.stopPropagation(); onReturnAnalysis(); }}
-                  className={`${primaryBtn} border border-amber-500/40 bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 dark:text-amber-200`}>
-                  <ArrowLeft size={12} /> Devolver
+                  className={`${primaryBtn} shrink-0 border border-amber-500/40 bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 dark:text-amber-200`}>
+                  <ArrowLeft size={12} className="shrink-0" /> <span>Devolver</span>
                 </button>
               )}
             </div>
@@ -2082,26 +2107,26 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
           {/* Ação principal da coluna */}
           {onMoveToNext && (
             <button onClick={e => { e.stopPropagation(); onMoveToNext(); }}
-              className={`${primaryBtn} bg-primary text-primary-foreground hover:bg-primary/90`}>
-              <ArrowRight size={12} /> Mover para {nextColumnLabel}
+              className={`${primaryBtn} w-full bg-primary text-primary-foreground hover:bg-primary/90`}>
+              <ArrowRight size={12} className="shrink-0" /> <span>Mover para {nextColumnLabel}</span>
             </button>
           )}
           {onSchedule && (
             <button onClick={e => { e.stopPropagation(); onSchedule(); }}
-              className={`${primaryBtn} bg-primary text-primary-foreground hover:bg-primary/90`}>
-              <Calendar size={12} /> Agendar postagem
+              className={`${primaryBtn} w-full bg-primary text-primary-foreground hover:bg-primary/90`}>
+              <Calendar size={12} className="shrink-0" /> <span>Agendar postagem</span>
             </button>
           )}
           {onResubmit && (
             <button onClick={e => { e.stopPropagation(); onResubmit(); }}
-              className={`${primaryBtn} bg-teal-600 text-white hover:bg-teal-700`}>
-              <Send size={12} /> Reenviar Revisão
+              className={`${primaryBtn} w-full bg-teal-600 text-white hover:bg-teal-500`}>
+              <Send size={12} className="shrink-0" /> <span>Reenviar Revisão</span>
             </button>
           )}
           {onConfirmPosted && (
             <button onClick={e => { e.stopPropagation(); onConfirmPosted(); }}
-              className={`${primaryBtn} ${isOverdue ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-800 hover:bg-emerald-500/20 dark:text-emerald-200'}`}>
-              <CheckCircle2 size={12} /> Confirmar postagem
+              className={`${primaryBtn} w-full ${isOverdue ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-800 hover:bg-emerald-500/20 dark:text-emerald-200'}`}>
+              <CheckCircle2 size={12} className="shrink-0" /> <span>Confirmar postagem</span>
             </button>
           )}
 
@@ -2110,7 +2135,7 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
             <div className="flex items-center gap-1.5 pt-0.5">
               {onMoveBackward && (
                 <button onClick={e => { e.stopPropagation(); onMoveBackward(); }}
-                  className="flex items-center gap-1 flex-1 min-w-0 justify-center h-7 px-2 rounded-lg border border-border/60 bg-secondary/40 hover:bg-secondary text-muted-foreground hover:text-foreground text-[11px] font-medium transition-colors"
+                  className="flex items-center gap-1 flex-1 min-w-0 justify-center h-7 px-2 rounded-lg border border-border/60 bg-secondary/40 hover:bg-secondary text-muted-foreground hover:text-foreground text-[11px] font-medium transition-[background-color,transform] active:scale-95"
                   title={`Mover para ${backwardLabel}`}>
                   <ChevronLeft size={12} className="shrink-0" />
                   <span className="truncate">{backwardLabel}</span>
@@ -2118,7 +2143,7 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
               )}
               {onMoveForward && (
                 <button onClick={e => { e.stopPropagation(); onMoveForward(); }}
-                  className="flex items-center gap-1 flex-1 min-w-0 justify-center h-7 px-2 rounded-lg border border-primary/25 bg-primary/5 hover:bg-primary/10 text-primary text-[11px] font-semibold transition-colors"
+                  className="flex items-center gap-1 flex-1 min-w-0 justify-center h-7 px-2 rounded-lg border border-primary/25 bg-primary/5 hover:bg-primary/10 text-primary text-[11px] font-semibold transition-[background-color,transform] active:scale-95"
                   title={`Mover para ${forwardLabel}`}>
                   <span className="truncate">{forwardLabel}</span>
                   <ChevronRight size={12} className="shrink-0" />

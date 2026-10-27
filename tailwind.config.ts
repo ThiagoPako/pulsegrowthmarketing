@@ -62,6 +62,21 @@ export default {
           "0%, 100%": { opacity: "0.85" },
           "50%": { opacity: "1" },
         },
+        // Kanban: card chegando (entra de leve) e card que acabou de mudar de coluna (brilho que some)
+        "kanban-in": {
+          from: { opacity: "0", transform: "translateY(6px) scale(0.985)" },
+          to: { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        "kanban-flash": {
+          "0%": { boxShadow: "0 0 0 0 hsl(var(--primary) / 0.65)", transform: "scale(1.02)" },
+          "40%": { boxShadow: "0 0 0 6px hsl(var(--primary) / 0.25)", transform: "scale(1)" },
+          "100%": { boxShadow: "0 0 0 0 hsl(var(--primary) / 0)" },
+        },
+        "kanban-bump": {
+          "0%": { transform: "scale(1)" },
+          "40%": { transform: "scale(1.25)" },
+          "100%": { transform: "scale(1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -69,6 +84,9 @@ export default {
         "pulse-ring": "pulse-ring 1.5s ease-out infinite",
         "soft-pulse": "soft-pulse 3s ease-in-out infinite",
         "soft-glow": "soft-glow 2.5s ease-in-out infinite",
+        "kanban-in": "kanban-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both",
+        "kanban-flash": "kanban-flash 1.4s ease-out",
+        "kanban-bump": "kanban-bump 0.35s ease-out",
       },
     },
   },

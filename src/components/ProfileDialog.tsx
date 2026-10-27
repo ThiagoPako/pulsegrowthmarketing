@@ -9,6 +9,21 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Camera, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import { uploadFileToVps } from '@/services/vpsApi';
+
+/** Foto do perfil em JPEG 256×256 (antes ia inteira para o banco como base64, até 2,4 MB por pessoa). */
+async function squareJpeg(file: File, size = 256): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const side = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Não foi possível preparar a foto');
+  ctx.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, size, size);
+  bitmap.close?.();
+  return new Promise((resolve, reject) => canvas.toBlob(b => (b ? resolve(b) : reject(new Error('Não foi possível preparar a foto'))), 'image/jpeg', 0.85));
+}
 
 const ProfileDialog = forwardRef<HTMLDivElement, { children: React.ReactNode }>(
   function ProfileDialog({ children }, _ref) {
@@ -19,6 +34,9 @@ const ProfileDialog = forwardRef<HTMLDivElement, { children: React.ReactNode }>(
     const [jobTitle, setJobTitle] = useState(currentUser?.jobTitle || '');
     const [bio, setBio] = useState((currentUser as any)?.bio || '');
     const [avatarUrl, setAvatarUrl] = useState(currentUser?.avatarUrl || '');
+    // foto nova escolhida: vai como arquivo para /uploads no "Salvar" (avatarUrl mostra a prévia)
+    const [avatarBlob, setAvatarBlob] = useState<Blob | null>(null);
+    const [saving, setSaving] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     if (!currentUser) return null;
@@ -26,22 +44,37 @@ const ProfileDialog = forwardRef<HTMLDivElement, { children: React.ReactNode }>(
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        setAvatarUrl(ev.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+      squareJpeg(file)
+        .then(blob => {
+          setAvatarBlob(blob);
+          setAvatarUrl(URL.createObjectURL(blob));
+        })
+        .catch(() => toast.error('Não consegui abrir essa imagem. Tente um JPG ou PNG.'));
     };
 
     const handleSave = async () => {
-      await updateProfile({
-        display_name: displayName,
-        job_title: jobTitle,
-        avatar_url: avatarUrl,
-        bio,
-      });
-      toast.success('Perfil atualizado!');
-      setOpen(false);
+      setSaving(true);
+      try {
+        let finalAvatar = avatarUrl;
+        if (avatarBlob) {
+          finalAvatar = await uploadFileToVps(new File([avatarBlob], 'avatar.jpg', { type: 'image/jpeg' }), 'avatars');
+        } else if (finalAvatar.startsWith('blob:')) {
+          finalAvatar = currentUser.avatarUrl || '';
+        }
+        await updateProfile({
+          display_name: displayName,
+          job_title: jobTitle,
+          avatar_url: finalAvatar,
+          bio,
+        });
+        setAvatarBlob(null);
+        toast.success('Perfil atualizado!');
+        setOpen(false);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Não foi possível salvar o perfil');
+      } finally {
+        setSaving(false);
+      }
     };
 
     const initials = (displayName || currentUser.name)
@@ -58,6 +91,7 @@ const ProfileDialog = forwardRef<HTMLDivElement, { children: React.ReactNode }>(
           setDisplayName(currentUser.displayName || currentUser.name);
           setJobTitle(currentUser.jobTitle || '');
           setAvatarUrl(currentUser.avatarUrl || '');
+          setAvatarBlob(null);
           setBio((currentUser as any)?.bio || '');
         }
       }}>
@@ -121,7 +155,7 @@ const ProfileDialog = forwardRef<HTMLDivElement, { children: React.ReactNode }>(
               </div>
             </div>
 
-            <Button onClick={handleSave} className="w-full gap-2 mt-2">
+            <Button onClick={handleSave} disabled={saving} className="w-full gap-2 mt-2">
               <Save size={16} /> Salvar
             </Button>
           </div>

@@ -288,3 +288,8 @@ html { -webkit-tap-highlight-color: transparent; }
   }
   .group-hover\/card\:pointer-events-auto { pointer-events: auto; }
 }
+
+/* Quem prefere menos movimento (acessibilidade do sistema) não vê as animações do Kanban */
+@media (prefers-reduced-motion: reduce) {
+  .animate-kanban-in, .animate-kanban-flash, .animate-kanban-bump { animation: none !important; }
+}

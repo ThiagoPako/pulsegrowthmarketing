@@ -43,6 +43,8 @@ const SocialConnectInvite = lazy(() => import("@/pages/SocialConnectInvite"));
 const SocialInsights = lazy(() => import("@/pages/SocialInsights"));
 const PostStudio = lazy(() => import("@/pages/PostStudio"));
 const Scheduling = lazy(() => import("@/pages/Scheduling"));
+const Wallpaper = lazy(() => import("@/pages/Wallpaper"));
+const WallpaperConnect = lazy(() => import("@/pages/WallpaperConnect"));
 const StoryReminder = lazy(() => import("@/pages/StoryReminder"));
 const RequireModuleAccess = lazy(() => import("@/components/scheduling/RequireModuleAccess"));
 const ContentKanban = lazy(() => import("@/pages/ContentKanban"));
@@ -300,6 +302,9 @@ function AppRoutes() {
         <Route path="/clientes/temperatura" element={<ProtectedRoute><ClientTemperature /></ProtectedRoute>} />
         <Route path="/banco-clientes" element={<ProtectedRoute><ClientDatabase /></ProtectedRoute>} />
         <Route path="/banco-publico/:token" element={<Suspense fallback={<PageLoader />}><PublicClientDatabase /></Suspense>} />
+        <Route path="/wallpaper-admin" element={<ProtectedRoute allowedRoles={['admin']}><Wallpaper /></ProtectedRoute>} />
+        {/* Link do cliente para conectar os computadores (público) */}
+        <Route path="/wallpaper/:token" element={<Suspense fallback={<PageLoader />}><WallpaperConnect /></Suspense>} />
 
         <Route path="/equipe" element={<ProtectedRoute><Team /></ProtectedRoute>} />
         <Route path="/equipe/apresentacao" element={<TeamPresentation />} />

@@ -16,7 +16,7 @@ import ProfileDialog from '@/components/ProfileDialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
   LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Cpu, MessageCircle, Workflow, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon, Gauge, Flame, Pin, PinOff, Database, Link2, Images
-  , Sparkles, Thermometer, type LucideIcon,
+  , Sparkles, Thermometer, Wallpaper, type LucideIcon,
 } from 'lucide-react';
 
 import { useTheme } from '@/hooks/useTheme';
@@ -135,6 +135,7 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/clientes', label: 'Clientes', icon: Building2, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/clientes/temperatura', label: 'Temperatura dos clientes', icon: Thermometer, roles: ['admin', 'social_media', 'gestor_projetos', 'socio_gestor'] },
+      { path: '/wallpaper-admin', label: 'Wallpaper', icon: Wallpaper, roles: ['admin'] },
       { path: '/banco-clientes', label: 'Banco de Dados', icon: Database, roles: ['admin', 'social_media', 'gestor_projetos', 'designer', 'copywriter', 'videomaker', 'editor', 'endomarketing', 'fotografo', 'parceiro'] },
 
       { path: '/relacionamento', label: 'Relacionamento', icon: Handshake, roles: ['admin', 'social_media', 'gestor_projetos'] },

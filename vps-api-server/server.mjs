@@ -26,6 +26,7 @@ import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerSchedulingRoutes } from './scheduling.mjs';
+import { registerWallpaperRoutes } from './wallpaper.mjs';
 import { createPostCaption } from './lib/postCaption.mjs';
 import { migrateInlineAvatars } from './lib/avatarFiles.mjs';
 import { createPulsePlus, neutralizeAvatars } from './pulsePlus.mjs';
@@ -20478,6 +20479,16 @@ const scheduling = registerSchedulingRoutes(app, {
 });
 // semente do Pulse Plus depois do esquema dos Agendamentos (mesma tabela module_access; copia a lista de lá)
 pulsePlus.start({ after: () => scheduling.ready() });
+
+// ─── Wallpaper (papel de parede dos computadores do cliente; acesso: admin) ──
+registerWallpaperRoutes(app, {
+  pool,
+  verifyUser,
+  isStrictAdmin: isStrictAdminUser,
+  resolveActiveCity,
+  cityVisibilityExpression,
+  publicAppUrl: process.env.PUBLIC_APP_URL,
+});
 
 // ─── Start ──────────────────────────────────────────────────
 

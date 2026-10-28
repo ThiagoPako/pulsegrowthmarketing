@@ -133,6 +133,9 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_review_notes TEXT`);
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_review_by UUID`);
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_review_at TIMESTAMPTZ`);
+        // "Fixar" no Kanban de Edição: card reservado para a equipe presencial, fora da fila dos agentes
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ`);
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS pinned_by UUID`);
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_edit_versions_task ON edit_versions(task_id, version DESC)`).catch(() => {});
         // atividade geral (chefe, revisão, editor entre cards): online enquanto o status for recente
         await pool.query(`
@@ -806,10 +809,10 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         ),
         pool.query(
           `SELECT
-              COUNT(*) FILTER (WHERE kanban_column = 'edicao' AND assigned_to IS NULL) AS waiting,
-              COUNT(*) FILTER (WHERE kanban_column = 'edicao' AND assigned_to IS NULL AND COALESCE(drive_link, '') = '') AS without_footage,
+              COUNT(*) FILTER (WHERE kanban_column = 'edicao' AND assigned_to IS NULL AND pinned_at IS NULL) AS waiting,
+              COUNT(*) FILTER (WHERE kanban_column = 'edicao' AND assigned_to IS NULL AND pinned_at IS NULL AND COALESCE(drive_link, '') = '') AS without_footage,
               COUNT(*) FILTER (WHERE kanban_column = 'alteracao' AND edited_by IN (SELECT user_id FROM agent_keys)) AS agent_alterations,
-              COUNT(*) FILTER (WHERE kanban_column = 'edicao' AND assigned_to IS NULL AND editing_deadline < now()) AS overdue
+              COUNT(*) FILTER (WHERE kanban_column = 'edicao' AND assigned_to IS NULL AND pinned_at IS NULL AND editing_deadline < now()) AS overdue
              FROM content_tasks
             WHERE content_type IS DISTINCT FROM 'otimizacao'`
         ),
@@ -1018,7 +1021,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     t.editing_deadline, t.alteration_deadline, t.assigned_to, t.edited_by, t.edited_video_link,
     t.editing_started_at, t.agent_step, t.agent_heartbeat_at, t.position, t.created_at,
     t.script_id, t.script_alteration_type,
-    t.agent_review_verdict, t.agent_review_notes, t.agent_review_at,
+    t.agent_review_verdict, t.agent_review_notes, t.agent_review_at, t.pinned_at,
     c.company_name AS client_name, c.niche AS client_niche, c.drive_link AS client_drive_link,
     c.drive_identidade_visual AS client_identity_link,
     s.title AS script_title, s.content AS script_content, s.video_type AS script_video_type,
@@ -1033,6 +1036,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
   function agentReadiness(t) {
     const missing = [];
     const type = t.content_type || '';
+    if (t.pinned_at) missing.push({ key: 'fixado', label: 'desfixar (reservado para a equipe presencial)', blocking: true });
     if (!String(t.drive_link || '').trim()) missing.push({ key: 'brutos', label: 'link dos brutos (Drive)', blocking: true });
     if (!t.client_id) missing.push({ key: 'cliente', label: 'cliente cadastrado', blocking: true });
     if (!AGENT_EDITABLE_TYPES.has(type)) {
@@ -1079,6 +1083,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
            LEFT JOIN clients c ON c.id = t.client_id
            LEFT JOIN scripts s ON s.id = t.script_id
           WHERE t.content_type IS DISTINCT FROM 'otimizacao'
+            -- fixado: reservado para a equipe presencial até alguém desfixar
+            AND t.pinned_at IS NULL
             AND (
               (t.kanban_column = 'edicao' AND (t.assigned_to IS NULL OR t.assigned_to = $1))
               -- alteração só de vídeo que o próprio agente editou (os de humanos não têm plano no OPEN CUT)
@@ -1124,6 +1130,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             updated_at = now()
           WHERE id = $1
             AND content_type IS DISTINCT FROM 'otimizacao'
+            AND pinned_at IS NULL
             AND (assigned_to IS NULL OR assigned_to = $2)
             AND (
               kanban_column = 'edicao'
@@ -1132,7 +1139,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           RETURNING id, kanban_column`,
         [req.params.id, agent.userId]
       );
-      if (!rows.length) return res.status(409).json({ error: 'Card indisponível (já assumido, fora da fila ou de outro editor)' });
+      if (!rows.length) return res.status(409).json({ error: 'Card indisponível (já assumido, fixado para a equipe presencial, fora da fila ou de outro editor)' });
       await logHistory(rows[0].id, agent.userId, rows[0].kanban_column === 'alteracao' ? 'Alteração iniciada' : 'Edição iniciada');
       const { rows: full } = await pool.query(
         `SELECT ${TASK_FIELDS} FROM content_tasks t

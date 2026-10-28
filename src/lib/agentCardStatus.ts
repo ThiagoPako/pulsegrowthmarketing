@@ -32,6 +32,8 @@ export interface AgentCardFields {
   agent_review_notes?: string | null;
   agent_review_at?: string | null;
   agent_review_by?: string | null;
+  /** "Fixar" no Kanban de Edição: reservado para a equipe presencial, a IA não pega. */
+  pinned_at?: string | null;
 }
 
 const isAgent = (agentIds: ReadonlySet<string> | undefined, id: string | null | undefined) =>
@@ -74,7 +76,7 @@ export function agentWorkState(
   return { state, column, step, minutes };
 }
 
-export type ReadinessKey = 'brutos' | 'cliente' | 'tipo' | 'roteiro' | 'prazo' | 'ajustes';
+export type ReadinessKey = 'brutos' | 'cliente' | 'tipo' | 'roteiro' | 'prazo' | 'ajustes' | 'fixado';
 
 export interface ReadinessItem {
   key: ReadinessKey;
@@ -107,6 +109,7 @@ export function agentReadiness(
   const type = task.content_type || '';
   const missing: ReadinessItem[] = [];
 
+  if (task.pinned_at) missing.push({ key: 'fixado', label: 'desfixar (reservado para a equipe presencial)', blocking: true });
   if (!task.drive_link?.trim()) missing.push({ key: 'brutos', label: 'link dos brutos (Drive)', blocking: true });
   if (!task.client_id) missing.push({ key: 'cliente', label: 'cliente cadastrado', blocking: true });
   if (!(AGENT_EDITABLE_TYPES as readonly string[]).includes(type)) {
@@ -125,7 +128,7 @@ export function agentReadiness(
 
   const takenByAgent = !!task.agent_step && !!task.assigned_to;
   const freeOrAgent = !task.assigned_to || isAgent(agentIds, task.assigned_to);
-  const inQueue = type !== 'otimizacao' && !takenByAgent && freeOrAgent && (
+  const inQueue = type !== 'otimizacao' && !task.pinned_at && !takenByAgent && freeOrAgent && (
     column === 'edicao' || (column === 'alteracao' && isAgent(agentIds, task.edited_by))
   );
 

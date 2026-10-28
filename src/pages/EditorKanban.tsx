@@ -63,7 +63,7 @@ const SEND_TO_CLIENT_DESCRIPTION = (
   </>
 );
 
-import { Undo2 } from 'lucide-react';
+import { Undo2, Pin, PinOff } from 'lucide-react';
 
 interface EditorTask {
   id: string;
@@ -99,6 +99,9 @@ interface EditorTask {
   agent_review_notes?: string | null;
   agent_review_at?: string | null;
   agent_review_by?: string | null;
+  /** Fixado para a equipe presencial: os agentes de IA não pegam até desfixar. */
+  pinned_at?: string | null;
+  pinned_by?: string | null;
 }
 
 function getDeadlineStatus(deadline: string | null) {
@@ -120,7 +123,7 @@ function getTypeConfig(type: string) {
   return CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 }
 
-function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, onUnclaimTask, onReturnFromReview, onOpenDetail, draggedId, onDragStart, currentUserIds, users, agentIds }: {
+function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, onUnclaimTask, onReturnFromReview, onOpenDetail, onTogglePin, canPin, draggedId, onDragStart, currentUserIds, users, agentIds }: {
   task: EditorTask; clients: any[]; onOpenScript: (id: string) => void;
   onSendToReview: (task: EditorTask) => void;
   onAddVideoLink: (task: EditorTask) => void;
@@ -128,6 +131,8 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   onUnclaimTask: (task: EditorTask) => void;
   onReturnFromReview: (task: EditorTask) => void;
   onOpenDetail: (task: EditorTask) => void;
+  onTogglePin: (task: EditorTask) => void;
+  canPin: boolean;
   draggedId: string | null; onDragStart: (e: React.DragEvent, task: EditorTask) => void;
   currentUserIds: string[];
   users: any[];
@@ -148,6 +153,9 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   const isAfterDelivery = ['pre_revisao', 'revisao', 'envio'].includes(task.kanban_column);
   const editor = isAfterDelivery && !task.assigned_to && task.edited_by ? users.find(u => u.id === task.edited_by) : null;
   const agentBusy = !!agentWorkState(task, { agentIds });
+  const isPinned = !!task.pinned_at;
+  const pinnedBy = isPinned && task.pinned_by ? users.find(u => u.id === task.pinned_by) : null;
+  const pinnable = canPin && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao');
 
   // Count filled optimization slots (parsed from description marker)
   const optSlotCount = (() => {
@@ -169,7 +177,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
       } ${isOptimize
           ? 'border-fuchsia-500/60 bg-gradient-to-br from-fuchsia-500/10 via-purple-500/5 to-violet-500/10 ring-1 ring-fuchsia-500/30 shadow-fuchsia-500/20 shadow-md'
           : isReview ? 'border-teal-500/40 bg-teal-500/5' : 'border-border'
-      } ${
+      } ${isPinned ? 'ring-2 ring-orange-500/50' : ''} ${
         deadlineStatus.variant === 'destructive' && task.kanban_column === 'edicao' ? 'ring-1 ring-destructive/40' : ''
       }`}>
       {isOptimize && (
@@ -217,6 +225,14 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
           )}
         </div>
         <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
+        {isPinned && (
+          <div className="flex items-center gap-1.5 rounded-md px-2 py-1 bg-orange-500/10 border border-orange-500/30 text-orange-700 dark:text-orange-300">
+            <Pin size={11} className="shrink-0 fill-current" />
+            <p className="text-[10px] font-bold leading-tight min-w-0 truncate">
+              Fixado · equipe presencial{pinnedBy?.name ? ` (${pinnedBy.name.split(' ')[0]})` : ''}
+            </p>
+          </div>
+        )}
         {/* Fila dos agentes: pronto para a IA ou o que falta */}
         <AgentReadinessBadge task={task} agentIds={agentIds} />
 
@@ -425,6 +441,15 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
           </div>
         )}
 
+        {/* Fixar: card reservado para a equipe presencial; os agentes de IA não pegam até desfixar */}
+        {pinnable && (
+          <Button size="sm" variant="outline"
+            className={`w-full gap-1.5 h-7 text-xs mt-1 whitespace-nowrap ${isPinned ? 'border-orange-500/40 text-orange-700 dark:text-orange-300 hover:bg-orange-500/10' : ''}`}
+            onClick={(e) => { e.stopPropagation(); onTogglePin(task); }}>
+            {isPinned ? <><PinOff size={11} /> Desfixar</> : <><Pin size={11} /> Fixar</>}
+          </Button>
+        )}
+
         {/* Ops! Volta aqui - editor can return review task to editing */}
         {task.kanban_column === 'revisao' && wasEditedByMe && (
           <motion.div whileTap={{ scale: 0.95 }} className="mt-1">
@@ -544,6 +569,8 @@ export default function EditorKanban() {
     EDITOR_COLUMNS.forEach(col => { map[col.id] = []; });
     filteredTasks.forEach(t => { if (map[t.kanban_column]) map[t.kanban_column].push(t); });
     map['edicao'] = [...(map['edicao'] || [])].sort((a, b) => {
+      // fixados (equipe presencial) no topo
+      if (!!a.pinned_at !== !!b.pinned_at) return a.pinned_at ? -1 : 1;
       if (!a.editing_deadline && !b.editing_deadline) return 0;
       if (!a.editing_deadline) return 1;
       if (!b.editing_deadline) return -1;
@@ -601,6 +628,28 @@ export default function EditorKanban() {
     const { error } = await supabase.from('content_tasks').update(updateData).eq('id', task.id);
     if (error) { toast.error(`Não foi possível liberar o card${error.message ? `: ${error.message}` : '. Tente de novo.'}`); return; }
     toast.success('🏳️ Tarefa liberada para a fila!');
+    fetchTasks();
+  };
+
+  // Fixar / desfixar. Card com um agente sai da mão dele (a entrega do agente passa a ser recusada).
+  const canPin = isManager || isEditorRole;
+  const handleTogglePin = async (task: EditorTask) => {
+    if (!user) return;
+    const pinning = !task.pinned_at;
+    const updateData: Record<string, string | null> = pinning
+      ? { pinned_at: new Date().toISOString(), pinned_by: user.id, updated_at: new Date().toISOString() }
+      : { pinned_at: null, pinned_by: null, updated_at: new Date().toISOString() };
+    const withAgent = pinning && !!task.assigned_to && agentIds.has(task.assigned_to);
+    if (withAgent) {
+      updateData.assigned_to = null;
+      updateData.editing_started_at = null;
+      if (task.kanban_column !== 'alteracao') updateData.edited_by = null;
+    }
+    const { error } = await supabase.from('content_tasks').update(updateData).eq('id', task.id);
+    if (error) { toast.error(`Não foi possível ${pinning ? 'fixar' : 'desfixar'} o card${error.message ? `: ${error.message}` : '. Tente de novo.'}`); return; }
+    toast.success(pinning
+      ? (pulsePlus ? '📌 Card fixado para a equipe presencial. A IA não pega até desfixar.' : '📌 Card fixado para a equipe presencial.')
+      : 'Card desfixado.');
     fetchTasks();
   };
 
@@ -1021,6 +1070,7 @@ export default function EditorKanban() {
                         onSendToReview={handleSendToReview} onAddVideoLink={openVideoLinkDialog}
                         onClaimTask={handleClaimTask} onUnclaimTask={handleUnclaimTask} onReturnFromReview={handleReturnFromReview}
                         onOpenDetail={setDetailTask}
+                        onTogglePin={handleTogglePin} canPin={canPin}
                         currentUserIds={profile?.identity_ids?.length ? profile.identity_ids : (user?.id ? [user.id] : [])} users={users}
                         agentIds={agentIds}
                         draggedId={draggedTask?.id || null} onDragStart={handleDragStart} />

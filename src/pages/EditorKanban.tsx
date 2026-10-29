@@ -38,6 +38,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import EditorTaskDetail from '@/components/editor/EditorTaskDetail';
 import type { EditorTask as EditorTaskFull } from '@/pages/EditorDashboard';
 import { useCity } from '@/contexts/CityContext';
+import { PINNABLE_COLUMNS, pinToggleMessage, pinToggleUpdate } from '@/lib/pinCard';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },
@@ -155,7 +156,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   const agentBusy = !!agentWorkState(task, { agentIds });
   const isPinned = !!task.pinned_at;
   const pinnedBy = isPinned && task.pinned_by ? users.find(u => u.id === task.pinned_by) : null;
-  const pinnable = canPin && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao');
+  const pinnable = canPin && PINNABLE_COLUMNS.includes(task.kanban_column);
 
   // Count filled optimization slots (parsed from description marker)
   const optSlotCount = (() => {
@@ -636,20 +637,9 @@ export default function EditorKanban() {
   const handleTogglePin = async (task: EditorTask) => {
     if (!user) return;
     const pinning = !task.pinned_at;
-    const updateData: Record<string, string | null> = pinning
-      ? { pinned_at: new Date().toISOString(), pinned_by: user.id, updated_at: new Date().toISOString() }
-      : { pinned_at: null, pinned_by: null, updated_at: new Date().toISOString() };
-    const withAgent = pinning && !!task.assigned_to && agentIds.has(task.assigned_to);
-    if (withAgent) {
-      updateData.assigned_to = null;
-      updateData.editing_started_at = null;
-      if (task.kanban_column !== 'alteracao') updateData.edited_by = null;
-    }
-    const { error } = await supabase.from('content_tasks').update(updateData).eq('id', task.id);
+    const { error } = await supabase.from('content_tasks').update(pinToggleUpdate(task, user.id, agentIds)).eq('id', task.id);
     if (error) { toast.error(`Não foi possível ${pinning ? 'fixar' : 'desfixar'} o card${error.message ? `: ${error.message}` : '. Tente de novo.'}`); return; }
-    toast.success(pinning
-      ? (pulsePlus ? '📌 Card fixado para a equipe presencial. A IA não pega até desfixar.' : '📌 Card fixado para a equipe presencial.')
-      : 'Card desfixado.');
+    toast.success(pinToggleMessage(pinning, pulsePlus));
     fetchTasks();
   };
 

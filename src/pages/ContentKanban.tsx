@@ -30,7 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, ArrowLeft, Send, Eye, Maximize2, Rocket, Download, ChevronLeft, ChevronRight, ArrowDownUp, Lightbulb, Video } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, ArrowLeft, Send, Eye, Maximize2, Rocket, Download, ChevronLeft, ChevronRight, ArrowDownUp, Lightbulb, Video, Pin, PinOff } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -43,6 +43,7 @@ import ContentTaskDetailSheet from '@/components/content/ContentTaskDetailSheet'
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { sanitizeScriptHtml } from '@/lib/highlightQuotes';
+import { PINNABLE_COLUMNS, pinToggleMessage, pinToggleUpdate } from '@/lib/pinCard';
 
 const normalizeDateValue = (value?: string | null) => {
   if (!value) return null;
@@ -206,6 +207,9 @@ interface ContentTask {
   agent_review_notes?: string | null;
   agent_review_at?: string | null;
   agent_review_by?: string | null;
+  /** Fixado para a equipe presencial (src/lib/pinCard.ts): a IA não pega até desfixar. */
+  pinned_at?: string | null;
+  pinned_by?: string | null;
 }
 
 /** Ordem dos cards nas colunas: última movimentação ou prazo da etapa. */
@@ -593,13 +597,15 @@ export default function ContentKanban() {
       const time = value ? new Date(value).getTime() : NaN;
       return Number.isFinite(time) ? time : Number.MAX_SAFE_INTEGER;
     };
+    // fixados (equipe presencial) no topo das colunas de edição
+    const byPinned = (a: ContentTask, b: ContentTask) => Number(!!b.pinned_at) - Number(!!a.pinned_at);
     Object.keys(map).forEach(colId => {
       map[colId].sort(sortMode === 'deadline'
-        ? (a, b) => (Number(!!b.immediate_alteration) - Number(!!a.immediate_alteration))
+        ? (a, b) => byPinned(a, b) || (Number(!!b.immediate_alteration) - Number(!!a.immediate_alteration))
           || (Number(!!b.editing_priority) - Number(!!a.editing_priority))
           || (deadlineTime(a) - deadlineTime(b))
           || byRecent(a, b)
-        : byRecent);
+        : (a, b) => byPinned(a, b) || byRecent(a, b));
     });
     return map;
   }, [filteredTasks, sortMode]);
@@ -1042,6 +1048,17 @@ export default function ContentKanban() {
     fetchTasks();
   };
 
+  // ─── FIXAR (equipe presencial; a IA não pega até desfixar) ─
+  const canPin = isManager || userRole === 'editor' || userRole === 'videomaker';
+  const handleTogglePin = async (task: ContentTask) => {
+    if (!user) return;
+    const pinning = !task.pinned_at;
+    const result = await updateTaskRow(task.id, pinToggleUpdate(task, user.id, agentIds));
+    if (result.status !== 'ok') { toast.error(updateErrorMessage(result, pinning ? 'fixar o cartão' : 'desfixar o cartão')); return; }
+    toast.success(pinToggleMessage(pinning, pulsePlus));
+    fetchTasks();
+  };
+
   // ─── QUICK LINK DIALOG ────────────────────────────────────
   const openLinkDialog = (task: ContentTask, type: 'drive' | 'video') => {
     setLinkDialogTask(task);
@@ -1446,6 +1463,7 @@ export default function ContentKanban() {
                               undefined
                             }
                             onSchedule={task.kanban_column === 'agendamentos' && isManager ? () => openScheduleDialog(task) : undefined}
+                            onTogglePin={canPin && PINNABLE_COLUMNS.includes(task.kanban_column) ? () => handleTogglePin(task) : undefined}
                             onResubmit={task.kanban_column === 'alteracao' && (userRole === 'editor' || isManager || (userRole === 'videomaker' && task.content_type === 'story')) && agentWorkState(task, { agentIds })?.state !== 'working' ? () => handleResubmitFromAlteracao(task) : undefined}
                             onMoveForward={(() => {
                               if (isRestricted) {
@@ -1823,6 +1841,8 @@ interface TaskCardProps {
   nextColumnLabel?: string;
   onSchedule?: () => void;
   onResubmit?: () => void;
+  /** Fixar / desfixar para a equipe presencial (colunas de edição). */
+  onTogglePin?: () => void;
   onMoveForward?: () => void;
   onMoveBackward?: () => void;
   forwardLabel?: string;
@@ -1843,11 +1863,12 @@ const FOREIGN_TASK_NO_ACTIONS: Partial<TaskCardProps> = {
   onMoveToNext: undefined,
   onSchedule: undefined,
   onResubmit: undefined,
+  onTogglePin: undefined,
   onMoveForward: undefined,
   onMoveBackward: undefined,
 };
 
-function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável', users = [], agentIds, videomaker, recordingStatus, linkedScript, isDragging, viewOnly, cityLabel, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onReleaseAnalysis, onReturnAnalysis, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável', users = [], agentIds, videomaker, recordingStatus, linkedScript, isDragging, viewOnly, cityLabel, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onReleaseAnalysis, onReturnAnalysis, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onTogglePin, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
@@ -1882,6 +1903,7 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
   // Selos de exceção (o que pede atenção). Os que só repetiam a coluna (Gravando, Agendar,
   // Para Postar, enviado/aguarda) saíram: o cabeçalho da coluna já diz isso.
   const pills: { key: string; label: string; tone: string; dot?: boolean; title?: string }[] = [];
+  if (task.pinned_at) pills.push({ key: 'fixado', label: '📌 Fixado · presencial', tone: 'bg-orange-500/15 text-orange-700 border-orange-500/40 dark:text-orange-300', title: 'Reservado para a equipe presencial' });
   if (task.immediate_alteration && task.kanban_column === 'alteracao') pills.push({ key: 'imediato', label: 'Imediato', tone: 'bg-red-600 text-white', dot: true });
   if (task.editing_priority) pills.push({ key: 'prioridade', label: 'Prioridade', tone: 'bg-red-500/10 text-red-700 border-red-500/30 dark:text-red-300' });
   if (isOverdue) pills.push({ key: 'vence', label: 'Vence hoje', tone: 'bg-red-500/10 text-red-700 border-red-500/30 dark:text-red-300' });
@@ -1904,7 +1926,7 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
         onClick={onCardClick}
         style={{ borderLeftColor: `hsl(${clientColor})` }}
         className={`group relative rounded-xl overflow-hidden border border-l-[3px] bg-card transition-[box-shadow,transform,border-color,opacity] duration-200 ease-out ${
-          isAwaitingLink ? 'border-amber-300/70 dark:border-amber-500/40' : isOverdue ? 'border-red-400/60' : 'border-border/60 hover:border-primary/30'
+          task.pinned_at ? 'border-orange-400/70 ring-1 ring-orange-500/40' : isAwaitingLink ? 'border-amber-300/70 dark:border-amber-500/40' : isOverdue ? 'border-red-400/60' : 'border-border/60 hover:border-primary/30'
         } ${
           viewOnly ? 'cursor-default opacity-80' : 'cursor-grab active:cursor-grabbing'
         } ${
@@ -2102,6 +2124,15 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
                 </button>
               )}
             </div>
+          )}
+
+          {/* Fixar: card reservado para a equipe presencial */}
+          {onTogglePin && (
+            <button onClick={e => { e.stopPropagation(); onTogglePin(); }}
+              className={`${primaryBtn} w-full border ${task.pinned_at ? 'border-orange-500/40 bg-orange-500/10 text-orange-800 hover:bg-orange-500/20 dark:text-orange-200' : 'border-border bg-background text-foreground/80 hover:bg-secondary'}`}>
+              {task.pinned_at ? <PinOff size={12} className="shrink-0" /> : <Pin size={12} className="shrink-0" />}
+              <span>{task.pinned_at ? 'Desfixar' : 'Fixar'}</span>
+            </button>
           )}
 
           {/* Ação principal da coluna */}

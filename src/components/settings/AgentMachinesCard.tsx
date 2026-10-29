@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
+import { AGENT_ROLE_LABELS } from '@/lib/agentRoles';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,7 +62,6 @@ interface Agent {
   email: string | null;
 }
 
-const ROLE_LABELS: Record<string, string> = { editor: 'Editor', revisor: 'Revisão', chefe: 'Chefe', designer: 'Designer', revisor_arte: 'Revisão de artes' };
 const ONLINE_MS = 15 * 60 * 1000;
 const PULSE_CMD = 'node ~/Movies/"OPEN CUT"/ferramentas/sistema/pulse.mjs conectar';
 
@@ -349,7 +349,7 @@ export default function AgentMachinesCard() {
                   ) : (
                     list.map((agent) => (
                       <Badge key={agent.user_id} variant="secondary">
-                        {agent.name || agent.email} · {ROLE_LABELS[agent.role] || agent.role}
+                        {agent.name || agent.email} · {AGENT_ROLE_LABELS[agent.role] || agent.role}
                       </Badge>
                     ))
                   )}
@@ -370,7 +370,7 @@ export default function AgentMachinesCard() {
               <div className="flex flex-wrap gap-1.5">
                 {withoutKey.map((agent) => (
                   <Badge key={agent.user_id} variant="outline">
-                    {agent.name || agent.email} · {ROLE_LABELS[agent.role] || agent.role}
+                    {agent.name || agent.email} · {AGENT_ROLE_LABELS[agent.role] || agent.role}
                   </Badge>
                 ))}
               </div>
@@ -386,7 +386,7 @@ export default function AgentMachinesCard() {
               <div className="flex flex-wrap gap-1.5">
                 {unassigned.map((agent) => (
                   <Badge key={agent.user_id} variant="outline">
-                    {agent.name || agent.email} · {ROLE_LABELS[agent.role] || agent.role}
+                    {agent.name || agent.email} · {AGENT_ROLE_LABELS[agent.role] || agent.role}
                   </Badge>
                 ))}
               </div>
@@ -485,7 +485,7 @@ export default function AgentMachinesCard() {
                     <label key={agent.user_id} className="flex items-center gap-2 text-sm cursor-pointer">
                       <Checkbox checked={selected.includes(agent.user_id)} onCheckedChange={() => toggle(agent.user_id)} />
                       <span>{agent.name || agent.email}</span>
-                      <span className="text-xs text-muted-foreground">{ROLE_LABELS[agent.role] || agent.role}</span>
+                      <span className="text-xs text-muted-foreground">{AGENT_ROLE_LABELS[agent.role] || agent.role}</span>
                       {elsewhere && selected.includes(agent.user_id) && (
                         <span className="text-xs text-amber-600">sai do {elsewhere}</span>
                       )}

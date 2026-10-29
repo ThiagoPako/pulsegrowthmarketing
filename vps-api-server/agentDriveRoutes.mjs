@@ -1,4 +1,5 @@
-// ─── Entrada de vídeos pelo Drive (módulo Agentes) ──────────
+// ─── Severino: entrada de vídeos pelo Drive (módulo Agentes) ──────────
+// Severino é o agente (nome dado pelo usuário em 29/10/2026) que transforma as pastas novas do Drive em cards.
 // Antes, o videomaker criava à mão o card de edição: copiava o link da pasta do Drive, colava no card e
 // escolhia o tipo. Aqui o sistema varre o Drive do cliente (clients.drive_link), acha as pastas de vídeo
 // que ainda não têm card e cria os cards em Edição em lote, pelo tipo escolhido:
@@ -293,7 +294,7 @@ export function registerAgentDriveRoutes(app, { pool, verifyUser, isStrictAdmin,
           title = cleanName(req.body?.title) || (sameParent ? units[0].parent_name : `Stories ${brDate()}`);
           driveLink = wholeParent ? folderUrl(parentId) : units[0].url;
           description = [
-            `📂 Pacote de ${units.length} stor${units.length === 1 ? 'y' : 'ies'} criado pela entrada do Drive (Agentes) por ${who}.`,
+            `📂 Pacote de ${units.length} stor${units.length === 1 ? 'y' : 'ies'} criado pelo Severino (entrada do Drive) a pedido de ${who}.`,
             'Cada pasta é um story:',
             ...units.map((u, i) => `${String(i + 1).padStart(2, '0')} ${u.name} — ${u.url}`),
           ].join('\n');
@@ -303,7 +304,7 @@ export function registerAgentDriveRoutes(app, { pool, verifyUser, isStrictAdmin,
           const u = units[0];
           title = u.name;
           driveLink = u.url;
-          description = `📂 Criado pela entrada do Drive (Agentes) por ${who}.\nPasta: ${[...u.path, u.name].join(' / ')}`;
+          description = `📂 Criado pelo Severino (entrada do Drive) a pedido de ${who}.\nPasta: ${[...u.path, u.name].join(' / ')}`;
           scriptId = group[0].script_id && freeIds.has(group[0].script_id) ? group[0].script_id : null;
         }
         if (scriptId) freeIds.delete(scriptId);
@@ -319,7 +320,7 @@ export function registerAgentDriveRoutes(app, { pool, verifyUser, isStrictAdmin,
         if (scriptId) await db.query(`UPDATE scripts SET recorded = true WHERE id = $1`, [scriptId]);
         await db.query(
           `INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, 'Movido para Edição', $3)`,
-          [id, user.id, `Card criado pela entrada do Drive: ${units.map((u) => u.name).join(', ')}`]
+          [id, user.id, `Card criado pelo Severino a partir do Drive: ${units.map((u) => u.name).join(', ')}`]
         );
         await db.query(
           `INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, 'editing_started')`,
@@ -467,7 +468,7 @@ export function registerAgentDriveRoutes(app, { pool, verifyUser, isStrictAdmin,
       console.error('[drive-intake] IA do roteiro:', error.message);
       return null;
     });
-    const header = `<p><em>Roteiro do que foi gravado: transcrição automática dos brutos do Drive em ${brDate()}${organized ? ', organizada pela IA' : ''}. Confira antes de usar.</em></p>`;
+    const header = `<p><em>Roteiro do que foi gravado, montado pelo Severino: transcrição automática dos brutos do Drive em ${brDate()}${organized ? ', organizada pela IA' : ''}. Confira antes de usar.</em></p>`;
     const body = organized || rawScriptHtml(job, parts);
     const scriptId = crypto.randomUUID();
     const cityCol = task?.city && (await hasColumn('scripts', 'city'));

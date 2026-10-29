@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-// Entrada de vídeos pelo Drive (vps-api-server/agentDriveRoutes.mjs): varre a pasta do cliente, lista as
+// Severino: entrada de vídeos pelo Drive (vps-api-server/agentDriveRoutes.mjs): varre a pasta do cliente, lista as
 // pastas de vídeo sem card e cria os cards em Edição em lote, pelo tipo (story: todas viram 1 card).
 
 type ContentType = 'reels' | 'criativo' | 'story';
@@ -181,7 +181,7 @@ export function DriveIntakePanel() {
       );
       const pending = body.created.filter((c) => c.script_pending).length;
       toast.success(
-        `${body.created.length} card(s) criado(s) em Edição${pending ? `; ${pending} roteiro(s) sendo montado(s) pela transcrição` : ''}`
+        `Severino criou ${body.created.length} card(s) em Edição${pending ? `; ${pending} roteiro(s) sendo montado(s) pela transcrição` : ''}`
         + (body.skipped.length ? `. Pulado(s) por já ter card: ${body.skipped.map((s) => s.name).join(', ')}` : ''),
       );
       const done = new Set(units.map((u) => u.id));
@@ -211,11 +211,11 @@ export function DriveIntakePanel() {
     <div className="glass-card space-y-4 p-4">
       <div className="flex items-center gap-2">
         <FolderSearch size={16} className="text-primary" />
-        <h2 className="text-sm font-semibold">Entrada do Drive — vídeos novos para edição</h2>
+        <h2 className="text-sm font-semibold">Severino — vídeos novos do Drive para edição</h2>
       </div>
       <p className="text-xs text-muted-foreground">
-        Escolha o cliente: o sistema lê a pasta do Drive dele e mostra as pastas de vídeo que ainda não têm card.
-        Marque, escolha o tipo e envie; story vira um card só (a edição separa os stories). Sem roteiro, o sistema
+        Escolha o cliente: o Severino lê a pasta do Drive dele e mostra as pastas de vídeo que ainda não têm card.
+        Marque, escolha o tipo e envie; story vira um card só (a edição separa os stories). Sem roteiro, o Severino
         monta um com a transcrição do que foi gravado e liga ao card.
       </p>
 
@@ -328,7 +328,7 @@ export function DriveIntakePanel() {
       {jobs.length > 0 && (
         <div>
           <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            <FileText size={13} /> Roteiros do que foi gravado
+            <FileText size={13} /> Roteiros que o Severino está montando
           </h3>
           <ul className="space-y-1 text-xs">
             {jobs.map((job) => (

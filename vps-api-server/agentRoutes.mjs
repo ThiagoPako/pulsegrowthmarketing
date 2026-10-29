@@ -80,7 +80,7 @@ function brazilDateString(date) {
 }
 
 /** Mesmo cálculo de addBusinessHours do front: soma dias úteis inteiros mantendo o horário. */
-function addBusinessHours(from, hours, workDays) {
+export function addBusinessHours(from, hours, workDays) {
   let daysToAdd = Math.ceil(hours / 24);
   let current = new Date(from.getTime());
   while (daysToAdd > 0) {

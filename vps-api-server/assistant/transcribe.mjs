@@ -52,6 +52,36 @@ export async function removeAudio(file) {
   if (isPrivateAudio(file)) await fs.unlink(file).catch(() => {});
 }
 
+/**
+ * Vídeo de um link (brutos do Drive, entrada de vídeos do agentDriveRoutes.mjs): o ffmpeg lê direto do
+ * link só o áudio (até maxSeconds), sem guardar o vídeo; mesma fila de um por vez do WhatsApp.
+ * { ok: true, text } ou { ok: false, reason } (sem_whisper, vazio, falha).
+ */
+export function transcribeUrl(url, { maxSeconds = 240 } = {}) {
+  return oneAtATime(async () => {
+    if (!/^https:\/\//.test(String(url || ''))) return { ok: false, reason: 'falha' };
+    if (!(await whisperAvailable())) return { ok: false, reason: 'sem_whisper' };
+    const { bin, model, ffmpeg, threads } = whisperConfig();
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'pulse-bruto-'));
+    try {
+      const wav = path.join(tmp, 'audio.wav');
+      await run(ffmpeg, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', '-i', url, '-vn', '-t', String(maxSeconds),
+        '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wav], { timeout: 480_000 });
+      const out = path.join(tmp, 'texto');
+      await run(bin, ['-m', model, '-f', wav, '-l', 'pt', '-t', threads, '-nt', '-np', '-otxt', '-of', out],
+        { timeout: 480_000, maxBuffer: 4 * 1024 * 1024 });
+      const text = (await fs.readFile(`${out}.txt`, 'utf8'))
+        .replace(/\[(BLANK_AUDIO|MÚSICA|MUSIC|Música)\]/gi, ' ').replace(/\((música|music|risos)\)/gi, ' ').replace(/\s+/g, ' ').trim();
+      return text ? { ok: true, text } : { ok: false, reason: 'vazio' };
+    } catch (error) {
+      console.error('[drive] transcrição:', error.message);
+      return { ok: false, reason: 'falha' };
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+}
+
 /** { ok: true, text } ou { ok: false, reason } (sem_whisper, arquivo_invalido, vazio, falha). */
 export function transcribe(file) {
   return oneAtATime(async () => {

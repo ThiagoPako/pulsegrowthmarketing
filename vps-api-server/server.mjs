@@ -25,6 +25,8 @@ import compression from 'compression';
 import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
+import { registerAgentDriveRoutes } from './agentDriveRoutes.mjs';
+import { transcribeUrl } from './assistant/transcribe.mjs';
 import { registerAgentTriageRoutes } from './agentTriageRoutes.mjs';
 import { registerSchedulingRoutes } from './scheduling.mjs';
 import { registerWallpaperRoutes } from './wallpaper.mjs';
@@ -20441,6 +20443,19 @@ const agentDesignApi = registerAgentDesignRoutes(app, {
   }),
 });
 
+// ─── Entrada de vídeos pelo Drive (módulo Agentes): pastas novas → cards em Edição, roteiro do que foi gravado ──
+registerAgentDriveRoutes(app, {
+  pool,
+  verifyUser,
+  isStrictAdmin: (user) => (user?.role === 'admin' ? true : userHasAssignedRole(user, 'admin')),
+  transcribeUrl,
+  askAi: async (messages, options) => {
+    const ai = await resolveAiConfig();
+    const model = { gemini: 'gemini-3.5-flash', openai: 'gpt-4o-mini', claude: 'claude-opus-5-5' }[ai.provider] || 'gemini-3.5-flash';
+    return callAi(ai, model, messages, options);
+  },
+});
+
 // ─── Agente de triagem do Drive (abre cards de Edição e de Design do que achou no Drive) ──
 registerAgentTriageRoutes(app, { pool, agentApi, designApi: agentDesignApi });
 
@@ -20510,4 +20525,5 @@ server.listen(PORT, () => {
  * Optional:
  * OPENAI_API_KEY=<if using OpenAI>
  * ANTHROPIC_API_KEY=<if using Claude>
+ * GOOGLE_DRIVE_API_KEY=<entrada do Drive pela Drive API; sem ela, lê as pastas públicas por link>
  */

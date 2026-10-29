@@ -9,6 +9,7 @@ import { AGENT_ROLE_LABELS } from '@/lib/agentRoles';
 import { uploadFileToVps } from '@/services/vpsApi';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { DriveIntakePanel } from '@/components/agents/DriveIntakePanel';
 
 interface PauseRow {
   scope: string;
@@ -373,6 +374,8 @@ export default function AgentsPanel() {
           );
         })}
       </div>
+
+      <DriveIntakePanel />
 
       {design && (
         <div className="glass-card p-4 space-y-4">

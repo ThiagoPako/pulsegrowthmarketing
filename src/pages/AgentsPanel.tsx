@@ -5,6 +5,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { Cpu, Pause, Play, Loader2, AlertTriangle, KeyRound, Clock, CheckCircle2, Inbox, Camera, Palette, GraduationCap } from 'lucide-react';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
+import { AGENT_ROLE_LABELS } from '@/lib/agentRoles';
 import { uploadFileToVps } from '@/services/vpsApi';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -47,7 +48,6 @@ interface Overview {
   activity: { created_at: string; action: string; details: string | null; agent_name: string; title: string | null }[];
 }
 
-const ROLE_LABELS: Record<string, string> = { editor: 'Editor', revisor: 'Revisão', chefe: 'Chefe', designer: 'Designer', revisor_arte: 'Revisão de artes' };
 
 // Agentes de design (GET /api/agents/design-overview, agentDesignRoutes.mjs)
 interface DesignCurrent {
@@ -308,7 +308,7 @@ export default function AgentsPanel() {
                 </label>
                 <span className="text-base font-semibold">{label}</span>
                 {agent.roles.split(',').map((role) => (
-                  <Badge key={role} variant="outline">{ROLE_LABELS[role] || role}</Badge>
+                  <Badge key={role} variant="outline">{AGENT_ROLE_LABELS[role] || role}</Badge>
                 ))}
                 {paused ? (
                   <Badge variant="destructive">Pausado</Badge>

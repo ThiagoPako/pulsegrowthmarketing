@@ -25,6 +25,7 @@ import compression from 'compression';
 import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
+import { registerAgentTriageRoutes } from './agentTriageRoutes.mjs';
 import { registerSchedulingRoutes } from './scheduling.mjs';
 import { registerWallpaperRoutes } from './wallpaper.mjs';
 import { createPostCaption } from './lib/postCaption.mjs';
@@ -20426,7 +20427,7 @@ registerAssistant(app, {
 });
 
 // ─── Agentes de design (artes, Análise IA, aprendizado) ─────
-registerAgentDesignRoutes(app, {
+const agentDesignApi = registerAgentDesignRoutes(app, {
   pool,
   uploadRoot: UPLOAD_ROOT,
   verifyUser,
@@ -20439,6 +20440,9 @@ registerAgentDesignRoutes(app, {
     tableJsonColumnsPromiseCache.delete(table);
   }),
 });
+
+// ─── Agente de triagem do Drive (abre cards de Edição e de Design do que achou no Drive) ──
+registerAgentTriageRoutes(app, { pool, agentApi, designApi: agentDesignApi });
 
 // ─── Agendamentos (calendário de postagem por cliente; acesso: Pulse Plus) ──
 // Fotos de perfil gravadas dentro do banco viram arquivo (deixavam o Kanban de Design com ~18 MB por abertura)

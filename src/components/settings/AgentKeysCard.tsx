@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
+import { AGENT_ROLE_LABELS } from '@/lib/agentRoles';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -24,15 +25,6 @@ interface Member {
   name: string;
   email: string;
 }
-
-const ROLE_LABELS: Record<string, string> = {
-  editor: 'Editor',
-  revisor: 'Revisão',
-  chefe: 'Chefe',
-  // agentes de design (Kanban de Design): criam artes / revisam artes na coluna Análise IA
-  designer: 'Designer',
-  revisor_arte: 'Revisão de artes',
-};
 
 function formatDate(value: string | null) {
   if (!value) return '—';
@@ -165,7 +157,7 @@ export default function AgentKeysCard() {
           <Select value={role} onValueChange={setRole}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              {Object.entries(ROLE_LABELS).map(([value, label]) => (
+              {Object.entries(AGENT_ROLE_LABELS).map(([value, label]) => (
                 <SelectItem key={value} value={value}>{label}</SelectItem>
               ))}
             </SelectContent>
@@ -186,7 +178,7 @@ export default function AgentKeysCard() {
           {keys.map((key) => (
             <div key={key.id} className="flex flex-wrap items-center gap-2 p-3 text-sm">
               <span className="font-medium">{key.name || key.email}</span>
-              <Badge variant="outline">{ROLE_LABELS[key.role] || key.role}</Badge>
+              <Badge variant="outline">{AGENT_ROLE_LABELS[key.role] || key.role}</Badge>
               <span className="text-xs text-muted-foreground">…{key.key_hint}</span>
               <span className="text-xs text-muted-foreground">último uso: {formatDate(key.last_used_at)}</span>
               {key.revoked_at ? (

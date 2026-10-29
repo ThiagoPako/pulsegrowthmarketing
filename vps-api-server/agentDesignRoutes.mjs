@@ -19,6 +19,7 @@
 //   POST /api/agent/design/tasks/:id/review       (revisor_arte, chefe) { verdict: aprovado|ajustes, notes, errors: [{category, description}] }
 //   POST /api/agent/design/tasks/:id/references-archived  (designer, chefe) { link } referências guardadas no Drive do cliente
 //   GET  /api/agent/design/learning?designer=&days=   erros por categoria (designer vê só os próprios)
+//   GET  /api/agent/design/playbook?client=&q=&format=&status=&limit=  (designer, revisor_arte, chefe) artes aprovadas/postadas do cliente
 //   GET  /api/agent/design/stale?minutes=&hours=  (chefe) artes paradas
 //   POST /api/agent/design/tasks/:id/assign       (chefe) { to, reason } passa para um designer-agente
 //   POST /api/agent/design/tasks/:id/move         (chefe) { column, reason, notes }
@@ -859,6 +860,78 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
         designerId = hit.user_id;
       }
       res.json(await learningSummary({ designerId, days: req.query.days }));
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // ── Playbook do cliente (só leitura) ──────────────────────
+  // Artes aprovadas e postadas de um cliente, para o agente estudar o padrão antes de criar
+  // (mesmo recorte da página ClientArtPlaybook). ?client=<id ou nome> obrigatório;
+  // ?q= busca no título, ?format=feed|story|…, ?status=aprovado|postado (padrão: as duas), ?limit= (padrão 30, máx. 100).
+  app.get('/api/agent/design/playbook', async (req, res) => {
+    try {
+      await designAgent(req, ['designer', 'revisor_arte', 'chefe']);
+      const termo = String(req.query.client || '').trim();
+      if (!termo) throw httpError(400, 'Informe ?client=<id ou nome do cliente>');
+      const { rows: clientes } = await pool.query(
+        /^[0-9a-f-]{36}$/i.test(termo)
+          ? 'SELECT id, company_name, niche, city, logo_url, drive_link FROM clients WHERE id::text = $1'
+          : `SELECT id, company_name, niche, city, logo_url, drive_link FROM clients
+              WHERE company_name ILIKE '%' || $1 || '%' ORDER BY length(company_name) LIMIT 5`,
+        [termo]
+      );
+      if (!clientes.length) throw httpError(404, 'Cliente não encontrado');
+      const exato = clientes.find((c) => String(c.company_name || '').trim().toLowerCase() === termo.toLowerCase());
+      if (clientes.length > 1 && !exato) {
+        throw httpError(400, `Mais de um cliente com esse nome: ${clientes.map((c) => String(c.company_name || '').trim()).join(', ')}`);
+      }
+      const cliente = exato || clientes[0];
+
+      const status = String(req.query.status || '').trim();
+      const colunas = status === 'aprovado' || status === 'postado' ? [status] : ['aprovado', 'postado'];
+      const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 100);
+      const { rows } = await pool.query(
+        `SELECT dt.id, dt.title, dt.format_type, dt.dimensions, dt.copy_brief, dt.copy_text, dt.kanban_column,
+                dt.attachment_url, dt.attachment_urls, dt.mockup_url, dt.editable_file_url, dt.completed_at, dt.created_at
+           FROM design_tasks dt
+          WHERE dt.client_id = $1 AND dt.kanban_column = ANY($2::text[])
+            AND ($3::text = '' OR dt.title ILIKE '%' || $3 || '%')
+            AND ($4::text = '' OR dt.format_type = $4)
+          ORDER BY dt.completed_at DESC NULLS LAST, dt.created_at DESC
+          LIMIT $5`,
+        [cliente.id, colunas, String(req.query.q || '').trim(), String(req.query.format || '').trim(), limit]
+      );
+      // mesmas artes que a página mostra (getTaskArtUrls): carrossel inteiro, capa primeiro; sem arte, o mockup
+      const artes = rows.map((t) => {
+        const lista = parseJson(t.attachment_urls);
+        let files = [...new Set([...(Array.isArray(lista) ? lista : []), t.attachment_url].filter((u) => typeof u === 'string' && u))];
+        if (!files.length && t.mockup_url) files = [t.mockup_url];
+        const format = describeDesignFormat(t.dimensions, t.format_type);
+        return {
+          task_id: t.id,
+          title: t.title,
+          status: t.kanban_column,
+          format: format ? format.label : t.format_type,
+          format_type: t.format_type,
+          completed_at: t.completed_at,
+          created_at: t.created_at,
+          files,
+          editable_file_url: t.editable_file_url || null,
+          copy: describeDesignCopy(t.copy_brief, t.copy_text),
+        };
+      }).filter((a) => a.files.length);
+      res.json({
+        client: {
+          id: cliente.id,
+          name: String(cliente.company_name || '').trim(),
+          niche: cliente.niche,
+          city: cliente.city,
+          logo_url: cliente.logo_url,
+          drive: cliente.drive_link || null,
+        },
+        arts: artes,
+      });
     } catch (error) {
       sendError(res, error);
     }

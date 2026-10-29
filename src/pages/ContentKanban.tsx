@@ -1921,6 +1921,15 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
         {/* Agente de IA com o card (Edição/Alteração) e parecer da Análise */}
         <AgentWorkBadge task={task} users={users} agentIds={agentIds} />
         <AgentReviewBadge task={task} users={users} />
+        {(task as any).cover_status && (
+          <div className={`px-3 py-1 border-b border-border/50 text-[10px] font-semibold ${
+            (task as any).cover_status === 'aprovada' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+              : (task as any).cover_status === 'ajuste' ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+                : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'}`}>
+            {(task as any).cover_status === 'aprovada' ? '🖼 Capa aprovada'
+              : (task as any).cover_status === 'ajuste' ? '🖼 Capa: ajuste pedido' : '🖼 Capa aguardando aprovação'}
+          </div>
+        )}
 
         <div className="p-3 space-y-2.5">
           {/* Cliente + ações rápidas (sempre visíveis no celular; no hover no computador) */}

@@ -140,8 +140,9 @@ export async function proposeAction(pool, number, kind, payload, { source = 'com
   return rows[0];
 }
 
-export const confirmQuestion = (summary) => `${summary}\n\nConfirma? (sim/não)`;
-export const confirmManyQuestion = (summaries) => `${summaries.map((s, i) => `*${i + 1}.* ${s}`).join('\n\n')}\n\nConfirma tudo? (sim/não)`;
+// a pergunta em si vai na enquete logo depois (confirmPoll); "sim"/"não" por escrito também vale
+export const confirmQuestion = (summary) => `${summary}\n\nToque na enquete abaixo para confirmar.`;
+export const confirmManyQuestion = (summaries) => `${summaries.map((s, i) => `*${i + 1}.* ${s}`).join('\n\n')}\n\nToque na enquete abaixo para confirmar tudo.`;
 
 // ── Execução do payload guardado ──
 const EXECUTORS = {

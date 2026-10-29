@@ -186,13 +186,27 @@ export async function logEvent(pool, { numberId = null, phone = null, kind, tool
  * Mensagem do PULSE para um número da equipe, pela conexão do assistente (a mesma que recebeu, quando houver).
  * Sem conexão com a função "assistente", a fila usa a "geral" (regra da fila).
  */
-export async function sendToNumber(pool, number, body, { connectionId, mediaUrl, mediaName } = {}) {
+export async function sendToNumber(pool, number, body, { connectionId, mediaUrl, mediaName, poll } = {}) {
   const connId = connectionId || (await assistantConnection(pool))?.id || null;
-  return enqueueWhatsApp(pool, {
-    to: number.phone, body: clip(body, 4000), purpose: 'assistente', triggerType: 'assistente',
-    connectionId: connId, mediaUrl, mediaName, history: false, // conversa interna: fora do histórico geral
-  });
+  if (body || mediaUrl) {
+    await enqueueWhatsApp(pool, {
+      to: number.phone, body: clip(body, 4000), purpose: 'assistente', triggerType: 'assistente',
+      connectionId: connId, mediaUrl, mediaName, history: false, // conversa interna: fora do histórico geral
+    });
+  }
+  // a enquete vai logo depois do texto, pela mesma conexão (a fila manda na ordem); o voto volta como mensagem
+  if (poll) {
+    await enqueueWhatsApp(pool, {
+      to: number.phone, purpose: 'assistente', triggerType: 'assistente', connectionId: connId, poll, history: false,
+    });
+  }
 }
+
+/** Enquete das confirmações: o voto vira "sim" ou "não", como se a pessoa tivesse escrito. */
+export const confirmPoll = (many = false) => ({
+  name: many ? 'Confirma tudo?' : 'Confirma?',
+  options: [{ label: '✅ Sim, pode fazer', answer: 'sim' }, { label: '❌ Não, cancelar', answer: 'não' }],
+});
 
 export async function remember(pool, numberId, role, content) {
   if (!content) return;

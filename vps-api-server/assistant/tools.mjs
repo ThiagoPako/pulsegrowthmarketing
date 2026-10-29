@@ -5,7 +5,7 @@
 // Consultas respondem direto. Ferramentas de ação NÃO executam: só registram a proposta (turn.propose) e o motor
 // manda o resumo pedindo "sim" (ver actions.mjs).
 
-import { clientTarget } from '../whatsapp/shared.mjs';
+import { clientTarget, normalizePoll } from '../whatsapp/shared.mjs';
 import {
   CITIES, PERMISSIONS, cityExpr, cityLabel, clientAllowed, clientCity, norm, clip, brazilToday, brazilMonth, isIsoDate,
   isMonth, addDays, fmtDate, monthLabel, roundMoney, logEvent,
@@ -184,6 +184,18 @@ export function createTools({ pool, publicUploadsUrl }) {
 
   // ── Ferramentas ──
   const TOOLS = {
+    enviar_enquete: {
+      permission: null,
+      description: 'Manda, logo depois da sua resposta, uma enquete do WhatsApp para a pessoa escolher tocando numa opção (no lugar de botões, que o WhatsApp da agência não tem). Use quando ela precisa escolher entre caminhos: qual cliente ou card, o próximo passo, o que fazer com um vídeo. O voto volta para você como uma mensagem com o texto da opção. Uma enquete por resposta; não use para confirmar ações (o sistema já manda a enquete de sim/não).',
+      input_schema: object({
+        pergunta: str('Pergunta curta da enquete.'),
+        opcoes: { type: 'array', items: { type: 'string' }, description: 'De 2 a 12 opções curtas e diferentes (até 100 caracteres), com o nome do que está sendo escolhido (ex.: "Aprovar: Reels Padaria 12/11").' },
+      }),
+      async run(number, input, turn) {
+        return turn.offerPoll(input.pergunta, input.opcoes);
+      },
+    },
+
     buscar_cliente: {
       permission: null,
       description: 'Procura clientes pelo nome (tolera erro de digitação) nas cidades deste número. Use antes de qualquer ferramenta que peça cliente_id. Se vier mais de um parecido, pergunte qual é.',
@@ -1037,7 +1049,19 @@ export function createTurn({ execute = null } = {}) {
   const turn = {
     proposals: [],
     done: [],
+    poll: null,
     get proposal() { return turn.proposals[0] || null; },
+    offerPoll(pergunta, opcoes) {
+      need(!turn.poll, 'Já tem uma enquete nesta resposta.');
+      let poll;
+      try {
+        poll = normalizePoll({ name: pergunta, options: Array.isArray(opcoes) ? opcoes : [] });
+      } catch (error) {
+        throw new UseError(error.message);
+      }
+      turn.poll = poll;
+      return { status: 'enquete_preparada', instrucao: 'A enquete sai logo depois da sua resposta. Escreva só uma frase curta antes dela; não liste as opções de novo no texto.' };
+    },
     async propose(kind, payload, clareza = 'duvida') {
       const summary = SUMMARIES[kind](payload);
       if (turn.proposals.length >= 8) throw new UseError('Ações demais numa mensagem: peça o resto em seguida.');

@@ -116,6 +116,21 @@ export function ensureWhatsAppSchema(pool) {
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_wa_outbox_fila ON wa_outbox (status, next_try_at)`);
       // mensagem com hora marcada (confirmação de gravação, lembrete de reunião) não sai depois do compromisso
       await pool.query(`ALTER TABLE wa_outbox ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`);
+      // enquete do WhatsApp no lugar do texto: { name, options: [{ label, answer }] } (ver normalizePoll)
+      await pool.query(`ALTER TABLE wa_outbox ADD COLUMN IF NOT EXISTS poll JSONB`);
+      // enquetes enviadas: o voto chega cifrado e só abre com o segredo da enquete; answer é o texto que o voto vira
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS wa_polls (
+          connection_id UUID NOT NULL,
+          wa_id TEXT NOT NULL,
+          jid TEXT NOT NULL,
+          secret TEXT NOT NULL,
+          options JSONB NOT NULL,
+          voted_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          PRIMARY KEY (connection_id, wa_id)
+        )
+      `);
       await pool.query(`
         CREATE TABLE IF NOT EXISTS wa_inbound (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -246,17 +261,44 @@ function validExpiry(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+export const POLL_MAX_OPTIONS = 12;
+
+/**
+ * Enquete válida para o WhatsApp: pergunta de até 255 caracteres e de 2 a 12 opções diferentes (até 100 cada).
+ * `answer` é o texto que o voto vira na conversa (ex.: a opção "✅ Sim, pode fazer" vira "sim"); sem ele, o rótulo.
+ */
+export function normalizePoll(poll) {
+  if (!poll) return null;
+  const name = String(poll.name || '').replace(/\s+/g, ' ').trim().slice(0, 255);
+  const seen = new Set();
+  const options = [];
+  for (const o of Array.isArray(poll.options) ? poll.options : []) {
+    const label = String((o && typeof o === 'object' ? o.label : o) || '').replace(/\s+/g, ' ').trim().slice(0, 100);
+    if (!label || seen.has(label.toLowerCase())) continue;
+    seen.add(label.toLowerCase());
+    const answer = String((o && typeof o === 'object' && o.answer) || label).trim().slice(0, 300);
+    options.push({ label, answer });
+    if (options.length >= POLL_MAX_OPTIONS) break;
+  }
+  if (!name || options.length < 2) throw new Error('Enquete precisa de pergunta e de ao menos 2 opções diferentes');
+  return { name, options };
+}
+
 /**
  * Coloca uma mensagem na fila. O processo do WhatsApp envia pela conexão que tem a função `purpose`
  * (ou pela "geral"), com intervalo entre mensagens. Também registra no histórico (whatsapp_messages).
  */
-export async function enqueueWhatsApp(pool, { to, body, purpose, triggerType, clientId, sentBy, mediaUrl, mediaName, connectionId, expiresAt, history = true }) {
+export async function enqueueWhatsApp(pool, { to, body, purpose, triggerType, clientId, sentBy, mediaUrl, mediaName, connectionId, expiresAt, poll, history = true }) {
   await ensureWhatsAppSchema(pool);
   const target = String(to || '').trim();
   if (!target) throw new Error('Número de destino vazio');
-  if (!body && !mediaUrl) throw new Error('Mensagem vazia');
+  const pollData = normalizePoll(poll);
+  if (pollData && mediaUrl) throw new Error('Enquete não leva arquivo');
+  if (!body && !mediaUrl && !pollData) throw new Error('Mensagem vazia');
   const finalPurpose = purposeFor(purpose, triggerType);
-  const logMessage = mediaUrl ? `${body || ''} [📎 ${mediaName || 'arquivo'}]` : body;
+  const logMessage = pollData
+    ? `📊 ${pollData.name} (${pollData.options.map((o) => o.label).join(' / ')})`
+    : mediaUrl ? `${body || ''} [📎 ${mediaName || 'arquivo'}]` : body;
   // o histórico é separado por cidade: grava na cidade do cliente (sem cliente, fica na cidade padrão)
   const withCity = clientId && await historyHasCity(pool);
   // history: false = conversa interna (respostas do PULSE à equipe, que podem ter financeiro): fica fora do
@@ -273,10 +315,11 @@ export async function enqueueWhatsApp(pool, { to, body, purpose, triggerType, cl
     return { rows: [] };
   });
   const { rows } = await pool.query(
-    `INSERT INTO wa_outbox (purpose, connection_id, to_number, body, media_url, media_name, client_id, trigger_type, sent_by, log_id, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
-    [finalPurpose, connectionId || null, target, body || '', mediaUrl || null, mediaName || null, clientId || null,
-      triggerType || 'manual', sentBy || null, logRows[0]?.id || null, validExpiry(expiresAt)]
+    `INSERT INTO wa_outbox (purpose, connection_id, to_number, body, media_url, media_name, client_id, trigger_type, sent_by, log_id, expires_at, poll)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+    // enquete: o texto fica só para quem olha a fila (o envio usa a coluna poll)
+    [finalPurpose, connectionId || null, target, body || (pollData ? `📊 ${pollData.name}` : ''), mediaUrl || null, mediaName || null, clientId || null,
+      triggerType || 'manual', sentBy || null, logRows[0]?.id || null, validExpiry(expiresAt), pollData ? JSON.stringify(pollData) : null]
   );
   return { id: rows[0].id, purpose: finalPurpose };
 }

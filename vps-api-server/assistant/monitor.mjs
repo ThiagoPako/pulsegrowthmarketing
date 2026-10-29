@@ -84,6 +84,7 @@ export function createMonitor({ pool, claude, intervalMs = 30_000, debounceSecon
     const card = demand.suggestion || {};
     let sent = 0;
     for (const number of numbers) {
+      let poll = null;
       let body = `📣 *Demanda no grupo de ${client.company_name}* (${cityLabel(city)})\n${KINDS[demand.kind] || demand.kind}: ${demand.summary}`;
       if (demand.excerpt) body += `\n\n💬 "${clip(demand.excerpt, 300)}"`;
       if (card.tipo === 'design' || card.tipo === 'video') {
@@ -98,13 +99,14 @@ export function createMonitor({ pool, claude, intervalMs = 30_000, debounceSecon
               ? { client_id: client.id, cliente: client.company_name, cidade: city, titulo: card.titulo, formato: 'feed', prioridade: demand.urgent ? 'alta' : 'media', prazo: null, descricao: card.descricao, texto_da_arte: null, demanda_id: demand.id }
               : { client_id: client.id, cliente: client.company_name, cidade: city, titulo: card.titulo, tipo: 'reels', descricao: card.descricao, demanda_id: demand.id };
             const action = await proposeAction(pool, number, card.tipo === 'design' ? 'criar_card_design' : 'criar_card_video', payload, { source: 'alerta' });
-            body += `\n\nCriar este card? ${action.summary}\nResponda *sim* para criar, *não* para ignorar, ou me diga o que mudar.`;
+            body += `\n\nCriar este card? ${action.summary}\nToque na enquete abaixo, ou me diga o que mudar.`;
+            poll = { name: 'Criar este card?', options: [{ label: '✅ Criar o card', answer: 'sim' }, { label: '❌ Ignorar', answer: 'não' }] };
           } else {
             body += '\n\nPara criar o card, me diga "cria o card dessa demanda".';
           }
         }
       }
-      await sendToNumber(pool, number, body);
+      await sendToNumber(pool, number, body, { poll });
       await remember(pool, number.id, 'assistant', `${body}\n(id da demanda: ${demand.id})`);
       await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'alerta', text: demand.summary, detail: { demand_id: demand.id, client: client.company_name } });
       sent++;

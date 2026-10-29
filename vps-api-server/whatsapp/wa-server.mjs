@@ -6,6 +6,7 @@
 //   wa_auth         sessão de cada número (criptografada), para reconectar sem ler o QR de novo
 //   wa_outbox       fila de envio: este processo envia pela conexão certa, com intervalo entre mensagens
 //   wa_inbound      mensagens recebidas (a API trata, ex.: resposta 1/2 da confirmação de gravação)
+//   wa_polls        enquetes enviadas (segredo para abrir o voto, que chega cifrado e vira texto em wa_inbound)
 //
 // Cuidados que o motor tem (aprendidos com o WA-AKG e com a Baileys):
 //   - sem baixar o histórico do número ao conectar (pesaria na VPS);
@@ -26,12 +27,14 @@ import QRCode from 'qrcode';
 import makeWASocket, {
   Browsers,
   BufferJSON,
+  decryptPollVote,
   DisconnectReason,
   downloadMediaMessage,
   fetchLatestBaileysVersion,
   initAuthCreds,
   isJidBroadcast,
   jidDecode,
+  jidNormalizedUser,
   makeCacheableSignalKeyStore,
   normalizeMessageContent,
   proto,
@@ -449,9 +452,13 @@ class Connection {
       const isGroup = jid.endsWith('@g.us');
       const content = normalizeMessageContent(msg.message);
       if (!content) continue;
-      const text = content.conversation || content.extendedTextMessage?.text || content.imageMessage?.caption
+      let text = content.conversation || content.extendedTextMessage?.text || content.imageMessage?.caption
         || content.videoMessage?.caption || content.buttonsResponseMessage?.selectedDisplayText
         || content.listResponseMessage?.title || content.templateButtonReplyMessage?.selectedDisplayText || '';
+      // voto numa enquete que este número mandou: vira o texto da opção (ex.: "sim"), como se a pessoa tivesse escrito
+      if (!text && content.pollUpdateMessage) {
+        text = await this.readPollVote(sock, msg, content.pollUpdateMessage).catch((e) => { log(this.name, 'enquete:', e.message); return null; }) || '';
+      }
       // privado do número do PULSE: comando da equipe (texto ou áudio), tratado só pelo assistente da API
       const assistantChat = !isGroup && this.purposes.includes('assistente');
       const voice = assistantChat && !text ? content.audioMessage : null;
@@ -480,6 +487,43 @@ class Connection {
           assistantChat ? 'assistente' : null, voice ? 'audio' : null, mediaPath]
       );
     }
+  }
+
+  /**
+   * Abre o voto (cifrado com o segredo da enquete, o id dela e os ids de quem criou e de quem votou). O WhatsApp
+   * pode identificar cada lado pelo telefone ou pelo id interno (LID): tenta as combinações até o voto abrir.
+   * Vale só o primeiro voto de cada enquete; tirar o voto (nenhuma opção) é ignorado.
+   */
+  async readPollVote(sock, msg, update) {
+    const pollId = update.pollCreationMessageKey?.id;
+    if (!pollId || !update.vote?.encPayload) return null;
+    const { rows: [poll] } = await pool.query(
+      `SELECT secret, options FROM wa_polls WHERE connection_id = $1 AND wa_id = $2 AND voted_at IS NULL`, [this.id, pollId]
+    );
+    if (!poll) return null;
+    const ids = (list) => [...new Set(list.filter(Boolean).map((j) => { try { return jidNormalizedUser(j); } catch { return null; } }).filter(Boolean))];
+    const creators = ids([sock.user?.id, sock.user?.lid]);
+    const voters = ids([msg.key.participant, msg.key.remoteJid, msg.key.participantAlt, msg.key.remoteJidAlt, msg.key.senderPn, msg.participantPn]);
+    const pollEncKey = Buffer.from(poll.secret, 'base64');
+    let vote = null;
+    for (const pollCreatorJid of creators) {
+      for (const voterJid of voters) {
+        try {
+          vote = decryptPollVote(update.vote, { pollEncKey, pollCreatorJid, pollMsgId: pollId, voterJid });
+        } catch { vote = null; }
+        if (vote) break;
+      }
+      if (vote) break;
+    }
+    if (!vote) throw new Error('não deu para abrir o voto');
+    const selected = new Set((vote.selectedOptions || []).map((b) => Buffer.from(b).toString('hex')));
+    if (!selected.size) return null;
+    const chosen = (poll.options || []).find((o) => selected.has(crypto.createHash('sha256').update(o.label).digest('hex')));
+    if (!chosen) return null;
+    const { rowCount } = await pool.query(
+      `UPDATE wa_polls SET voted_at = now() WHERE connection_id = $1 AND wa_id = $2 AND voted_at IS NULL`, [this.id, pollId]
+    );
+    return rowCount ? chosen.answer : null;
   }
 
   // mensagem de voz → arquivo .ogg na pasta privada (fora de /uploads); a API transcreve e apaga
@@ -562,6 +606,11 @@ class Connection {
   }
 
   async buildContent(row) {
+    // enquete: o segredo vai junto para abrir os votos depois (guardado em wa_polls no envio)
+    if (row.poll) {
+      const poll = typeof row.poll === 'string' ? JSON.parse(row.poll) : row.poll;
+      return { poll: { name: poll.name, values: poll.options.map((o) => o.label), selectableCount: 1, messageSecret: crypto.randomBytes(32) } };
+    }
     if (!row.media_url) return { text: row.body };
     // confere tipo e tamanho antes; a Baileys baixa e envia em streaming a partir da URL.
     // Os redirecionamentos são seguidos aqui, um a um, conferindo cada destino (ver checkMediaUrl).
@@ -616,6 +665,13 @@ class Connection {
       await this.sock.sendPresenceUpdate('paused', jid);
     } catch {}
     const result = await this.sock.sendMessage(jid, content);
+    if (content.poll && result?.key?.id) {
+      const poll = typeof row.poll === 'string' ? JSON.parse(row.poll) : row.poll;
+      await pool.query(
+        `INSERT INTO wa_polls (connection_id, wa_id, jid, secret, options) VALUES ($1, $2, $3, $4, $5::jsonb) ON CONFLICT DO NOTHING`,
+        [this.id, result.key.id, jid, Buffer.from(content.poll.messageSecret).toString('base64'), JSON.stringify(poll.options)]
+      ).catch((e) => log(this.name, 'enquete (guardar):', e.message));
+    }
     if (result?.key?.id && result.message) {
       this.sent.set(result.key.id, result.message);
       if (this.sent.size > 500) this.sent.delete(this.sent.keys().next().value);
@@ -737,7 +793,8 @@ async function dispatch() {
     `UPDATE wa_outbox SET next_try_at = now() + interval '2 minutes' WHERE id = $1 AND status = 'fila'`, [row.id]
   );
   const { rows } = await pool.query(
-    `SELECT * FROM wa_outbox WHERE status = 'fila' AND next_try_at <= now() ORDER BY created_at LIMIT 50`
+    // empate no horário: o texto sai antes da enquete que vem com ele
+    `SELECT * FROM wa_outbox WHERE status = 'fila' AND next_try_at <= now() ORDER BY created_at, (poll IS NOT NULL) LIMIT 50`
   );
   for (const row of rows) {
     const free = ready.filter((c) => !c.busy && Date.now() >= c.nextSendAt);
@@ -842,6 +899,7 @@ async function housekeeping() {
     lastCleanup = Date.now();
     await pool.query(`DELETE FROM wa_outbox WHERE status IN ('enviada', 'falhou') AND created_at < now() - interval '30 days'`);
     await pool.query(`DELETE FROM wa_inbound WHERE handled_at IS NOT NULL AND received_at < now() - interval '30 days'`);
+    await pool.query(`DELETE FROM wa_polls WHERE created_at < now() - interval '7 days'`);
   }
 }
 

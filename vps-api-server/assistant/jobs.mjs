@@ -78,10 +78,10 @@ export function registerJobRoutes(app, { pool, uploadRoot, publicUploadsUrl, get
   }
 
   // ── Avisos a quem pediu (pelo número do PULSE e no sino do sistema) ──
-  async function notifyRequester(job, { body, mediaUrl, mediaName, title }) {
+  async function notifyRequester(job, { body, mediaUrl, mediaName, title, poll }) {
     const number = job.requested_by_number ? await getNumber(pool, job.requested_by_number) : null;
     if (number?.active) {
-      await sendToNumber(pool, number, body, { mediaUrl, mediaName });
+      await sendToNumber(pool, number, body, { mediaUrl, mediaName, poll });
       await remember(pool, number.id, 'assistant', body);
     }
     if (job.requested_by_user) {
@@ -105,10 +105,11 @@ export function registerJobRoutes(app, { pool, uploadRoot, publicUploadsUrl, get
       await proposeAction(pool, number, 'enviar_relatorio',
         { job_id: job.id, client_id: client.id, cliente: client.company_name, cidade: clientCity(client), mes: month }, { source: 'entrega' });
     }
-    const body = `📊 Relatório de ${label} pronto${pdf ? ' (arquivo anexo)' : ''}.${canSend ? ' Envio no WhatsApp do cliente? (sim/não)' : ''}`
+    const body = `📊 Relatório de ${label} pronto${pdf ? ' (arquivo anexo)' : ''}.${canSend ? ' Envio no WhatsApp do cliente? Toque na enquete abaixo.' : ''}`
       + `${job.note ? `\nObservação do agente: ${clip(job.note, 300)}` : ''}`;
     await notifyRequester(job, {
-      body, title: '📊 Relatório pronto', mediaUrl: pdf?.url, mediaName: pdf ? `Relatório ${client?.company_name || ''} ${monthLabel(month).replace('/', '-')}${path.extname(pdf.name || pdf.url || '.pdf') || '.pdf'}`.trim() : undefined,
+      body, title: '📊 Relatório pronto',
+      poll: canSend ? { name: 'Envio ao cliente?', options: [{ label: '✅ Enviar ao cliente', answer: 'sim' }, { label: '❌ Não enviar', answer: 'não' }] } : null, mediaUrl: pdf?.url, mediaName: pdf ? `Relatório ${client?.company_name || ''} ${monthLabel(month).replace('/', '-')}${path.extname(pdf.name || pdf.url || '.pdf') || '.pdf'}`.trim() : undefined,
     });
     await logEvent(pool, { numberId: number?.id || null, kind: 'relatorio_entregue', text: label, detail: { job_id: job.id, perguntou_envio: !!canSend } });
   }

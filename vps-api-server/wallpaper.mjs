@@ -29,7 +29,16 @@
 //   POST /api/wallpaper/agent/register  { token, hostname, os, user, os_version, device_id?, device_secret? }
 //   GET  /api/wallpaper/agent/state                     cabeçalhos X-Device-Id e X-Device-Secret
 //   POST /api/wallpaper/agent/report    { image_id?, error? }
+//   GET  /api/wallpaper/agent/script                    agente novo (o agente se atualiza sozinho quando a versão muda)
 // ?format=env nas rotas do agente responde chave=valor por linha (o agente do Mac não tem leitor de JSON).
+//
+// Qualquer tela: cada imagem pode ter versões em outros formatos (ultrawide, vertical, 4:3...).
+// O agente manda as telas do computador (X-Screens: "1920x1080,1080x1920") e o servidor escolhe,
+// para cada tela, a versão de proporção mais próxima (bestFileForScreen). Sem versão daquele
+// formato, vai a principal e o modo "Preencher" corta as sobras. Agente da versão 1 não manda
+// telas: recebe só a principal, como antes.
+//   POST   /api/wallpaper/images/:id/variants  { file_url, width, height }
+//   DELETE /api/wallpaper/variants/:id
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -37,7 +46,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const AGENT_INTERVAL_MIN = 2;
-export const AGENT_VERSION = '1';
+export const AGENT_VERSION = '2';
 const ONLINE_WINDOW_MS = AGENT_INTERVAL_MIN * 3 * 60_000;
 const FITS = new Set(['fill', 'fit', 'stretch', 'center', 'tile', 'span']);
 const OS_VALUES = new Set(['windows', 'mac']);
@@ -63,6 +72,75 @@ export function activeSchedule(schedules, now = Date.now()) {
   }
   return best;
 }
+
+const MAX_SCREENS = 16;
+const MAX_SIDE = 20000;
+
+/** "1920x1080,1080x1920" → [{ w, h }] (telas inválidas ficam de fora) */
+export function parseScreens(header) {
+  return String(header || '').split(',').slice(0, MAX_SCREENS).map((part) => {
+    const m = /^\s*(\d{2,5})\s*x\s*(\d{2,5})\s*$/i.exec(part);
+    if (!m) return null;
+    const w = Number(m[1]);
+    const h = Number(m[2]);
+    return w > 0 && h > 0 && w <= MAX_SIDE && h <= MAX_SIDE ? { w, h } : null;
+  }).filter(Boolean);
+}
+
+const PRESET_RATIOS = [
+  ['16:9', 16 / 9], ['16:10', 16 / 10], ['21:9', 64 / 27], ['32:9', 32 / 9], ['4:3', 4 / 3], ['5:4', 5 / 4],
+  ['3:2', 3 / 2], ['9:16', 9 / 16], ['10:16', 10 / 16], ['3:4', 3 / 4],
+];
+
+/** Nome da proporção ("16:9", "21:9", "9:16"...); fora das comuns, "2,35:1". */
+export function ratioLabel(w, h) {
+  const r = w / h;
+  let best = null;
+  for (const [label, value] of PRESET_RATIOS) {
+    const diff = Math.abs(Math.log(r / value));
+    if (diff < 0.03 && (!best || diff < best.diff)) best = { label, diff };
+  }
+  if (best) return best.label;
+  return r >= 1 ? `${r.toFixed(2).replace('.', ',')}:1` : `1:${(1 / r).toFixed(2).replace('.', ',')}`;
+}
+
+/** Quanto da imagem o "Preencher" corta numa tela (0 a 1). */
+export function cropFraction(file, screen) {
+  if (!file?.width || !file?.height) return null;
+  const a = file.width / file.height;
+  const b = screen.w / screen.h;
+  return 1 - Math.min(a, b) / Math.max(a, b);
+}
+
+/**
+ * Melhor arquivo para uma tela: o de proporção mais próxima; empate (mesma proporção) fica com o
+ * maior. Arquivo sem medidas (enviado antes das versões) só ganha se nenhum outro tiver medidas.
+ */
+export function bestFileForScreen(files, screen) {
+  let best = null;
+  let bestScore = Infinity;
+  const target = screen.w / screen.h;
+  for (const f of files) {
+    const score = f.width && f.height ? Math.abs(Math.log(f.width / f.height / target)) : 10;
+    const bigger = best && (f.width || 0) * (f.height || 0) > (best.width || 0) * (best.height || 0);
+    if (score < bestScore - 1e-6 || (Math.abs(score - bestScore) <= 1e-6 && bigger)) {
+      best = f;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+/** Telas de "Estender" viram uma só (lado a lado, a altura da maior). */
+export function spanScreen(screens) {
+  if (!screens.length) return null;
+  return { w: screens.reduce((sum, s) => sum + s.w, 0), h: Math.max(...screens.map((s) => s.h)) };
+}
+
+const cleanDim = (value) => {
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) && n > 0 && n <= MAX_SIDE ? n : null;
+};
 
 /** chave=valor por linha (valores sem quebra de linha) */
 export function toEnv(obj) {
@@ -145,6 +223,23 @@ export function registerWallpaperRoutes(app, deps) {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
+    // medidas da imagem (lidas no navegador ao subir) e versões para outras telas
+    await pool.query(`ALTER TABLE wallpaper_images ADD COLUMN IF NOT EXISTS width INTEGER`);
+    await pool.query(`ALTER TABLE wallpaper_images ADD COLUMN IF NOT EXISTS height INTEGER`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wallpaper_image_variants (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        image_id UUID NOT NULL REFERENCES wallpaper_images(id) ON DELETE CASCADE,
+        file_url TEXT NOT NULL,
+        width INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        created_by UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+    // telas do computador, como o agente mandou ([{ w, h }])
+    await pool.query(`ALTER TABLE wallpaper_devices ADD COLUMN IF NOT EXISTS screens JSONB NOT NULL DEFAULT '[]'::jsonb`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_wallpaper_variants_image ON wallpaper_image_variants (image_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_wallpaper_images_account ON wallpaper_images (account_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_wallpaper_schedules_account ON wallpaper_schedules (account_id, starts_at)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_wallpaper_devices_account ON wallpaper_devices (account_id)`);
@@ -198,6 +293,9 @@ export function registerWallpaperRoutes(app, deps) {
       os_version: d.os_version,
       os_user: d.os_user,
       agent_version: d.agent_version,
+      // a versão 1 não se atualiza sozinha: precisa abrir o link de novo no computador
+      needs_reinstall: Number(d.agent_version || 0) < 2,
+      screens: Array.isArray(d.screens) ? d.screens : [],
       last_seen_at: d.last_seen_at,
       online: seen > 0 && now - seen < ONLINE_WINDOW_MS,
       applied_image_id: d.applied_image_id,
@@ -260,13 +358,54 @@ export function registerWallpaperRoutes(app, deps) {
   app.get('/api/wallpaper/accounts/:id', route('detalhe', async (req, res) => {
     const { city } = await requireAdmin(req);
     const account = await loadAccount(req.params.id, city);
-    const [images, schedules, devices] = await Promise.all([
-      pool.query(`SELECT id, title, file_url, created_at FROM wallpaper_images WHERE account_id = $1 ORDER BY created_at DESC`, [account.id]),
+    const [images, schedules, devices, variants] = await Promise.all([
+      pool.query(`SELECT id, title, file_url, width, height, created_at FROM wallpaper_images WHERE account_id = $1 ORDER BY created_at DESC`, [account.id]),
       pool.query(`SELECT id, image_id, starts_at, ends_at, created_at FROM wallpaper_schedules WHERE account_id = $1 ORDER BY starts_at DESC`, [account.id]),
       pool.query(`SELECT * FROM wallpaper_devices WHERE account_id = $1 ORDER BY hostname, created_at`, [account.id]),
+      pool.query(
+        `SELECT v.id, v.image_id, v.file_url, v.width, v.height, v.created_at
+           FROM wallpaper_image_variants v JOIN wallpaper_images i ON i.id = v.image_id
+          WHERE i.account_id = $1 ORDER BY v.width::float / v.height`,
+        [account.id]
+      ),
     ]);
     const active = activeSchedule(schedules.rows);
     const now = Date.now();
+
+    // formatos de tela dos computadores (uma linha por proporção, "Estender" conta o conjunto)
+    const groups = new Map();
+    for (const d of devices.rows) {
+      const list = parseScreens((Array.isArray(d.screens) ? d.screens : []).map((x) => `${x.w}x${x.h}`).join(','));
+      const targets = account.fit === 'span' ? [spanScreen(list)].filter(Boolean) : list;
+      for (const sc of targets) {
+        const key = ratioLabel(sc.w, sc.h);
+        const g = groups.get(key) || { ratio: key, w: sc.w, h: sc.h, screens: 0, devices: new Set(), sizes: new Set() };
+        g.screens += 1;
+        g.devices.add(d.id);
+        g.sizes.add(`${sc.w}×${sc.h}`);
+        groups.set(key, g);
+      }
+    }
+    const screenGroups = [...groups.values()]
+      .sort((a, b) => b.screens - a.screens)
+      .map((g) => ({ ratio: g.ratio, w: g.w, h: g.h, screens: g.screens, devices: g.devices.size, sizes: [...g.sizes].slice(0, 6) }));
+
+    const imageViews = images.rows.map((i) => {
+      const own = variants.rows.filter((v) => v.image_id === i.id);
+      const files = [{ id: i.id, file_url: i.file_url, width: i.width, height: i.height, main: true }, ...own];
+      return {
+        ...i,
+        file_url: absoluteUrl(i.file_url),
+        ratio: i.width && i.height ? ratioLabel(i.width, i.height) : null,
+        variants: own.map((v) => ({ ...v, file_url: absoluteUrl(v.file_url), ratio: ratioLabel(v.width, v.height) })),
+        // o que cada formato de tela recebe desta imagem e quanto o "Preencher" corta
+        coverage: screenGroups.map((g) => {
+          const file = bestFileForScreen(files, g);
+          const crop = cropFraction(file, g);
+          return { ratio: g.ratio, w: g.w, h: g.h, file_url: absoluteUrl(file.file_url), variant_id: file.main ? null : file.id, crop: crop == null ? null : Math.round(crop * 100) };
+        }),
+      };
+    });
     res.json({
       account: {
         id: account.id,
@@ -281,7 +420,9 @@ export function registerWallpaperRoutes(app, deps) {
       },
       active_schedule_id: active?.id || null,
       active_image_id: active?.image_id || null,
-      images: images.rows.map((i) => ({ ...i, file_url: absoluteUrl(i.file_url) })),
+      images: imageViews,
+      screen_groups: screenGroups,
+      agent_version: AGENT_VERSION,
       schedules: schedules.rows.map((s) => ({
         ...s,
         status: s.id === active?.id ? 'ativa'
@@ -317,20 +458,58 @@ export function registerWallpaperRoutes(app, deps) {
     res.json({ success: true });
   }));
 
-  app.post('/api/wallpaper/accounts/:id/images', route('nova imagem', async (req, res) => {
-    const { user, city } = await requireAdmin(req);
-    const account = await loadAccount(req.params.id, city);
-    const fileUrl = clean(req.body?.file_url, 1000);
+  function uploadedImageUrl(body) {
+    const fileUrl = clean(body?.file_url, 1000);
     const allowed = fileUrl.startsWith(`${base}/uploads/`) || fileUrl.startsWith('/uploads/')
       || (process.env.PUBLIC_UPLOADS_URL && fileUrl.startsWith(String(process.env.PUBLIC_UPLOADS_URL).replace(/\/+$/, '') + '/'));
     if (!allowed) throw httpError(400, 'A imagem precisa ser enviada pelo sistema');
     if (!IMAGE_RE.test(fileUrl)) throw httpError(400, 'Use uma imagem JPG, PNG, BMP ou WEBP');
+    return fileUrl;
+  }
+
+  app.post('/api/wallpaper/accounts/:id/images', route('nova imagem', async (req, res) => {
+    const { user, city } = await requireAdmin(req);
+    const account = await loadAccount(req.params.id, city);
+    const fileUrl = uploadedImageUrl(req.body);
     const title = clean(req.body?.title, 120);
     const { rows: [image] } = await pool.query(
-      `INSERT INTO wallpaper_images (account_id, title, file_url, created_by) VALUES ($1, $2, $3, $4) RETURNING id, title, file_url, created_at`,
-      [account.id, title, fileUrl, user.id]
+      `INSERT INTO wallpaper_images (account_id, title, file_url, width, height, created_by) VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, title, file_url, width, height, created_at`,
+      [account.id, title, fileUrl, cleanDim(req.body?.width), cleanDim(req.body?.height), user.id]
     );
     res.status(201).json({ image: { ...image, file_url: absoluteUrl(image.file_url) } });
+  }));
+
+  app.post('/api/wallpaper/images/:id/variants', route('nova versão', async (req, res) => {
+    const { user, city } = await requireAdmin(req);
+    if (!isUuid(req.params.id)) throw httpError(404, 'Imagem não encontrada');
+    const { rows: [image] } = await pool.query(`SELECT id, account_id FROM wallpaper_images WHERE id = $1`, [req.params.id]);
+    if (!image) throw httpError(404, 'Imagem não encontrada');
+    await loadAccount(image.account_id, city);
+    const fileUrl = uploadedImageUrl(req.body);
+    const width = cleanDim(req.body?.width);
+    const height = cleanDim(req.body?.height);
+    if (!width || !height) throw httpError(400, 'Não deu para ler o tamanho da imagem');
+    const { rows: [{ n }] } = await pool.query(`SELECT count(*)::int AS n FROM wallpaper_image_variants WHERE image_id = $1`, [image.id]);
+    if (n >= 12) throw httpError(400, 'Limite de 12 versões por imagem');
+    const { rows: [variant] } = await pool.query(
+      `INSERT INTO wallpaper_image_variants (image_id, file_url, width, height, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [image.id, fileUrl, width, height, user.id]
+    );
+    res.status(201).json({ id: variant.id });
+  }));
+
+  app.delete('/api/wallpaper/variants/:id', route('apagar versão', async (req, res) => {
+    const { city } = await requireAdmin(req);
+    if (!isUuid(req.params.id)) throw httpError(404, 'Versão não encontrada');
+    const { rows: [variant] } = await pool.query(
+      `SELECT i.account_id FROM wallpaper_image_variants v JOIN wallpaper_images i ON i.id = v.image_id WHERE v.id = $1`,
+      [req.params.id]
+    );
+    if (!variant) throw httpError(404, 'Versão não encontrada');
+    await loadAccount(variant.account_id, city);
+    await pool.query(`DELETE FROM wallpaper_image_variants WHERE id = $1`, [req.params.id]);
+    res.json({ success: true });
   }));
 
   app.delete('/api/wallpaper/images/:id', route('apagar imagem', async (req, res) => {
@@ -398,7 +577,7 @@ export function registerWallpaperRoutes(app, deps) {
 
   async function activeImage(accountId) {
     const { rows } = await pool.query(
-      `SELECT s.id, s.image_id, s.starts_at, s.ends_at, i.file_url, i.title
+      `SELECT s.id, s.image_id, s.starts_at, s.ends_at, i.file_url, i.title, i.width, i.height
          FROM wallpaper_schedules s JOIN wallpaper_images i ON i.id = s.image_id
         WHERE s.account_id = $1 AND s.starts_at <= now() AND (s.ends_at IS NULL OR s.ends_at > now())
         ORDER BY s.starts_at DESC LIMIT 1`,
@@ -426,17 +605,18 @@ export function registerWallpaperRoutes(app, deps) {
     return fs.readFileSync(path.join(AGENT_DIR, name), 'utf8');
   }
 
+  const fillTemplate = (text) => text
+    .replaceAll('{{API_BASE}}', `${base}/api`)
+    .replaceAll('{{INTERVAL_MIN}}', String(AGENT_INTERVAL_MIN))
+    .replaceAll('{{AGENT_VERSION}}', AGENT_VERSION);
+
   app.get('/api/wallpaper/install/:token/:kind', route('instalador', async (req, res) => {
     const account = await accountByToken(req.params.token);
     const apiBase = `${base}/api`;
-    const fill = (text) => text
-      .replaceAll('{{API_BASE}}', apiBase)
-      .replaceAll('{{TOKEN}}', account.token)
-      .replaceAll('{{INTERVAL_MIN}}', String(AGENT_INTERVAL_MIN))
-      .replaceAll('{{AGENT_VERSION}}', AGENT_VERSION);
+    const fill = (text) => fillTemplate(text).replaceAll('{{TOKEN}}', account.token);
     res.set('Cache-Control', 'no-store');
     if (req.params.kind === 'windows') {
-      const agent = Buffer.from(agentTemplate('agent-windows.ps1'), 'utf8').toString('base64');
+      const agent = Buffer.from(fill(agentTemplate('agent-windows.ps1')), 'utf8').toString('base64');
       const script = fill(agentTemplate('install-windows.ps1')).replace('{{AGENT_PS1_B64}}', agent);
       res.type('text/plain; charset=utf-8').send(script);
     } else if (req.params.kind === 'windows-bat') {
@@ -445,7 +625,7 @@ export function registerWallpaperRoutes(app, deps) {
       res.set('Content-Disposition', 'attachment; filename="Instalar-Wallpaper.bat"');
       res.type('application/octet-stream').send(bat);
     } else if (req.params.kind === 'mac') {
-      const agent = Buffer.from(agentTemplate('agent-mac.sh'), 'utf8').toString('base64');
+      const agent = Buffer.from(fill(agentTemplate('agent-mac.sh')), 'utf8').toString('base64');
       const script = fill(agentTemplate('install-mac.sh')).replace('{{AGENT_SH_B64}}', agent);
       res.type('text/plain; charset=utf-8').send(script);
     } else {
@@ -523,14 +703,50 @@ export function registerWallpaperRoutes(app, deps) {
       `UPDATE wallpaper_devices SET last_seen_at = now(), agent_version = coalesce(nullif($2, ''), agent_version) WHERE id = $1`,
       [device.id, agentVersion]
     );
+    const screens = parseScreens(req.get('x-screens'));
+    if (req.get('x-screens') !== undefined) {
+      await pool.query(`UPDATE wallpaper_devices SET screens = $2::jsonb WHERE id = $1`, [device.id, JSON.stringify(screens)]);
+    }
     const { rows: [account] } = await pool.query(`SELECT fit FROM wallpaper_accounts WHERE id = $1`, [device.account_id]);
+    const fit = account?.fit || 'fill';
     const image = await activeImage(device.account_id);
-    agentSend(req, res, 200, {
+    const payload = {
       image_id: image?.image_id || '',
       url: image ? absoluteUrl(image.file_url) : '',
-      fit: account?.fit || 'fill',
+      fit,
       interval_min: AGENT_INTERVAL_MIN,
-    });
+      agent_version: AGENT_VERSION,
+    };
+    if (image && screens.length) {
+      const { rows: variants } = await pool.query(
+        `SELECT id, file_url, width, height FROM wallpaper_image_variants WHERE image_id = $1`,
+        [image.image_id]
+      );
+      const files = [{ id: image.image_id, file_url: image.file_url, width: image.width, height: image.height }, ...variants];
+      // "Estender" (só Windows): uma imagem para o conjunto de telas
+      const targets = fit === 'span' && device.os !== 'mac' ? [spanScreen(screens)] : screens;
+      const chosen = targets.map((sc) => bestFileForScreen(files, sc));
+      // file_key muda quando troca o arquivo (nome do arquivo baixado no computador)
+      const perScreen = chosen.map((f) => ({ file_key: f.id, url: absoluteUrl(f.file_url) }));
+      if (req.query.format === 'env') {
+        payload.screens = perScreen.length;
+        perScreen.forEach((f, i) => {
+          payload[`screen_${i}_key`] = f.file_key;
+          payload[`screen_${i}_url`] = f.url;
+        });
+      } else {
+        payload.screens = perScreen;
+      }
+    }
+    agentSend(req, res, 200, payload);
+  }));
+
+  // autoatualização: o agente baixa a versão nova quando a do servidor é outra
+  app.get('/api/wallpaper/agent/script', agentRoute('script', async (req, res) => {
+    const device = await deviceFromHeaders(req);
+    const name = device.os === 'mac' ? 'agent-mac.sh' : 'agent-windows.ps1';
+    res.set('Cache-Control', 'no-store');
+    res.type('text/plain; charset=utf-8').send(fillTemplate(agentTemplate(name)));
   }));
 
   app.post('/api/wallpaper/agent/report', agentRoute('relatório', async (req, res) => {

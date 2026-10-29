@@ -5,7 +5,7 @@ import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   AlertTriangle, Apple, CalendarClock, CheckCircle2, Copy, ImagePlus, Link2, Loader2, Monitor, MonitorSmartphone,
-  Plus, RefreshCw, Send, Trash2, Wallpaper as WallpaperIcon, Zap,
+  Plus, Ratio, RefreshCw, Send, Trash2, Wallpaper as WallpaperIcon, X, Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,10 +20,10 @@ import { useCity } from '@/contexts/CityContext';
 import { uploadFileToVps } from '@/services/vpsApi';
 import { cn } from '@/lib/utils';
 import {
-  FIT_LABELS, addWallpaperImage, createWallpaperAccount, deleteWallpaperAccount, deleteWallpaperImage,
+  FIT_LABELS, addWallpaperImage, addWallpaperVariant, createWallpaperAccount, deleteWallpaperVariant, readImageSize, deleteWallpaperAccount, deleteWallpaperImage,
   deleteWallpaperSchedule, fetchWallpaperAccount, fetchWallpaperAccounts, fetchWallpaperClients,
   regenerateWallpaperLink, removeWallpaperDevice, scheduleWallpaper, updateWallpaperAccount, wallpaperLinkUrl,
-  type WallpaperAccountDetail, type WallpaperFit, type WallpaperImage,
+  type WallpaperAccountDetail, type WallpaperCoverage, type WallpaperFit, type WallpaperImage,
 } from '@/services/wallpaperApi';
 
 const logoProps = (c: { company_name: string; logo_url: string | null; color: string | null }) => ({
@@ -49,6 +49,34 @@ function Section({ title, icon: Icon, action, children }: { title: string; icon:
       </div>
       {children}
     </section>
+  );
+}
+
+/** A partir de quanto corte o "Preencher" pede uma versão no formato da tela */
+const CROP_WARN = 20;
+
+const OBJECT_FIT: Record<WallpaperFit, string> = {
+  fill: 'object-cover', span: 'object-cover', fit: 'object-contain', stretch: 'object-fill', center: 'object-none', tile: 'object-none',
+};
+
+/** Miniatura de uma tela no formato dela, com a versão que ela recebe e o ajuste do cadastro. */
+function ScreenPreview({ coverage, fit, label }: { coverage: WallpaperCoverage; fit: WallpaperFit; label: string }) {
+  const warn = fit === 'fill' && coverage.crop != null && coverage.crop >= CROP_WARN && !coverage.variant_id;
+  return (
+    <figure className="flex w-fit flex-col items-center gap-1">
+      <div
+        className="h-20 max-w-[220px] overflow-hidden rounded-md border-2 border-foreground/70 bg-black"
+        style={{ aspectRatio: `${coverage.w} / ${coverage.h}` }}
+      >
+        <img src={coverage.file_url} alt="" loading="lazy" className={cn('h-full w-full', OBJECT_FIT[fit])} />
+      </div>
+      <figcaption className="text-center text-[11px] leading-tight">
+        <span className="font-medium">{label}</span>
+        <span className={cn('block', warn ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>
+          {coverage.variant_id ? 'versão própria' : coverage.crop == null ? 'principal' : coverage.crop === 0 ? 'principal, sem corte' : `principal, corta ${coverage.crop}%`}
+        </span>
+      </figcaption>
+    </figure>
   );
 }
 
@@ -190,6 +218,9 @@ function AccountDetail({ id, onDeleted }: { id: string; onDeleted: () => void })
   const queryClient = useQueryClient();
   const { activeCity } = useCity();
   const fileInput = useRef<HTMLInputElement>(null);
+  const variantInput = useRef<HTMLInputElement>(null);
+  const [variantFor, setVariantFor] = useState<WallpaperImage | null>(null);
+  const [uploadingVariant, setUploadingVariant] = useState<string | null>(null);
   const [uploading, setUploading] = useState(0);
   const [scheduleFor, setScheduleFor] = useState<WallpaperImage | null>(null);
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
@@ -233,8 +264,9 @@ function AccountDetail({ id, onDeleted }: { id: string; onDeleted: () => void })
     for (const file of list) {
       try {
         if (!/\.(png|jpe?g|bmp|webp)$/i.test(file.name)) throw new Error(`${file.name}: use JPG, PNG, BMP ou WEBP`);
+        const size = await readImageSize(file);
         const url = await uploadFileToVps(file, `wallpapers/${account.id}`);
-        await addWallpaperImage(account.id, url, file.name.replace(/\.[^.]+$/, ''));
+        await addWallpaperImage(account.id, url, file.name.replace(/\.[^.]+$/, ''), size);
       } catch (err) {
         toast.error((err as Error).message);
       }
@@ -242,6 +274,32 @@ function AccountDetail({ id, onDeleted }: { id: string; onDeleted: () => void })
     }
     if (fileInput.current) fileInput.current.value = '';
     refresh();
+  };
+
+  // versão da imagem para outro formato de tela (vertical, ultrawide, 4:3...)
+  const uploadVariant = async (file: File | undefined) => {
+    const image = variantFor;
+    if (variantInput.current) variantInput.current.value = '';
+    if (!file || !image) return;
+    setUploadingVariant(image.id);
+    try {
+      if (!/\.(png|jpe?g|bmp|webp)$/i.test(file.name)) throw new Error(`${file.name}: use JPG, PNG, BMP ou WEBP`);
+      const size = await readImageSize(file);
+      const url = await uploadFileToVps(file, `wallpapers/${account.id}`);
+      await addWallpaperVariant(image.id, url, size);
+      toast.success('Versão adicionada. Cada tela recebe a do formato mais próximo.');
+      refresh();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setUploadingVariant(null);
+      setVariantFor(null);
+    }
+  };
+
+  const pickVariant = (image: WallpaperImage) => {
+    setVariantFor(image);
+    variantInput.current?.click();
   };
 
   const applyNow = (image: WallpaperImage) => setConfirm({
@@ -337,7 +395,35 @@ function AccountDetail({ id, onDeleted }: { id: string; onDeleted: () => void })
         ) : (
           <p className="text-sm text-muted-foreground">Nenhum papel de parede aplicado ainda. Suba uma imagem e clique em “Aplicar agora”.</p>
         )}
+        {active && active.coverage.length > 0 && (
+          <div className="mt-4 border-t border-border pt-3">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Como fica nas telas dos computadores</p>
+            <div className="flex flex-wrap items-end gap-4">
+              {active.coverage.map((c) => (
+                <ScreenPreview key={c.ratio} coverage={c} fit={account.fit} label={c.ratio} />
+              ))}
+            </div>
+          </div>
+        )}
       </Section>
+
+      {data.screen_groups.length > 0 && (
+        <Section title="Telas dos computadores" icon={Ratio}>
+          <p className="mb-2 text-sm text-muted-foreground">
+            Cada tela recebe a versão da imagem no formato mais próximo do dela. Sem versão própria, vai a principal
+            {account.fit === 'fill' ? ' e o “Preencher” corta as sobras.' : '.'}
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {data.screen_groups.map((g) => (
+              <li key={g.ratio} className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm">
+                <span className="font-semibold">{g.ratio}</span>
+                <span className="text-muted-foreground"> · {g.screens} tela(s) em {g.devices} computador(es)</span>
+                <span className="block text-xs text-muted-foreground">{g.sizes.join(', ')}</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
 
       <Section
         title="Imagens"
@@ -345,6 +431,7 @@ function AccountDetail({ id, onDeleted }: { id: string; onDeleted: () => void })
         action={(
           <>
             <input ref={fileInput} type="file" accept=".png,.jpg,.jpeg,.bmp,.webp" multiple hidden onChange={(e) => upload(e.target.files)} />
+            <input ref={variantInput} type="file" accept=".png,.jpg,.jpeg,.bmp,.webp" hidden onChange={(e) => uploadVariant(e.target.files?.[0])} />
             <Button size="sm" onClick={() => fileInput.current?.click()} disabled={uploading > 0}>
               {uploading > 0 ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Plus className="mr-1.5 h-4 w-4" />}
               {uploading > 0 ? `Enviando ${uploading}…` : 'Subir imagens'}
@@ -353,7 +440,9 @@ function AccountDetail({ id, onDeleted }: { id: string; onDeleted: () => void })
         )}
       >
         {data.images.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Suba as artes no tamanho da tela (ex.: 1920×1080 ou 3840×2160).</p>
+          <p className="text-sm text-muted-foreground">
+            Suba a arte principal em 16:9 (1920×1080 ou 3840×2160). Para telas de outro formato (vertical, ultrawide, 4:3), adicione versões na imagem.
+          </p>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {data.images.map((image) => (
@@ -361,9 +450,43 @@ function AccountDetail({ id, onDeleted }: { id: string; onDeleted: () => void })
                 <img src={image.file_url} alt="" loading="lazy" className="aspect-video w-full object-cover" />
                 <div className="space-y-2 p-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-medium" title={image.title}>{image.title || 'Sem nome'}</p>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium" title={image.title}>{image.title || 'Sem nome'}</p>
+                      {image.width && image.height && (
+                        <p className="text-[11px] text-muted-foreground">{image.width}×{image.height} · {image.ratio}</p>
+                      )}
+                    </div>
                     {image.id === data.active_image_id && <Badge className="shrink-0">No ar</Badge>}
                   </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {image.variants.map((v) => (
+                      <span key={v.id} className="inline-flex items-center gap-1 rounded-md border border-border py-0.5 pl-0.5 pr-1 text-[11px]" title={`${v.width}×${v.height}`}>
+                        <img src={v.file_url} alt="" loading="lazy" className="h-5 w-5 rounded-sm object-cover" />
+                        {v.ratio}
+                        <button
+                          type="button" className="rounded-sm p-0.5 text-muted-foreground hover:text-destructive" aria-label={`Apagar versão ${v.ratio}`}
+                          onClick={() => run(() => deleteWallpaperVariant(v.id), 'Versão apagada')}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                    <Button
+                      size="sm" variant="ghost" className="h-6 whitespace-nowrap px-1.5 text-[11px]"
+                      disabled={uploadingVariant === image.id} onClick={() => pickVariant(image)}
+                    >
+                      {uploadingVariant === image.id ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Plus className="mr-1 h-3 w-3" />}
+                      Versão para outra tela
+                    </Button>
+                  </div>
+                  {account.fit === 'fill' && (() => {
+                    const missing = image.coverage.filter((c) => !c.variant_id && c.crop != null && c.crop >= CROP_WARN).map((c) => c.ratio);
+                    return missing.length > 0 && (
+                      <p className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+                        <AlertTriangle className="h-3 w-3 shrink-0" />Corta bastante em {missing.join(', ')}: suba uma versão nesse formato
+                      </p>
+                    );
+                  })()}
                   <div className="flex gap-1.5">
                     <Button size="sm" className="h-8 flex-1" onClick={() => applyNow(image)} disabled={image.id === data.active_image_id}>
                       <Zap className="mr-1 h-3.5 w-3.5" />Aplicar agora
@@ -434,7 +557,13 @@ function AccountDetail({ id, onDeleted }: { id: string; onDeleted: () => void })
                 {d.os === 'mac' ? <Apple className="h-4 w-4 shrink-0 text-muted-foreground" /> : <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />}
                 <div className="min-w-0 flex-1 text-sm">
                   <p className="truncate font-medium">{d.hostname || 'Sem nome'}{d.os_user && <span className="font-normal text-muted-foreground"> · {d.os_user}</span>}</p>
-                  <p className="text-xs text-muted-foreground">Visto {ago(d.last_seen_at)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Visto {ago(d.last_seen_at)}
+                    {d.screens.length > 0 && ` · ${d.screens.length === 1 ? 'tela' : `${d.screens.length} telas`} ${d.screens.map((sc) => `${sc.w}×${sc.h}`).join(', ')}`}
+                  </p>
+                  {d.needs_reinstall && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">Programa antigo: abra o link de novo neste computador para cada tela receber o formato certo</p>
+                  )}
                   {d.last_error && (
                     <p className="flex items-center gap-1 text-xs text-destructive"><AlertTriangle className="h-3 w-3" />{d.last_error}</p>
                   )}

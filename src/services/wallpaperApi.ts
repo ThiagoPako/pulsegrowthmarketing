@@ -36,11 +36,44 @@ export interface WallpaperAccountSummary {
   upcoming: number;
 }
 
+export interface WallpaperVariant {
+  id: string;
+  file_url: string;
+  width: number;
+  height: number;
+  ratio: string;
+}
+
+/** O que um formato de tela recebe da imagem: a versão escolhida e quanto o "Preencher" corta (%). */
+export interface WallpaperCoverage {
+  ratio: string;
+  w: number;
+  h: number;
+  file_url: string;
+  variant_id: string | null;
+  crop: number | null;
+}
+
 export interface WallpaperImage {
   id: string;
   title: string;
   file_url: string;
+  width: number | null;
+  height: number | null;
+  ratio: string | null;
+  variants: WallpaperVariant[];
+  coverage: WallpaperCoverage[];
   created_at: string;
+}
+
+/** Formato de tela dos computadores conectados (uma linha por proporção). */
+export interface WallpaperScreenGroup {
+  ratio: string;
+  w: number;
+  h: number;
+  screens: number;
+  devices: number;
+  sizes: string[];
 }
 
 export interface WallpaperSchedule {
@@ -57,6 +90,8 @@ export interface WallpaperDevice {
   os: 'windows' | 'mac' | string;
   os_version: string;
   os_user: string;
+  screens: { w: number; h: number }[];
+  needs_reinstall: boolean;
   last_seen_at: string | null;
   online: boolean;
   up_to_date: boolean;
@@ -79,6 +114,7 @@ export interface WallpaperAccountDetail {
   active_schedule_id: string | null;
   active_image_id: string | null;
   images: WallpaperImage[];
+  screen_groups: WallpaperScreenGroup[];
   schedules: WallpaperSchedule[];
   devices: WallpaperDevice[];
   agent_interval_min: number;
@@ -110,8 +146,26 @@ export const regenerateWallpaperLink = (id: string) =>
 
 export const deleteWallpaperAccount = (id: string) => call(`wallpaper/accounts/${id}`, { method: 'DELETE' });
 
-export const addWallpaperImage = (id: string, file_url: string, title: string) =>
-  call<{ image: WallpaperImage }>(`wallpaper/accounts/${id}/images`, { body: { file_url, title } }).then((d) => d.image);
+export const addWallpaperImage = (id: string, file_url: string, title: string, size: ImageSize | null) =>
+  call<{ image: WallpaperImage }>(`wallpaper/accounts/${id}/images`, { body: { file_url, title, ...size } }).then((d) => d.image);
+
+export const addWallpaperVariant = (imageId: string, file_url: string, size: ImageSize) =>
+  call<{ id: string }>(`wallpaper/images/${imageId}/variants`, { body: { file_url, ...size } });
+
+export const deleteWallpaperVariant = (variantId: string) => call(`wallpaper/variants/${variantId}`, { method: 'DELETE' });
+
+export interface ImageSize { width: number; height: number }
+
+/** Largura e altura reais do arquivo (lidas no navegador antes de subir). */
+export function readImageSize(file: File): Promise<ImageSize> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve({ width: img.naturalWidth, height: img.naturalHeight }); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(`${file.name}: não deu para abrir a imagem`)); };
+    img.src = url;
+  });
+}
 
 export const deleteWallpaperImage = (imageId: string) => call(`wallpaper/images/${imageId}`, { method: 'DELETE' });
 

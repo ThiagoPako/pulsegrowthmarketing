@@ -28,6 +28,7 @@ import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerAgentDriveRoutes } from './agentDriveRoutes.mjs';
 import { transcribeUrl } from './assistant/transcribe.mjs';
 import { registerAgentTriageRoutes } from './agentTriageRoutes.mjs';
+import { registerAgentWhatsAppRoutes } from './agentWhatsAppRoutes.mjs';
 import { registerSchedulingRoutes } from './scheduling.mjs';
 import { registerWallpaperRoutes } from './wallpaper.mjs';
 import { createPostCaption } from './lib/postCaption.mjs';
@@ -20458,6 +20459,9 @@ registerAgentDriveRoutes(app, {
 
 // ─── Agente de triagem do Drive (abre cards de Edição e de Design do que achou no Drive) ──
 registerAgentTriageRoutes(app, { pool, agentApi, designApi: agentDesignApi });
+
+// ─── WhatsApp pelos agentes (a chefe manda arte/vídeo ao grupo do cliente pela fila) ──
+registerAgentWhatsAppRoutes(app, { pool, uploadRoot: UPLOAD_ROOT, publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL, agentApi });
 
 // ─── Agendamentos (calendário de postagem por cliente; acesso: Pulse Plus) ──
 // Fotos de perfil gravadas dentro do banco viram arquivo (deixavam o Kanban de Design com ~18 MB por abertura)

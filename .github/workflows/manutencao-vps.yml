@@ -1,0 +1,49 @@
+name: Manutenção da VPS
+
+# Rodada à mão (Actions → Manutenção da VPS → Run workflow, ou gh workflow run).
+# "medir" só mostra disco, memória e banco; "limpar" apaga o descartável e roda VACUUM ANALYZE
+# (regras em scripts/manutencao-vps.sh).
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "medir ou limpar"
+        required: true
+        default: medir
+        type: choice
+        options: [medir, limpar]
+
+# não roda junto com um deploy
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  manutencao:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare SSH key
+        env:
+          SSH_PRIVATE_KEY_B64: ${{ secrets.SSH_PRIVATE_KEY_B64 }}
+        run: |
+          printf '%s' "$SSH_PRIVATE_KEY_B64" | base64 -d > /tmp/github_deploy_key
+          chmod 600 /tmp/github_deploy_key
+
+      - name: Run maintenance via SSH
+        uses: appleboy/ssh-action@v1
+        env:
+          MODO: ${{ inputs.modo }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key_path: /tmp/github_deploy_key
+          port: 22
+          envs: MODO
+          command_timeout: 30m
+          script: |
+            cd /var/www/pulsegrowthmarketing
+            if [ "$MODO" = "limpar" ]; then
+              bash scripts/manutencao-vps.sh --limpar
+            else
+              bash scripts/manutencao-vps.sh
+            fi

@@ -11,6 +11,7 @@ import {
   isMonth, addDays, fmtDate, monthLabel, roundMoney, logEvent,
 } from './common.mjs';
 import { financialSummary, delinquents } from './finance.mjs';
+import { materialsByCode } from './materials.mjs';
 import {
   CONTENT_TYPES, DESIGN_FORMATS, DESIGN_PRIORITIES, REVENUE_CATEGORIES, SUMMARIES, CONTENT_COLUMNS, DESIGN_COLUMNS,
   RECORDING_TYPES, ALWAYS_CONFIRM, loadClient, isUuid, recordingConflict,
@@ -334,6 +335,45 @@ export function createTools({ pool, publicUploadsUrl }) {
           client_id: client.id, cliente: client.company_name, cidade: clientCity(client), titulo: text(input.titulo, 120, 'Título', { required: true }),
           tipo: input.tipo, descricao: text(input.descricao, 1500, 'Descrição'), demanda_id: isUuid(input.demanda_id) ? input.demanda_id : null,
         }, input.clareza);
+      },
+    },
+
+    guardar_material: {
+      permission: 'criar_cards',
+      description: 'Guarda no Drive do cliente o material encaminhado ao PULSE (códigos M1, M2… da mensagem "[Material encaminhado…]") e cria um card em Edição por vídeo, com o link da pasta e o roteiro. Uma pasta por vídeo final, com o título do roteiro. Sempre pede "sim".',
+      input_schema: object({
+        cliente_id: CLIENT_ID,
+        videos: {
+          type: 'array',
+          description: 'Um item por vídeo final (card).',
+          items: object({
+            titulo: str('Título do roteiro (vira o nome da pasta no Drive e o título do card).'),
+            tipo: strEnum(['reels', 'criativo', 'story'], 'reels, criativo ou story.'),
+            arquivos: { type: 'array', items: { type: 'string' }, description: 'Códigos dos vídeos e fotos deste vídeo final (ex.: ["M1","M3"]).' },
+            roteiro: str('Texto do roteiro deste vídeo, como veio no documento ou na mensagem (vazio se não veio).'),
+          }),
+        },
+        clareza: CLAREZA,
+      }),
+      async run(number, input, turn) {
+        const client = await clientFor(number, input.cliente_id);
+        const videos = Array.isArray(input.videos) ? input.videos : [];
+        need(videos.length, 'Diga pelo menos um vídeo.');
+        const { rows: [drive] } = await pool.query('SELECT drive_link FROM clients WHERE id = $1', [client.id]);
+        need(drive?.drive_link, `O cadastro de ${client.company_name} não tem a pasta do Drive. Peça para colocarem o link da pasta do cliente no cadastro.`);
+        const codes = [...new Set(videos.flatMap((v) => (v.arquivos || []).map((c) => String(c).toUpperCase().replace(/^#/, ''))))];
+        const found = await materialsByCode(pool, number.id, codes);
+        const missing = codes.filter((c) => !found.some((m) => m.codigo === c));
+        need(!missing.length, `Não achei estes arquivos: ${missing.join(', ')}.`);
+        return turn.propose('guardar_material', {
+          client_id: client.id, cliente: client.company_name, cidade: clientCity(client), drive_link: drive.drive_link,
+          videos: videos.map((v) => ({
+            titulo: text(v.titulo, 120, 'Título', { required: true }),
+            tipo: ['reels', 'criativo', 'story'].includes(v.tipo) ? v.tipo : 'reels',
+            arquivos: (v.arquivos || []).map((c) => String(c).toUpperCase().replace(/^#/, '')),
+            roteiro: text(v.roteiro, 8000, 'Roteiro'),
+          })),
+        }, 'duvida');
       },
     },
 

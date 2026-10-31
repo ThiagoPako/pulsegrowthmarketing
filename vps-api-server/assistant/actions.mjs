@@ -17,6 +17,8 @@
 // dúvida → resumo pedindo "sim". O que sai para o cliente (ALWAYS_CONFIRM) pede "sim" sempre.
 
 import { enqueueWhatsApp, clientTarget } from '../whatsapp/shared.mjs';
+import { materialsByCode, saveMaterialsToDrive, removeMaterialFiles } from './materials.mjs';
+import { driveIdFromLink, folderUrl } from '../lib/driveFolders.mjs';
 import {
   CONFIRM_MINUTES, cityLabel, clientAllowed, fmtDate, fmtMoney, monthLabel, clip, requesterName, getNumber, logEvent,
 } from './common.mjs';
@@ -38,7 +40,7 @@ export const DESIGN_COLUMNS = {
 export const RECORDING_TYPES = { fixa: 'Fixa', extra: 'Extra', avulso: 'Avulsa' };
 
 /** Sai para o cliente: pede "sim" mesmo com pedido claro. */
-export const ALWAYS_CONFIRM = new Set(['enviar_cliente', 'enviar_relatorio']);
+export const ALWAYS_CONFIRM = new Set(['enviar_cliente', 'enviar_relatorio', 'guardar_material']);
 
 // Dependências do servidor (registerAssistant): movimentação de card do fluxo de edição
 let deps = {};
@@ -98,6 +100,7 @@ async function inTransaction(pool, fn) {
 
 // ── Resumos (o texto que pede o "sim") ──
 export const SUMMARIES = {
+  guardar_material: (p) => `Guardar no Drive de ${p.cliente} e criar ${p.videos.length} card(s) em Edição:\n${p.videos.map((v) => `• '${v.titulo}' (${CONTENT_TYPES[v.tipo] || v.tipo}) · ${v.arquivos.join(', ')}${v.roteiro ? ' · com roteiro' : ' · sem roteiro'}`).join('\n')}`,
   lancar_despesa: (p) => `Despesa ${fmtMoney(p.valor)} · ${cityLabel(p.cidade)} · ${p.categoria} · ${fmtDate(p.data)} · '${p.descricao}'${p.tipo === 'variavel' ? ' · variável' : ''}`,
   lancar_receita: (p) => `Receita ${fmtMoney(p.valor)} · ${cityLabel(p.cidade)}${p.cliente ? ` · ${p.cliente}` : ' · sem cliente'} · vence ${fmtDate(p.vencimento)} · ${REVENUE_CATEGORIES[p.categoria] || p.categoria}${p.descricao ? ` · '${p.descricao}'` : ''}${p.recebida ? ' · já recebida' : ' · a receber'}`,
   criar_card_video: (p) => `Card de vídeo (${CONTENT_TYPES[p.tipo] || p.tipo}) · ${p.cliente} (${cityLabel(p.cidade)}) · '${p.titulo}' · Kanban de conteúdo, coluna Ideias${p.descricao ? `\n📝 ${clip(p.descricao, 300)}` : ''}`,
@@ -146,6 +149,39 @@ export const confirmManyQuestion = (summaries) => `${summaries.map((s, i) => `*$
 
 // ── Execução do payload guardado ──
 const EXECUTORS = {
+  // material encaminhado → pasta do cliente no Drive (uma subpasta por vídeo) + card em Edição com o link e o roteiro
+  async guardar_material(pool, action) {
+    const p = action.payload;
+    const { number, client } = await recheck(pool, action.number_id, 'criar_cards', { clientId: p.client_id });
+    const folderId = driveIdFromLink(p.drive_link);
+    if (!folderId) throw new Error('O link do Drive do cliente não é de uma pasta.');
+    const linhas = [];
+    const cards = [];
+    for (const v of p.videos) {
+      const materiais = await materialsByCode(pool, number.id, v.arquivos);
+      if (!materiais.length) { linhas.push(`⚠ '${v.titulo}': os arquivos já tinham sido guardados ou expiraram.`); continue; }
+      const { folderId: pasta } = await saveMaterialsToDrive(folderId, v.titulo, materiais);
+      const link = folderUrl(pasta);
+      const description = [`Material encaminhado pelo WhatsApp — ${requesterName(number)}`, v.roteiro ? `ROTEIRO:\n${v.roteiro}` : ''].filter(Boolean).join('\n\n');
+      const { rows: [task] } = await pool.query(
+        `INSERT INTO content_tasks (client_id, title, content_type, kanban_column, description, drive_link, created_by, position, updated_at)
+         VALUES ($1, $2, $3, 'edicao', $4, $5, $6, (SELECT count(*) FROM content_tasks WHERE kanban_column = 'edicao'), now())
+         RETURNING id`,
+        [client.id, v.titulo, v.tipo, description, link, number.user_id || null]
+      );
+      await pool.query('INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+        [task.id, number.user_id || null, 'Card criado pelo WhatsApp (material encaminhado)', `Pedido por ${requesterName(number)} · ${materiais.length} arquivo(s) no Drive`]).catch(() => {});
+      await pool.query(
+        `UPDATE assistant_materials SET status = 'guardado', client_id = $2, content_task_id = $3, drive_path = $4, updated_at = now() WHERE id = ANY($1::uuid[])`,
+        [materiais.map((m) => m.id), client.id, task.id, link]
+      );
+      await removeMaterialFiles(materiais);
+      cards.push(task.id);
+      linhas.push(`✅ '${v.titulo}': ${materiais.length} arquivo(s) no Drive e card em Edição.`);
+    }
+    return { message: `${linhas.join('\n')}\n📁 ${client.company_name} · a edição já pode pegar.`, result: { content_task_ids: cards } };
+  },
+
   async lancar_despesa(pool, action) {
     const p = action.payload;
     const { number } = await recheck(pool, action.number_id, 'lancar_financeiro', { city: p.cidade });

@@ -75,6 +75,8 @@ const VIDEO_MAX_BYTES = 100 * 1024 * 1024; // vídeo vai por streaming (não car
 const GROUPS_REFRESH_MS = 30 * 60 * 1000;
 const VOICE_MAX_SECONDS = 300; // comando por áudio no número do PULSE: até 5 min
 const VOICE_MAX_BYTES = 8 * 1024 * 1024;
+// material encaminhado ao PULSE (brutos e roteiros de cliente, assistant/materials.mjs): até 1,5 GB por arquivo
+const MATERIAL_MAX_BYTES = 1536 * 1024 * 1024;
 
 // ── Criptografia da sessão (AES-256-GCM) ───────────────────────
 const secret = process.env.WA_ENCRYPTION_KEY || process.env.JWT_SECRET;
@@ -462,7 +464,10 @@ class Connection {
       // privado do número do PULSE: comando da equipe (texto ou áudio), tratado só pelo assistente da API
       const assistantChat = !isGroup && this.purposes.includes('assistente');
       const voice = assistantChat && !text ? content.audioMessage : null;
-      if (!text && !voice) continue;
+      // material encaminhado ao PULSE (vídeo, foto, documento ou texto encaminhado): não é comando, é bruto/roteiro de cliente
+      const material = assistantChat ? pickMaterial(content) : null;
+      const forwarded = assistantChat && !material && text && isForwarded(content);
+      if (!text && !voice && !material) continue;
       // quem escreveu: no privado é o próprio chat; no grupo é o participante
       const senderJid = isGroup ? (msg.key.participant || '') : jid;
       let phone = null;
@@ -478,13 +483,16 @@ class Connection {
       // mensagem de outro número da própria agência (ex.: aviso no grupo) não é resposta de cliente
       if (phone && [...connections.values()].some((c) => c.phone && c.phone === phone)) continue;
       // áudio: baixa para a pasta privada (sem caminho = não deu para baixar; o assistente pede por escrito)
-      const mediaPath = voice ? await this.saveVoice(sock, msg, voice).catch((e) => { log(this.name, 'áudio:', e.message); return null; }) : null;
+      const mediaPath = voice ? await this.saveVoice(sock, msg, voice).catch((e) => { log(this.name, 'áudio:', e.message); return null; })
+        : material ? await this.saveMaterial(sock, msg, material).catch((e) => { log(this.name, 'material:', e.message); return null; })
+          : null;
+      const mediaType = voice ? 'audio' : material ? material.tipo : forwarded ? 'encaminhado' : null;
       await pool.query(
         `INSERT INTO wa_inbound (connection_id, wa_id, from_jid, phone, push_name, text, group_jid, route, media_type, media_path)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          ON CONFLICT DO NOTHING`,
         [this.id, msg.key.id, senderJid || jid, phone, msg.pushName || null, text.slice(0, 4000), isGroup ? jid : null,
-          assistantChat ? 'assistente' : null, voice ? 'audio' : null, mediaPath]
+          assistantChat ? 'assistente' : null, mediaType, mediaPath]
       );
     }
   }
@@ -524,6 +532,23 @@ class Connection {
       `UPDATE wa_polls SET voted_at = now() WHERE connection_id = $1 AND wa_id = $2 AND voted_at IS NULL`, [this.id, pollId]
     );
     return rowCount ? chosen.answer : null;
+  }
+
+  // material encaminhado → arquivo na pasta privada (fora de /uploads); a API manda para o Drive do cliente e apaga
+  async saveMaterial(sock, msg, material) {
+    if (Number(material.media.fileLength) > MATERIAL_MAX_BYTES) throw new Error('arquivo grande demais (máximo 1,5 GB)');
+    const dir = path.join(waPrivateDir(), 'material');
+    await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+    const nome = String(material.nome).replace(/[\\/:*?"<>|\r\n]+/g, ' ').trim().slice(0, 120) || `${material.tipo}${material.ext}`;
+    const file = path.join(dir, `${this.id}-${String(msg.key.id).replace(/[^A-Za-z0-9-]/g, '')}_${nome}`);
+    const stream = await downloadMediaMessage(msg, 'stream', {}, { logger: baileysLogger, reuploadRequest: sock.updateMediaMessage });
+    const handle = await fs.open(file, 'w', 0o600);
+    try {
+      for await (const chunk of stream) await handle.write(chunk);
+    } finally {
+      await handle.close();
+    }
+    return file;
   }
 
   // mensagem de voz → arquivo .ogg na pasta privada (fora de /uploads); a API transcreve e apaga
@@ -955,3 +980,21 @@ main().catch((error) => {
   log('falha fatal:', error);
   process.exit(1);
 });
+
+// ── material encaminhado ao PULSE ──
+const EXT_MIME = { 'video/mp4': '.mp4', 'video/quicktime': '.mov', 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'application/pdf': '.pdf' };
+function pickMaterial(content) {
+  const doc = content.documentMessage || content.documentWithCaptionMessage?.message?.documentMessage;
+  const media = content.videoMessage || content.imageMessage || doc;
+  if (!media) return null;
+  const mime = String(media.mimetype || '');
+  const tipo = content.videoMessage || mime.startsWith('video/') ? 'video' : content.imageMessage || mime.startsWith('image/') ? 'imagem' : 'documento';
+  const ext = EXT_MIME[mime.split(';')[0]] || (tipo === 'video' ? '.mp4' : tipo === 'imagem' ? '.jpg' : '');
+  const nome = doc?.fileName || `${tipo}-${Date.now()}${ext}`;
+  return { tipo, media, ext, nome };
+}
+
+function isForwarded(content) {
+  const ctx = content.extendedTextMessage?.contextInfo || content.conversation?.contextInfo;
+  return !!(ctx?.isForwarded || Number(ctx?.forwardingScore) > 0);
+}

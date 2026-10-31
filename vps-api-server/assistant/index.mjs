@@ -27,6 +27,7 @@
 //   TEMPERATURE_TICK_MS=600000          de quanto em quanto tempo confere se a análise do dia já rodou
 
 import { ensureAssistantSchema } from './schema.mjs';
+import { createDailyReport } from './dailyReport.mjs';
 import { createClaude } from './claude.mjs';
 import { createTools } from './tools.mjs';
 import { configureActions } from './actions.mjs';
@@ -87,5 +88,8 @@ export function registerAssistant(app, {
     monitor.start();
   }
   if (process.env.ASSISTANT_DISABLED !== '1' && process.env.TEMPERATURE_DISABLED !== '1') temperature.start();
-  return { engine, monitor, claude, tools, temperature };
+  // resumo do dia às 18h no WhatsApp dos números com "resumo_diario" (dailyReport.mjs)
+  const dailyReport = createDailyReport({ pool, hour: envHour('ASSISTANT_DAILY_REPORT_HOUR', 18), intervalMs: envNumber('ASSISTANT_DAILY_REPORT_TICK_MS', 300_000) });
+  if (process.env.ASSISTANT_DISABLED !== '1') dailyReport.start();
+  return { engine, monitor, claude, tools, temperature, dailyReport };
 }

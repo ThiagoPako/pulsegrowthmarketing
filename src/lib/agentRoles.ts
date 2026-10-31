@@ -8,4 +8,7 @@ export const AGENT_ROLE_LABELS: Record<string, string> = {
   revisor_arte: 'Revisão de artes',
   // varre o Drive dos clientes e abre cards de Edição e de Design (agentTriageRoutes.mjs)
   triagem: 'Triagem do Drive',
+  // apoio da edição (desde 31/10/2026): não pegam card; trabalham no projeto do editor e mandam etapa no card
+  colorista: 'Colorista (cor)',
+  som: 'Som (sound designer)',
 };

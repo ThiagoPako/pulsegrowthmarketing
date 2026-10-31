@@ -61,10 +61,13 @@ import multer from 'multer';
 
 // designer e revisor_arte: agentes de design (rotas em agentDesignRoutes.mjs)
 // triagem: varre o Drive e só cria cards (rotas em agentTriageRoutes.mjs)
-const AGENT_ROLES = new Set(['editor', 'revisor', 'chefe', 'designer', 'revisor_arte', 'triagem']);
+// colorista (Íris) e som (Caio), desde 31/10/2026: trabalham no projeto que o editor passa por recado; mandam
+// etapa nos cards do fluxo de edição, mas não pegam card da fila
+const AGENT_ROLES = new Set(['editor', 'revisor', 'chefe', 'designer', 'revisor_arte', 'triagem', 'colorista', 'som']);
 const DESIGN_ONLY_ROLES = new Set(['designer', 'revisor_arte']);
+const SUPPORT_ROLES = new Set(['colorista', 'som']);
 // quem não edita vídeo: fila de edição vazia e o claim recusa
-const NO_VIDEO_ROLES = new Set([...DESIGN_ONLY_ROLES, 'triagem']);
+const NO_VIDEO_ROLES = new Set([...DESIGN_ONLY_ROLES, 'triagem', ...SUPPORT_ROLES]);
 // marcadores dos ajustes de um card em Alteração depois que o revisor traduz o pedido (o gatilho do banco lê o primeiro)
 const TRADUCAO_ALTERACAO = '🧭 TRADUÇÃO DA ALTERAÇÃO';
 const ORIGINAL_ALTERACAO = '\n\n— Pedido original da equipe: ';
@@ -132,6 +135,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         `);
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_step TEXT`);
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_heartbeat_at TIMESTAMPTZ`);
+        // quem mandou a última etapa (o editor do card, ou a revisão/chefe conferindo): o selo do card mostra o nome
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_step_by UUID`);
         // usado pela divisão de pacotes (otimização e stories) em cards filhos; não existia em produção
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS parent_task_id UUID`);
         // parecer do revisor IA na Análise (POST /api/agent/tasks/:id/review); a entrega nova apaga
@@ -163,6 +168,83 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           )
         `);
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_messages_to ON agent_messages(to_user, read_at)`).catch(() => {});
+        // 🔥 Urgência (pedido do usuário, 31/10/2026): botão nos cards de Edição, Análise e Alteração, ou a alteração
+        // pedida com urgência na Revisão. Urgente = prioridade total: topo da fila dos agentes e recado na hora para
+        // quem está com o vídeo (editor; na Análise, a revisão) e para a chefe. Sai sozinha quando o card deixa o
+        // fluxo de edição (ex.: liberado para a Revisão). Gravado pelo navegador; os gatilhos fazem o resto.
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS urgent_at TIMESTAMPTZ`);
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS urgent_by UUID`);
+        await pool.query(`
+          CREATE OR REPLACE FUNCTION pulse_urgencia_limpa() RETURNS trigger AS $fn$
+          BEGIN
+            -- "Alteração com urgência" (a caixa do pedido de ajustes, em qualquer tela) liga a urgência
+            IF NEW.kanban_column = 'alteracao' AND NEW.immediate_alteration IS TRUE AND NEW.urgent_at IS NULL
+               AND (OLD.immediate_alteration IS NOT TRUE OR OLD.kanban_column IS DISTINCT FROM 'alteracao') THEN
+              NEW.urgent_at := now();
+            END IF;
+            IF NEW.urgent_at IS NOT NULL AND NEW.kanban_column NOT IN ('edicao', 'pre_revisao', 'alteracao') THEN
+              NEW.urgent_at := NULL;
+              NEW.urgent_by := NULL;
+            END IF;
+            RETURN NEW;
+          END
+          $fn$ LANGUAGE plpgsql
+        `);
+        await pool.query(`DROP TRIGGER IF EXISTS trg_content_tasks_urgencia_limpa ON content_tasks`);
+        await pool.query(`
+          CREATE TRIGGER trg_content_tasks_urgencia_limpa BEFORE UPDATE OF kanban_column, urgent_at, immediate_alteration ON content_tasks
+            FOR EACH ROW EXECUTE FUNCTION pulse_urgencia_limpa()
+        `);
+        await pool.query(`
+          CREATE OR REPLACE FUNCTION pulse_urgencia_avisa() RETURNS trigger AS $fn$
+          DECLARE
+            chefe UUID;
+            alvo UUID;
+            onde TEXT;
+          BEGIN
+            -- só quando a urgência acaba de ser ligada, ou o card urgente muda de coluna (ex.: entregue → Análise)
+            IF NEW.urgent_at IS NULL
+               OR (OLD.urgent_at IS NOT NULL AND OLD.kanban_column IS NOT DISTINCT FROM NEW.kanban_column) THEN
+              RETURN NULL;
+            END IF;
+            SELECT k.user_id INTO chefe FROM agent_keys k JOIN profiles p ON p.id = k.user_id
+              WHERE k.revoked_at IS NULL AND k.role = 'chefe' AND p.name NOT ILIKE 'severino%'
+              ORDER BY k.created_at DESC LIMIT 1;
+            onde := CASE NEW.kanban_column WHEN 'edicao' THEN 'Edição' WHEN 'pre_revisao' THEN 'Análise' ELSE 'Alteração' END;
+            IF NEW.kanban_column = 'pre_revisao' THEN
+              SELECT user_id INTO alvo FROM agent_keys WHERE revoked_at IS NULL AND role = 'revisor'
+                ORDER BY created_at DESC LIMIT 1;
+              IF alvo IS NOT NULL THEN
+                INSERT INTO agent_messages (from_user, to_user, body) VALUES (chefe, alvo,
+                  '🔥 URGENTE na Análise (prioridade total, marcado pela equipe): "' || NEW.title || '" · card ' || NEW.id ||
+                  '. Confira este antes de qualquer outro e mande o parecer na hora.');
+              END IF;
+            ELSE
+              SELECT user_id INTO alvo FROM agent_keys WHERE revoked_at IS NULL AND role = 'editor'
+                AND user_id IN (NEW.assigned_to, NEW.edited_by)
+                ORDER BY (user_id IS NOT DISTINCT FROM NEW.assigned_to) DESC LIMIT 1;
+              IF alvo IS NOT NULL THEN
+                INSERT INTO agent_messages (from_user, to_user, body) VALUES (chefe, alvo,
+                  '🔥 URGENTE em ' || onde || ' (prioridade total, marcado pela equipe): "' || NEW.title || '" · card ' || NEW.id ||
+                  '. Termine só o render ou a transcrição que já está rodando, pare o resto e faça este agora (pulse ver).');
+              END IF;
+            END IF;
+            IF chefe IS NOT NULL AND chefe IS DISTINCT FROM alvo THEN
+              INSERT INTO agent_messages (from_user, to_user, body) VALUES (NULL, chefe,
+                '🔥 URGENTE em ' || onde || ': "' || NEW.title || '" · card ' || NEW.id ||
+                CASE WHEN alvo IS NULL THEN '. Nenhum agente com o card: atribua agora.' ELSE '. O agente do card já foi avisado.' END);
+            END IF;
+            RETURN NULL;
+          EXCEPTION WHEN OTHERS THEN
+            RETURN NULL;
+          END
+          $fn$ LANGUAGE plpgsql
+        `);
+        await pool.query(`DROP TRIGGER IF EXISTS trg_content_tasks_urgencia_avisa ON content_tasks`);
+        await pool.query(`
+          CREATE TRIGGER trg_content_tasks_urgencia_avisa AFTER UPDATE OF urgent_at, kanban_column, immediate_alteration ON content_tasks
+            FOR EACH ROW EXECUTE FUNCTION pulse_urgencia_avisa()
+        `);
         // computadores onde os agentes rodam (Mac 1, Mac 2…) e os códigos de conexão de uso único
         await pool.query(`
           CREATE TABLE IF NOT EXISTS agent_machines (
@@ -1087,7 +1169,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
 
   const TASK_FIELDS = `
     t.id, t.title, t.kanban_column, t.content_type, t.client_id, t.drive_link, t.description,
-    t.adjustment_notes, t.script_alteration_notes, t.immediate_alteration, t.editing_priority,
+    t.adjustment_notes, t.script_alteration_notes, t.immediate_alteration, t.editing_priority, t.urgent_at,
     t.editing_deadline, t.alteration_deadline, t.assigned_to, t.edited_by, t.edited_video_link,
     t.editing_started_at, t.agent_step, t.agent_heartbeat_at, t.position, t.created_at,
     t.script_id, t.script_alteration_type,
@@ -1161,7 +1243,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
               OR (t.kanban_column = 'alteracao' AND t.edited_by = $1
                   AND (t.assigned_to IS NULL OR t.assigned_to = $1))
             )
-          ORDER BY (t.kanban_column = 'alteracao') DESC,
+          ORDER BY (t.urgent_at IS NOT NULL) DESC,
+                   (t.kanban_column = 'alteracao') DESC,
                    t.immediate_alteration DESC NULLS LAST,
                    t.editing_priority DESC NULLS LAST,
                    COALESCE(t.alteration_deadline, t.editing_deadline) ASC NULLS LAST,
@@ -1184,7 +1267,11 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     try {
       const agent = await verifyAgent(req);
       if (DESIGN_ONLY_ROLES.has(agent.role)) return res.status(403).json({ error: 'Agente de design não pega vídeo: use pulse arte fila / pulse arte pegar' });
-      if (NO_VIDEO_ROLES.has(agent.role)) return res.status(403).json({ error: 'A triagem não pega vídeo: só cria cards (pulse triagem card-edicao / card-arte)' });
+      if (NO_VIDEO_ROLES.has(agent.role)) {
+        return res.status(403).json({ error: SUPPORT_ROLES.has(agent.role)
+          ? 'Cor e som não pegam card: trabalham no projeto que o editor passa por recado (pulse etapa <card> mostra o que está fazendo)'
+          : 'A triagem não pega vídeo: só cria cards (pulse triagem card-edicao / card-arte)' });
+      }
       const pause = await pauseStateFor(agent.userId);
       if (pause.paused) {
         return res.status(423).json({ error: `Agentes pausados pelo sistema${pause.all ? '' : ` (${agent.name})`}. Não pegue cards novos.`, pause });
@@ -1231,12 +1318,24 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       const agent = await verifyAgent(req);
       const step = String(req.body?.step || '').slice(0, 120) || null;
       const { rowCount } = await pool.query(
-        `UPDATE content_tasks SET agent_step = COALESCE($3, agent_step), agent_heartbeat_at = now()
+        `UPDATE content_tasks SET agent_step = COALESCE($3, agent_step), agent_heartbeat_at = now(), agent_step_by = $2
           WHERE id = $1 AND assigned_to = $2`,
         [req.params.id, agent.userId, step]
       );
-      if (!rowCount) return res.status(409).json({ error: 'Este card não está com você' });
-      res.json({ ok: true });
+      if (rowCount) return res.json({ ok: true });
+      // etapa ao vivo de quem não é o dono do card (pedido do usuário, 31/10/2026: "nos cards do sistema mostre o
+      // que está sendo feito em cada um em tempo real"): a revisão conferindo na Análise, a chefe, ou um editor
+      // num card de outro agente. Só no fluxo de edição e nunca num card que está com uma pessoa da equipe.
+      if (step && ['editor', 'revisor', 'chefe', 'colorista', 'som'].includes(agent.role)) {
+        const r = await pool.query(
+          `UPDATE content_tasks SET agent_step = $3, agent_heartbeat_at = now(), agent_step_by = $2
+            WHERE id = $1 AND kanban_column IN ('edicao', 'alteracao', 'pre_revisao')
+              AND (assigned_to IS NULL OR assigned_to IN (SELECT user_id FROM agent_keys WHERE revoked_at IS NULL))`,
+          [req.params.id, agent.userId, step]
+        );
+        if (r.rowCount) return res.json({ ok: true });
+      }
+      res.status(409).json({ error: 'Este card não está com você' });
     } catch (error) {
       sendError(res, error);
     }

@@ -1,4 +1,4 @@
-import { agentReviewOf, type AgentCardFields } from '@/lib/agentCardStatus';
+import { agentReviewOf, analysisLiveStep, formatSince, type AgentCardFields } from '@/lib/agentCardStatus';
 import { usePulsePlusKnown } from '@/hooks/usePulsePlus';
 
 /**
@@ -17,6 +17,21 @@ export default function AgentReviewBadge({ task, users }: Props) {
   // parecer do agente: só quem tem Pulse Plus vê
   if (!pulsePlus || task.kanban_column !== 'pre_revisao') return null;
   const review = agentReviewOf(task);
+  const live = analysisLiveStep(task);
+  if (!review && live) {
+    // revisão conferindo agora (etapa ao vivo pelo `pulse etapa`)
+    const who = (users.find((u) => u.id === live.by)?.name || 'Revisão').trim().split(/\s+/)[0];
+    return (
+      <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-purple-600 via-fuchsia-500 to-purple-600" title={live.step}>
+        <span className="relative flex h-1.5 w-1.5 shrink-0">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+        </span>
+        <span className="text-[9px] font-black text-white uppercase tracking-widest shrink-0">Análise · {who}</span>
+        <span className="text-[9px] text-white/90 truncate">{live.step}{live.minutes < 1 ? ' · agora' : ` · há ${formatSince(live.minutes)}`}</span>
+      </div>
+    );
+  }
   if (!review) {
     return (
       <div className="flex items-center gap-1.5 px-3 py-1 bg-purple-500/90">

@@ -816,7 +816,7 @@ export default function SocialMediaDeliveries() {
     }
     // O vídeo vai mudar: a postagem automática pendente não pode sair com a versão reprovada
     await cancelLinkedScheduledPosts({ deliveryId: alterationDelivery.id, reason: 'o conteúdo foi enviado para alteração' });
-    toast.success(alterationImmediate ? '🚨 Enviado para alteração IMEDIATA!' : 'Enviado para alteração');
+    toast.success(alterationImmediate ? '🔥 Enviado para alteração com URGÊNCIA!' : 'Enviado para alteração');
     setAlterationDialogOpen(false);
     setAlterationDelivery(null);
     fetchData();
@@ -1953,7 +1953,7 @@ export default function SocialMediaDeliveries() {
                   id="sm-immediate-check"
                 />
                 <label htmlFor="sm-immediate-check" className="text-sm cursor-pointer">
-                  <span className="font-semibold text-destructive">🚨 Alteração Imediata</span>
+                  <span className="font-semibold text-destructive">🔥 Alteração com urgência (prioridade total)</span>
                   <span className="text-xs text-muted-foreground block">O editor será notificado para corrigir com prioridade máxima</span>
                 </label>
               </div>

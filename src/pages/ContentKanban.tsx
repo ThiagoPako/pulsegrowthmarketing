@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
+import UrgentBadge from '@/components/kanban/UrgentBadge';
 import AgentReviewBadge from '@/components/kanban/AgentReviewBadge';
 import AgentReadinessBadge from '@/components/kanban/AgentReadinessBadge';
 import AdjustmentRequestDialog from '@/components/kanban/AdjustmentRequestDialog';
 import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
 import KanbanColumnJumpBar, { kanbanColumnDomId } from '@/components/kanban/KanbanColumnJumpBar';
 import { useAgentIds } from '@/hooks/useAgentIds';
-import { agentReviewOf, agentWorkState, matchesOwnerFilter, ownerFilterOptions, type OwnerFilter } from '@/lib/agentCardStatus';
+import { agentReviewOf, agentWorkState, isUrgent, matchesOwnerFilter, ownerFilterOptions, type OwnerFilter } from '@/lib/agentCardStatus';
 import { usePulsePlus } from '@/hooks/usePulsePlus';
 import {
   ANALYSIS_FORBIDDEN_MSG, EDITING_NEEDS_FOOTAGE_MSG, SEND_TO_CLIENT_FORBIDDEN_MSG,
@@ -185,6 +186,8 @@ interface ContentTask {
   approval_sent_at: string | null;
   editing_priority: boolean;
   immediate_alteration: boolean;
+  urgent_at?: string | null;
+  agent_step_by?: string | null;
   review_deadline: string | null;
   alteration_deadline: string | null;
   approval_deadline: string | null;
@@ -598,7 +601,9 @@ export default function ContentKanban() {
       return Number.isFinite(time) ? time : Number.MAX_SAFE_INTEGER;
     };
     // fixados (equipe presencial) no topo das colunas de edição
-    const byPinned = (a: ContentTask, b: ContentTask) => Number(!!b.pinned_at) - Number(!!a.pinned_at);
+    // 🔥 urgentes acima de tudo (prioridade total), depois os fixados (equipe presencial)
+    const byPinned = (a: ContentTask, b: ContentTask) => (Number(isUrgent(b)) - Number(isUrgent(a)))
+      || (Number(!!b.pinned_at) - Number(!!a.pinned_at));
     Object.keys(map).forEach(colId => {
       map[colId].sort(sortMode === 'deadline'
         ? (a, b) => byPinned(a, b) || (Number(!!b.immediate_alteration) - Number(!!a.immediate_alteration))
@@ -1941,6 +1946,7 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
         )}
 
         {/* Agente de IA com o card (Edição/Alteração) e parecer da Análise */}
+        <UrgentBadge task={task} />
         <AgentWorkBadge task={task} users={users} agentIds={agentIds} />
         <AgentReviewBadge task={task} users={users} />
 

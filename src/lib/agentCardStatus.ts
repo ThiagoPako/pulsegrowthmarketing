@@ -28,10 +28,15 @@ export interface AgentCardFields {
   adjustment_notes?: string | null;
   agent_step?: string | null;
   agent_heartbeat_at?: string | null;
+  /** Quem mandou a última etapa (o editor do card, ou a revisão/chefe conferindo na Análise). */
+  agent_step_by?: string | null;
   agent_review_verdict?: string | null;
   agent_review_notes?: string | null;
   agent_review_at?: string | null;
   agent_review_by?: string | null;
+  /** 🔥 Urgência marcada pela equipe (Edição, Análise ou Alteração): prioridade total para os agentes. */
+  urgent_at?: string | null;
+  urgent_by?: string | null;
   /** "Fixar" no Kanban de Edição: reservado para a equipe presencial, a IA não pega. */
   pinned_at?: string | null;
 }
@@ -53,6 +58,8 @@ export interface AgentWork {
   step: string;
   /** Minutos desde o último sinal (null quando o card não tem sinal registrado). */
   minutes: number | null;
+  /** Quem está trabalhando: o autor da última etapa, ou o dono do card. */
+  by: string | null;
 }
 
 /**
@@ -66,14 +73,24 @@ export function agentWorkState(
 ): AgentWork | null {
   const column = task.kanban_column;
   if (column !== 'edicao' && column !== 'alteracao') return null;
-  if (!task.assigned_to || !task.agent_step) return null;
-  if (options.agentIds && options.agentIds.size > 0 && !options.agentIds.has(task.assigned_to)) return null;
+  if (!task.agent_step) return null;
   const now = options.now ?? Date.now();
   const at = task.agent_heartbeat_at ? new Date(task.agent_heartbeat_at).getTime() : NaN;
   const minutes = Number.isFinite(at) ? Math.max(0, Math.round((now - at) / 60000)) : null;
   const step = task.agent_step === 'iniciado' ? 'começando' : task.agent_step;
   const state = minutes !== null && minutes < AGENT_SIGNAL_STALE_MINUTES ? 'working' : 'stale';
-  return { state, column, step, minutes };
+  const hasAgents = !!options.agentIds && options.agentIds.size > 0;
+  if (!task.assigned_to) {
+    // card sem dono (alteração esperando o editor) com um agente mexendo agora: só enquanto o sinal for recente
+    if (state !== 'working' || !task.agent_step_by || (hasAgents && !isAgent(options.agentIds, task.agent_step_by))) return null;
+    return { state, column, step, minutes, by: task.agent_step_by };
+  }
+  if (hasAgents && !isAgent(options.agentIds, task.assigned_to)) return null;
+  // etapa recente de outro agente (ex.: a chefe ou um colega no card) aparece com o nome dele; senão, o dono
+  const by = state === 'working' && task.agent_step_by && (!hasAgents || isAgent(options.agentIds, task.agent_step_by))
+    ? task.agent_step_by
+    : task.assigned_to;
+  return { state, column, step, minutes, by };
 }
 
 export type ReadinessKey = 'brutos' | 'cliente' | 'tipo' | 'roteiro' | 'prazo' | 'ajustes' | 'fixado';
@@ -160,6 +177,20 @@ export interface AgentReview {
 }
 
 /** Parecer gravado pelo revisor IA (POST /api/agent/tasks/:id/review). Uma entrega nova apaga o parecer. */
+/**
+ * Conferência ao vivo na Análise: a revisão (ou a chefe) mandou etapa nos últimos 30 min, depois da entrega.
+ * A entrega grava agent_step = 'pré-revisão' em nome do editor; só conta a etapa de outra pessoa.
+ */
+export function analysisLiveStep(task: AgentCardFields, now = Date.now()): { step: string; by: string; minutes: number } | null {
+  if (task.kanban_column !== 'pre_revisao' || !task.agent_step || !task.agent_step_by) return null;
+  if (task.agent_step === 'pré-revisão' || task.agent_step_by === task.edited_by) return null;
+  const at = task.agent_heartbeat_at ? new Date(task.agent_heartbeat_at).getTime() : NaN;
+  if (!Number.isFinite(at)) return null;
+  const minutes = Math.max(0, Math.round((now - at) / 60000));
+  if (minutes >= AGENT_SIGNAL_STALE_MINUTES) return null;
+  return { step: task.agent_step, by: task.agent_step_by, minutes };
+}
+
 export function agentReviewOf(task: AgentCardFields): AgentReview | null {
   const verdict = (task.agent_review_verdict || '').trim();
   if (verdict !== 'ok' && verdict !== 'ajustes') return null;
@@ -218,4 +249,11 @@ export function matchesOwnerFilter(
     default:
       return true;
   }
+}
+
+/** Colunas em que a urgência vale (fora delas o servidor apaga a marca sozinho). */
+export const URGENT_COLUMNS = ['edicao', 'pre_revisao', 'alteracao'] as const;
+
+export function isUrgent(task: Pick<AgentCardFields, 'urgent_at' | 'kanban_column'>): boolean {
+  return !!task.urgent_at && (URGENT_COLUMNS as readonly string[]).includes(String(task.kanban_column));
 }

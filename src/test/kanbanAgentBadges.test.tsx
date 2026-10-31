@@ -23,13 +23,29 @@ describe('AgentWorkBadge', () => {
   it('mostra o agente editando, com a etapa', () => {
     render(<AgentWorkBadge task={{ kanban_column: 'edicao', assigned_to: BEA, agent_step: 'cortando', agent_heartbeat_at: ago(3) }} users={users} agentIds={agents} />);
     expect(screen.getByText(/Editando · Beatriz/)).toBeInTheDocument();
-    expect(screen.getByText('cortando')).toBeInTheDocument();
+    expect(screen.getByText('cortando · há 3 min')).toBeInTheDocument();
   });
 
   it('na alteração vira "Em correção"', () => {
     render(<AgentWorkBadge task={{ kanban_column: 'alteracao', assigned_to: BEA, agent_step: 'iniciado', agent_heartbeat_at: ago(1) }} users={users} agentIds={agents} />);
     expect(screen.getByText(/Em correção · Beatriz/)).toBeInTheDocument();
-    expect(screen.getByText('começando')).toBeInTheDocument();
+    expect(screen.getByText('começando · há 1 min')).toBeInTheDocument();
+  });
+
+  it('etapa recente de outro agente mostra o nome de quem está mexendo', () => {
+    const MARC = 'agent-marc';
+    render(<AgentWorkBadge task={{ kanban_column: 'alteracao', assigned_to: BEA, agent_step: 'cor com a Íris', agent_step_by: MARC, agent_heartbeat_at: ago(0) }}
+      users={[...users, { id: MARC, name: 'Marcely Chefe' }]} agentIds={new Set([BEA, MARC])} />);
+    expect(screen.getByText(/Em correção · Marcely/)).toBeInTheDocument();
+    expect(screen.getByText('cor com a Íris · agora')).toBeInTheDocument();
+  });
+
+  it('alteração sem dono com agente mexendo agora aparece; sinal velho não', () => {
+    const live = render(<AgentWorkBadge task={{ kanban_column: 'alteracao', assigned_to: null, agent_step: 'traduzindo o pedido', agent_step_by: BEA, agent_heartbeat_at: ago(2) }} users={users} agentIds={agents} />);
+    expect(screen.getByText(/Em correção · Beatriz/)).toBeInTheDocument();
+    live.unmount();
+    const old = render(<AgentWorkBadge task={{ kanban_column: 'alteracao', assigned_to: null, agent_step: 'traduzindo o pedido', agent_step_by: BEA, agent_heartbeat_at: ago(50) }} users={users} agentIds={agents} />);
+    expect(old.container).toBeEmptyDOMElement();
   });
 
   it('sem sinal há 30 min ou mais aparece como parado', () => {
@@ -45,6 +61,17 @@ describe('AgentWorkBadge', () => {
 });
 
 describe('AgentReviewBadge', () => {
+  it('Análise com a revisão conferindo agora mostra a etapa ao vivo', () => {
+    render(<AgentReviewBadge task={{ kanban_column: 'pre_revisao', edited_by: BEA, agent_step: 'folha a 30 qps nas trocas', agent_step_by: 'uriel', agent_heartbeat_at: ago(4) }} users={users} />);
+    expect(screen.getByText(/Análise · Uriel/)).toBeInTheDocument();
+    expect(screen.getByText('folha a 30 qps nas trocas · há 4 min')).toBeInTheDocument();
+  });
+
+  it('a etapa da entrega (pré-revisão do editor) não conta como conferência', () => {
+    render(<AgentReviewBadge task={{ kanban_column: 'pre_revisao', edited_by: BEA, agent_step: 'pré-revisão', agent_step_by: BEA, agent_heartbeat_at: ago(1) }} users={users} />);
+    expect(screen.getByText(/aguardando parecer/)).toBeInTheDocument();
+  });
+
   it('Análise sem parecer: aguardando', () => {
     render(<AgentReviewBadge task={{ kanban_column: 'pre_revisao' }} users={users} />);
     expect(screen.getByText(/aguardando parecer/)).toBeInTheDocument();
@@ -99,5 +126,22 @@ describe('sem Pulse Plus', () => {
     expect(waiting.container).toBeEmptyDOMElement();
     const ready = render(<AgentReadinessBadge task={base} agentIds={agents} detailed />);
     expect(ready.container).toBeEmptyDOMElement();
+  });
+});
+
+describe('UrgentBadge', () => {
+  it('aparece em Edição, Análise e Alteração com a urgência ligada', async () => {
+    const { default: UrgentBadge } = await import('@/components/kanban/UrgentBadge');
+    for (const col of ['edicao', 'pre_revisao', 'alteracao']) {
+      const r = render(<UrgentBadge task={{ kanban_column: col, urgent_at: ago(1) }} />);
+      expect(screen.getByText(/Urgente · prioridade total/)).toBeInTheDocument();
+      r.unmount();
+    }
+  });
+
+  it('some fora do fluxo de edição ou sem a marca', async () => {
+    const { default: UrgentBadge } = await import('@/components/kanban/UrgentBadge');
+    expect(render(<UrgentBadge task={{ kanban_column: 'revisao', urgent_at: ago(1) }} />).container).toBeEmptyDOMElement();
+    expect(render(<UrgentBadge task={{ kanban_column: 'edicao', urgent_at: null }} />).container).toBeEmptyDOMElement();
   });
 });

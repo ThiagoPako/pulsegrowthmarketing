@@ -68,6 +68,9 @@ const DESIGN_ONLY_ROLES = new Set(['designer', 'revisor_arte']);
 const SUPPORT_ROLES = new Set(['colorista', 'som']);
 // quem não edita vídeo: fila de edição vazia e o claim recusa
 const NO_VIDEO_ROLES = new Set([...DESIGN_ONLY_ROLES, 'triagem', ...SUPPORT_ROLES]);
+// marcadores dos ajustes de um card em Alteração depois que o revisor traduz o pedido (o gatilho do banco lê o primeiro)
+const TRADUCAO_ALTERACAO = '🧭 TRADUÇÃO DA ALTERAÇÃO';
+const ORIGINAL_ALTERACAO = '\n\n— Pedido original da equipe: ';
 const TZ = 'America/Sao_Paulo';
 const WEEKDAY_TO_KEY = { Sun: 'domingo', Mon: 'segunda', Tue: 'terca', Wed: 'quarta', Thu: 'quinta', Fri: 'sexta', Sat: 'sabado' };
 
@@ -295,6 +298,70 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             paused_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             reason TEXT
           )
+        `);
+        // Alteração pedida pelo sistema é prioridade (pedido do dono em 30/10/2026). O banco avisa na hora, sem ninguém
+        // consultar a fila: card que entra em Alteração (ou ganha ajustes novos lá) vai primeiro ao revisor, que traduz a
+        // escrita da equipe no que fazer com precisão (POST /api/agent/tasks/:id/translation grava a tradução no começo dos
+        // ajustes, com o marcador TRADUCAO_ALTERACAO); ajustes que já começam pelo marcador vão ao agente do card
+        // (atribuído, senão quem editou). Sem revisor ativo, vai direto ao agente; card sem agente, à chefe atribuir.
+        // O `pulse esperar` de quem recebe acorda com o recado. Falha aqui nunca impede a mudança do card.
+        await pool.query(`
+          CREATE OR REPLACE FUNCTION pulse_alteracao_avisa_agente() RETURNS trigger
+          LANGUAGE plpgsql AS $fn$
+          DECLARE
+            destino UUID;
+            revisor UUID;
+            editor TEXT;
+            cliente TEXT;
+            texto TEXT;
+            chefe RECORD;
+          BEGIN
+            BEGIN
+              IF NEW.kanban_column = 'alteracao' AND (OLD.kanban_column IS DISTINCT FROM 'alteracao'
+                  OR OLD.adjustment_notes IS DISTINCT FROM NEW.adjustment_notes) THEN
+                SELECT k.user_id, trim(p.name) INTO destino, editor FROM agent_keys k JOIN profiles p ON p.id = k.user_id
+                 WHERE k.revoked_at IS NULL AND k.role = 'editor' AND k.user_id IN (NEW.assigned_to, NEW.edited_by)
+                 ORDER BY (k.user_id = NEW.assigned_to) DESC LIMIT 1;
+                SELECT trim(c.company_name) INTO cliente FROM clients c WHERE c.id = NEW.client_id;
+                IF coalesce(NEW.adjustment_notes, '') NOT LIKE '${TRADUCAO_ALTERACAO}%' THEN
+                  SELECT user_id INTO revisor FROM agent_keys WHERE revoked_at IS NULL AND role = 'revisor' LIMIT 1;
+                END IF;
+                IF revisor IS NOT NULL THEN
+                  INSERT INTO agent_messages (from_user, to_user, body) VALUES (NULL, revisor,
+                    '🧭 TRADUZIR ALTERAÇÃO antes do editor: ' || NEW.id || ' · ' || coalesce(cliente, 'avulso') || ' — '
+                    || coalesce(NEW.title, '') || ' (editor: ' || coalesce(editor, 'sem agente') || '). A equipe escreveu: "'
+                    || coalesce(left(regexp_replace(NEW.adjustment_notes, '\\s+', ' ', 'g'), 1500), '')
+                    || '". Veja a versão anterior nos mm:ss citados e grave o que fazer com precisão (mm:ss, o quê, como, o que'
+                    || ' não mexer) com: pulse traduzir ' || NEW.id || ' "…". O sistema avisa o editor em seguida.');
+                  RETURN NULL;
+                END IF;
+                texto := '🔧 ALTERAÇÃO PRIORITÁRIA pelo sistema: ' || NEW.id || ' · ' || coalesce(cliente, 'avulso') || ' — '
+                  || coalesce(NEW.title, '') || '. Ajustes: "'
+                  || coalesce(left(regexp_replace(NEW.adjustment_notes, '\\s+', ' ', 'g'), 1500), 'ver no card')
+                  || '". Regra do dono: alteração do sistema vem antes de card novo (termine só o render/transcrição em'
+                  || ' andamento); só fica atrás de pedido que ele fez direto no seu chat.';
+                IF destino IS NOT NULL THEN
+                  INSERT INTO agent_messages (from_user, to_user, body) VALUES (NULL, destino, texto);
+                END IF;
+                -- sem agente no card: a chefe atribui (a chave de triagem do Severino também é 'chefe' e fica de fora)
+                IF destino IS NULL THEN
+                  FOR chefe IN SELECT DISTINCT k.user_id FROM agent_keys k JOIN profiles p ON p.id = k.user_id
+                                WHERE k.revoked_at IS NULL AND k.role = 'chefe' AND p.name NOT ILIKE 'severino%' LOOP
+                    INSERT INTO agent_messages (from_user, to_user, body) VALUES (NULL, chefe.user_id, texto || ' Card sem agente: atribua.');
+                  END LOOP;
+                END IF;
+              END IF;
+            EXCEPTION WHEN OTHERS THEN
+              RAISE WARNING 'pulse_alteracao_avisa_agente: %', SQLERRM;
+            END;
+            RETURN NULL;
+          END
+          $fn$
+        `);
+        await pool.query(`DROP TRIGGER IF EXISTS trg_content_tasks_alteracao_agente ON content_tasks`);
+        await pool.query(`
+          CREATE TRIGGER trg_content_tasks_alteracao_agente AFTER UPDATE OF kanban_column, adjustment_notes
+          ON content_tasks FOR EACH ROW EXECUTE FUNCTION pulse_alteracao_avisa_agente()
         `);
       })().catch((error) => {
         schemaPromise = null;
@@ -1321,6 +1388,32 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
 
   // ── Organização (chefe): buscar e mover cards do fluxo de edição ──
   const MOVABLE = new Set(['edicao', 'revisao', 'alteracao']);
+
+  // Tradução da alteração (pedido do dono em 30/10/2026): o revisor lê o que a equipe escreveu e a versão anterior e
+  // grava no card o que fazer com precisão. A tradução entra no começo dos ajustes, com o marcador, e o pedido original
+  // fica embaixo (uma tradução nova troca a anterior e mantém o original); o gatilho do banco então avisa o editor.
+  app.post('/api/agent/tasks/:id/translation', async (req, res) => {
+    try {
+      const agent = await verifyAgent(req);
+      if (!['revisor', 'chefe'].includes(agent.role)) return res.status(403).json({ error: 'Só o revisor ou a chefe traduzem alterações' });
+      const texto = String(req.body?.text || '').trim().slice(0, 3500);
+      if (texto.length < 20) return res.status(400).json({ error: 'Escreva a tradução (o que fazer, onde em mm:ss, como)' });
+      const { rows } = await pool.query(
+        `UPDATE content_tasks
+            SET adjustment_notes = $2 || $3 || coalesce(nullif(split_part(coalesce(adjustment_notes, ''), $3, 2), ''), adjustment_notes, ''),
+                updated_at = now()
+          WHERE id = $1 AND kanban_column = 'alteracao'
+          RETURNING title`,
+        [req.params.id, `${TRADUCAO_ALTERACAO} (${(agent.name || 'revisor').trim()}):\n${texto}`, ORIGINAL_ALTERACAO]
+      );
+      if (!rows.length) return res.status(409).json({ error: 'O card não está em Alteração' });
+      await pool.query('INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+        [req.params.id, agent.userId, 'alteracao_traduzida', texto.slice(0, 500)]).catch(() => {});
+      res.json({ ok: true, title: rows[0].title });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
 
   // client_portal_contents.content_task_id (criada pelo server.mjs na subida): liga o conteúdo do
   // portal ao card. Só memoriza o "sim", porque a coluna pode surgir depois desta checagem.

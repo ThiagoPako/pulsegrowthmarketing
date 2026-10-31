@@ -214,6 +214,54 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             reason TEXT
           )
         `);
+        // Alteração pedida pelo sistema é prioridade (pedido do dono em 30/10/2026). O banco avisa na hora: card que entra
+        // em Alteração (ou ganha ajustes novos lá) vira recado ao agente do card (atribuído, senão quem editou); card sem
+        // agente vai para a chefe atribuir. O `pulse esperar` do agente acorda com o recado, sem
+        // ninguém ficar consultando a fila. Falha aqui nunca impede a mudança do card.
+        await pool.query(`
+          CREATE OR REPLACE FUNCTION pulse_alteracao_avisa_agente() RETURNS trigger
+          LANGUAGE plpgsql AS $fn$
+          DECLARE
+            destino UUID;
+            cliente TEXT;
+            texto TEXT;
+            chefe RECORD;
+          BEGIN
+            BEGIN
+              IF NEW.kanban_column = 'alteracao' AND (OLD.kanban_column IS DISTINCT FROM 'alteracao'
+                  OR OLD.adjustment_notes IS DISTINCT FROM NEW.adjustment_notes) THEN
+                SELECT k.user_id INTO destino FROM agent_keys k
+                 WHERE k.revoked_at IS NULL AND k.role <> 'chefe' AND k.user_id IN (NEW.assigned_to, NEW.edited_by)
+                 ORDER BY (k.user_id = NEW.assigned_to) DESC LIMIT 1;
+                SELECT trim(c.company_name) INTO cliente FROM clients c WHERE c.id = NEW.client_id;
+                texto := '🔧 ALTERAÇÃO PRIORITÁRIA pelo sistema: ' || NEW.id || ' · ' || coalesce(cliente, 'avulso') || ' — '
+                  || coalesce(NEW.title, '') || '. Ajustes: "'
+                  || coalesce(left(regexp_replace(NEW.adjustment_notes, '\\s+', ' ', 'g'), 600), 'ver no card')
+                  || '". Regra do dono: alteração do sistema vem antes de card novo (termine só o render/transcrição em'
+                  || ' andamento); só fica atrás de pedido que ele fez direto no seu chat.';
+                IF destino IS NOT NULL THEN
+                  INSERT INTO agent_messages (from_user, to_user, body) VALUES (NULL, destino, texto);
+                END IF;
+                -- sem agente no card: a chefe atribui (a chave de triagem do Severino também é 'chefe' e fica de fora)
+                IF destino IS NULL THEN
+                  FOR chefe IN SELECT DISTINCT k.user_id FROM agent_keys k JOIN profiles p ON p.id = k.user_id
+                                WHERE k.revoked_at IS NULL AND k.role = 'chefe' AND p.name NOT ILIKE 'severino%' LOOP
+                    INSERT INTO agent_messages (from_user, to_user, body) VALUES (NULL, chefe.user_id, texto || ' Card sem agente: atribua.');
+                  END LOOP;
+                END IF;
+              END IF;
+            EXCEPTION WHEN OTHERS THEN
+              RAISE WARNING 'pulse_alteracao_avisa_agente: %', SQLERRM;
+            END;
+            RETURN NULL;
+          END
+          $fn$
+        `);
+        await pool.query(`DROP TRIGGER IF EXISTS trg_content_tasks_alteracao_agente ON content_tasks`);
+        await pool.query(`
+          CREATE TRIGGER trg_content_tasks_alteracao_agente AFTER UPDATE OF kanban_column, adjustment_notes
+          ON content_tasks FOR EACH ROW EXECUTE FUNCTION pulse_alteracao_avisa_agente()
+        `);
       })().catch((error) => {
         schemaPromise = null;
         throw error;

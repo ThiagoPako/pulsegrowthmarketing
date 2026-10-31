@@ -8,6 +8,8 @@
 //   POST /api/agent/whatsapp/send                (chefe) multipart: file (PNG/JPG/WEBP/PDF/MP4, até 60 MB),
 //        to (nome ou id do cliente), text, purpose (geral|aprovacao|assistente), confirm=1
 //        Sem confirm=1 só responde o que seria enviado (cliente, grupo, conexão), sem pôr nada na fila.
+//   POST /api/agent/whatsapp/team                (chefe) { to (nome de quem está no Assistente PULSE), text, confirm }:
+//        aviso no privado de alguém da equipe pelo número do PULSE; sem confirm, só a prévia.
 //
 // Só manda para o grupo cadastrado de um cliente: número ou grupo digitado à mão não passa por aqui.
 
@@ -16,6 +18,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import multer from 'multer';
 import { enqueueWhatsApp } from './whatsapp/shared.mjs';
+import { sendToNumber, remember, logEvent } from './assistant/common.mjs';
 
 const MEDIA_EXT = { '.png': 'png', '.jpg': 'jpg', '.jpeg': 'jpg', '.webp': 'webp', '.pdf': 'pdf', '.mp4': 'mp4' };
 const PURPOSES = new Set(['geral', 'aprovacao', 'assistente']);
@@ -138,5 +141,32 @@ export function registerAgentWhatsAppRoutes(app, { pool, uploadRoot, publicUploa
         sendError(res, error);
       }
     });
+  });
+
+  // Aviso a alguém da equipe no privado, pelo número do PULSE (pedido do usuário, 31/10/2026: "avisa a Naay pra ela
+  // olhar o sistema"). Só para quem está cadastrado no Assistente PULSE (assistant_numbers ativo), pelo nome.
+  //   POST /api/agent/whatsapp/team  { to (nome da pessoa), text, confirm }  — sem confirm, só a prévia
+  app.post('/api/agent/whatsapp/team', async (req, res) => {
+    try {
+      const agent = await chefe(req);
+      const to = String(req.body?.to || '').trim();
+      const text = String(req.body?.text || '').trim().slice(0, 1500);
+      const confirm = ['1', 'true', 'sim'].includes(String(req.body?.confirm || '').toLowerCase());
+      if (!to || !text) throw Object.assign(new Error('Diga a pessoa (to) e o texto (text)'), { status: 400 });
+      const { rows } = await pool.query(`SELECT * FROM assistant_numbers WHERE active ORDER BY name`);
+      const exact = rows.filter((n) => semAcento(n.name) === semAcento(to));
+      const list = exact.length ? exact : rows.filter((n) => semAcento(n.name).includes(semAcento(to)));
+      if (!list.length) throw Object.assign(new Error(`Ninguém da equipe com "${to}" no Assistente PULSE (${rows.map((n) => n.name).join(', ')})`), { status: 404 });
+      if (list.length > 1) throw Object.assign(new Error(`"${to}" bate com ${list.map((n) => n.name).join(', ')}. Use o nome exato.`), { status: 409 });
+      const number = list[0];
+      const body = `${text}\n\n— Marcely (agentes da Pulse)`;
+      if (!confirm) return res.json({ dry_run: true, to: number.name, text: body });
+      await sendToNumber(pool, number, body);
+      await remember(pool, number.id, 'assistant', body);
+      await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'aviso_agente', text: text.slice(0, 200), detail: { agente: agent.name || null } });
+      res.json({ success: true, to: number.name, text: body });
+    } catch (error) {
+      sendError(res, error);
+    }
   });
 }

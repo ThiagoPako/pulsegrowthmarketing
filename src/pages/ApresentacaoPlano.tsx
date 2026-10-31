@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useParams, useLocation, Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -292,6 +292,7 @@ export default function ApresentacaoPlano() {
     const goToPlan = (key: string) => navigate(buildPlanUrl(key));
 
     return (
+      <ScrollLayoutContext.Provider value={true}>
       <div className="min-h-screen w-full bg-background text-foreground relative scroll-smooth">
         <div className="absolute inset-0 -z-10 pointer-events-none">
           <div className="absolute top-0 -left-32 w-[400px] h-[400px] rounded-full bg-primary/15 blur-3xl" />
@@ -299,7 +300,7 @@ export default function ApresentacaoPlano() {
         </div>
 
         {/* TOP BAR */}
-        <div className="sticky top-0 z-50 flex items-center justify-between gap-2 px-3 py-2 bg-background/90 backdrop-blur border-b border-border">
+        <div className="sticky top-0 z-50 flex items-center justify-between gap-2 px-3 py-2 bg-background/95 border-b border-border">
           <div className="flex items-center gap-2">
             <img src={LOGO_URL} alt="Pulse" className="h-7" />
             <Badge variant="outline" className="text-xs">
@@ -398,7 +399,7 @@ export default function ApresentacaoPlano() {
         </div>
 
         {/* Nav planos fixa no rodapé (mobile / tablet) */}
-        <div className="lg:hidden sticky bottom-0 z-50 flex items-center justify-between gap-2 px-3 py-2 bg-background/90 backdrop-blur border-t border-border">
+        <div className="lg:hidden sticky bottom-0 z-50 flex items-center justify-between gap-2 px-3 py-2 bg-background/95 border-t border-border">
           {prevKey ? (
             <button onClick={goPrevPlan} className="h-10 px-3 rounded-full border border-border bg-background flex items-center gap-1 text-sm">
               <ArrowLeft className="h-4 w-4" /> Anterior
@@ -424,6 +425,7 @@ export default function ApresentacaoPlano() {
           )}
         </div>
       </div>
+      </ScrollLayoutContext.Provider>
     );
   }
 
@@ -570,6 +572,11 @@ const slideVariants = {
 };
 const slideTransition = { duration: 0.5, ease: [0.22, 1, 0.36, 1] as any };
 
+// No layout de scroll único (celular e link público) as etapas ficam empilhadas na página: caixa com
+// rolagem própria dentro dela prende o dedo e a página "trava". Lá a etapa cresce com o conteúdo.
+const ScrollLayoutContext = createContext(false);
+const useStageBox = (slideClass: string) => (useContext(ScrollLayoutContext) ? 'w-full' : slideClass);
+
 function Slide({ children }: { children: React.ReactNode }) {
   return (
     <motion.div
@@ -597,9 +604,10 @@ function StageIntro() {
     { icon: Film, title: 'Produção audiovisual própria', desc: 'Videomakers profissionais com método "Frase a Frase" — gravamos com quem nunca gravou.' },
     { icon: BarChart3, title: 'Operação comercial integrada', desc: 'CRM, portal do cliente, relatórios e acompanhamento até o fechamento da venda.' },
   ];
+  const boxClass = useStageBox('w-full max-h-[calc(100dvh-9rem)] overflow-y-auto pr-1');
   return (
     <Slide>
-      <div className="w-full max-h-[calc(100dvh-9rem)] overflow-y-auto pr-1">
+      <div className={boxClass}>
         <div className="text-center max-w-6xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
             <Badge className="mb-4 bg-primary/10 text-primary border-primary/30 px-3 py-1">
@@ -885,9 +893,10 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
   ].filter((h) => h.show);
 
 
+  const boxClass = useStageBox('w-full max-h-[calc(100dvh-10rem)] overflow-y-auto pr-2');
   return (
     <Slide>
-      <div className="w-full max-h-[calc(100dvh-10rem)] overflow-y-auto pr-2">
+      <div className={boxClass}>
         <div className="text-center mb-5">
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 }}>
             <Badge className="bg-primary text-primary-foreground mb-3 text-sm px-4 py-1.5">

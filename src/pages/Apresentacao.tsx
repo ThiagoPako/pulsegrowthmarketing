@@ -85,9 +85,9 @@ export default function Apresentacao() {
 
       {/* HERO */}
       <section className="relative pt-20 pb-12 overflow-hidden">
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute top-0 -left-32 w-[600px] h-[600px] rounded-full bg-primary/20 blur-3xl animate-pulse" />
-          <div className="absolute bottom-0 -right-32 w-[600px] h-[600px] rounded-full bg-primary/30 blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute inset-0 -z-10 pointer-events-none">
+          <div className="absolute top-0 -left-32 w-[600px] h-[600px] rounded-full bg-primary/20 blur-3xl" />
+          <div className="absolute bottom-0 -right-32 w-[600px] h-[600px] rounded-full bg-primary/30 blur-3xl" />
         </div>
 
         <div className="container mx-auto px-4 md:px-6 text-center pt-14 md:pt-0">

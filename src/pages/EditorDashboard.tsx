@@ -33,6 +33,7 @@ import { EDITOR_SCORE, EDITOR_APPROVED_COLUMNS, getEditorScoreBreakdown, getEdit
 import { useCity } from '@/contexts/CityContext';
 import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
 import UrgentBadge from '@/components/kanban/UrgentBadge';
+import WaitingBadge from '@/components/kanban/WaitingBadge';
 import { useAgentIds } from '@/hooks/useAgentIds';
 import { usePulsePlus } from '@/hooks/usePulsePlus';
 import { agentWorkState, formatSince } from '@/lib/agentCardStatus';
@@ -67,6 +68,8 @@ export interface EditorTask {
   editing_priority: boolean;
   immediate_alteration: boolean;
   urgent_at?: string | null;
+  waiting_material_at?: string | null;
+  waiting_material_note?: string | null;
   agent_step_by?: string | null;
   review_deadline: string | null;
   alteration_deadline: string | null;
@@ -1435,6 +1438,7 @@ function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTa
       )}
 
       <UrgentBadge task={task} />
+      <WaitingBadge task={task} />
       <AgentWorkBadge task={task} users={users || []} agentIds={agentIds} />
       <div className="h-1" style={{ backgroundColor: `hsl(${clientColor})` }} />
       <div className="p-3 space-y-2.5">

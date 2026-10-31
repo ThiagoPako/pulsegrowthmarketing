@@ -172,6 +172,10 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         // pedida com urgência na Revisão. Urgente = prioridade total: topo da fila dos agentes e recado na hora para
         // quem está com o vídeo (editor; na Análise, a revisão) e para a chefe. Sai sozinha quando o card deixa o
         // fluxo de edição (ex.: liberado para a Revisão). Gravado pelo navegador; os gatilhos fazem o resto.
+        // ⏸ Aguardando material (31/10/2026): card em Edição/Alteração que não dá para fazer até chegar algo (bruto,
+        // projeto em outro computador, resposta do cliente). Fica no fim da fila e não trava o editor de pegar outro.
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS waiting_material_at TIMESTAMPTZ`);
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS waiting_material_note TEXT`);
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS urgent_at TIMESTAMPTZ`);
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS urgent_by UUID`);
         await pool.query(`
@@ -181,6 +185,12 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             IF NEW.kanban_column = 'alteracao' AND NEW.immediate_alteration IS TRUE AND NEW.urgent_at IS NULL
                AND (OLD.immediate_alteration IS NOT TRUE OR OLD.kanban_column IS DISTINCT FROM 'alteracao') THEN
               NEW.urgent_at := now();
+            END IF;
+            -- aguardando material sai sozinho quando o card sai de Edição/Alteração ou quando o link dos brutos chega
+            IF NEW.waiting_material_at IS NOT NULL AND (NEW.kanban_column NOT IN ('edicao', 'alteracao')
+               OR (COALESCE(OLD.drive_link, '') = '' AND COALESCE(NEW.drive_link, '') <> '')) THEN
+              NEW.waiting_material_at := NULL;
+              NEW.waiting_material_note := NULL;
             END IF;
             IF NEW.urgent_at IS NOT NULL AND NEW.kanban_column NOT IN ('edicao', 'pre_revisao', 'alteracao') THEN
               NEW.urgent_at := NULL;
@@ -192,7 +202,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         `);
         await pool.query(`DROP TRIGGER IF EXISTS trg_content_tasks_urgencia_limpa ON content_tasks`);
         await pool.query(`
-          CREATE TRIGGER trg_content_tasks_urgencia_limpa BEFORE UPDATE OF kanban_column, urgent_at, immediate_alteration ON content_tasks
+          CREATE TRIGGER trg_content_tasks_urgencia_limpa BEFORE UPDATE OF kanban_column, urgent_at, immediate_alteration, drive_link ON content_tasks
             FOR EACH ROW EXECUTE FUNCTION pulse_urgencia_limpa()
         `);
         await pool.query(`
@@ -1169,7 +1179,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
 
   const TASK_FIELDS = `
     t.id, t.title, t.kanban_column, t.content_type, t.client_id, t.drive_link, t.description,
-    t.adjustment_notes, t.script_alteration_notes, t.immediate_alteration, t.editing_priority, t.urgent_at,
+    t.adjustment_notes, t.script_alteration_notes, t.immediate_alteration, t.editing_priority, t.urgent_at, t.waiting_material_at, t.waiting_material_note,
     t.editing_deadline, t.alteration_deadline, t.assigned_to, t.edited_by, t.edited_video_link,
     t.editing_started_at, t.agent_step, t.agent_heartbeat_at, t.position, t.created_at,
     t.script_id, t.script_alteration_type,
@@ -1243,7 +1253,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
               OR (t.kanban_column = 'alteracao' AND t.edited_by = $1
                   AND (t.assigned_to IS NULL OR t.assigned_to = $1))
             )
-          ORDER BY (t.urgent_at IS NOT NULL) DESC,
+          ORDER BY (t.waiting_material_at IS NULL) DESC,
+                   (t.urgent_at IS NOT NULL) DESC,
                    (t.kanban_column = 'alteracao') DESC,
                    t.immediate_alteration DESC NULLS LAST,
                    t.editing_priority DESC NULLS LAST,
@@ -1336,6 +1347,35 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         if (r.rowCount) return res.json({ ok: true });
       }
       res.status(409).json({ error: 'Este card não está com você' });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // ⏸ Aguardando material: o editor do card, a revisão ou a chefe marcam (waiting: true + motivo) e desmarcam
+  app.post('/api/agent/tasks/:id/waiting', async (req, res) => {
+    try {
+      const agent = await verifyAgent(req);
+      if (!['editor', 'revisor', 'chefe'].includes(agent.role)) return res.status(403).json({ error: 'Só editor, revisão ou chefe' });
+      const waiting = req.body?.waiting !== false;
+      const note = String(req.body?.note || '').trim().slice(0, 500);
+      if (waiting && !note) return res.status(400).json({ error: 'Diga o que falta (ex.: "projeto está no Mac")' });
+      const { rows } = await pool.query(
+        `SELECT id, title, kanban_column, assigned_to, edited_by FROM content_tasks WHERE id::text = $1 OR id::text LIKE $1 || '%' LIMIT 2`,
+        [String(req.params.id).trim()]
+      );
+      if (rows.length !== 1) return res.status(rows.length ? 400 : 404).json({ error: rows.length ? 'Mais de um card com esse começo de id' : 'Card não encontrado' });
+      const task = rows[0];
+      if (!['edicao', 'alteracao'].includes(task.kanban_column)) return res.status(409).json({ error: 'Só card em Edição ou Alteração' });
+      if (agent.role === 'editor' && ![task.assigned_to, task.edited_by].includes(agent.userId)) {
+        return res.status(403).json({ error: 'Este card não é seu' });
+      }
+      await pool.query(
+        `UPDATE content_tasks SET waiting_material_at = $2, waiting_material_note = $3, updated_at = now() WHERE id = $1`,
+        [task.id, waiting ? new Date() : null, waiting ? note : null]
+      );
+      await logHistory(task.id, agent.userId, waiting ? '⏸ Aguardando material' : '▶ Material chegou, card retomado', note || null);
+      res.json({ ok: true, task: { id: task.id, title: task.title }, waiting });
     } catch (error) {
       sendError(res, error);
     }
@@ -1805,7 +1845,18 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         [task.id, verdict, notes || null, agent.userId]
       );
       await logHistory(task.id, agent.userId, 'Parecer da Análise', `${verdict === 'ok' ? '✅ ok' : '⚠ ajustes'}${notes ? `: ${notes}` : ''}`);
-      res.json({ ok: true, task: { id: task.id, title: task.title, column: task.kanban_column }, verdict });
+      // ✅ na Análise libera para a Revisão na hora (pedido do usuário, 31/10/2026: a liberação dependia da chefe
+      // e atrasava). ⚠ continua com a chefe, que devolve para Alteração com os ajustes.
+      let released = false;
+      if (verdict === 'ok' && task.kanban_column === 'pre_revisao') {
+        try {
+          await moveEditCard(task.id, 'revisao', { userId: agent.userId, reason: 'Parecer ✅ da Análise: liberado automaticamente' });
+          released = true;
+        } catch (error) {
+          console.error('[agent] liberação automática falhou', task.id, error?.message || error);
+        }
+      }
+      res.json({ ok: true, task: { id: task.id, title: task.title, column: released ? 'revisao' : task.kanban_column }, verdict, released });
     } catch (error) {
       sendError(res, error);
     }

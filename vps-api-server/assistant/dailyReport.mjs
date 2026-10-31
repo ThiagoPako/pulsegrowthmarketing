@@ -26,7 +26,7 @@ export async function collectDay(pool, cities) {
     console.error('[resumo do dia]', error.message);
     return [];
   });
-  const [hist, entregas, design, gravacoes, novos, fila, porCliente] = await Promise.all([
+  const [hist, entregas, design, gravacoes, novos, fila, porCliente, pessoasHist, pessoasEntrega, pessoasDesign, pessoasGravacao] = await Promise.all([
     q(`SELECT h.action, count(*)::int AS n FROM task_history h WHERE ${TODAY_H} ${cityFilter('h.')} GROUP BY 1`),
     q(`SELECT (v.created_by IN (SELECT user_id FROM agent_keys)) AS agente, count(DISTINCT v.task_id)::int AS n
          FROM edit_versions v JOIN content_tasks t ON t.id = v.task_id
@@ -43,6 +43,27 @@ export async function collectDay(pool, cities) {
          FROM task_history h JOIN content_tasks t ON t.id = h.task_id JOIN clients c ON c.id = t.client_id
         WHERE ${TODAY_H} AND h.action IN ('Enviado para Cliente', 'Enviado para Revisão', 'Enviado para revisão') ${cityFilter('h.')}
         GROUP BY 1 ORDER BY 2 DESC LIMIT 6`),
+    // quem fez o quê (pedido do usuário, 31/10/2026: "quero que ele mande quem fez o que")
+    q(`SELECT coalesce(nullif(p.display_name, ''), p.name) AS nome, (h.user_id IN (SELECT user_id FROM agent_keys)) AS agente,
+              count(*) FILTER (WHERE h.action ~* '^Enviado para revis')::int AS para_revisao,
+              count(*) FILTER (WHERE h.action = 'Enviado para Cliente')::int AS para_cliente,
+              count(*) FILTER (WHERE h.action = 'Alteração iniciada')::int AS alteracoes,
+              count(*) FILTER (WHERE h.action = 'Solicitado Alteração')::int AS pediu_alteracao,
+              count(*) FILTER (WHERE h.action ~ '^✅ Aprovado')::int AS aprovou,
+              count(*) FILTER (WHERE h.action = 'Parecer da Análise')::int AS pareceres
+         FROM task_history h JOIN profiles p ON p.id = h.user_id
+        WHERE ${TODAY_H} ${cityFilter('h.')} GROUP BY 1, 2`),
+    q(`SELECT coalesce(nullif(p.display_name, ''), p.name) AS nome, count(DISTINCT v.task_id)::int AS n
+         FROM edit_versions v JOIN content_tasks t ON t.id = v.task_id JOIN profiles p ON p.id = v.created_by
+        WHERE (v.created_at AT TIME ZONE '${TZ}')::date = (now() AT TIME ZONE '${TZ}')::date ${cityFilter('t.')} GROUP BY 1`),
+    q(`SELECT coalesce(nullif(p.display_name, ''), p.name) AS nome,
+              count(*) FILTER (WHERE h.action ~* '^Arte (enviada|entregue|corrigida)')::int AS artes,
+              count(*) FILTER (WHERE h.action ~* '^(Aprovada|Ajustes solicitados)')::int AS conferiu
+         FROM design_task_history h JOIN profiles p ON p.id = h.user_id
+        WHERE ${TODAY_H} ${cityFilter('h.')} GROUP BY 1`),
+    q(`SELECT coalesce(nullif(p.display_name, ''), p.name) AS nome, count(*)::int AS n
+         FROM recordings r JOIN profiles p ON p.id = r.videomaker_id
+        WHERE r.date = (now() AT TIME ZONE '${TZ}')::date AND coalesce(r.status, '') !~* 'cancel' ${cityFilter('r.')} GROUP BY 1`),
   ]);
   const acao = (rows, test) => rows.filter((r) => test(r.action)).reduce((s, r) => s + r.n, 0);
   const colunas = Object.fromEntries(fila.map((r) => [r.col, r]));
@@ -66,7 +87,37 @@ export async function collectDay(pool, cities) {
       urgentes: fila.reduce((s, r) => s + r.urgentes, 0), aguardando: fila.reduce((s, r) => s + r.aguardando, 0),
     },
     porCliente,
+    pessoas: quemFez({ pessoasHist, pessoasEntrega, pessoasDesign, pessoasGravacao }),
   };
+}
+
+/** Junta as contas de cada pessoa numa linha ("Davi: 9 vídeo(s) entregues, 16 alterações"), quem fez mais primeiro. */
+function quemFez({ pessoasHist, pessoasEntrega, pessoasDesign, pessoasGravacao }) {
+  const pessoas = new Map();
+  const de = (nome) => {
+    const chave = String(nome || '').trim();
+    if (!pessoas.has(chave)) pessoas.set(chave, { nome: chave, agente: false, itens: [], total: 0 });
+    return pessoas.get(chave);
+  };
+  const soma = (p, n, texto) => { if (n > 0) { p.itens.push(`${n} ${texto}`); p.total += n; } };
+  for (const r of pessoasGravacao) soma(de(r.nome), r.n, 'gravação(ões)');
+  for (const r of pessoasEntrega) soma(de(r.nome), r.n, 'vídeo(s) entregue(s)');
+  for (const r of pessoasHist) {
+    const p = de(r.nome);
+    p.agente ||= r.agente;
+    soma(p, r.alteracoes, 'alteração(ões) feita(s)');
+    soma(p, r.pareceres, 'parecer(es) na Análise');
+    soma(p, r.para_revisao, 'liberado(s) para a revisão');
+    soma(p, r.para_cliente, 'enviado(s) ao cliente');
+    soma(p, r.pediu_alteracao, 'alteração(ões) pedida(s)');
+    soma(p, r.aprovou, 'aprovação(ões)');
+  }
+  for (const r of pessoasDesign) {
+    const p = de(r.nome);
+    soma(p, r.artes, 'arte(s) entregue(s)');
+    soma(p, r.conferiu, 'arte(s) conferida(s)');
+  }
+  return [...pessoas.values()].filter((p) => p.nome && p.itens.length).sort((a, b) => b.total - a.total);
 }
 
 /** Texto do WhatsApp (formato do PULSE: *negrito*, "•", sem tabela). */
@@ -85,6 +136,10 @@ export function formatDay(d, cities, date = new Date()) {
   linhas.push('', '*📅 Gravações e cards*');
   linhas.push(`• ${d.gravacoes} gravação(ões) hoje${d.gravacoesCanceladas ? ` · ${d.gravacoesCanceladas} cancelada(s)` : ''}`);
   linhas.push(`• ${d.cardsVideo} card(s) de vídeo e ${d.cardsDesign} de arte criados`);
+  if (d.pessoas?.length) {
+    linhas.push('', '*👥 Quem fez o quê*');
+    for (const p of d.pessoas) linhas.push(`• ${p.agente ? '🤖 ' : ''}*${clip(p.nome, 24)}*: ${p.itens.join(', ')}`);
+  }
   linhas.push('', '*📌 Fila agora*');
   linhas.push(`• Edição ${d.fila.edicao} · Alteração ${d.fila.alteracao} · Análise ${d.fila.analise} · Revisão ${d.fila.revisao}`);
   if (d.fila.urgentes || d.fila.aguardando) {

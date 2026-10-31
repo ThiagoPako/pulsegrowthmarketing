@@ -17,6 +17,7 @@ export const PERMISSIONS = {
   lembretes_stories: 'Receber os lembretes de story para postar com link (Agendamentos)',
   resumo_diario: 'Receber às 18h o resumo do que foi feito no dia (vídeos, artes, gravações, fila)',
   aviso_revisao: 'Receber aviso na hora em que um vídeo entra em Revisão',
+  aviso_aprovacao: 'Receber aviso quando uma arte vai para aprovação (Em Análise) e quando um vídeo urgente entra em Revisão',
   consultar_producao: 'Ver andamento de cards e agenda',
   editar_cards: 'Mudar cards (mover, pedir alteração, prazo, prioridade, responsável, dados do card)',
   agenda: 'Marcar, remarcar e cancelar gravações',

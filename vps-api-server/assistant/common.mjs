@@ -15,6 +15,7 @@ export const PERMISSIONS = {
   alertas_grupos: 'Receber os avisos de demanda detectada nos grupos',
   alertas_satisfacao: 'Receber os avisos de cliente insatisfeito (temperatura do cliente)',
   lembretes_stories: 'Receber os lembretes de story para postar com link (Agendamentos)',
+  resumo_diario: 'Receber às 18h o resumo do que foi feito no dia (vídeos, artes, gravações, fila)',
   consultar_producao: 'Ver andamento de cards e agenda',
   editar_cards: 'Mudar cards (mover, pedir alteração, prazo, prioridade, responsável, dados do card)',
   agenda: 'Marcar, remarcar e cancelar gravações',

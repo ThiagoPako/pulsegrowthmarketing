@@ -255,6 +255,40 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           CREATE TRIGGER trg_content_tasks_urgencia_avisa AFTER UPDATE OF urgent_at, kanban_column, immediate_alteration ON content_tasks
             FOR EACH ROW EXECUTE FUNCTION pulse_urgencia_avisa()
         `);
+        // 📦 Ficha do bruto (31/10/2026, "usa o Severino mesmo"): card de vídeo que entra em Edição com o link dos
+        // brutos (ou ganha o link lá) vira recado para o agente de triagem, que baixa os brutos e deixa a ficha para o
+        // editor (duração, HDR, luz, ruído, contagem nas pontas). Sem consulta em laço: o recado acorda o pulse esperar.
+        await pool.query(`
+          CREATE OR REPLACE FUNCTION pulse_bruto_avisa_triagem() RETURNS trigger AS $fn$
+          DECLARE
+            triagem UUID;
+          BEGIN
+            IF NEW.kanban_column <> 'edicao' OR COALESCE(NEW.drive_link, '') = ''
+               OR NEW.content_type NOT IN ('reels', 'story', 'criativo') THEN
+              RETURN NULL;
+            END IF;
+            IF TG_OP = 'UPDATE' AND OLD.kanban_column IS NOT DISTINCT FROM NEW.kanban_column
+               AND COALESCE(OLD.drive_link, '') = COALESCE(NEW.drive_link, '') THEN
+              RETURN NULL;
+            END IF;
+            SELECT user_id INTO triagem FROM agent_keys WHERE revoked_at IS NULL AND role = 'triagem'
+              ORDER BY created_at DESC LIMIT 1;
+            IF triagem IS NOT NULL THEN
+              INSERT INTO agent_messages (from_user, to_user, body) VALUES (NULL, triagem,
+                '📦 BRUTO NOVO: "' || NEW.title || '" · card ' || NEW.id || ' · ' || NEW.drive_link ||
+                '. Baixe os brutos e faça a ficha do bruto (ferramentas/video/ficha-bruto.mjs).');
+            END IF;
+            RETURN NULL;
+          EXCEPTION WHEN OTHERS THEN
+            RETURN NULL;
+          END
+          $fn$ LANGUAGE plpgsql
+        `);
+        await pool.query(`DROP TRIGGER IF EXISTS trg_content_tasks_bruto_triagem ON content_tasks`);
+        await pool.query(`
+          CREATE TRIGGER trg_content_tasks_bruto_triagem AFTER INSERT OR UPDATE OF kanban_column, drive_link ON content_tasks
+            FOR EACH ROW EXECUTE FUNCTION pulse_bruto_avisa_triagem()
+        `);
         // computadores onde os agentes rodam (Mac 1, Mac 2…) e os códigos de conexão de uso único
         await pool.query(`
           CREATE TABLE IF NOT EXISTS agent_machines (

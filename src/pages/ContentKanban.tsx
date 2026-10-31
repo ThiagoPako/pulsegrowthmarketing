@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
 import UrgentBadge from '@/components/kanban/UrgentBadge';
+import WaitingBadge from '@/components/kanban/WaitingBadge';
 import AgentReviewBadge from '@/components/kanban/AgentReviewBadge';
 import AgentReadinessBadge from '@/components/kanban/AgentReadinessBadge';
 import AdjustmentRequestDialog from '@/components/kanban/AdjustmentRequestDialog';
@@ -187,6 +188,8 @@ interface ContentTask {
   editing_priority: boolean;
   immediate_alteration: boolean;
   urgent_at?: string | null;
+  waiting_material_at?: string | null;
+  waiting_material_note?: string | null;
   agent_step_by?: string | null;
   review_deadline: string | null;
   alteration_deadline: string | null;
@@ -1947,6 +1950,7 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
 
         {/* Agente de IA com o card (Edição/Alteração) e parecer da Análise */}
         <UrgentBadge task={task} />
+        <WaitingBadge task={task} />
         <AgentWorkBadge task={task} users={users} agentIds={agentIds} />
         <AgentReviewBadge task={task} users={users} />
 

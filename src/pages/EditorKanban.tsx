@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
 import UrgentBadge from '@/components/kanban/UrgentBadge';
+import WaitingBadge from '@/components/kanban/WaitingBadge';
 import AgentReviewBadge from '@/components/kanban/AgentReviewBadge';
 import AgentReadinessBadge from '@/components/kanban/AgentReadinessBadge';
 import AdjustmentRequestDialog from '@/components/kanban/AdjustmentRequestDialog';
@@ -89,6 +90,8 @@ interface EditorTask {
   approval_sent_at: string | null;
   immediate_alteration: boolean;
   urgent_at?: string | null;
+  waiting_material_at?: string | null;
+  waiting_material_note?: string | null;
   agent_step_by?: string | null;
   adjustment_notes?: string | null;
   script_alteration_notes?: string | null;
@@ -326,6 +329,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
         {/* Agente de IA com o card (edição ou correção) e parecer da Análise */}
         <div className="-mx-3 overflow-hidden rounded-md">
           <UrgentBadge task={task} />
+          <WaitingBadge task={task} />
           <AgentWorkBadge task={task} users={users} agentIds={agentIds} />
           <AgentReviewBadge task={task} users={users} />
         </div>

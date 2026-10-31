@@ -4,7 +4,7 @@ import { usePulsePlusKnown } from '@/hooks/usePulsePlus';
 
 /**
  * Selo em destaque enquanto um agente de IA está com o card (do `pulse pegar` até o `entregar` ou
- * `liberar`): na Edição "Editando · Beatriz · cortando" (ícone de lápis), na Alteração "🔧 Em correção · Davi · …"
+ * `liberar`), com a etapa e há quanto tempo veio (o Kanban atualiza a cada 15 s): na Edição "Editando · Beatriz · cortando" (ícone de lápis), na Alteração "🔧 Em correção · Davi · …"
  * (pedido do usuário, 25/10/2026). Sem sinal há 30 min ou mais (o limite do `pulse travados`), vira
  * "⏸ … parada · sem sinal há X" — é o card que a Marcely precisa destravar.
  * Os dados vêm do próprio card: o servidor grava `agent_step`/`agent_heartbeat_at` no pegar e a cada
@@ -22,7 +22,9 @@ export default function AgentWorkBadge({ task, users, agentIds }: Props) {
   const work = agentWorkState(task, { agentIds });
   // agente com o card: só quem tem Pulse Plus vê (para o resto o card mostra o responsável, como qualquer card)
   if (!pulsePlus || !work) return null;
-  const name = (users.find((u) => u.id === task.assigned_to)?.name || 'Agente').trim().split(/\s+/)[0];
+  const name = (users.find((u) => u.id === (work.by || task.assigned_to))?.name || 'Agente').trim().split(/\s+/)[0];
+  // há quanto tempo veio a última etapa: com o Kanban atualizando a cada 15 s, mostra o que está sendo feito agora
+  const when = work.minutes === null ? '' : work.minutes < 1 ? ' · agora' : ` · há ${formatSince(work.minutes)}`;
   const isFix = work.column === 'alteracao';
 
   if (work.state === 'stale') {
@@ -41,7 +43,7 @@ export default function AgentWorkBadge({ task, users, agentIds }: Props) {
     return (
       <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 animate-pulse">
         <span className="text-[9px] font-black text-white uppercase tracking-widest shrink-0">🔧 Em correção · {name}</span>
-        <span className="text-[9px] text-white/90 truncate">{work.step}</span>
+        <span className="text-[9px] text-white/90 truncate" title={work.step}>{work.step}{when}</span>
       </div>
     );
   }
@@ -53,7 +55,7 @@ export default function AgentWorkBadge({ task, users, agentIds }: Props) {
       </span>
       <Pencil size={10} className="text-white shrink-0" aria-hidden />
       <span className="text-[9px] font-black text-white uppercase tracking-widest shrink-0">Editando · {name}</span>
-      <span className="text-[9px] text-white/90 truncate">{work.step}</span>
+      <span className="text-[9px] text-white/90 truncate" title={work.step}>{work.step}{when}</span>
     </div>
   );
 }

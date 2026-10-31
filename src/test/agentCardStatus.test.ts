@@ -97,7 +97,7 @@ describe('agentWorkState', () => {
   const working: AgentCardFields = { kanban_column: 'edicao', assigned_to: BEA, agent_step: 'renderizando', agent_heartbeat_at: minutesAgo(5) };
 
   it('agente com sinal recente está trabalhando', () => {
-    expect(agentWorkState(working, { agentIds: agents, now: NOW })).toEqual({ state: 'working', column: 'edicao', step: 'renderizando', minutes: 5 });
+    expect(agentWorkState(working, { agentIds: agents, now: NOW })).toEqual({ state: 'working', column: 'edicao', step: 'renderizando', minutes: 5, by: working.assigned_to });
   });
 
   it('sem sinal há 30 min ou mais fica parado', () => {

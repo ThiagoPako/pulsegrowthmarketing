@@ -78,7 +78,7 @@ export default function AdjustmentRequestDialog({ open, title = 'Solicitar Ajust
               id="adjustment-immediate-check"
             />
             <label htmlFor="adjustment-immediate-check" className="text-sm cursor-pointer">
-              <span className="font-semibold text-destructive">🚨 Alteração Imediata</span>
+              <span className="font-semibold text-destructive">🔥 Alteração com urgência (prioridade total)</span>
             </label>
           </div>
         </div>

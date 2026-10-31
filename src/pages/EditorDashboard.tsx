@@ -32,6 +32,7 @@ import { uploadFileToVps, deleteFileFromVps } from '@/services/vpsApi';
 import { EDITOR_SCORE, EDITOR_APPROVED_COLUMNS, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate } from '@/lib/scoringSystem';
 import { useCity } from '@/contexts/CityContext';
 import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
+import UrgentBadge from '@/components/kanban/UrgentBadge';
 import { useAgentIds } from '@/hooks/useAgentIds';
 import { usePulsePlus } from '@/hooks/usePulsePlus';
 import { agentWorkState, formatSince } from '@/lib/agentCardStatus';
@@ -65,6 +66,8 @@ export interface EditorTask {
   adjustment_notes: string | null;
   editing_priority: boolean;
   immediate_alteration: boolean;
+  urgent_at?: string | null;
+  agent_step_by?: string | null;
   review_deadline: string | null;
   alteration_deadline: string | null;
   approval_deadline: string | null;
@@ -1431,6 +1434,7 @@ function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTa
         </div>
       )}
 
+      <UrgentBadge task={task} />
       <AgentWorkBadge task={task} users={users || []} agentIds={agentIds} />
       <div className="h-1" style={{ backgroundColor: `hsl(${clientColor})` }} />
       <div className="p-3 space-y-2.5">

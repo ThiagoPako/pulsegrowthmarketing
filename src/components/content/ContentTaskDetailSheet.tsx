@@ -214,6 +214,8 @@ interface ContentTask {
   approval_sent_at: string | null;
   editing_priority: boolean;
   immediate_alteration: boolean;
+  urgent_at?: string | null;
+  urgent_by?: string | null;
   review_deadline: string | null;
   alteration_deadline: string | null;
   approval_deadline: string | null;
@@ -936,6 +938,8 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       kanban_column: 'alteracao',
       adjustment_notes: adjustmentNotes.trim(),
       immediate_alteration: adjustmentImmediate,
+      // alteração pedida com urgência na Revisão liga a urgência (prioridade total)
+      ...(adjustmentImmediate ? { urgent_at: new Date().toISOString(), urgent_by: user?.id || null } : {}),
       ...(isReviewer ? { assigned_to: user?.id } : {}),
       updated_at: new Date().toISOString(),
     }, 'pedir os ajustes');
@@ -944,7 +948,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     // O texto do ajuste vai para o histórico (antes só ficava no card e se perdia na alteração seguinte).
     await syncTask('alteracao', { immediate_alteration: adjustmentImmediate },
       `${task.kanban_column === 'pre_revisao' ? 'Devolvido da Análise · ' : ''}Ajustes: ${adjustmentNotes.trim()}`);
-    toast.success(adjustmentImmediate ? '🚨 Alteração IMEDIATA solicitada!' : '📝 Ajustes solicitados');
+    toast.success(adjustmentImmediate ? '🔥 Alteração URGENTE solicitada: prioridade total' : '📝 Ajustes solicitados');
     onRefresh();
     onOpenChange(false);
   };
@@ -1043,6 +1047,20 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     toast.success('✅ Confirmado como postado e arquivado!');
     onRefresh();
     onOpenChange(false);
+  };
+
+  // 🔥 Urgência (pedido do usuário, 31/10/2026): prioridade total para os agentes em Edição, Análise e Alteração.
+  // O servidor avisa o agente do card na hora (gatilho) e apaga a marca quando o card sai do fluxo de edição.
+  const handleToggleUrgent = async () => {
+    const turnOn = !task.urgent_at;
+    const saved = await saveTask({
+      urgent_at: turnOn ? new Date().toISOString() : null,
+      urgent_by: turnOn ? user?.id || null : null,
+      updated_at: new Date().toISOString(),
+    }, 'mudar a urgência');
+    if (!saved) return;
+    toast.success(turnOn ? '🔥 Marcado como URGENTE: prioridade total para os agentes' : 'Urgência removida');
+    onRefresh();
   };
 
   const handleTogglePriority = async () => {
@@ -1874,6 +1892,18 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                           </div>
                         )}
 
+                        {/* 🔥 Urgência: Edição, Análise e Alteração - admin/social media */}
+                        {['edicao', 'pre_revisao', 'alteracao'].includes(task.kanban_column) && canManage && (
+                          <Button
+                            variant={task.urgent_at ? 'default' : 'outline'}
+                            size="sm"
+                            className={`w-full gap-2 justify-start ${task.urgent_at ? 'bg-red-600 hover:bg-red-700 text-white animate-pulse' : 'text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-800'}`}
+                            onClick={handleToggleUrgent}
+                          >
+                            <Flame size={14} /> {task.urgent_at ? '🔥 URGENTE (clique para tirar)' : 'Marcar urgência'}
+                          </Button>
+                        )}
+
                         {/* Toggle priority (edição) - admin/social media only */}
                         {task.kanban_column === 'edicao' && canManage && (
                           <Button
@@ -1974,7 +2004,8 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                                 id="detail-immediate"
                               />
                               <label htmlFor="detail-immediate" className="text-xs cursor-pointer">
-                                <span className="font-semibold text-destructive">🚨 Alteração Imediata</span>
+                                <span className="font-semibold text-destructive">🔥 Alteração com urgência</span>
+                                <span className="block text-[10px] text-muted-foreground">Prioridade total: passa na frente de tudo na fila dos agentes</span>
                               </label>
                             </div>
                             <div className="flex gap-2">

@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
+import UrgentBadge from '@/components/kanban/UrgentBadge';
 import AgentReviewBadge from '@/components/kanban/AgentReviewBadge';
 import AgentReadinessBadge from '@/components/kanban/AgentReadinessBadge';
 import AdjustmentRequestDialog from '@/components/kanban/AdjustmentRequestDialog';
 import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
 import KanbanColumnJumpBar, { kanbanColumnDomId } from '@/components/kanban/KanbanColumnJumpBar';
 import { useAgentIds } from '@/hooks/useAgentIds';
-import { agentReviewOf, agentWorkState, matchesOwnerFilter, ownerFilterOptions, type OwnerFilter } from '@/lib/agentCardStatus';
+import { agentReviewOf, agentWorkState, isUrgent, matchesOwnerFilter, ownerFilterOptions, type OwnerFilter } from '@/lib/agentCardStatus';
 import { usePulsePlus } from '@/hooks/usePulsePlus';
 import {
   ANALYSIS_FORBIDDEN_MSG, EDITING_NEEDS_FOOTAGE_MSG, SEND_TO_CLIENT_FORBIDDEN_MSG,
@@ -87,6 +88,8 @@ interface EditorTask {
   approval_deadline: string | null;
   approval_sent_at: string | null;
   immediate_alteration: boolean;
+  urgent_at?: string | null;
+  agent_step_by?: string | null;
   adjustment_notes?: string | null;
   script_alteration_notes?: string | null;
   editing_priority?: boolean;
@@ -322,6 +325,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
 
         {/* Agente de IA com o card (edição ou correção) e parecer da Análise */}
         <div className="-mx-3 overflow-hidden rounded-md">
+          <UrgentBadge task={task} />
           <AgentWorkBadge task={task} users={users} agentIds={agentIds} />
           <AgentReviewBadge task={task} users={users} />
         </div>
@@ -569,7 +573,12 @@ export default function EditorKanban() {
     const map: Record<string, EditorTask[]> = {};
     EDITOR_COLUMNS.forEach(col => { map[col.id] = []; });
     filteredTasks.forEach(t => { if (map[t.kanban_column]) map[t.kanban_column].push(t); });
+    // 🔥 urgentes no topo de Análise e Alteração (na Edição, a ordenação abaixo também os põe primeiro)
+    for (const col of ['pre_revisao', 'alteracao']) {
+      map[col] = [...(map[col] || [])].sort((a, b) => Number(isUrgent(b)) - Number(isUrgent(a)));
+    }
     map['edicao'] = [...(map['edicao'] || [])].sort((a, b) => {
+      if (isUrgent(a) !== isUrgent(b)) return isUrgent(a) ? -1 : 1;
       // fixados (equipe presencial) no topo
       if (!!a.pinned_at !== !!b.pinned_at) return a.pinned_at ? -1 : 1;
       if (!a.editing_deadline && !b.editing_deadline) return 0;

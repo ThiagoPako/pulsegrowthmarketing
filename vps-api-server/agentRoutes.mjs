@@ -61,10 +61,13 @@ import multer from 'multer';
 
 // designer e revisor_arte: agentes de design (rotas em agentDesignRoutes.mjs)
 // triagem: varre o Drive e só cria cards (rotas em agentTriageRoutes.mjs)
-const AGENT_ROLES = new Set(['editor', 'revisor', 'chefe', 'designer', 'revisor_arte', 'triagem']);
+// colorista (Íris) e som (Caio), desde 31/10/2026: trabalham no projeto que o editor passa por recado; mandam
+// etapa nos cards do fluxo de edição, mas não pegam card da fila
+const AGENT_ROLES = new Set(['editor', 'revisor', 'chefe', 'designer', 'revisor_arte', 'triagem', 'colorista', 'som']);
 const DESIGN_ONLY_ROLES = new Set(['designer', 'revisor_arte']);
+const SUPPORT_ROLES = new Set(['colorista', 'som']);
 // quem não edita vídeo: fila de edição vazia e o claim recusa
-const NO_VIDEO_ROLES = new Set([...DESIGN_ONLY_ROLES, 'triagem']);
+const NO_VIDEO_ROLES = new Set([...DESIGN_ONLY_ROLES, 'triagem', ...SUPPORT_ROLES]);
 const TZ = 'America/Sao_Paulo';
 const WEEKDAY_TO_KEY = { Sun: 'domingo', Mon: 'segunda', Tue: 'terca', Wed: 'quarta', Thu: 'quinta', Fri: 'sexta', Sat: 'sabado' };
 
@@ -1197,7 +1200,11 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     try {
       const agent = await verifyAgent(req);
       if (DESIGN_ONLY_ROLES.has(agent.role)) return res.status(403).json({ error: 'Agente de design não pega vídeo: use pulse arte fila / pulse arte pegar' });
-      if (NO_VIDEO_ROLES.has(agent.role)) return res.status(403).json({ error: 'A triagem não pega vídeo: só cria cards (pulse triagem card-edicao / card-arte)' });
+      if (NO_VIDEO_ROLES.has(agent.role)) {
+        return res.status(403).json({ error: SUPPORT_ROLES.has(agent.role)
+          ? 'Cor e som não pegam card: trabalham no projeto que o editor passa por recado (pulse etapa <card> mostra o que está fazendo)'
+          : 'A triagem não pega vídeo: só cria cards (pulse triagem card-edicao / card-arte)' });
+      }
       const pause = await pauseStateFor(agent.userId);
       if (pause.paused) {
         return res.status(423).json({ error: `Agentes pausados pelo sistema${pause.all ? '' : ` (${agent.name})`}. Não pegue cards novos.`, pause });
@@ -1252,7 +1259,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       // etapa ao vivo de quem não é o dono do card (pedido do usuário, 31/10/2026: "nos cards do sistema mostre o
       // que está sendo feito em cada um em tempo real"): a revisão conferindo na Análise, a chefe, ou um editor
       // num card de outro agente. Só no fluxo de edição e nunca num card que está com uma pessoa da equipe.
-      if (step && ['editor', 'revisor', 'chefe'].includes(agent.role)) {
+      if (step && ['editor', 'revisor', 'chefe', 'colorista', 'som'].includes(agent.role)) {
         const r = await pool.query(
           `UPDATE content_tasks SET agent_step = $3, agent_heartbeat_at = now(), agent_step_by = $2
             WHERE id = $1 AND kanban_column IN ('edicao', 'alteracao', 'pre_revisao')

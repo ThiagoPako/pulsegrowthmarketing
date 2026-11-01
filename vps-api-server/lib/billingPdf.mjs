@@ -181,6 +181,8 @@ async function payment(doc, pay) {
     doc.font('bold').fontSize(10).fillColor('#FFFFFF').text('Pagar no cartão', x2 + 14, by + 9, { width: w - 28, align: 'center', link: pay.cardLink, underline: false });
     doc.link(x2 + 14, by, w - 28, 30, pay.cardLink);
     doc.font('regular').fontSize(6.5).fillColor(C.cinza).text(pay.cardLink, x2 + 14, by + 36, { width: w - 28, link: pay.cardLink, ellipsis: true, height: 10 });
+    // aviso discreto: a taxa do cartão é da facilitadora, a Pulse não cobra nada a mais
+    if (pay.cardNotice) doc.font('regular').fontSize(6.5).fillColor(C.cinza).text(pay.cardNotice, x2 + 14, by + 48, { width: w - 28 });
   } else {
     doc.font('regular').fontSize(9).fillColor(C.cinza).text('Pagamento no cartão: fale com a gente pelo contato abaixo.', x2 + 14, y + 34, { width: w - 28 });
   }

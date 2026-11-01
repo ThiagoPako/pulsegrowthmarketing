@@ -31,7 +31,7 @@ export const STEP_STATUS_LABELS: Record<string, string> = {
 export const TEMPLATE_VARS: Record<BillingStep, string[]> = {
   relatorio_mensal: ['nome_cliente', 'mes_anterior', 'mes_atual', 'qtd_videos', 'qtd_artes', 'qtd_posts', 'qtd_gravacoes', 'horas_dedicadas', 'resumo_rede', 'sugestoes', 'link_relatorio'],
   pre_vencimento: ['nome_cliente', 'mes_ref', 'gravacoes_feitas', 'gravacoes_marcadas', 'media_videos', 'dica_assiduidade', 'dia_vencimento'],
-  cobranca: ['nome_cliente', 'plano', 'valor', 'pix_copia_cola', 'chave_pix', 'nome_recebedor', 'link_infinitepay'],
+  cobranca: ['nome_cliente', 'plano', 'valor', 'pix_copia_cola', 'chave_pix', 'nome_recebedor', 'link_infinitepay', 'aviso_cartao'],
   lembrete: ['nome_cliente', 'mes_ref', 'valor', 'pix_copia_cola', 'link_infinitepay'],
 };
 
@@ -39,7 +39,8 @@ export interface BillingConfig {
   mode: BillingMode;
   card_fee_percent: number;
   has_pix: boolean;
-  infinitepay_handle: string;
+  /** as duas contas: Pix de Financeiro → Config da cidade (own = a cidade tem configuração própria) e a InfiniteTag */
+  accounts: Record<'uruacu' | 'minacu', { own: boolean; pix_key: string; receiver: string; bank: string; infinitepay_handle: string }>;
   templates: Record<BillingStep, string>;
   defaults: Record<BillingStep, string>;
   /** rodapé de mensagem automática em todas as mensagens ao cliente (vazio = sem rodapé) */
@@ -77,7 +78,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const fetchBillingConfig = () => call<BillingConfig>('/billing-isis/config');
-export const saveBillingConfig = (patch: Partial<Pick<BillingConfig, 'mode' | 'card_fee_percent' | 'infinitepay_handle' | 'footer'>> & {
+export const saveBillingConfig = (patch: Partial<Pick<BillingConfig, 'mode' | 'footer'>> & {
+  infinitepay_handles?: Partial<Record<'uruacu' | 'minacu', string>>;
   templates?: Partial<Record<BillingStep, string>>;
   contacts?: Partial<Record<'uruacu' | 'minacu', { name: string; phone: string }>>;
 }) =>
@@ -103,11 +105,11 @@ export async function openBillingPdfPreview(contractId: string, step: BillingSte
 
 export interface PaymentLinkRow {
   id: string; order_nsu: string; month: string | null; amount: number; url: string; status: string; client: string | null;
-  capture_method: string | null; paid_at: string | null; receipt_url: string | null;
+  capture_method: string | null; paid_at: string | null; receipt_url: string | null; city: string | null;
 }
 export const fetchPaymentLinks = (month: string) =>
-  call<{ handle: string | null; webhook_url: string; links: PaymentLinkRow[] }>(`/infinitepay/links?month=${encodeURIComponent(month)}`);
-export const createTestLink = () =>
-  call<{ url: string }>('/infinitepay/test-link', { method: 'POST', body: JSON.stringify({ amount: 1 }) });
+  call<{ handle: string | null; handles: Record<'uruacu' | 'minacu', string | null>; webhook_url: string; links: PaymentLinkRow[] }>(`/infinitepay/links?month=${encodeURIComponent(month)}`);
+export const createTestLink = (city: 'uruacu' | 'minacu') =>
+  call<{ url: string }>('/infinitepay/test-link', { method: 'POST', body: JSON.stringify({ amount: 1, city }) });
 export const recheckPaymentLink = (id: string) =>
   call<{ paid: boolean; marked?: boolean }>(`/infinitepay/check/${id}`, { method: 'POST', body: '{}' });

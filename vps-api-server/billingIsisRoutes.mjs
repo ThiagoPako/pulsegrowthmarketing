@@ -16,11 +16,12 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import {
   BILLING_STEPS, MODES, DEFAULT_TEMPLATES, monthName, previousMonth, nextMonth, stepDates, attendanceTip,
-  brl, pixPayload, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
+  brl, pixPayload, CARD_NOTICE, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
   accountSummary,
 } from './lib/billingIsis.mjs';
 import { renderPdf } from './lib/billingPdf.mjs';
 import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
+import { normalizeCityValue } from './lib/cityResolution.mjs';
 import { enqueueWhatsApp } from './whatsapp/shared.mjs';
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -34,6 +35,8 @@ const TEMPLATE_COLUMNS = {
 const todayBr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 const dateKey = (v) => (!v ? '' : v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
 const isPaid = (r) => r?.status === 'recebida' || r?.status === 'pago';
+// cidade de uma linha de payment_config (sem coluna de cidade: a única conta, tratada como Minaçu)
+const cityOf = (cfg) => normalizeCityValue(cfg?.city) || 'minacu';
 const dataBr = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '—');
 const monthLabel = (month) => `${monthName(`${month}-01`)} de ${month.slice(0, 4)}`;
 const DOC_NAMES = { relatorio_mensal: 'Relatorio', pre_vencimento: 'Agenda', cobranca: 'Cobranca', lembrete: 'Cobranca' };
@@ -236,6 +239,12 @@ export function registerBillingIsisRoutes(app, {
     if (step !== 'pre_vencimento' && paid) return { skip: 'pago', config };
     if (step === 'cobranca' || step === 'lembrete') {
       const problems = checkBillingData({ contractValue: contract.contract_value, revenues: monthRows, month });
+      // duas contas (Uruaçu e Minaçu): sem a configuração da cidade do cliente, não cobra na conta da outra
+      const clientCity = normalizeCityValue(contract.client_city || contract.city) || 'minacu';
+      if (config && config.city !== undefined && cityOf(config) !== clientCity) {
+        problems.push(`${clientCity === 'uruacu' ? 'Uruaçu' : 'Minaçu'} está sem conta cadastrada em Financeiro → Config (o Pix sairia na conta da outra cidade)`);
+      }
+      if (!config?.pix_key) problems.push('a cidade do cliente está sem chave Pix em Financeiro → Config');
       if (problems.length) return { skip: 'conferir', problems, config };
     }
 
@@ -288,7 +297,7 @@ export function registerBillingIsisRoutes(app, {
           rows: [[`Mensalidade ${plano}`, `${month.slice(5, 7)}/${month.slice(0, 4)}`, brl(amount)]],
           total: { label: 'Total', value: brl(amount) },
         },
-        payment: { pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(amount) : null },
+        payment: { pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(amount) : null, cardNotice: CARD_NOTICE },
         sections: [
           ...(conta.open.length ? [{ title: `Também em aberto (${brl(conta.openTotal)})`, bullets: conta.open }] : []),
           ...(conta.paid.length ? [{ title: 'Últimos pagamentos', bullets: conta.paid }] : []),
@@ -297,7 +306,7 @@ export function registerBillingIsisRoutes(app, {
       body: applyTemplate(templateOf(config, step), {
         ...base, plano, valor: brl(amount), mes_ref: monthName(`${month}-01`),
         pix_copia_cola: pix, chave_pix: config?.pix_key, nome_recebedor: config?.receiver_name,
-        link_infinitepay: link,
+        link_infinitepay: link, aviso_cartao: link ? CARD_NOTICE : '',
       }),
     };
   }
@@ -402,7 +411,8 @@ export function registerBillingIsisRoutes(app, {
         mode: modeOf(config),
         card_fee_percent: Number(config?.card_fee_percent) || 0,
         has_pix: !!config?.pix_key,
-        infinitepay_handle: config?.infinitepay_handle || '',
+        // as duas contas (Uruaçu e Minaçu): o Pix vem de Financeiro → Config da cidade; a InfiniteTag é editada aqui
+        accounts: await accountsByCity(),
         templates: Object.fromEntries(BILLING_STEPS.map((s) => [s, templateOf(config, s)])),
         defaults: DEFAULT_TEMPLATES,
         footer: config?.msg_isis_rodape ?? DEFAULT_FOOTER,
@@ -412,6 +422,22 @@ export function registerBillingIsisRoutes(app, {
       });
     } catch (error) { sendError(res, error); }
   });
+
+  async function accountsByCity() {
+    const out = {};
+    for (const city of ['uruacu', 'minacu']) {
+      const cfg = await paymentConfigFor(city);
+      const own = !!cfg && cityOf(cfg) === city;
+      out[city] = {
+        own,
+        pix_key: own ? cfg.pix_key || '' : '',
+        receiver: own ? cfg.receiver_name || '' : '',
+        bank: own ? cfg.bank || '' : '',
+        infinitepay_handle: own ? cfg.infinitepay_handle || '' : '',
+      };
+    }
+    return out;
+  }
 
   async function contactsByCity() {
     const { rows } = await pool.query('SELECT * FROM payment_config').catch(() => ({ rows: [] }));
@@ -434,12 +460,17 @@ export function registerBillingIsisRoutes(app, {
       const fee = req.body?.card_fee_percent === undefined ? null : Math.min(Math.max(Number(req.body.card_fee_percent) || 0, 0), 30);
       const sets = [];
       const params = [];
+      const contactUpdates = [];
       if (mode) { params.push(mode); sets.push(`isis_mode = $${params.length}`); }
       if (fee !== null) { params.push(fee); sets.push(`card_fee_percent = $${params.length}`); }
-      // InfiniteTag (pública, não é senha): cadastrada pelo Thiago; a coluna nasce em infinitePayRoutes.mjs
-      if (typeof req.body?.infinitepay_handle === 'string') {
-        params.push(req.body.infinitepay_handle.trim().replace(/^\$/, '').replace(/\s+/g, '').slice(0, 60) || null);
-        sets.push(`infinitepay_handle = $${params.length}`);
+      // InfiniteTag de cada cidade (pública, não é senha; cada cidade recebe na sua conta): na linha da cidade
+      for (const city of ['uruacu', 'minacu']) {
+        const tag = req.body?.infinitepay_handles?.[city];
+        if (typeof tag !== 'string') continue;
+        const cfg = await paymentConfigFor(city);
+        if (!cfg?.id || cityOf(cfg) !== city) continue;
+        contactUpdates.push(pool.query(`UPDATE payment_config SET infinitepay_handle = $2 WHERE id = $1`,
+          [cfg.id, tag.trim().replace(/^\$/, '').replace(/\s+/g, '').slice(0, 60) || null]));
       }
       // rodapé: igual ao padrão = guarda vazio (null); texto vazio = sem rodapé
       if (typeof req.body?.footer === 'string') {
@@ -455,7 +486,6 @@ export function registerBillingIsisRoutes(app, {
         sets.push(`${TEMPLATE_COLUMNS[step]} = $${params.length}`);
       }
       // contato por cidade: grava na linha da cidade (a mesma que paymentConfigFor devolve para ela)
-      const contactUpdates = [];
       for (const city of ['uruacu', 'minacu']) {
         const c = req.body?.contacts?.[city];
         if (!c || typeof c !== 'object') continue;

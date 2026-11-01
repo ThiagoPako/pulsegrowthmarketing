@@ -41,6 +41,7 @@ export const DEFAULT_TEMPLATES = {
     '{pix_copia_cola}',
     'Chave: {chave_pix} · {nome_recebedor}',
     '💳 Prefere cartão? Pague pelo link: {link_infinitepay}',
+    '_{aviso_cartao}_',
     'Se já pagou, pode desconsiderar. Obrigada pela confiança! 🧡',
   ].join('\n'),
   lembrete: [
@@ -126,6 +127,9 @@ export function attendanceTip({ done = 0, scheduled = 0, cancelled = 0, avg = nu
   }
   return 'Que tal já deixarmos as próximas gravações marcadas? Assim o conteúdo não para.';
 }
+
+// aviso discreto do cartão (usuário, 01/11/2026): a taxa é da facilitadora, a Pulse não cobra nada a mais
+export const CARD_NOTICE = 'No cartão de crédito há a taxa da transação, cobrada pela facilitadora de pagamentos. A Pulse não cobra nenhum valor a mais.';
 
 /** Valor no cartão com a taxa repassada: o líquido é a mensalidade (valor ÷ (1 − taxa)). */
 export function cardAmount(amount, feePercent) {

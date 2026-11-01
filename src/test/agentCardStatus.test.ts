@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  agentProgress,
   agentReadiness,
   agentReviewOf,
+  AGENT_TYPICAL_TOTAL_MINUTES,
+  queueVisualState,
   agentWorkState,
   cardOwnerKind,
   formatSince,
@@ -151,5 +154,53 @@ describe('agentReviewOf e formatSince', () => {
     expect(formatSince(45)).toBe('45 min');
     expect(formatSince(130)).toBe('2 h');
     expect(formatSince(3 * 1440)).toBe('3 d');
+  });
+});
+
+describe('agentProgress (barra do card em execução)', () => {
+  it('avança pela etapa e o tempo que falta diminui', () => {
+    const corte = agentProgress('cortando', 0);
+    const render = agentProgress('renderizando', 0);
+    expect(render.pct).toBeGreaterThan(corte.pct);
+    expect(render.etaMinutes).toBeLessThan(corte.etaMinutes);
+  });
+
+  it('acha a etapa por palavra-chave no texto livre e para em 90% da etapa sem sinal novo', () => {
+    expect(agentProgress('som: pronto (trilha com EQ fixo)', 0).stepIndex).toBe(agentProgress('som', 0).stepIndex);
+    expect(agentProgress('cortando', 999).pct).toBeLessThan(agentProgress('cor', 0).pct + 0.0001);
+  });
+
+  it('etapa desconhecida começa do início; nunca passa de 97% nem dá menos de 1 min', () => {
+    expect(agentProgress('xyz', null).pct).toBeLessThanOrEqual(0.1);
+    const fim = agentProgress('renderizando', 60);
+    expect(fim.pct).toBeLessThanOrEqual(0.97);
+    expect(fim.etaMinutes).toBeGreaterThanOrEqual(1);
+  });
+
+  it('com o início conhecido, o tempo que falta segue o ritmo real', () => {
+    const lento = agentProgress('plano', 0, AGENT_TYPICAL_TOTAL_MINUTES * 2);
+    const tabela = agentProgress('plano', 0);
+    expect(lento.etaMinutes).toBeGreaterThan(tabela.etaMinutes);
+  });
+});
+
+describe('queueVisualState (card apagado na fila, vivo em execução)', () => {
+  const base: AgentCardFields = { kanban_column: 'edicao', assigned_to: null };
+
+  it('na fila sem ninguém fazendo fica apagado', () => {
+    expect(queueVisualState(base, { agentIds: agents, now: NOW })).toBe('waiting');
+    // agente com o card mas parado (sem sinal há 45 min): também apagado
+    expect(queueVisualState({ ...base, assigned_to: BEA, agent_step: 'cortando', agent_heartbeat_at: minutesAgo(45) }, { agentIds: agents, now: NOW })).toBe('waiting');
+  });
+
+  it('agente com sinal recente = em execução', () => {
+    expect(queueVisualState({ ...base, assigned_to: BEA, agent_step: 'cortando', agent_heartbeat_at: minutesAgo(3) }, { agentIds: agents, now: NOW })).toBe('working');
+  });
+
+  it('com alguém da equipe, urgente, fixado ou fora da fila não muda', () => {
+    expect(queueVisualState({ ...base, assigned_to: ANA }, { agentIds: agents, now: NOW })).toBeNull();
+    expect(queueVisualState({ ...base, urgent_at: minutesAgo(1) }, { agentIds: agents, now: NOW })).toBeNull();
+    expect(queueVisualState({ ...base, pinned_at: minutesAgo(1) }, { agentIds: agents, now: NOW })).toBeNull();
+    expect(queueVisualState({ ...base, kanban_column: 'revisao' }, { agentIds: agents, now: NOW })).toBeNull();
   });
 });

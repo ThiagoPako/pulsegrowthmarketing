@@ -77,6 +77,19 @@ export default {
           "40%": { transform: "scale(1.25)" },
           "100%": { transform: "scale(1)" },
         },
+        // card que um agente está fazendo agora: faixa de cor correndo, brilho pulsando e reflexo na barra
+        "agent-flow": {
+          "0%": { backgroundPosition: "0% 50%" },
+          "100%": { backgroundPosition: "200% 50%" },
+        },
+        "agent-glow": {
+          "0%, 100%": { boxShadow: "0 0 0 1px hsl(217 91% 60% / 0.55), 0 0 10px 0 hsl(217 91% 60% / 0.25)" },
+          "50%": { boxShadow: "0 0 0 2px hsl(217 91% 60% / 0.9), 0 0 22px 2px hsl(217 91% 60% / 0.45)" },
+        },
+        "agent-shimmer": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(100%)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -87,6 +100,9 @@ export default {
         "kanban-in": "kanban-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both",
         "kanban-flash": "kanban-flash 1.4s ease-out",
         "kanban-bump": "kanban-bump 0.35s ease-out",
+        "agent-flow": "agent-flow 3s linear infinite",
+        "agent-glow": "agent-glow 2s ease-in-out infinite",
+        "agent-shimmer": "agent-shimmer 1.6s ease-in-out infinite",
       },
     },
   },

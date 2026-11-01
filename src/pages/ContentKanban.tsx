@@ -8,7 +8,7 @@ import AdjustmentRequestDialog from '@/components/kanban/AdjustmentRequestDialog
 import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
 import KanbanColumnJumpBar, { kanbanColumnDomId } from '@/components/kanban/KanbanColumnJumpBar';
 import { useAgentIds } from '@/hooks/useAgentIds';
-import { agentReviewOf, agentWorkState, isUrgent, matchesOwnerFilter, ownerFilterOptions, type OwnerFilter } from '@/lib/agentCardStatus';
+import { agentReviewOf, agentWorkState, isUrgent, matchesOwnerFilter, ownerFilterOptions, queueVisualState, type OwnerFilter } from '@/lib/agentCardStatus';
 import { usePulsePlus } from '@/hooks/usePulsePlus';
 import {
   ANALYSIS_FORBIDDEN_MSG, EDITING_NEEDS_FOOTAGE_MSG, SEND_TO_CLIENT_FORBIDDEN_MSG,
@@ -1920,6 +1920,10 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
   if (task.content_type === 'otimizacao') pills.push({ key: 'otimizar', label: 'Otimizar', tone: 'bg-fuchsia-500/10 text-fuchsia-700 border-fuchsia-500/30 dark:text-fuchsia-300' });
   if (task.adjustment_notes && !task.immediate_alteration) pills.push({ key: 'alterado', label: 'Já teve ajuste', tone: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:text-amber-300' });
 
+  // fila dos agentes (pedido do usuário, 01/11/2026): na fila sem ninguém fazendo = meio apagado; agente fazendo agora =
+  // cor viva com brilho pulsando (o selo mostra a etapa e a barra com o tempo estimado)
+  const fila = queueVisualState(task, { agentIds });
+  const filaClasse = fila === 'waiting' ? 'opacity-50 saturate-[0.35] hover:opacity-100 hover:saturate-100' : fila === 'working' ? 'animate-agent-glow !border-sky-400/80' : '';
   const clientName = client?.companyName || task.prospect_name || 'Cliente';
   // Links (brutos, portal, baixar): discretos, ícone colorido, sem quebrar linha
   const secondaryBtn = 'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-secondary/60 hover:bg-secondary text-[11px] font-medium text-foreground/80 hover:text-foreground whitespace-nowrap transition-[background-color,transform] active:scale-95';
@@ -1939,7 +1943,7 @@ function TaskCard({ task, client, assignedUser, responsibleLabel = 'Responsável
           viewOnly ? 'cursor-default opacity-80' : 'cursor-grab active:cursor-grabbing'
         } ${
           isDragging ? 'opacity-40 scale-[0.97] rotate-1 shadow-none' : 'shadow-sm hover:shadow-lg hover:-translate-y-0.5'
-        }`}
+        } ${filaClasse}`}
       >
         {/* Selo de praça: cartões de outra cidade (somente leitura) */}
         {cityLabel && (

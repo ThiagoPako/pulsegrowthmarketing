@@ -118,7 +118,8 @@ export function cobrancaDoc(d) {
       {
         title: 'Informações',
         bullets: [
-          d.payment?.cardLink ? 'Pelo link do cartão, a confirmação do pagamento é automática.' : '',
+          d.payment?.payUrl ? 'No botão "Pagar agora" (ou no link da mensagem), você copia o Pix com um toque ou paga no cartão.' : '',
+          d.payment?.cardLink ? 'Pelo checkout da InfinitePay, a confirmação do pagamento é automática.' : '',
           'O QR Code e o Pix copia e cola já levam o valor desta mensalidade.',
           'Se o pagamento já foi feito, desconsidere esta cobrança.',
         ].filter(Boolean),

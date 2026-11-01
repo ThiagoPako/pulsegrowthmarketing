@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   stepsDueOn, stepDates, attendanceTip, cardAmount, crc16, pixPayload, applyTemplate, bulletList, nextMonth, previousMonth,
-  DEFAULT_TEMPLATES, DEFAULT_FOOTER, withFooter, checkBillingData, accountSummary,
+  DEFAULT_TEMPLATES, DEFAULT_FOOTER, withFooter, checkBillingData, accountSummary, ensurePayLink, payToken,
 } from '../../vps-api-server/lib/billingIsis.mjs';
 import { contactForCity, formatPhoneBr } from '../../vps-api-server/lib/contactByCity.mjs';
 import { execFileSync } from 'node:child_process';
@@ -40,24 +40,54 @@ describe('cobranças da Ísis · valores e Pix', () => {
     expect(pix.slice(-4)).toBe(crc16(pix.slice(0, -4)));
     expect(pixPayload({ key: '', name: 'x', city: 'y', amount: 1 })).toBeNull();
   });
+
+  it('BR Code estático: os campos EMV se leem de ponta a ponta e o CRC bate com qualquer valor', () => {
+    // lê TLV (id de 2 dígitos + tamanho de 2 dígitos + valor) até o fim; tamanho errado quebra a leitura
+    const parse = (s: string) => {
+      const out: Record<string, string> = {};
+      for (let i = 0; i < s.length;) {
+        const len = Number(s.slice(i + 2, i + 4));
+        out[s.slice(i, i + 2)] = s.slice(i + 4, i + 4 + len);
+        i += 4 + len;
+      }
+      return out;
+    };
+    for (const [amount, key] of [[1, '+5562985382981'], [1499.9, '12345678901'], [12345.67, 'f1c3a9e2-0b5d-4c8e-9a7f-2d6b1e0c4a33']] as const) {
+      const pix = pixPayload({ key, name: 'Agência Pulse', city: 'Uruaçu', amount, txid: 'PULSE202611' })!;
+      const f = parse(pix);
+      expect(f['00']).toBe('01');
+      expect(parse(f['26'])).toEqual({ '00': 'br.gov.bcb.pix', '01': key });
+      expect(f['53']).toBe('986');
+      expect(f['54']).toBe(amount.toFixed(2));
+      expect(f['58']).toBe('BR');
+      expect(f['60']).toBe('URUACU');
+      expect(parse(f['62'])['05']).toBe('PULSE202611');
+      expect(f['63']).toBe(crc16(pix.slice(0, -4)));
+      expect(f['63']).toMatch(/^[0-9A-F]{4}$/);
+    }
+  });
 });
 
 describe('cobranças da Ísis · textos', () => {
-  it('linha com variável vazia sai inteira (sem link, sem cartão)', () => {
+  it('a cobrança leva a página de pagamento; o código Pix não vai no texto (vai sozinho na mensagem seguinte)', () => {
     const body = applyTemplate(DEFAULT_TEMPLATES.cobranca, {
       nome_cliente: 'Posto Naraely', plano: 'Plano Pulse', valor: 'R$ 1.500,00', pix_copia_cola: '000201…', chave_pix: 'pix@pulse.com.br',
-      nome_recebedor: 'Agência Pulse', valor_cartao: '', link_infinitepay: null,
+      nome_recebedor: 'Agência Pulse', link_pagamento: 'https://agenciapulse.tech/pagar/abc', aviso_cartao: '',
     });
     expect(body).toContain('Hoje é o vencimento da sua mensalidade Pulse (Plano Pulse): *R$ 1.500,00*.');
-    expect(body).toContain('💠 *Pix (preferencial):*\n000201…');
-    expect(body).not.toContain('Prefere cartão');
+    expect(body).toContain('👉 *Pague por aqui (Pix ou cartão):* https://agenciapulse.tech/pagar/abc');
+    expect(body).toContain('Pix Copia e Cola');
+    expect(body).not.toContain('000201');
     expect(body).not.toContain('{');
+    expect(body.toLowerCase()).not.toContain('taxa');
+    const lembrete = applyTemplate(DEFAULT_TEMPLATES.lembrete, { nome_cliente: 'X', mes_ref: 'novembro', valor: 'R$ 1,00', link_pagamento: 'https://agenciapulse.tech/pagar/abc' });
+    expect(lembrete).toContain('https://agenciapulse.tech/pagar/abc');
   });
 
-  it('a cobrança não fala de taxa (a InfinitePay repassa na hora do pagamento)', () => {
-    const body = applyTemplate(DEFAULT_TEMPLATES.cobranca, { nome_cliente: 'X', plano: 'P', valor: 'R$ 1,00', pix_copia_cola: '0002', chave_pix: 'k', nome_recebedor: 'r', link_infinitepay: 'https://checkout.infinitepay.io/a/b' });
-    expect(body).toContain('💳 Prefere cartão? Pague pelo link: https://checkout.infinitepay.io/a/b');
-    expect(body.toLowerCase()).not.toContain('taxa');
+  it('modelo salvo antes da página ganha o link; token da página é URL-safe e imprevisível', () => {
+    expect(ensurePayLink('Olá {nome_cliente}')).toBe('Olá {nome_cliente}\n👉 Pague por aqui (Pix ou cartão): {link_pagamento}');
+    expect(ensurePayLink('Pague: {link_pagamento}')).toBe('Pague: {link_pagamento}');
+    expect(payToken((n: number) => Buffer.alloc(n, 255))).toMatch(/^[A-Za-z0-9_-]{22}$/);
   });
 
   it('dica de assiduidade pelo que aconteceu', () => {

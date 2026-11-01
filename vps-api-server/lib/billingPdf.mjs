@@ -337,6 +337,21 @@ async function payment(doc, pay) {
   // cartão (InfinitePay)
   const x2 = M + w + gap;
   doc.roundedRect(x2, y, w, h, 12).fill(C.cinzaClaro);
+  if (pay.payUrl) {
+    // página de pagamento (/pagar/<token>): botão de copiar o Pix e o checkout da InfinitePay (Pix ou cartão)
+    doc.font('bold').fontSize(11).fillColor(C.texto).text('Pagar agora', x2 + 14, y + 12);
+    doc.font('regular').fontSize(9).fillColor(C.cinza)
+      .text(`Na página de pagamento você copia o Pix com um toque${pay.cardLink ? ' ou paga no cartão em até 12x' : ''}.`, x2 + 14, y + 34, { width: w - 28 });
+    doc.font('bold').fontSize(18).fillColor(C.texto).text(pay.cardAmount || pay.amount || '', x2 + 14, y + 66, { width: w - 28 });
+    const by = y + 98;
+    doc.roundedRect(x2 + 14, by, w - 28, 30, 15).fill(C.laranja);
+    doc.font('bold').fontSize(10).fillColor('#FFFFFF').text('Pagar agora', x2 + 14, by + 9, { width: w - 28, align: 'center', link: pay.payUrl, underline: false });
+    doc.link(x2 + 14, by, w - 28, 30, pay.payUrl);
+    doc.font('regular').fontSize(6.5).fillColor(C.cinza).text(pay.payUrl, x2 + 14, by + 36, { width: w - 28, link: pay.payUrl, ellipsis: true, height: 10 });
+    if (pay.cardLink && pay.cardNotice) doc.font('regular').fontSize(6.5).fillColor(C.cinza).text(pay.cardNotice, x2 + 14, by + 48, { width: w - 28 });
+    doc.y = y + h + 18;
+    return;
+  }
   doc.font('bold').fontSize(11).fillColor(C.texto).text('Cartão', x2 + 14, y + 12);
   if (pay.cardLink) {
     doc.font('regular').fontSize(9).fillColor(C.cinza).text('Pelo link da InfinitePay, em até 12x.', x2 + 14, y + 34, { width: w - 28 });

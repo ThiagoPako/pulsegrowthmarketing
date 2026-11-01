@@ -14,9 +14,10 @@
 
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
 import {
   BILLING_STEPS, MODES, DEFAULT_TEMPLATES, monthName, previousMonth, nextMonth, stepDates, attendanceTip,
-  brl, pixPayload, CARD_NOTICE, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
+  brl, pixPayload, CARD_NOTICE, ensurePayLink, payToken, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
 } from './lib/billingIsis.mjs';
 import { renderPdf } from './lib/billingPdf.mjs';
 import { cobrancaDoc, relatorioDoc, agradecimentoDoc } from './lib/billingPdfDocs.mjs';
@@ -42,8 +43,9 @@ const DOC_NAMES = { relatorio_mensal: 'Relatorio', pre_vencimento: 'Agenda', cob
 
 export function registerBillingIsisRoutes(app, {
   pool, verifyAdmin, paymentConfigFor, socialReports, paymentLink = async () => null, uploadRoot, publicUploadsUrl,
-  logger = console,
+  publicAppUrl = process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech', logger = console,
 }) {
+  const appBase = String(publicAppUrl).replace(/\/+$/, '');
   const uploadsBase = String(publicUploadsUrl || 'https://agenciapulse.tech/uploads').replace(/\/+$/, '');
   let schemaPromise = null;
   function ensureSchema() {
@@ -64,6 +66,26 @@ export function registerBillingIsisRoutes(app, {
           ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS body TEXT;
           ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS reference_month TEXT;
           ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS contract_id UUID;
+          -- página pública de pagamento de cada cobrança (/pagar/<token>): uma por contrato e mês
+          CREATE TABLE IF NOT EXISTS billing_pay_pages (
+            token TEXT PRIMARY KEY,
+            contract_id UUID NOT NULL,
+            client_id UUID,
+            month TEXT NOT NULL,
+            revenue_id UUID,
+            client_name TEXT,
+            plan_name TEXT,
+            amount NUMERIC NOT NULL,
+            due_date DATE,
+            pix_payload TEXT,
+            pix_key TEXT,
+            receiver_name TEXT,
+            card_link TEXT,
+            city TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE (contract_id, month)
+          );
         `);
       })().catch((error) => { schemaPromise = null; throw error; });
     }
@@ -156,6 +178,25 @@ export function registerBillingIsisRoutes(app, {
   async function assistantNumbers() {
     const { rows } = await pool.query(`SELECT name, phone, active FROM assistant_numbers`).catch(() => ({ rows: [] }));
     return rows;
+  }
+
+  /** Página de pagamento da cobrança (uma por contrato e mês; o token não muda entre a cobrança e o lembrete). */
+  async function payPage(contract, month, data) {
+    await ensureSchema();
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO billing_pay_pages (token, contract_id, client_id, month, revenue_id, client_name, plan_name, amount, due_date,
+                                      pix_payload, pix_key, receiver_name, card_link, city)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       ON CONFLICT (contract_id, month) DO UPDATE SET
+         revenue_id = EXCLUDED.revenue_id, client_name = EXCLUDED.client_name, plan_name = EXCLUDED.plan_name,
+         amount = EXCLUDED.amount, due_date = EXCLUDED.due_date, pix_payload = EXCLUDED.pix_payload, pix_key = EXCLUDED.pix_key,
+         receiver_name = EXCLUDED.receiver_name, card_link = coalesce(EXCLUDED.card_link, billing_pay_pages.card_link),
+         city = EXCLUDED.city, updated_at = now()
+       RETURNING token`,
+      [payToken(crypto.randomBytes), contract.id, contract.client_id, month, data.revenueId || null, data.clientName, data.planName,
+        data.amount, data.dueDate || null, data.pix, data.pixKey, data.receiver, data.cardLink || null, data.city || null]
+    );
+    return `${appBase}/pagar/${row.token}`;
   }
 
   /** Texto de uma etapa com o rodapé (contato da cidade do cliente) e o PDF a montar; { skip } quando não deve sair. */
@@ -268,16 +309,26 @@ export function registerBillingIsisRoutes(app, {
     });
     const plano = contract.plan_name || 'plano mensal';
     const history = await previousRevenues(contract, month);
+    const payUrl = await payPage(contract, month, {
+      revenueId: revenue?.id, clientName: String(contract.company_name || '').trim(), planName: plano, amount, dueDate,
+      pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, city: normalizeCityValue(contract.client_city || contract.city),
+    }).catch((error) => {
+      logger.error('[cobranca-isis] página de pagamento:', error.message);
+      return null;
+    });
     return {
       config,
       revenue,
       pdf: cobrancaDoc({
         month, today: date, dueDate, amount, status: step === 'lembrete' ? 'vencido' : 'aberto',
         client: clientOf(contract), plan: planOf(contract), issuer: issuerOf(contract, config), history,
-        payment: { pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(amount) : null, cardNotice: CARD_NOTICE },
+        payment: { pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(amount) : null, cardNotice: CARD_NOTICE, payUrl, amount: brl(amount) },
       }),
-      body: applyTemplate(templateOf(config, step), {
-        ...base, plano, valor: brl(amount), mes_ref: monthName(`${month}-01`),
+      payUrl,
+      // o código Pix sozinho, numa mensagem logo depois, para o cliente tocar, segurar e copiar
+      pixMessage: pix,
+      body: applyTemplate(payUrl ? ensurePayLink(templateOf(config, step)) : templateOf(config, step), {
+        ...base, link_pagamento: payUrl, plano, valor: brl(amount), mes_ref: monthName(`${month}-01`),
         pix_copia_cola: pix, chave_pix: config?.pix_key, nome_recebedor: config?.receiver_name,
         link_infinitepay: link, aviso_cartao: link ? CARD_NOTICE : '',
       }),
@@ -362,6 +413,11 @@ export function registerBillingIsisRoutes(app, {
               to: contract.whatsapp, body: out.body, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id,
               ...(pdf ? { mediaUrl: pdf.url, mediaName: pdf.name } : {}),
             });
+            if (out.pixMessage) {
+              await enqueueWhatsApp(pool, {
+                to: contract.whatsapp, body: out.pixMessage, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id,
+              });
+            }
             await record(contract, step, month, 'enviada', out.body, out.revenue?.id, pdf?.url);
           }
           results.push({ client: contract.company_name, step, status: mode === 'previa' ? 'previa' : 'enviada' });
@@ -533,7 +589,34 @@ export function registerBillingIsisRoutes(app, {
         res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${step}-${month}.pdf"` });
         return res.send(buffer);
       }
-      res.json({ step, date, skip: out.skip || null, problems: out.problems || null, body: out.body || null, contact: out.contact || null });
+      res.json({
+        step, date, skip: out.skip || null, problems: out.problems || null, body: out.body || null, contact: out.contact || null,
+        pix_message: out.pixMessage || null, pay_url: out.payUrl || null,
+      });
+    } catch (error) { sendError(res, error); }
+  });
+
+  // ── página pública de pagamento (/pagar/<token>), sem login: valor, vencimento, Pix copia e cola e o checkout ──
+  app.get('/api/public/cobranca/:token', async (req, res) => {
+    try {
+      const token = String(req.params.token || '');
+      if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) throw httpError(404, 'Cobrança não encontrada');
+      await ensureSchema();
+      const { rows: [p] } = await pool.query(`SELECT * FROM billing_pay_pages WHERE token = $1`, [token]);
+      if (!p) throw httpError(404, 'Cobrança não encontrada');
+      // pago agora? (o webhook da InfinitePay ou o financeiro baixam a receita)
+      const { rows: [rev] } = p.revenue_id
+        ? await pool.query(`SELECT status, paid_at FROM revenues WHERE id = $1`, [p.revenue_id]).catch(() => ({ rows: [] }))
+        : { rows: [] };
+      const paid = ['recebida', 'pago'].includes(rev?.status);
+      res.set('Cache-Control', 'no-store');
+      res.json({
+        client: p.client_name, plan: p.plan_name, month: p.month, amount: Number(p.amount),
+        due_date: p.due_date ? String(p.due_date instanceof Date ? p.due_date.toISOString() : p.due_date).slice(0, 10) : null,
+        paid, paid_at: paid ? rev.paid_at : null,
+        pix_payload: paid ? null : p.pix_payload, pix_key: p.pix_key, receiver: p.receiver_name,
+        card_link: paid ? null : p.card_link, city: p.city,
+      });
     } catch (error) { sendError(res, error); }
   });
 

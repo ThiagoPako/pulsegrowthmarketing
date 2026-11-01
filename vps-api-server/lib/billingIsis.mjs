@@ -34,21 +34,22 @@ export const DEFAULT_TEMPLATES = {
     '{dica_assiduidade}',
     'Sua mensalidade vence dia {dia_vencimento}; no dia te mando o Pix e o link, tudo certinho.',
   ].join('\n'),
+  // pedido do usuário (01/11/2026): "uma forma do cliente copiar o pagamento ou clicar para pagar": a mensagem leva a
+  // página de pagamento ({link_pagamento}, com o botão de copiar o Pix e o de pagar) e o código Pix vai sozinho na
+  // mensagem seguinte, para tocar, segurar e copiar
   cobranca: [
     'Olá, {nome_cliente}! Tudo bem? 😊',
     'Hoje é o vencimento da sua mensalidade Pulse ({plano}): *{valor}*.',
-    '💠 *Pix (preferencial):*',
-    '{pix_copia_cola}',
+    '👉 *Pague por aqui (Pix ou cartão):* {link_pagamento}',
+    '💠 Prefere o Pix direto? O código vai na próxima mensagem: toque, segure e copie; no app do seu banco, vá em Pix → Pix Copia e Cola.',
     'Chave: {chave_pix} · {nome_recebedor}',
-    '💳 Prefere cartão? Pague pelo link: {link_infinitepay}',
     '_{aviso_cartao}_',
     'Se já pagou, pode desconsiderar. Obrigada pela confiança! 🧡',
   ].join('\n'),
   lembrete: [
     'Oi, {nome_cliente}! Não localizamos ainda o pagamento da mensalidade de {mes_ref} ({valor}).',
-    'Se já pagou, desconsidere e me desculpe 🙏. Se precisar, o Pix e o link continuam valendo:',
-    '{pix_copia_cola}',
-    '{link_infinitepay}',
+    'Se já pagou, desconsidere e me desculpe 🙏. Se precisar, é só pagar por aqui (Pix ou cartão): {link_pagamento}',
+    'O código Pix vai na próxima mensagem, para copiar.',
   ].join('\n'),
 };
 
@@ -170,6 +171,17 @@ export function pixPayload({ key, name, city, amount, txid = '***' }) {
     '6304',
   ].join('');
   return body + crc16(body);
+}
+
+/** Modelo de cobrança salvo antes da página de pagamento: ganha a linha do link no fim (o cliente sempre recebe). */
+export function ensurePayLink(template) {
+  const t = String(template || '');
+  return t.includes('{link_pagamento}') ? t : `${t}\n👉 Pague por aqui (Pix ou cartão): {link_pagamento}`;
+}
+
+/** Token da página de pagamento: 22 caracteres URL-safe (128 bits). */
+export function payToken(randomBytes) {
+  return Buffer.from(randomBytes(16)).toString('base64url');
 }
 
 /** Preenche o modelo; linha com variável vazia sai inteira (sem link, sem rede, sem sugestão). */

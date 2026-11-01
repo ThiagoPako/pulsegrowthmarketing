@@ -21,7 +21,21 @@ export interface VictoriaLesson {
   created_at: string;
 }
 
+export interface VictoriaSuggestion {
+  titulo: string;
+  ideia: string;
+  por_que: string;
+  tipo: ScriptVideoType | null;
+}
+
+export interface VictoriaSuggestions {
+  status: 'pronta' | 'preparando';
+  items: VictoriaSuggestion[];
+}
+
 export interface VictoriaReply {
+  /** frase dela para quem pediu, no jeito alegre (pode vir vazia) */
+  recado?: string;
   titulo: string;
   roteiro: string;
   legenda: string;
@@ -38,6 +52,7 @@ export interface VictoriaPrepared {
   research: 'pronta' | 'preparando';
   research_date: string | null;
   usados: { roteiros_cliente: number; roteiros_agencia: number; regras: number };
+  suggestions?: VictoriaSuggestions;
 }
 
 export interface VictoriaInfo {
@@ -68,6 +83,10 @@ export interface VictoriaRequest {
 /** Ao escolher cliente e tipo: o servidor monta o contexto e deixa a pesquisa do nicho pronta (rápido depois). */
 export const prepareVictoria = (payload: Pick<VictoriaRequest, 'client_id' | 'content_format' | 'video_type'>) =>
   call<VictoriaPrepared>('/victoria/prepare', { method: 'POST', body: JSON.stringify(payload) });
+
+/** Sugestões de abertura (a tela pergunta de novo enquanto estão 'preparando'). */
+export const fetchVictoriaSuggestions = (clientId: string, format: ScriptContentFormat) =>
+  call<VictoriaSuggestions>(`/victoria/suggestions?client_id=${encodeURIComponent(clientId)}&content_format=${format}`);
 
 /**
  * Pede o roteiro e recebe o texto enquanto ela escreve (text/event-stream: "delta" com pedaços, "done" com o roteiro,

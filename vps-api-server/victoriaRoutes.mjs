@@ -32,15 +32,18 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import {
-  VICTORIA_SYSTEM, VICTORIA_FORMATS, VICTORIA_VIDEO_TYPES, buildVictoriaContext, buildVictoriaTurns, parseVictoriaReply,
-  normalizeLessons, searchResultUrls, researchPrompt, parseResearch,
+  VICTORIA_SYSTEM, VICTORIA_SUGGEST_SYSTEM, VICTORIA_FORMATS, VICTORIA_VIDEO_TYPES, buildVictoriaContext, buildVictoriaTurns, parseVictoriaReply,
+  normalizeLessons, searchResultUrls, researchPrompt, parseResearch, nicheKind, RESEARCH_DAYS_BY_KIND, suggestionsPrompt,
+  parseSuggestions,
 } from './lib/victoria.mjs';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 // o Nginx corta em 120 s; com streaming o texto começa em poucos segundos, mas o total ainda tem de caber
 const DEADLINE_MS = 100_000;
-const RESEARCH_DAYS = 7;
+const RESEARCH_DAYS = 5;
+const SUGGESTIONS_DAYS = 3;
+const WARM_EVERY_MS = 5 * 60_000;
 const CONTEXT_CACHE_MAX = 200;
 
 export function registerVictoriaRoutes(app, {
@@ -75,6 +78,17 @@ export function registerVictoriaRoutes(app, {
             content_format TEXT,
             text TEXT NOT NULL,
             refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )
+        `);
+        // sugestões de abertura por cliente e formato
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS victoria_suggestions (
+            key TEXT PRIMARY KEY,
+            client_id UUID,
+            content_format TEXT,
+            items JSONB NOT NULL DEFAULT '[]'::jsonb,
+            research_at TEXT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
           )
         `);
@@ -153,31 +167,33 @@ export function registerVictoriaRoutes(app, {
     return saved;
   }
 
-  // ── Pesquisa do nicho (antes de pedirem) ──
-  const nicheKey = (client, format) => `${String(client.niche || client.company_name || '').trim().toLowerCase().replace(/\s+/g, ' ')}|${format}`;
-  const researching = new Map(); // niche_key → promessa da pesquisa em andamento
+  // ── Pesquisa do cliente (antes de pedirem) ──
+  // Uma por cliente e formato: o que ele faz, datas sazonais dos próximos 45 dias e temas do momento (agro: período do
+  // campo; jurídico: temas do momento). Vale 3 dias (agro, jurídico) ou 5 (demais): RESEARCH_DAYS_BY_KIND.
+  const researchKey = (client, format) => `cliente:${client.id}|${format}`;
+  const researchDays = (client) => RESEARCH_DAYS_BY_KIND[nicheKind(client.niche || client.company_name)] || RESEARCH_DAYS;
+  const researching = new Map(); // chave → promessa da pesquisa em andamento
 
-  async function storedResearch(key) {
+  async function storedResearch(client, format) {
     const { rows } = await pool.query(
       `SELECT text, refs, created_at FROM victoria_research WHERE niche_key = $1 AND created_at > now() - ($2 || ' days')::interval`,
-      [key, String(RESEARCH_DAYS)]
+      [researchKey(client, format), String(researchDays(client))]
     );
     if (!rows.length) return null;
     const at = new Date(rows[0].created_at);
     return { text: rows[0].text, refs: rows[0].refs || [], date: at.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }), at: rows[0].created_at };
   }
 
-  /** Pesquisa o nicho na web em segundo plano (uma por vez por nicho). Devolve a promessa. */
+  /** Pesquisa o cliente na web em segundo plano (uma por vez por cliente e formato). Devolve a promessa. */
   function startResearch(client, format) {
-    const key = nicheKey(client, format);
-    if (!client.niche && !client.company_name) return null;
+    const key = researchKey(client, format);
     if (researching.has(key)) return researching.get(key);
     const job = (async () => {
       const started = Date.now();
       const anthropic = await claude();
       const m = model();
-      const messages = [{ role: 'user', content: researchPrompt({ niche: client.niche || client.company_name, format }) }];
-      const tools = [{ type: 'web_search_20260209', name: 'web_search', max_uses: 3, user_location: { type: 'approximate', country: 'BR', timezone: 'America/Sao_Paulo' } }];
+      const messages = [{ role: 'user', content: researchPrompt({ client, format }) }];
+      const tools = [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4, user_location: { type: 'approximate', country: 'BR', region: 'Goiás', timezone: 'America/Sao_Paulo', ...(client.city ? { city: client.city } : {}) } }];
       const content = [];
       for (let round = 0; round < 3; round++) {
         const response = await anthropic.beta.messages.create({
@@ -196,10 +212,10 @@ export function registerVictoriaRoutes(app, {
          ON CONFLICT (niche_key) DO UPDATE SET text = EXCLUDED.text, refs = EXCLUDED.refs, created_at = now()`,
         [key, client.niche || client.company_name, format, research.text, JSON.stringify(research.refs)]
       );
-      logger.log?.(`[victoria] pesquisa do nicho "${key}" pronta em ${Math.round((Date.now() - started) / 1000)} s`);
+      logger.log?.(`[victoria] pesquisa de ${String(client.company_name || '').trim()} (${format}) pronta em ${Math.round((Date.now() - started) / 1000)} s`);
       return research;
     })().catch((error) => {
-      logger.warn?.('[victoria] pesquisa do nicho:', error?.message || error);
+      logger.warn?.('[victoria] pesquisa do cliente:', error?.message || error);
       return null;
     }).finally(() => researching.delete(key));
     researching.set(key, job);
@@ -223,7 +239,7 @@ export function registerVictoriaRoutes(app, {
     const key = `${client.id}|${format}|${videoType}`;
     const [fp, research] = await Promise.all([
       fingerprint(client.id),
-      withResearch ? storedResearch(nicheKey(client, format)) : null,
+      withResearch ? storedResearch(client, format) : null,
     ]);
     const cached = contexts.get(key);
     const researchStamp = research?.at ? String(research.at) : '';
@@ -266,6 +282,101 @@ export function registerVictoriaRoutes(app, {
     return { format, videoType };
   }
 
+  // ── Sugestões de abertura (pedido do usuário, 01/11/2026: "quando abrir a Victoria ela já vem com sugestões") ──
+  // 3 a 5 ideias por cliente e formato, escritas em segundo plano depois da pesquisa do cliente e guardadas
+  // (victoria_suggestions). Refeitas quando a pesquisa muda ou passam de SUGGESTIONS_DAYS; os roteiros novos do cliente
+  // entram na próxima rodada. A rodada de aquecimento (warm) deixa as de reels prontas para os clientes ativos.
+  const suggestionKey = (client, format) => `${client.id}|${format}`;
+  const suggesting = new Map();
+
+  async function storedSuggestions(client, format) {
+    const research = await storedResearch(client, format);
+    const { rows } = await pool.query(
+      `SELECT items, research_at, created_at FROM victoria_suggestions
+        WHERE key = $1 AND created_at > now() - ($2 || ' days')::interval`,
+      [suggestionKey(client, format), String(SUGGESTIONS_DAYS)]
+    );
+    const row = rows[0];
+    // pesquisa nova desde as sugestões: refaz com os temas novos
+    if (!row || (research?.at && String(research.at) !== String(row.research_at || ''))) return { items: null, research };
+    return { items: row.items || [], research };
+  }
+
+  /** Escreve as sugestões em segundo plano (espera a pesquisa do cliente, se estiver em andamento ou faltar). */
+  function startSuggestions(client, format) {
+    const key = suggestionKey(client, format);
+    if (suggesting.has(key)) return suggesting.get(key);
+    const job = (async () => {
+      const started = Date.now();
+      let research = await storedResearch(client, format);
+      if (!research) {
+        await startResearch(client, format);
+        research = await storedResearch(client, format);
+      }
+      const ctx = await clientContext(client, format, 'vendas', { withResearch: true });
+      const anthropic = await claude();
+      const m = model();
+      const message = await anthropic.beta.messages.create({
+        model: m,
+        ...fallbackParams(m),
+        max_tokens: 3000,
+        output_config: { effort: 'low' },
+        system: [
+          { type: 'text', text: VICTORIA_SUGGEST_SYSTEM },
+          { type: 'text', text: ctx.context, cache_control: { type: 'ephemeral' } },
+        ],
+        messages: [{ role: 'user', content: suggestionsPrompt({ format, kind: nicheKind(client.niche || client.company_name) }) }],
+      });
+      const items = parseSuggestions(message.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
+      if (!items.length) throw new Error('nenhuma sugestão');
+      await pool.query(
+        `INSERT INTO victoria_suggestions (key, client_id, content_format, items, research_at, created_at)
+         VALUES ($1, $2, $3, $4::jsonb, $5, now())
+         ON CONFLICT (key) DO UPDATE SET items = EXCLUDED.items, research_at = EXCLUDED.research_at, created_at = now()`,
+        [key, client.id, format, JSON.stringify(items), research?.at ? String(research.at) : null]
+      );
+      logger.log?.(`[victoria] ${items.length} sugestões de ${String(client.company_name || '').trim()} (${format}) em ${Math.round((Date.now() - started) / 1000)} s`);
+      return items;
+    })().catch((error) => {
+      logger.warn?.('[victoria] sugestões:', error?.message || error);
+      return null;
+    }).finally(() => suggesting.delete(key));
+    suggesting.set(key, job);
+    return job;
+  }
+
+  async function suggestionsState(client, format) {
+    const { items } = await storedSuggestions(client, format);
+    if (items) return { status: 'pronta', items };
+    startSuggestions(client, format);
+    return { status: 'preparando', items: [] };
+  }
+
+  // Aquecimento: um cliente ativo por rodada, os de roteiro mais recente primeiro (sugestões de reels prontas ao abrir)
+  async function warmTick() {
+    try {
+      await ensureSchema();
+      if (suggesting.size) return;
+      const { rows } = await pool.query(
+        `SELECT c.id, c.company_name, c.niche, c.city, c.editorial
+           FROM clients c
+          WHERE coalesce(c.status, 'ativo') <> 'cancelado'
+            AND NOT EXISTS (SELECT 1 FROM victoria_suggestions vs
+                             WHERE vs.key = c.id::text || '|reels' AND vs.created_at > now() - ($1 || ' days')::interval)
+          ORDER BY (SELECT max(s.updated_at) FROM scripts s WHERE s.client_id = c.id) DESC NULLS LAST
+          LIMIT 1`,
+        [String(SUGGESTIONS_DAYS)]
+      );
+      if (rows[0]) await startSuggestions(rows[0], 'reels');
+    } catch (error) {
+      logger.warn?.('[victoria] aquecimento:', error?.message || error);
+    }
+  }
+  if (env.PULSE_VICTORIA_WARM !== '0') {
+    setTimeout(() => { warmTick(); }, 2 * 60_000).unref?.();
+    setInterval(() => { warmTick(); }, WARM_EVERY_MS).unref?.();
+  }
+
   // ── Equipe ──
   app.get('/api/victoria/info', async (req, res) => {
     try {
@@ -297,12 +408,28 @@ export function registerVictoriaRoutes(app, {
       const { format, videoType } = readRequest(req.body);
       const ctx = await clientContext(client, format, videoType, { withResearch: true });
       if (!ctx.research) startResearch(client, format);
+      const suggestions = await suggestionsState(client, format);
       res.json({
         ready: true,
         research: ctx.research ? 'pronta' : 'preparando',
         research_date: ctx.research?.date || null,
         usados: ctx.usados,
+        suggestions,
       });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // A tela pergunta de novo enquanto as sugestões ficam prontas (status 'preparando' → 'pronta')
+  app.get('/api/victoria/suggestions', async (req, res) => {
+    try {
+      await verifyUser(req);
+      await ensureSchema();
+      const client = await loadClient(req.query.client_id);
+      const { format } = readRequest({ content_format: req.query.content_format });
+      res.set('Cache-Control', 'no-store');
+      res.json(await suggestionsState(client, format));
     } catch (error) {
       sendError(res, error);
     }

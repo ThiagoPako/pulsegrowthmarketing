@@ -17,8 +17,8 @@ import { useAuth } from '@/hooks/useAuth';
 import type { Client, Script, ScriptContentFormat, ScriptVideoType } from '@/types';
 import { SCRIPT_CONTENT_FORMAT_LABELS, SCRIPT_VIDEO_TYPE_LABELS } from '@/types';
 import {
-  askVictoria, conversationPayload, fetchVictoriaInfo, partialScript, prepareVictoria, removeVictoriaLesson, scriptToHtml, useSpeechToText,
-  type VictoriaPrepared,
+  askVictoria, conversationPayload, fetchVictoriaInfo, fetchVictoriaSuggestions, partialScript, prepareVictoria, removeVictoriaLesson,
+  scriptToHtml, useSpeechToText, type VictoriaPrepared, type VictoriaSuggestion,
   type VictoriaReply, type VictoriaTurn,
 } from '@/lib/victoria';
 
@@ -44,6 +44,7 @@ function VictoriaAvatar({ url, name, size = 'md' }: { url: string | null | undef
 function ReplyCard({ reply, onUse, latest }: { reply: VictoriaReply; onUse: () => void; latest: boolean }) {
   return (
     <div className="space-y-3 rounded-2xl rounded-bl-sm border border-border bg-muted/60 p-3 text-sm">
+      {reply.recado && <p className="text-[13px] italic text-muted-foreground">{reply.recado}</p>}
       {reply.titulo && <p className="font-semibold">{reply.titulo}</p>}
       <p className="whitespace-pre-wrap break-words leading-relaxed">{reply.roteiro}</p>
       {reply.legenda && (
@@ -109,6 +110,7 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
   // texto chegando enquanto ela escreve (streaming)
   const [streamText, setStreamText] = useState('');
   const [prepared, setPrepared] = useState<VictoriaPrepared | null>(null);
+  const [suggestions, setSuggestions] = useState<VictoriaPrepared['suggestions'] | null>(null);
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [final, setFinal] = useState({ title: '', content: '', caption: '' });
@@ -137,6 +139,7 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
     setWebSearch(true);
     setStreamText('');
     setPrepared(null);
+    setSuggestions(null);
     setFinal({ title: '', content: '', caption: '' });
   }, [open]);
 
@@ -159,34 +162,35 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
 
   const lastReply = [...turns].reverse().find((t) => t.role === 'victoria')?.reply;
 
-  const send = async () => {
-    const text = draft.trim();
+  const send = async (fromSuggestion?: VictoriaSuggestion) => {
+    const text = (fromSuggestion ? fromSuggestion.ideia : draft).trim();
     if (!text || !client || busy) return;
     speech.stop();
     const role = lastReply ? 'correcao' : 'pedido';
     const next: VictoriaTurn[] = [...turns, { role, text }];
     setTurns(next);
-    setDraft('');
+    if (fromSuggestion?.tipo) setVideoType(fromSuggestion.tipo);
+    if (!fromSuggestion) setDraft('');
     setBusy(true);
     setStreamText('');
     try {
       const reply = await askVictoria({
         client_id: client.id,
         content_format: format,
-        video_type: videoType,
+        video_type: fromSuggestion?.tipo || videoType,
         conversation: conversationPayload(next),
         search: webSearch,
       }, setStreamText);
       setTurns((list) => [...list, { role: 'victoria', text: reply.roteiro, reply }]);
       if (reply.aprendizados.length) {
-        toast.success(`${victoriaName} aprendeu ${reply.aprendizados.length} regra(s) com a sua correção`);
+        toast.success(`Anotadinho! ${victoriaName} aprendeu ${reply.aprendizados.length} regra(s) com a sua correção ✨`);
         void queryClient.invalidateQueries({ queryKey: ['victoria-info', client.id] });
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
       // devolve o texto para a pessoa não perder o que falou
       setTurns((list) => list.slice(0, -1));
-      setDraft(text);
+      if (!fromSuggestion) setDraft(text);
     } finally {
       setBusy(false);
       setStreamText('');
@@ -197,10 +201,35 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
   const openConversation = () => {
     setStep('conversa');
     if (!client) return;
+    setSuggestions(null);
     prepareVictoria({ client_id: client.id, content_format: format, video_type: videoType })
-      .then(setPrepared)
+      .then((result) => {
+        setPrepared(result);
+        setSuggestions(result.suggestions || null);
+      })
       .catch(() => { /* sem preparo: o roteiro sai do mesmo jeito, só um pouco mais devagar */ });
   };
+
+  // escolheu o cliente: o servidor já começa a preparar (contexto, pesquisa e sugestões de reels)
+  const chooseClient = (c: Client) => {
+    setClient(c);
+    setStep('tipo');
+    prepareVictoria({ client_id: c.id, content_format: 'reels', video_type: 'vendas' }).catch(() => {});
+  };
+
+  // sugestões ainda sendo escritas: pergunta de novo a cada 3 s (até ~2 min)
+  const suggestionsPending = step === 'conversa' && !!client && suggestions?.status === 'preparando';
+  useEffect(() => {
+    if (!suggestionsPending || !client) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries += 1;
+      fetchVictoriaSuggestions(client.id, format)
+        .then((next) => { if (next.status === 'pronta' || tries >= 40) setSuggestions(next.status === 'pronta' ? next : { status: 'pronta', items: [] }); })
+        .catch(() => {});
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [suggestionsPending, client, format]);
 
   const pickReply = (reply: VictoriaReply) => {
     setFinal({
@@ -277,7 +306,7 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => { setClient(c); setStep('tipo'); }}
+                  onClick={() => chooseClient(c)}
                   className="flex items-center gap-2 rounded-lg border border-border p-2 text-left text-sm transition hover:border-red-500/50"
                 >
                   <ClientLogo client={c} size="sm" />
@@ -359,10 +388,34 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
               <div className="flex gap-2">
                 <VictoriaAvatar url={victoriaAvatar} name={victoriaName} />
                 <div className="rounded-2xl rounded-tl-sm bg-muted px-3 py-2 text-sm">
-                  Oi! Sou a {victoriaName}. Já conheço o nicho e o editorial da {client.companyName} e os roteiros que vocês já gravaram.
-                  Me conta a ideia do {SCRIPT_CONTENT_FORMAT_LABELS[format].toLowerCase()} (pode falar no microfone) que eu escrevo no padrão da agência.
+                  Oiê! Que bom te ver por aqui 😊 Já dei uma olhada no editorial de {client.companyName}, nos roteiros que vocês já gravaram e no que está rolando no nicho agora.
+                  {turns.length === 0 && (suggestions?.items.length
+                    ? ' Separei umas ideias para você: é só tocar numa delas, ou me contar a sua (pode falar no microfone)!'
+                    : ` Me conta a ideia do ${SCRIPT_CONTENT_FORMAT_LABELS[format].toLowerCase()} (pode falar no microfone) que eu escrevo rapidinho no padrão da agência!`)}
                 </div>
               </div>
+              {turns.length === 0 && (suggestions?.status === 'preparando' || (!suggestions && !prepared)) && (
+                <div className="flex items-center gap-2 pl-12 text-xs text-muted-foreground">
+                  <Loader2 size={12} className="animate-spin" /> Separando umas ideias com datas e temas do momento…
+                </div>
+              )}
+              {turns.length === 0 && !!suggestions?.items.length && (
+                <div className="grid gap-2 pl-12 sm:grid-cols-2" aria-label={`Sugestões da ${victoriaName}`}>
+                  {suggestions.items.map((item) => (
+                    <button
+                      key={item.titulo}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void send(item)}
+                      className="rounded-xl border border-red-500/30 bg-red-600/5 p-3 text-left text-sm transition hover:border-red-500 hover:bg-red-600/10"
+                    >
+                      <span className="flex items-center gap-1 font-semibold"><Sparkles size={12} className="shrink-0 text-red-500" /> {item.titulo}</span>
+                      <span className="mt-1 block text-xs">{item.ideia}</span>
+                      {item.por_que && <span className="mt-1 block text-[11px] text-muted-foreground">{item.por_que}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
               {turns.map((turn, index) => (
                 turn.role === 'victoria' && turn.reply ? (
                   <div key={index} className="flex gap-2">
@@ -393,7 +446,7 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
                 ) : (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 size={14} className="animate-spin" />
-                    {victoriaName} está escrevendo…
+                    {victoriaName} está escrevendo com carinho…
                   </div>
                 )
               )}

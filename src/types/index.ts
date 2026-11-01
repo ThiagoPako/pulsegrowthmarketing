@@ -116,6 +116,8 @@ export interface Client {
   driveLink?: string;
   driveFotos?: string;
   driveIdentidadeVisual?: string;
+  /** Pasta de referências de design (Drive): o jeito que a agência acha bonito, para adaptar à identidade — não copiar */
+  driveReferenciasDesign?: string;
   editorial?: string;
   fullShiftRecording?: boolean; // client uses entire shift (morning or afternoon)
   preferredShift?: 'manha' | 'tarde'; // which shift the client prefers

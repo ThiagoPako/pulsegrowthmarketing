@@ -97,6 +97,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
     geral: (fullClient?.driveLink || task.clients?.drive_link || '').trim(),
     fotos: (fullClient?.driveFotos || '').trim(),
     identidade: (fullClient?.driveIdentidadeVisual || '').trim(),
+    referencias: (fullClient?.driveReferenciasDesign || '').trim(),
   };
   const formatInfo = describeDesignFormat(task.dimensions, task.format_type);
   const copyBrief = normalizeCopyBrief(task.copy_brief);
@@ -916,6 +917,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
                           <a href={clientDrive.geral} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1"><FolderOpen size={11} /> Pasta geral</a>
                           {clientDrive.identidade && <a href={clientDrive.identidade} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1"><Palette size={11} /> Identidade visual</a>}
+                          {clientDrive.referencias && <a href={clientDrive.referencias} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1" title="Referência não é cópia: adapte à identidade do cliente"><Palette size={11} /> Referências de design</a>}
                           {clientDrive.fotos && <a href={clientDrive.fotos} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1"><Image size={11} /> Fotos</a>}
                         </div>
                       </div>

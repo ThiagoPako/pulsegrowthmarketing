@@ -2544,6 +2544,8 @@ async function ensureClientExperienceColumns() {
     clientExperienceColumnsPromise = (async () => {
       await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS company_birthday DATE`);
       await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS client_owners JSONB DEFAULT '[]'::jsonb`);
+      // pasta de referências de design do cliente (01/11/2026): referência não é cópia, é como a agência acha bonito
+      await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS drive_referencias_design TEXT`);
     })().catch((error) => {
       clientExperienceColumnsPromise = null;
       throw error;

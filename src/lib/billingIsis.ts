@@ -41,6 +41,9 @@ export interface BillingConfig {
   infinitepay_handle: string;
   templates: Record<BillingStep, string>;
   defaults: Record<BillingStep, string>;
+  /** rodapé de mensagem automática em todas as mensagens ao cliente (vazio = sem rodapé) */
+  footer: string;
+  default_footer: string;
 }
 
 export interface BillingAgendaItem {
@@ -65,7 +68,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const fetchBillingConfig = () => call<BillingConfig>('/billing-isis/config');
-export const saveBillingConfig = (patch: Partial<Pick<BillingConfig, 'mode' | 'card_fee_percent' | 'infinitepay_handle'>> & { templates?: Partial<Record<BillingStep, string>> }) =>
+export const saveBillingConfig = (patch: Partial<Pick<BillingConfig, 'mode' | 'card_fee_percent' | 'infinitepay_handle' | 'footer'>> & { templates?: Partial<Record<BillingStep, string>> }) =>
   call<{ success: boolean }>('/billing-isis/config', { method: 'PUT', body: JSON.stringify(patch) });
 export const fetchBillingAgenda = (month: string) =>
   call<{ month: string; today: string; items: BillingAgendaItem[] }>(`/billing-isis/agenda?month=${encodeURIComponent(month)}`);

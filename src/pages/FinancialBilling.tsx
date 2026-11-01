@@ -148,6 +148,7 @@ function BillingSettings() {
   const [mode, setMode] = useState<BillingMode>('desligado');
   const [fee, setFee] = useState('0');
   const [handle, setHandle] = useState('');
+  const [footer, setFooter] = useState('');
   const [templates, setTemplates] = useState<Record<BillingStep, string>>({ relatorio_mensal: '', pre_vencimento: '', cobranca: '', lembrete: '' });
   const [saving, setSaving] = useState(false);
 
@@ -156,6 +157,7 @@ function BillingSettings() {
     setMode(data.mode);
     setFee(String(data.card_fee_percent));
     setHandle(data.infinitepay_handle || '');
+    setFooter(data.footer ?? '');
     setTemplates(data.templates);
   }, [data]);
   if (!data) return null;
@@ -163,7 +165,7 @@ function BillingSettings() {
   const save = async () => {
     setSaving(true);
     try {
-      await saveBillingConfig({ mode, card_fee_percent: Number(fee.replace(',', '.')) || 0, infinitepay_handle: handle, templates });
+      await saveBillingConfig({ mode, card_fee_percent: Number(fee.replace(',', '.')) || 0, infinitepay_handle: handle, footer, templates });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['billing-isis-config'] }),
         queryClient.invalidateQueries({ queryKey: ['billing-isis-agenda'] }),
@@ -240,6 +242,19 @@ function BillingSettings() {
           </CardContent>
         </Card>
       ))}
+
+      <Card>
+        <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Rodapé de todas as mensagens</CardTitle>
+          <Button variant="ghost" size="sm" disabled={footer === data.default_footer} onClick={() => setFooter(data.default_footer)}>
+            <RotateCcw size={14} className="mr-1" /> Texto aprovado
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          <Textarea rows={3} value={footer} onChange={(e) => setFooter(e.target.value)} className="font-mono text-xs" />
+          <p className="text-[11px] text-muted-foreground">Vai no fim do relatório, do agradecimento, da cobrança e do lembrete: avisa que o número é automático e para quem ligar. Vazio = sem rodapé.</p>
+        </CardContent>
+      </Card>
 
       <Button onClick={save} disabled={saving}>{saving && <Loader2 size={14} className="mr-1 animate-spin" />} Salvar cobranças</Button>
     </div>

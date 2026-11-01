@@ -12,7 +12,7 @@
 
 import {
   BILLING_STEPS, MODES, DEFAULT_TEMPLATES, monthName, previousMonth, nextMonth, stepDates, attendanceTip,
-  cardAmount, brl, pixPayload, applyTemplate, bulletList,
+  cardAmount, brl, pixPayload, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter,
 } from './lib/billingIsis.mjs';
 import { enqueueWhatsApp } from './whatsapp/shared.mjs';
 
@@ -43,6 +43,7 @@ export function registerBillingIsisRoutes(app, {
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_pre TEXT;
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_cobranca TEXT;
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_lembrete TEXT;
+          ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_rodape TEXT;
           ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS body TEXT;
           ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS reference_month TEXT;
           ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS contract_id UUID;
@@ -107,8 +108,13 @@ export function registerBillingIsisRoutes(app, {
     return { done, scheduled: rec.length - cancelled, cancelled, avg: dr.length ? Math.round((videos / dr.length) * 10) / 10 : null };
   }
 
-  /** Texto de uma etapa para um contrato (month = mês da mensalidade); { skip } quando não deve sair. */
+  /** Texto de uma etapa com o rodapé de mensagem automática (todas as etapas); { skip } quando não deve sair. */
   async function compose(contract, step, date, month = date.slice(0, 7)) {
+    const out = await composeBody(contract, step, date, month);
+    return out.body ? { ...out, body: withFooter(out.body, out.config?.msg_isis_rodape) } : out;
+  }
+
+  async function composeBody(contract, step, date, month) {
     const config = await paymentConfigFor(contract.city || contract.client_city);
     const base = { nome_cliente: String(contract.company_name || '').trim() };
 
@@ -243,6 +249,8 @@ export function registerBillingIsisRoutes(app, {
         infinitepay_handle: config?.infinitepay_handle || '',
         templates: Object.fromEntries(BILLING_STEPS.map((s) => [s, templateOf(config, s)])),
         defaults: DEFAULT_TEMPLATES,
+        footer: config?.msg_isis_rodape ?? DEFAULT_FOOTER,
+        default_footer: DEFAULT_FOOTER,
       });
     } catch (error) { sendError(res, error); }
   });
@@ -262,6 +270,12 @@ export function registerBillingIsisRoutes(app, {
       if (typeof req.body?.infinitepay_handle === 'string') {
         params.push(req.body.infinitepay_handle.trim().replace(/^\$/, '').replace(/\s+/g, '').slice(0, 60) || null);
         sets.push(`infinitepay_handle = $${params.length}`);
+      }
+      // rodapé: igual ao padrão = guarda vazio (null); texto vazio = sem rodapé
+      if (typeof req.body?.footer === 'string') {
+        const f = req.body.footer.trim();
+        params.push(f === DEFAULT_FOOTER ? null : f.slice(0, 500));
+        sets.push(`msg_isis_rodape = $${params.length}`);
       }
       for (const step of BILLING_STEPS) {
         const t = req.body?.templates?.[step];

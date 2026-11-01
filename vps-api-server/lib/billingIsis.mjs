@@ -52,6 +52,16 @@ export const DEFAULT_TEMPLATES = {
   ].join('\n'),
 };
 
+// rodapé de toda mensagem ao cliente (pedido do usuário, 01/11/2026: "avisa que é um número de mensagem automática e
+// deixa o número do Thiago para entrar em contato"); editável na tela, vazio = sem rodapé
+export const DEFAULT_FOOTER = '—\n_Esta é uma mensagem automática. Para dúvidas, fale com o Thiago: (62) 98538-2981._';
+
+/** Mensagem + rodapé (null/undefined = o padrão; texto vazio = sem rodapé). */
+export function withFooter(body, footer) {
+  const f = footer === null || footer === undefined ? DEFAULT_FOOTER : String(footer).trim();
+  return f ? `${String(body).trim()}\n\n${f}` : String(body).trim();
+}
+
 const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const pad2 = (n) => String(n).padStart(2, '0');
 

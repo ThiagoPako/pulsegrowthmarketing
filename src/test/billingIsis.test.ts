@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   stepsDueOn, stepDates, attendanceTip, cardAmount, crc16, pixPayload, applyTemplate, bulletList, nextMonth, previousMonth,
-  DEFAULT_TEMPLATES,
+  DEFAULT_TEMPLATES, DEFAULT_FOOTER, withFooter,
 } from '../../vps-api-server/lib/billingIsis.mjs';
 
 describe('cobranças da Ísis · calendário', () => {
@@ -58,5 +58,14 @@ describe('cobranças da Ísis · textos', () => {
 
   it('sugestões viram tópicos', () => {
     expect(bulletList('Story do café\n• Reels\n\n')).toBe('• Story do café\n• Reels');
+  });
+});
+
+describe('cobranças da Ísis · rodapé de mensagem automática', () => {
+  it('vai no fim de toda mensagem, editável e desligável', () => {
+    expect(withFooter('Olá!', null)).toBe('Olá!\n\n—\n_Esta é uma mensagem automática. Para dúvidas, fale com o Thiago: (62) 98538-2981._');
+    expect(withFooter('Olá!', undefined)).toBe(`Olá!\n\n${DEFAULT_FOOTER}`);
+    expect(withFooter('Olá!', 'Dúvidas: (62) 9999-0000')).toBe('Olá!\n\nDúvidas: (62) 9999-0000');
+    expect(withFooter('Olá!', '  ')).toBe('Olá!');
   });
 });

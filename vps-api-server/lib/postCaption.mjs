@@ -97,6 +97,43 @@ export function createPostCaption({ resolveAiConfig, resolveAiModel, uploadRoots
     }
   }
 
+  /**
+   * Quadros e fala do vídeo, guardados em <uploads>/.thumbs/<hash>.analise.json (o hash muda quando o arquivo muda).
+   * A primeira análise (ffmpeg + whisper) leva de 20 s a 2 min; daí em diante a legenda não espera por ela.
+   * Feita uma por vez no servidor; a pré-geração das legendas (captionPrefetch.mjs) já deixa pronta.
+   */
+  async function videoAnalysis(file) {
+    const stat = await fsp.stat(file.localPath);
+    const hash = crypto.createHash('sha1').update(`${file.relative}|${stat.size}|${stat.mtimeMs}`).digest('hex');
+    const dir = path.join(file.root, '.thumbs');
+    const dest = path.join(dir, `${hash}.analise.json`);
+    const cached = await fsp.readFile(dest, 'utf8').then(JSON.parse).catch(() => null);
+    if (cached && Array.isArray(cached.frames)) return cached;
+    return heavy(async () => {
+      const again = await fsp.readFile(dest, 'utf8').then(JSON.parse).catch(() => null);
+      if (again && Array.isArray(again.frames)) return again;
+      const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'pulse-legenda-'));
+      try {
+        const v = await videoFrames(file.localPath, tmp);
+        const result = { ...v, speech: await videoSpeech(file.localPath, tmp) };
+        await fsp.mkdir(dir, { recursive: true });
+        await fsp.writeFile(`${dest}.${process.pid}.tmp`, JSON.stringify(result));
+        await fsp.rename(`${dest}.${process.pid}.tmp`, dest);
+        return result;
+      } finally {
+        await fsp.rm(tmp, { recursive: true, force: true }).catch(() => {});
+      }
+    });
+  }
+
+  /** Deixa a análise do vídeo pronta (pré-geração). Devolve false quando não é vídeo de /uploads. */
+  async function prepareMedia(url) {
+    const file = localFile(url);
+    if (!file || !VIDEO_RE.test(file.localPath)) return false;
+    await videoAnalysis(file);
+    return true;
+  }
+
   async function imageBase64(file) {
     const stat = await fsp.stat(file);
     if (stat.size > 4.5 * 1024 * 1024) return null; // limite de imagem da API
@@ -119,15 +156,11 @@ export function createPostCaption({ resolveAiConfig, resolveAiModel, uploadRoots
     const blocks = [];
     const facts = [];
     let fonte = script ? 'roteiro' : 'titulo';
-    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'pulse-legenda-'));
-    try {
+    {
       const file = localFile(material.media_url);
       if (!script && file && VIDEO_RE.test(file.localPath)) {
-        // sem roteiro: assiste e ouve o vídeo (uma análise por vez no servidor)
-        const { frames, seconds, speech } = await heavy(async () => {
-          const v = await videoFrames(file.localPath, tmp);
-          return { ...v, speech: await videoSpeech(file.localPath, tmp) };
-        });
+        // sem roteiro: assiste e ouve o vídeo (análise guardada; só a primeira vez espera o ffmpeg e o whisper)
+        const { frames, seconds, speech } = await videoAnalysis(file);
         frames.forEach((data, i) => {
           blocks.push({ type: 'text', text: `Quadro ${i + 1} do vídeo (${['início', 'meio', 'fim'][i]}):` });
           blocks.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } });
@@ -143,8 +176,6 @@ export function createPostCaption({ resolveAiConfig, resolveAiModel, uploadRoots
           fonte = 'arte';
         }
       }
-    } finally {
-      await fsp.rm(tmp, { recursive: true, force: true }).catch(() => {});
     }
 
     const lines = [
@@ -163,14 +194,16 @@ export function createPostCaption({ resolveAiConfig, resolveAiModel, uploadRoots
     blocks.push({ type: 'text', text: `${lines.join('\n\n')}\n\nEscreva a legenda deste post.` });
 
     const client_ = new Anthropic({ apiKey: ai.key, timeout: 90_000, maxRetries: 1 });
-    const model = resolveAiModel(null, 'claude');
+    // Ferramenta rápida (pedido do usuário, 01/11/2026: "as ferramentas de IA não podem ser demoradas"): Sonnet em
+    // esforço baixo escreve a legenda em poucos segundos; o Opus em esforço médio levava bem mais. PULSE_CAPTION_MODEL troca.
+    const model = resolveAiModel(env.PULSE_CAPTION_MODEL || 'claude-sonnet-5-5', 'claude');
     // mesmo jeito do resto do servidor (callClaude): API beta com o modelo de reserva no Opus/Sonnet
     const response = await client_.beta.messages.create({
       model,
       ...(/^claude-(opus|sonnet)-/i.test(model) ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {}),
       max_tokens: 6000,
       output_config: {
-        effort: 'medium',
+        effort: 'low',
         format: {
           type: 'json_schema',
           schema: { type: 'object', additionalProperties: false, required: ['legenda'], properties: { legenda: { type: 'string' } } },
@@ -300,5 +333,5 @@ Regras da legenda:
     });
   }
 
-  return { generate, thumbnail, preview, registerMediaRoutes };
+  return { generate, prepareMedia, thumbnail, preview, registerMediaRoutes };
 }

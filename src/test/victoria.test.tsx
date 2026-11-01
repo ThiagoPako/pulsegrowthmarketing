@@ -3,12 +3,14 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import {
-  buildVictoriaPrompt, parseVictoriaReply, normalizeLessons, scriptPlainText, searchResultUrls, scriptToHtml as serverHtml,
+  buildVictoriaPrompt, buildVictoriaContext, parseVictoriaReply, normalizeLessons, scriptPlainText, searchResultUrls,
+  scriptToHtml as serverHtml, partialScript as serverPartial, parseResearch,
 } from '../../vps-api-server/lib/victoria.mjs';
-import { conversationPayload, scriptToHtml } from '@/lib/victoria';
+import { conversationPayload, scriptToHtml, partialScript } from '@/lib/victoria';
 
 const askVictoria = vi.fn();
 const fetchVictoriaInfo = vi.fn();
+const prepareVictoria = vi.fn();
 const addScript = vi.fn();
 vi.mock('@/lib/victoria', async (orig) => {
   const real = await orig<typeof import('@/lib/victoria')>();
@@ -16,6 +18,7 @@ vi.mock('@/lib/victoria', async (orig) => {
     ...real,
     askVictoria: (...a: unknown[]) => askVictoria(...a),
     fetchVictoriaInfo: (...a: unknown[]) => fetchVictoriaInfo(...a),
+    prepareVictoria: (...a: unknown[]) => prepareVictoria(...a),
   };
 });
 vi.mock('@/contexts/AppContext', () => ({
@@ -47,7 +50,7 @@ describe('Victoria: pedido ao Claude', () => {
         { role: 'victoria', text: 'versão 1' },
         { role: 'correcao', text: 'tira o preço' },
       ],
-      search: true,
+      research: { text: '- gancho com pergunta', date: '01/11/2026' },
     });
     expect(prompt).toContain('Nicho: Posto de combustível');
     expect(prompt).toContain('Atendimento rápido e preço justo');
@@ -55,15 +58,17 @@ describe('Victoria: pedido ao Claude', () => {
     expect(prompt).toContain('Aprendizados deste cliente (regras):\n- Sempre citar o café grátis');
     expect(prompt).toContain('Aprendizados gerais da agência (regras):\n- Gancho em até 2 frases');
     expect(prompt).toContain('· A3P');
-    expect(prompt).toMatch(/pesquise na web/);
+    expect(prompt).toContain('O que está em alta no nicho agora (pesquisa de 01/11/2026)');
     expect(prompt).toContain('Correção da equipe:\n"""tira o preço"""');
     expect(prompt).toMatch(/Refaça o roteiro aplicando a correção/);
   });
 
-  it('sem pesquisa e sem roteiros avisa e pede o roteiro da ideia', () => {
-    const prompt = buildVictoriaPrompt({ client: { company_name: 'X' }, format: 'story', videoType: 'x', conversation: [{ role: 'pedido', text: 'ideia' }] });
+  it('o contexto do cliente não muda com a conversa (fica em cache) e sem roteiros avisa', () => {
+    const base = { client: { company_name: 'X' }, format: 'story', videoType: 'x' };
+    expect(buildVictoriaContext(base)).toBe(buildVictoriaContext({ ...base, conversation: [{ role: 'pedido', text: 'outra' }] }));
+    const prompt = buildVictoriaPrompt({ ...base, conversation: [{ role: 'pedido', text: 'ideia' }] });
     expect(prompt).toContain('Este cliente ainda não tem roteiro no sistema.');
-    expect(prompt).toContain('Não precisa pesquisar na web');
+    expect(prompt).not.toContain('em alta no nicho agora');
     expect(prompt).toContain('Story');
     expect(prompt.trim().endsWith('Escreva o roteiro a partir da ideia.')).toBe(true);
   });
@@ -81,6 +86,25 @@ describe('Victoria: pedido ao Claude', () => {
     expect(reply.roteiro).toBe('"Gancho"\n[take]');
     expect(reply.referencias).toEqual([{ titulo: 'ok', url: 'https://instagram.com/p/1', por_que: 'gancho' }]);
     expect(reply.aprendizados).toEqual([{ scope: 'geral', rule: 'Nunca prometer preço' }]);
+  });
+
+  it('lê a resposta em seções (o formato que chega por streaming)', () => {
+    const text = 'TÍTULO: Sexta do óleo\nROTEIRO:\n"Gancho"\n[take]\nLEGENDA: Vem!\nOBSERVAÇÕES: preencher o preço\nAPRENDIZADOS:\n- [geral] Nunca prometer preço\n- citar o café';
+    expect(parseVictoriaReply(text)).toMatchObject({
+      titulo: 'Sexta do óleo', roteiro: '"Gancho"\n[take]', legenda: 'Vem!', observacoes: 'preencher o preço',
+      aprendizados: [{ scope: 'geral', rule: 'Nunca prometer preço' }, { scope: 'cliente', rule: 'citar o café' }],
+    });
+    const parcial = 'TÍTULO: x\nROTEIRO:\n"Seu carro pede';
+    expect(partialScript(parcial)).toBe('"Seu carro pede');
+    expect(serverPartial(parcial)).toBe(partialScript(parcial));
+    expect(partialScript(text)).toBe('"Gancho"\n[take]');
+    expect(partialScript('TÍTULO: só o título')).toBe('');
+  });
+
+  it('pesquisa do nicho: tópicos e só links que vieram da busca', () => {
+    const r = parseResearch('- gancho com pergunta\n- bastidor\nLINKS:\nA | https://a.com | bom\nB | https://inventado.com | x\nC | sem link', new Set(['https://a.com']));
+    expect(r.text).toBe('- gancho com pergunta\n- bastidor');
+    expect(r.refs).toEqual([{ titulo: 'A', url: 'https://a.com', por_que: 'bom' }]);
   });
 
   it('sem JSON, o texto inteiro vira o roteiro', () => {
@@ -131,6 +155,8 @@ describe('Victoria: tela no Copy', () => {
     askVictoria.mockReset();
     addScript.mockReset();
     fetchVictoriaInfo.mockReset();
+    prepareVictoria.mockReset();
+    prepareVictoria.mockResolvedValue({ ready: true, research: 'pronta', research_date: '01/11/2026', usados: { roteiros_cliente: 3, roteiros_agencia: 2, regras: 1 } });
     fetchVictoriaInfo.mockResolvedValue({
       victoria: { registered: true, user_id: 'vic', name: 'Victoria', avatar_url: null },
       client: { id: 'cli-1', company_name: 'Posto Naraely', niche: 'Posto', city: null, editorial: 'Preço justo' },
@@ -140,7 +166,10 @@ describe('Victoria: tela no Copy', () => {
   });
 
   it('cliente → tipo → ideia → correção → salva no cliente', async () => {
-    askVictoria.mockResolvedValueOnce(reply()).mockResolvedValueOnce(reply({
+    askVictoria.mockImplementationOnce(async (_payload: unknown, onText?: (t: string) => void) => {
+      onText?.('TÍTULO: Sexta\nROTEIRO:\n"Sexta tem');
+      return reply();
+    }).mockResolvedValueOnce(reply({
       roteiro: '"Sexta tem óleo e café grátis"', aprendizados: [{ id: 'l1', client_id: 'cli-1', scope: 'cliente', rule: 'Citar o café grátis', created_by_name: 'Naraely', created_at: '' }],
     }));
     addScript.mockResolvedValue(true);
@@ -150,20 +179,23 @@ describe('Victoria: tela no Copy', () => {
     fireEvent.click(screen.getByRole('button', { name: /Posto Naraely/ }));
     fireEvent.click(await screen.findByRole('button', { name: /Criativo/ }));
     fireEvent.click(screen.getByRole('button', { name: /Abrir a Victoria/ }));
+    expect(prepareVictoria).toHaveBeenCalledWith({ client_id: 'cli-1', content_format: 'criativo', video_type: 'vendas' });
+    expect(await screen.findByText('(pesquisa de 01/11/2026)')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Ideia do roteiro'), { target: { value: 'promo de troca de óleo na sexta' } });
     fireEvent.click(screen.getByRole('button', { name: /Escrever roteiro/ }));
     expect(await screen.findByText(/Sexta tem troca de óleo/)).toBeInTheDocument();
-    expect(askVictoria).toHaveBeenLastCalledWith({
+    expect(askVictoria.mock.calls[0][0]).toEqual({
       client_id: 'cli-1', content_format: 'criativo', video_type: 'vendas', search: true,
       conversation: [{ role: 'pedido', text: 'promo de troca de óleo na sexta' }],
     });
+    expect(typeof askVictoria.mock.calls[0][1]).toBe('function');
 
     fireEvent.change(screen.getByLabelText('Correção para a Victoria'), { target: { value: 'fala do café grátis' } });
     fireEvent.click(screen.getByRole('button', { name: /Refazer com a correção/ }));
     expect(await screen.findByText(/café grátis"/)).toBeInTheDocument();
     const second = askVictoria.mock.calls[1][0];
-    expect(second.search).toBe(false);
+    expect(second.search).toBe(true); // a pesquisa já está guardada: não atrasa a correção
     expect(second.conversation.map((t: { role: string }) => t.role)).toEqual(['pedido', 'victoria', 'correcao']);
     expect(screen.getByText(/Aprendi: Citar o café grátis/)).toBeInTheDocument();
 

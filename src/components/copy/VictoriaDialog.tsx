@@ -17,7 +17,8 @@ import { useAuth } from '@/hooks/useAuth';
 import type { Client, Script, ScriptContentFormat, ScriptVideoType } from '@/types';
 import { SCRIPT_CONTENT_FORMAT_LABELS, SCRIPT_VIDEO_TYPE_LABELS } from '@/types';
 import {
-  askVictoria, conversationPayload, fetchVictoriaInfo, removeVictoriaLesson, scriptToHtml, useSpeechToText,
+  askVictoria, conversationPayload, fetchVictoriaInfo, partialScript, prepareVictoria, removeVictoriaLesson, scriptToHtml, useSpeechToText,
+  type VictoriaPrepared,
   type VictoriaReply, type VictoriaTurn,
 } from '@/lib/victoria';
 
@@ -74,7 +75,8 @@ function ReplyCard({ reply, onUse, latest }: { reply: VictoriaReply; onUse: () =
       <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
         <span>
           Estudou {reply.usados.roteiros_cliente} roteiro(s) do cliente, {reply.usados.roteiros_agencia} da agência
-          {reply.usados.regras ? ` e ${reply.usados.regras} regra(s)` : ''}{reply.usados.pesquisou ? ' · pesquisou o nicho' : ''}
+          {reply.usados.regras ? ` e ${reply.usados.regras} regra(s)` : ''}{reply.usados.pesquisou ? ' · usou o que está em alta no nicho' : ''}
+          {reply.ms ? ` · ${(reply.ms / 1000).toFixed(1).replace('.', ',')} s` : ''}
         </span>
         {latest && (
           <Button size="sm" className="ml-auto h-7 bg-red-600 text-white hover:bg-red-700" onClick={onUse}>
@@ -102,7 +104,11 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
   const [videoType, setVideoType] = useState<ScriptVideoType>('vendas');
   const [turns, setTurns] = useState<VictoriaTurn[]>([]);
   const [draft, setDraft] = useState('');
+  // usar o que está em alta no nicho (pesquisa feita antes, em segundo plano: não atrasa o roteiro)
   const [webSearch, setWebSearch] = useState(true);
+  // texto chegando enquanto ela escreve (streaming)
+  const [streamText, setStreamText] = useState('');
+  const [prepared, setPrepared] = useState<VictoriaPrepared | null>(null);
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [final, setFinal] = useState({ title: '', content: '', caption: '' });
@@ -129,6 +135,8 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
     setTurns([]);
     setDraft('');
     setWebSearch(true);
+    setStreamText('');
+    setPrepared(null);
     setFinal({ title: '', content: '', caption: '' });
   }, [open]);
 
@@ -160,6 +168,7 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
     setTurns(next);
     setDraft('');
     setBusy(true);
+    setStreamText('');
     try {
       const reply = await askVictoria({
         client_id: client.id,
@@ -167,10 +176,8 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
         video_type: videoType,
         conversation: conversationPayload(next),
         search: webSearch,
-      });
+      }, setStreamText);
       setTurns((list) => [...list, { role: 'victoria', text: reply.roteiro, reply }]);
-      // a pesquisa do nicho vale para a conversa toda: nas correções fica mais rápido sem ela
-      setWebSearch(false);
       if (reply.aprendizados.length) {
         toast.success(`${victoriaName} aprendeu ${reply.aprendizados.length} regra(s) com a sua correção`);
         void queryClient.invalidateQueries({ queryKey: ['victoria-info', client.id] });
@@ -182,7 +189,17 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
       setDraft(text);
     } finally {
       setBusy(false);
+      setStreamText('');
     }
+  };
+
+  // escolheu cliente e tipo: o servidor já monta o contexto e prepara a pesquisa do nicho
+  const openConversation = () => {
+    setStep('conversa');
+    if (!client) return;
+    prepareVictoria({ client_id: client.id, content_format: format, video_type: videoType })
+      .then(setPrepared)
+      .catch(() => { /* sem preparo: o roteiro sai do mesmo jeito, só um pouco mais devagar */ });
   };
 
   const pickReply = (reply: VictoriaReply) => {
@@ -329,7 +346,7 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
             </div>
             <div className="flex justify-between">
               <Button variant="ghost" onClick={() => setStep('cliente')}><ArrowLeft size={14} className="mr-1" /> Cliente</Button>
-              <Button className="bg-red-600 text-white hover:bg-red-700" onClick={() => setStep('conversa')}>
+              <Button className="bg-red-600 text-white hover:bg-red-700" onClick={openConversation}>
                 <PenLine size={14} className="mr-1" /> Abrir a {victoriaName}
               </Button>
             </div>
@@ -366,10 +383,19 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
                 )
               ))}
               {busy && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 size={14} className="animate-spin" />
-                  {victoriaName} está escrevendo{webSearch && !lastReply ? ' e pesquisando o que está em alta no nicho' : ''}…
-                </div>
+                partialScript(streamText) ? (
+                  <div className="flex gap-2">
+                    <VictoriaAvatar url={victoriaAvatar} name={victoriaName} />
+                    <div className="min-w-0 flex-1 rounded-2xl rounded-bl-sm border border-border bg-muted/60 p-3 text-sm" aria-live="polite">
+                      <p className="whitespace-pre-wrap break-words leading-relaxed">{partialScript(streamText)}<span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-red-500 align-middle" /></p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 size={14} className="animate-spin" />
+                    {victoriaName} está escrevendo…
+                  </div>
+                )
               )}
             </div>
 
@@ -421,11 +447,16 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
                   </Button>
                 )}
                 <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Switch checked={webSearch} onCheckedChange={setWebSearch} disabled={busy} className="scale-75" aria-label="Pesquisar referências do nicho na web" />
-                  <Globe size={12} /> Pesquisar o nicho na web
+                  <Switch checked={webSearch} onCheckedChange={setWebSearch} disabled={busy} className="scale-75" aria-label="Usar o que está em alta no nicho" />
+                  <Globe size={12} /> Em alta no nicho
+                  {webSearch && prepared && (
+                    <span className="text-[10px]">
+                      {prepared.research === 'pronta' ? `(pesquisa de ${prepared.research_date})` : '(pesquisando em segundo plano)'}
+                    </span>
+                  )}
                 </label>
                 {turns.length > 0 && (
-                  <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { setTurns([]); setWebSearch(true); }}>
+                  <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setTurns([])}>
                     <RotateCcw size={13} className="mr-1" /> Recomeçar
                   </Button>
                 )}

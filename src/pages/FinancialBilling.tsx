@@ -15,7 +15,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
   BILLING_STEPS, MODE_LABELS, STEP_LABELS, STEP_STATUS_LABELS, TEMPLATE_VARS, fetchBillingAgenda, fetchBillingConfig,
-  fetchBillingPreview, saveBillingConfig, type BillingAgendaItem, type BillingMode, type BillingStep,
+  fetchBillingPreview, saveBillingConfig, fetchPaymentLinks, createTestLink, recheckPaymentLink,
+  type BillingAgendaItem, type BillingMode, type BillingStep,
 } from '@/lib/billingIsis';
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -146,6 +147,7 @@ function BillingSettings() {
   const { data } = useQuery({ queryKey: ['billing-isis-config'], queryFn: fetchBillingConfig });
   const [mode, setMode] = useState<BillingMode>('desligado');
   const [fee, setFee] = useState('0');
+  const [handle, setHandle] = useState('');
   const [templates, setTemplates] = useState<Record<BillingStep, string>>({ relatorio_mensal: '', pre_vencimento: '', cobranca: '', lembrete: '' });
   const [saving, setSaving] = useState(false);
 
@@ -153,6 +155,7 @@ function BillingSettings() {
     if (!data) return;
     setMode(data.mode);
     setFee(String(data.card_fee_percent));
+    setHandle(data.infinitepay_handle || '');
     setTemplates(data.templates);
   }, [data]);
   if (!data) return null;
@@ -160,7 +163,7 @@ function BillingSettings() {
   const save = async () => {
     setSaving(true);
     try {
-      await saveBillingConfig({ mode, card_fee_percent: Number(fee.replace(',', '.')) || 0, templates });
+      await saveBillingConfig({ mode, card_fee_percent: Number(fee.replace(',', '.')) || 0, infinitepay_handle: handle, templates });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['billing-isis-config'] }),
         queryClient.invalidateQueries({ queryKey: ['billing-isis-agenda'] }),
@@ -199,6 +202,23 @@ function BillingSettings() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">InfinitePay (link do cartão)</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          <div className="grid gap-3 sm:grid-cols-[260px_1fr] sm:items-end">
+            <div className="space-y-1.5">
+              <Label htmlFor="infinitetag">InfiniteTag</Label>
+              <Input id="infinitetag" placeholder="agenciapulse (sem o $)" value={handle} onChange={(e) => setHandle(e.target.value)} />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              A tag do app da InfinitePay (não é senha). Com ela, cada mensalidade ganha um link no valor com a taxa; pagou, a receita é baixada sozinha
+              depois de conferida na InfinitePay. Sem ela, a cobrança sai só com o Pix.
+            </p>
+          </div>
+          <PaymentLinksPanel />
+        </CardContent>
+      </Card>
+
       {BILLING_STEPS.map((step) => (
         <Card key={step}>
           <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
@@ -222,6 +242,49 @@ function BillingSettings() {
       ))}
 
       <Button onClick={save} disabled={saving}>{saving && <Loader2 size={14} className="mr-1 animate-spin" />} Salvar cobranças</Button>
+    </div>
+  );
+}
+
+function PaymentLinksPanel() {
+  const queryClient = useQueryClient();
+  const month = thisMonth();
+  const links = useQuery({ queryKey: ['infinitepay-links', month], queryFn: () => fetchPaymentLinks(month) });
+  const [busy, setBusy] = useState(false);
+  const run = async (fn: () => Promise<unknown>, ok: string) => {
+    setBusy(true);
+    try {
+      await fn();
+      toast.success(ok);
+      await queryClient.invalidateQueries({ queryKey: ['infinitepay-links'] });
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!links.data) return null;
+  return (
+    <div className="space-y-2 border-t pt-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="outline" disabled={busy || !links.data.handle} onClick={() => run(async () => {
+          const d = await createTestLink();
+          window.open(d.url, '_blank', 'noopener');
+        }, 'Link de teste criado (R$ 1,00)')}>
+          Criar link de teste (R$ 1,00)
+        </Button>
+        <span className="text-[11px] text-muted-foreground">Webhook: {links.data.webhook_url}</span>
+      </div>
+      {links.data.links.map((l) => (
+        <div key={l.id} className="flex flex-wrap items-center gap-2 text-xs">
+          <Badge variant={l.status === 'pago' ? 'default' : 'outline'}>{l.status === 'pago' ? `pago${l.capture_method ? ` · ${l.capture_method}` : ''}` : 'aberto'}</Badge>
+          <span>{l.client || 'teste'} · {brl(Number(l.amount))}</span>
+          <a className="text-primary underline truncate max-w-[220px]" href={l.url} target="_blank" rel="noreferrer">{l.url}</a>
+          {l.status !== 'pago' && (
+            <Button size="sm" variant="ghost" className="h-6 px-2" disabled={busy} onClick={() => run(() => recheckPaymentLink(l.id), 'Conferido na InfinitePay')}>Conferir</Button>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

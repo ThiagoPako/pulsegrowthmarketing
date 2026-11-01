@@ -38,6 +38,7 @@ export function registerBillingIsisRoutes(app, {
         await pool.query(`
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS isis_mode TEXT NOT NULL DEFAULT 'desligado';
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS card_fee_percent NUMERIC NOT NULL DEFAULT 0;
+          ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS infinitepay_handle TEXT;
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_relatorio TEXT;
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_pre TEXT;
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_cobranca TEXT;
@@ -239,6 +240,7 @@ export function registerBillingIsisRoutes(app, {
         mode: modeOf(config),
         card_fee_percent: Number(config?.card_fee_percent) || 0,
         has_pix: !!config?.pix_key,
+        infinitepay_handle: config?.infinitepay_handle || '',
         templates: Object.fromEntries(BILLING_STEPS.map((s) => [s, templateOf(config, s)])),
         defaults: DEFAULT_TEMPLATES,
       });
@@ -256,6 +258,11 @@ export function registerBillingIsisRoutes(app, {
       const params = [];
       if (mode) { params.push(mode); sets.push(`isis_mode = $${params.length}`); }
       if (fee !== null) { params.push(fee); sets.push(`card_fee_percent = $${params.length}`); }
+      // InfiniteTag (pública, não é senha): cadastrada pelo Thiago; a coluna nasce em infinitePayRoutes.mjs
+      if (typeof req.body?.infinitepay_handle === 'string') {
+        params.push(req.body.infinitepay_handle.trim().replace(/^\$/, '').replace(/\s+/g, '').slice(0, 60) || null);
+        sets.push(`infinitepay_handle = $${params.length}`);
+      }
       for (const step of BILLING_STEPS) {
         const t = req.body?.templates?.[step];
         if (typeof t !== 'string') continue;

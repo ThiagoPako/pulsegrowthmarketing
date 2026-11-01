@@ -38,6 +38,7 @@ export interface BillingConfig {
   mode: BillingMode;
   card_fee_percent: number;
   has_pix: boolean;
+  infinitepay_handle: string;
   templates: Record<BillingStep, string>;
   defaults: Record<BillingStep, string>;
 }
@@ -64,7 +65,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const fetchBillingConfig = () => call<BillingConfig>('/billing-isis/config');
-export const saveBillingConfig = (patch: Partial<Pick<BillingConfig, 'mode' | 'card_fee_percent'>> & { templates?: Partial<Record<BillingStep, string>> }) =>
+export const saveBillingConfig = (patch: Partial<Pick<BillingConfig, 'mode' | 'card_fee_percent' | 'infinitepay_handle'>> & { templates?: Partial<Record<BillingStep, string>> }) =>
   call<{ success: boolean }>('/billing-isis/config', { method: 'PUT', body: JSON.stringify(patch) });
 export const fetchBillingAgenda = (month: string) =>
   call<{ month: string; today: string; items: BillingAgendaItem[] }>(`/billing-isis/agenda?month=${encodeURIComponent(month)}`);
@@ -72,3 +73,14 @@ export const fetchBillingPreview = (contractId: string, step: BillingStep, date:
   call<{ body: string | null; skip: string | null }>(
     `/billing-isis/preview?contract_id=${contractId}&step=${step}&date=${date}&month=${month}`,
   );
+
+export interface PaymentLinkRow {
+  id: string; order_nsu: string; month: string | null; amount: number; url: string; status: string; client: string | null;
+  capture_method: string | null; paid_at: string | null; receipt_url: string | null;
+}
+export const fetchPaymentLinks = (month: string) =>
+  call<{ handle: string | null; webhook_url: string; links: PaymentLinkRow[] }>(`/infinitepay/links?month=${encodeURIComponent(month)}`);
+export const createTestLink = () =>
+  call<{ url: string }>('/infinitepay/test-link', { method: 'POST', body: JSON.stringify({ amount: 1 }) });
+export const recheckPaymentLink = (id: string) =>
+  call<{ paid: boolean; marked?: boolean }>(`/infinitepay/check/${id}`, { method: 'POST', body: '{}' });

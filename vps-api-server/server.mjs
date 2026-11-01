@@ -28,6 +28,7 @@ import { registerAgentTrainingRoutes } from './agentTrainingRoutes.mjs';
 import { registerVictoriaRoutes } from './victoriaRoutes.mjs';
 import { registerSocialReportRoutes } from './socialReportRoutes.mjs';
 import { registerBillingIsisRoutes } from './billingIsisRoutes.mjs';
+import { registerInfinitePayRoutes } from './infinitePayRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerAgentDriveRoutes } from './agentDriveRoutes.mjs';
 import { transcribeUrl } from './assistant/transcribe.mjs';
@@ -20428,12 +20429,22 @@ const socialReports = registerSocialReportRoutes(app, {
   },
 });
 
+// ─── InfinitePay: link de cada mensalidade e baixa automática (webhook conferido no payment_check) ──
+const infinitePay = registerInfinitePayRoutes(app, {
+  pool,
+  verifyAdmin,
+  paymentConfigFor: paymentConfigForCity,
+  publicApiUrl: process.env.PUBLIC_APP_URL,
+  tableHasCityColumn,
+});
+
 // ─── Cobranças da Ísis pelo Assistente PULSE (Financeiro → Cobranças; desligado = a cobrança antiga segue igual) ──
 const billingIsis = registerBillingIsisRoutes(app, {
   pool,
   verifyAdmin,
   paymentConfigFor: paymentConfigForCity,
   socialReports,
+  paymentLink: infinitePay.paymentLink,
 });
 
 // ─── Portal: equipe manda o vídeo/arte direto no WhatsApp do cliente (grupo ou privado) ──

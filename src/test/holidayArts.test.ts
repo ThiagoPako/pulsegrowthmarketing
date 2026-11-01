@@ -31,5 +31,7 @@ describe('aviso da manhã · feriados', () => {
     expect(msg).toContain('• Sem card (1): Clínica Sorriso');
     expect(msg).toContain('• Em andamento (1): Rede A3P');
     expect(morningMessage(holidayStatus([finados], clients.slice(0, 1), tasks))).toBeNull();
+    // recado de uma cidade só (o Victor recebe só Minaçu)
+    expect(morningMessage(status, { city: 'Minaçu' })).toMatch(/^Bom dia! ☀️ Artes de feriado que vencem em breve \(clientes de Minaçu\):/);
   });
 });

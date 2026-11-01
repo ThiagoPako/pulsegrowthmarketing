@@ -53,12 +53,21 @@ export const DEFAULT_TEMPLATES = {
 };
 
 // rodapé de toda mensagem ao cliente (pedido do usuário, 01/11/2026: "avisa que é um número de mensagem automática e
-// deixa o número do Thiago para entrar em contato"); editável na tela, vazio = sem rodapé
-export const DEFAULT_FOOTER = '—\n_Esta é uma mensagem automática. Para dúvidas, fale com o Thiago: (62) 98538-2981._';
+// deixa o número do Thiago para entrar em contato"); o contato é o da cidade do cliente (lib/contactByCity.mjs:
+// Uruaçu → Thiago, Minaçu → Victor). Editável na tela, vazio = sem rodapé
+export const DEFAULT_FOOTER = '—\n_Esta é uma mensagem automática. Para dúvidas, fale com o {contato_nome}: {contato_telefone}._';
+
+/** O rodapé com o contato preenchido; null quando vazio ou sem telefone (não manda "fale com o Victor:" sem número). */
+export function footerText(footer, contact = {}) {
+  const f = footer === null || footer === undefined ? DEFAULT_FOOTER : String(footer).trim();
+  if (!f) return null;
+  const out = applyTemplate(f, { contato_nome: contact.name, contato_telefone: contact.phone });
+  return /[A-Za-zÀ-ú]/.test(out) ? out : null;
+}
 
 /** Mensagem + rodapé (null/undefined = o padrão; texto vazio = sem rodapé). */
-export function withFooter(body, footer) {
-  const f = footer === null || footer === undefined ? DEFAULT_FOOTER : String(footer).trim();
+export function withFooter(body, footer, contact = { name: 'Thiago', phone: '(62) 98538-2981' }) {
+  const f = footerText(footer, contact);
   return f ? `${String(body).trim()}\n\n${f}` : String(body).trim();
 }
 

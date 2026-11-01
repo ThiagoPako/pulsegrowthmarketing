@@ -44,6 +44,14 @@ export interface BillingConfig {
   /** rodapé de mensagem automática em todas as mensagens ao cliente (vazio = sem rodapé) */
   footer: string;
   default_footer: string;
+  /** contato do rodapé por cidade; resolved = o que sai na mensagem (telefone do Assistente PULSE se vazio) */
+  contacts: Record<'uruacu' | 'minacu', CityContact>;
+}
+
+export interface CityContact {
+  name: string;
+  phone: string;
+  resolved: { city: string; name: string; phone: string | null };
 }
 
 export interface BillingAgendaItem {
@@ -57,7 +65,7 @@ export interface BillingAgendaItem {
   has_whatsapp: boolean;
   billing_enabled: boolean;
   mode: BillingMode;
-  steps: { step: BillingStep; date: string; status: string; body: string | null }[];
+  steps: { step: BillingStep; date: string; status: string; body: string | null; pdf_url: string | null }[];
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -68,7 +76,10 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const fetchBillingConfig = () => call<BillingConfig>('/billing-isis/config');
-export const saveBillingConfig = (patch: Partial<Pick<BillingConfig, 'mode' | 'card_fee_percent' | 'infinitepay_handle' | 'footer'>> & { templates?: Partial<Record<BillingStep, string>> }) =>
+export const saveBillingConfig = (patch: Partial<Pick<BillingConfig, 'mode' | 'card_fee_percent' | 'infinitepay_handle' | 'footer'>> & {
+  templates?: Partial<Record<BillingStep, string>>;
+  contacts?: Partial<Record<'uruacu' | 'minacu', { name: string; phone: string }>>;
+}) =>
   call<{ success: boolean }>('/billing-isis/config', { method: 'PUT', body: JSON.stringify(patch) });
 export const fetchBillingAgenda = (month: string) =>
   call<{ month: string; today: string; items: BillingAgendaItem[] }>(`/billing-isis/agenda?month=${encodeURIComponent(month)}`);
@@ -76,6 +87,18 @@ export const fetchBillingPreview = (contractId: string, step: BillingStep, date:
   call<{ body: string | null; skip: string | null }>(
     `/billing-isis/preview?contract_id=${contractId}&step=${step}&date=${date}&month=${month}`,
   );
+
+/** O PDF que sairia (gerado na hora, nada é guardado): abre numa aba. */
+export async function openBillingPdfPreview(contractId: string, step: BillingStep, date: string, month: string) {
+  const response = await vpsAuthedFetch(`/billing-isis/preview?contract_id=${contractId}&step=${step}&date=${date}&month=${month}&pdf=1`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body?.error || 'Não deu para montar o PDF.');
+  }
+  const url = URL.createObjectURL(await response.blob());
+  window.open(url, '_blank', 'noopener');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 export interface PaymentLinkRow {
   id: string; order_nsu: string; month: string | null; amount: number; url: string; status: string; client: string | null;

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, BellRing, Loader2, MessageSquareText, RotateCcw } from 'lucide-react';
+import { ArrowLeft, BellRing, FileText, Loader2, MessageSquareText, RotateCcw } from 'lucide-react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
   BILLING_STEPS, MODE_LABELS, STEP_LABELS, STEP_STATUS_LABELS, TEMPLATE_VARS, fetchBillingAgenda, fetchBillingConfig,
-  fetchBillingPreview, saveBillingConfig, fetchPaymentLinks, createTestLink, recheckPaymentLink,
+  fetchBillingPreview, saveBillingConfig, fetchPaymentLinks, createTestLink, recheckPaymentLink, openBillingPdfPreview,
   type BillingAgendaItem, type BillingMode, type BillingStep,
 } from '@/lib/billingIsis';
 
@@ -37,7 +37,7 @@ const thisMonth = () => new Date().toISOString().slice(0, 7);
 export default function FinancialBilling() {
   const navigate = useNavigate();
   const [month, setMonth] = useState(thisMonth());
-  const [open, setOpen] = useState<{ item: BillingAgendaItem; step: BillingStep; date: string; body: string | null } | null>(null);
+  const [open, setOpen] = useState<{ item: BillingAgendaItem; step: BillingStep; date: string; body: string | null; pdfUrl: string | null } | null>(null);
   const config = useQuery({ queryKey: ['billing-isis-config'], queryFn: fetchBillingConfig });
   const agenda = useQuery({ queryKey: ['billing-isis-agenda', month], queryFn: () => fetchBillingAgenda(month) });
 
@@ -88,7 +88,7 @@ export default function FinancialBilling() {
                       <button
                         key={s.step}
                         type="button"
-                        onClick={() => setOpen({ item, step: s.step, date: s.date, body: s.body })}
+                        onClick={() => setOpen({ item, step: s.step, date: s.date, body: s.body, pdfUrl: s.pdf_url })}
                         className={`rounded-md border px-2 py-1 text-left text-[11px] leading-tight hover:bg-muted/60 ${STATUS_STYLE[s.status] || 'text-muted-foreground'}`}
                         title="Ver a mensagem"
                       >
@@ -114,9 +114,21 @@ export default function FinancialBilling() {
   );
 }
 
-function MessageDialog({ item, step, date, body, month, onClose }: {
-  item: BillingAgendaItem; step: BillingStep; date: string; body: string | null; month: string; onClose: () => void;
+function MessageDialog({ item, step, date, body, pdfUrl, month, onClose }: {
+  item: BillingAgendaItem; step: BillingStep; date: string; body: string | null; pdfUrl: string | null; month: string; onClose: () => void;
 }) {
+  const [opening, setOpening] = useState(false);
+  const openPdf = async () => {
+    if (pdfUrl) { window.open(pdfUrl, '_blank', 'noopener'); return; }
+    setOpening(true);
+    try {
+      await openBillingPdfPreview(item.contract_id, step, date, month);
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setOpening(false);
+    }
+  };
   // guardada (prévia/enviada) mostra o que saiu; senão monta agora com os dados de hoje, sem gravar nada
   const preview = useQuery({
     queryKey: ['billing-isis-preview', item.contract_id, step, date],
@@ -137,6 +149,12 @@ function MessageDialog({ item, step, date, body, month, onClose }: {
         {skip === 'pago' && <p className="text-sm text-emerald-500">Mensalidade paga: a cobrança não sai.</p>}
         {preview.error && <p className="text-sm text-destructive">{(preview.error as Error).message}</p>}
         {text && <pre className="whitespace-pre-wrap [overflow-wrap:anywhere] rounded-md bg-muted/50 p-3 text-sm font-sans max-h-[60vh] overflow-y-auto">{text}</pre>}
+        {text && (
+          <Button variant="outline" size="sm" className="w-fit" onClick={openPdf} disabled={opening}>
+            {opening ? <Loader2 size={14} className="mr-1 animate-spin" /> : <FileText size={14} className="mr-1" />}
+            {pdfUrl ? 'Ver o PDF enviado' : 'Ver o PDF que vai junto'}
+          </Button>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -149,6 +167,7 @@ function BillingSettings() {
   const [fee, setFee] = useState('0');
   const [handle, setHandle] = useState('');
   const [footer, setFooter] = useState('');
+  const [contacts, setContacts] = useState<Record<'uruacu' | 'minacu', { name: string; phone: string }>>({ uruacu: { name: '', phone: '' }, minacu: { name: '', phone: '' } });
   const [templates, setTemplates] = useState<Record<BillingStep, string>>({ relatorio_mensal: '', pre_vencimento: '', cobranca: '', lembrete: '' });
   const [saving, setSaving] = useState(false);
 
@@ -158,6 +177,10 @@ function BillingSettings() {
     setFee(String(data.card_fee_percent));
     setHandle(data.infinitepay_handle || '');
     setFooter(data.footer ?? '');
+    if (data.contacts) setContacts({
+      uruacu: { name: data.contacts.uruacu.name, phone: data.contacts.uruacu.phone },
+      minacu: { name: data.contacts.minacu.name, phone: data.contacts.minacu.phone },
+    });
     setTemplates(data.templates);
   }, [data]);
   if (!data) return null;
@@ -165,7 +188,7 @@ function BillingSettings() {
   const save = async () => {
     setSaving(true);
     try {
-      await saveBillingConfig({ mode, card_fee_percent: Number(fee.replace(',', '.')) || 0, infinitepay_handle: handle, footer, templates });
+      await saveBillingConfig({ mode, card_fee_percent: Number(fee.replace(',', '.')) || 0, infinitepay_handle: handle, footer, contacts, templates });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['billing-isis-config'] }),
         queryClient.invalidateQueries({ queryKey: ['billing-isis-agenda'] }),
@@ -252,7 +275,27 @@ function BillingSettings() {
         </CardHeader>
         <CardContent className="space-y-1.5">
           <Textarea rows={3} value={footer} onChange={(e) => setFooter(e.target.value)} className="font-mono text-xs" />
-          <p className="text-[11px] text-muted-foreground">Vai no fim do relatório, do agradecimento, da cobrança e do lembrete: avisa que o número é automático e para quem ligar. Vazio = sem rodapé.</p>
+          <p className="text-[11px] text-muted-foreground">
+            Vai no fim do relatório, do agradecimento, da cobrança e do lembrete (e no rodapé do PDF): avisa que o número é automático e com quem
+            falar. {'{contato_nome}'} e {'{contato_telefone}'} são o contato da cidade do cliente, abaixo. Vazio = sem rodapé.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 pt-2">
+            {(['uruacu', 'minacu'] as const).map((city) => {
+              const resolved = data.contacts?.[city]?.resolved;
+              return (
+                <div key={city} className="space-y-1.5 rounded-md border p-2">
+                  <div className="text-xs font-semibold">{city === 'uruacu' ? 'Uruaçu' : 'Minaçu'}</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input placeholder={resolved?.name || 'Nome'} value={contacts[city].name} onChange={(e) => setContacts((c) => ({ ...c, [city]: { ...c[city], name: e.target.value } }))} />
+                    <Input placeholder={resolved?.phone || 'Telefone'} value={contacts[city].phone} onChange={(e) => setContacts((c) => ({ ...c, [city]: { ...c[city], phone: e.target.value } }))} />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Sai como: {resolved?.name || '—'}{resolved?.phone ? ` · ${resolved.phone}` : ' · sem telefone (a linha do rodapé não sai)'}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
         </CardContent>
       </Card>
 

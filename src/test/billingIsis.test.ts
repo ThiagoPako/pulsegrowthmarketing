@@ -3,6 +3,10 @@ import {
   stepsDueOn, stepDates, attendanceTip, cardAmount, crc16, pixPayload, applyTemplate, bulletList, nextMonth, previousMonth,
   DEFAULT_TEMPLATES, DEFAULT_FOOTER, withFooter,
 } from '../../vps-api-server/lib/billingIsis.mjs';
+import { contactForCity, formatPhoneBr } from '../../vps-api-server/lib/contactByCity.mjs';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 describe('cobranças da Ísis · calendário', () => {
   it('dia 1, D−5, D e D+3', () => {
@@ -64,8 +68,41 @@ describe('cobranças da Ísis · textos', () => {
 describe('cobranças da Ísis · rodapé de mensagem automática', () => {
   it('vai no fim de toda mensagem, editável e desligável', () => {
     expect(withFooter('Olá!', null)).toBe('Olá!\n\n—\n_Esta é uma mensagem automática. Para dúvidas, fale com o Thiago: (62) 98538-2981._');
-    expect(withFooter('Olá!', undefined)).toBe(`Olá!\n\n${DEFAULT_FOOTER}`);
+    expect(DEFAULT_FOOTER).toContain('{contato_nome}: {contato_telefone}');
     expect(withFooter('Olá!', 'Dúvidas: (62) 9999-0000')).toBe('Olá!\n\nDúvidas: (62) 9999-0000');
     expect(withFooter('Olá!', '  ')).toBe('Olá!');
   });
+
+  it('contato pela cidade do cliente: Uruaçu → Thiago, Minaçu → Victor (telefone do Assistente PULSE)', () => {
+    const numbers = [{ name: 'Victor Hugo', phone: '5562999990000', active: true }, { name: 'Naay', phone: '5562911112222', active: true }];
+    const uru = contactForCity('Uruaçu', null, numbers);
+    const min = contactForCity('minacu', null, numbers);
+    expect(uru).toEqual({ city: 'uruacu', name: 'Thiago', phone: '(62) 98538-2981' });
+    expect(min).toEqual({ city: 'minacu', name: 'Victor', phone: '(62) 99999-0000' });
+    expect(withFooter('Olá!', null, min)).toBe('Olá!\n\n—\n_Esta é uma mensagem automática. Para dúvidas, fale com o Victor: (62) 99999-0000._');
+    // configurado na tela vale por cima do padrão
+    expect(contactForCity('minacu', { contact_name: 'Naay', contact_phone: '62 91111-2222' }, numbers)).toMatchObject({ name: 'Naay', phone: '(62) 91111-2222' });
+    // sem telefone em lugar nenhum: o rodapé não sai pela metade
+    expect(withFooter('Olá!', null, contactForCity('minacu', null, []))).toBe('Olá!');
+    expect(formatPhoneBr('5562985382981')).toBe('(62) 98538-2981');
+  });
+});
+
+describe('cobranças da Ísis · PDF no modelo da Pulse', () => {
+  // roda num Node de verdade (no jsdom dos testes o pdfkit não lê a fonte TTF), como no servidor
+  it('gera um PDF de cobrança com o Pix e o link do cartão', () => {
+    const lib = pathToFileURL(path.resolve(process.cwd(), 'vps-api-server/lib/billingPdf.mjs')).href;
+    const spec = {
+      kind: 'cobranca', number: 'PULSE-202611-TEST', issued: '10/11/2026', title: 'Mensalidade de novembro de 2026', status: 'aberto',
+      cards: [{ label: 'Cliente', value: 'Cliente Teste', small: true }, { label: 'Vencimento', value: '10/11/2026' }, { label: 'Valor', value: 'R$ 1.500,00', highlight: true }],
+      table: { title: 'Serviços', columns: [{ label: 'Descrição', width: 287 }, { label: 'Competência', width: 120 }, { label: 'Valor', width: 100, align: 'right' }], rows: [['Mensalidade Plano Pulse', '11/2026', 'R$ 1.500,00']], total: { label: 'Total', value: 'R$ 1.500,00' } },
+      payment: { pixPayload: pixPayload({ key: 'pix@pulse.com.br', name: 'Agencia Pulse', city: 'Uruacu', amount: 1500 }), pixKey: 'pix@pulse.com.br', receiver: 'Agência Pulse', cardLink: 'https://checkout.infinitepay.io/x', cardAmount: 'R$ 1.565,76' },
+      footerNote: 'Esta é uma mensagem automática.', footerContact: 'Cliente Teste · Uruaçu',
+    };
+    const code = `const { renderPdf } = await import(${JSON.stringify(lib)}); const b = await renderPdf(${JSON.stringify(spec)}); process.stdout.write(b.subarray(0, 5).toString() + ' ' + b.length);`;
+    const out = execFileSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8' });
+    const [magic, size] = out.trim().split(' ');
+    expect(magic).toBe('%PDF-');
+    expect(Number(size)).toBeGreaterThan(10_000);
+  }, 30_000);
 });

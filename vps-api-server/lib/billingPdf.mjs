@@ -427,7 +427,7 @@ export async function renderPdf(d) {
   doc.on('data', (c) => chunks.push(c));
   const done = new Promise((resolve, reject) => { doc.on('end', resolve); doc.on('error', reject); });
   fonts(doc);
-  header(doc, { kicker: { cobranca: 'Cobrança', relatorio: 'Relatório do mês', agradecimento: 'Agenda e parceria' }[d.kind] || 'Pulse', number: d.number, issued: d.issued });
+  header(doc, { kicker: { cobranca: 'Cobrança', relatorio: 'Relatório do mês', agradecimento: 'Agenda e parceria', recibo: 'Recibo' }[d.kind] || 'Pulse', number: d.number, issued: d.issued });
   title(doc, d.title, d.status, d.subtitle);
   if (d.intro) intro(doc, d.intro);
   if (d.parties?.length) parties(doc, d.parties);

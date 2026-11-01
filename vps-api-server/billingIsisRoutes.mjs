@@ -17,10 +17,10 @@ import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import {
   BILLING_STEPS, MODES, DEFAULT_TEMPLATES, monthName, previousMonth, nextMonth, stepDates, attendanceTip,
-  brl, pixPayload, CARD_NOTICE, ensurePayLink, payToken, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
+  brl, pixPayload, CARD_NOTICE, ensurePayLink, payToken, valorPorExtenso, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
 } from './lib/billingIsis.mjs';
 import { renderPdf } from './lib/billingPdf.mjs';
-import { cobrancaDoc, relatorioDoc, agradecimentoDoc } from './lib/billingPdfDocs.mjs';
+import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, monthName as nomeMes } from './lib/billingPdfDocs.mjs';
 import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
 import { enqueueWhatsApp } from './whatsapp/shared.mjs';
@@ -32,14 +32,17 @@ const TEMPLATE_COLUMNS = {
   pre_vencimento: 'msg_isis_pre',
   cobranca: 'msg_isis_cobranca',
   lembrete: 'msg_isis_lembrete',
+  obrigado: 'msg_isis_obrigado',
 };
+// modelos editáveis na tela: as 4 etapas do calendário + o obrigado depois do pagamento
+const TEMPLATE_STEPS = [...BILLING_STEPS, 'obrigado'];
 const todayBr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 const dateKey = (v) => (!v ? '' : v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
 const isPaid = (r) => r?.status === 'recebida' || r?.status === 'pago';
 // cidade de uma linha de payment_config (sem coluna de cidade: a única conta, tratada como Minaçu)
 const cityOf = (cfg) => normalizeCityValue(cfg?.city) || 'minacu';
 const dataBr = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '—');
-const DOC_NAMES = { relatorio_mensal: 'Relatorio', pre_vencimento: 'Agenda', cobranca: 'Cobranca', lembrete: 'Cobranca' };
+const DOC_NAMES = { relatorio_mensal: 'Relatorio', pre_vencimento: 'Agenda', cobranca: 'Cobranca', lembrete: 'Cobranca', obrigado: 'Recibo' };
 
 export function registerBillingIsisRoutes(app, {
   pool, verifyAdmin, paymentConfigFor, socialReports, paymentLink = async () => null, uploadRoot, publicUploadsUrl,
@@ -60,6 +63,9 @@ export function registerBillingIsisRoutes(app, {
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_cobranca TEXT;
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_lembrete TEXT;
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_rodape TEXT;
+          ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_obrigado TEXT;
+          -- o obrigado só vale para pagamentos a partir do dia em que a função entrou (nada de agradecer o passado)
+          ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS obrigado_desde DATE DEFAULT CURRENT_DATE;
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS contact_name TEXT;
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS contact_phone TEXT;
           ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS pdf_url TEXT;
@@ -197,6 +203,97 @@ export function registerBillingIsisRoutes(app, {
         data.amount, data.dueDate || null, data.pix, data.pixKey, data.receiver, data.cardLink || null, data.city || null]
     );
     return `${appBase}/pagar/${row.token}`;
+  }
+
+  // ── obrigado depois do pagamento confirmado (baixa da InfinitePay ou manual no Financeiro), uma vez por cobrança ──
+  const thanking = new Set();
+
+  /** Agradece o pagamento de uma mensalidade: mensagem + recibo em PDF, pelo número do PULSE. */
+  async function thankRevenue(revenueId) {
+    if (!revenueId || thanking.has(revenueId)) return { skip: 'em andamento' };
+    thanking.add(revenueId);
+    try {
+      await ensureSchema();
+      const { rows: [rev] } = await pool.query(`SELECT * FROM revenues WHERE id = $1`, [revenueId]);
+      if (!rev || !isPaid(rev)) return { skip: 'não paga' };
+      if (rev.recurrence_id || String(rev.description || '').trim()) return { skip: 'não é mensalidade' };
+      const { rows: done } = await pool.query(
+        `SELECT 1 FROM billing_messages WHERE revenue_id = $1 AND message_type = 'obrigado' LIMIT 1`, [revenueId]
+      );
+      if (done.length) return { skip: 'já agradecido' };
+      const contract = (await activeContracts()).find((c) => c.client_id === rev.client_id && (!rev.contract_id || c.id === rev.contract_id));
+      if (!contract) return { skip: 'sem contrato ativo' };
+      const config = await paymentConfigFor(contract.city || contract.client_city);
+      const mode = modeOf(config);
+      if (mode === 'desligado') return { skip: 'desligado' };
+      const paidAt = dateKey(rev.paid_at) || todayBr();
+      if (config?.obrigado_desde && paidAt < dateKey(config.obrigado_desde)) return { skip: 'antes da função' };
+      const month = dateKey(rev.reference_month).slice(0, 7) || paidAt.slice(0, 7);
+      const amount = Number(rev.amount) || 0;
+      const { rows: [pl] } = await pool.query(
+        `SELECT capture_method FROM payment_links WHERE revenue_id = $1 AND paid_at IS NOT NULL ORDER BY paid_at DESC LIMIT 1`, [revenueId]
+      ).catch(() => ({ rows: [] }));
+      const contact = contactForCity(contract.client_city || contract.city, config, await assistantNumbers());
+      const note = footerText(config?.msg_isis_rodape, contact);
+      const spec = {
+        ...reciboDoc({
+          month, paidAt, amount, amountWords: valorPorExtenso(amount), method: pl?.capture_method || null,
+          client: clientOf(contract), plan: planOf(contract), issuer: issuerOf(contract, config),
+        }),
+        number: `REC-${month.replace('-', '')}-${String(contract.id).slice(0, 4).toUpperCase()}`,
+        issued: dataBr(todayBr()),
+        footerNote: note ? note.replace(/^—\s*/, '').replace(/_/g, '').trim() : '',
+        footerContact: `${String(contract.company_name || '').trim()} · ${contact.city === 'uruacu' ? 'Uruaçu' : 'Minaçu'}`,
+      };
+      if (spec.parties?.[0] && contact?.phone) spec.parties[0].lines[2] = `Contato: ${contact.name} · ${contact.phone}`;
+      const pdf = await savePdf(contract, 'obrigado', month, spec).catch((error) => {
+        logger.error('[cobranca-isis] recibo:', error.message);
+        return null;
+      });
+      const body = withFooter(applyTemplate(templateOf(config, 'obrigado'), {
+        nome_cliente: String(contract.company_name || '').trim(), plano: contract.plan_name || 'plano mensal', valor: brl(amount),
+        mes_ref: nomeMes(month), data_pagamento: dataBr(paidAt),
+        recibo: pdf?.ok ? 'O recibo segue em anexo, para o seu controle.' : '',
+      }), config?.msg_isis_rodape, contact);
+      if (!contract.whatsapp) {
+        await record(contract, 'obrigado', month, 'sem_whatsapp', body, revenueId, pdf?.ok ? pdf.url : null);
+        return { status: 'sem_whatsapp' };
+      }
+      if (mode === 'previa') {
+        await record(contract, 'obrigado', month, 'previa', body, revenueId, pdf?.ok ? pdf.url : null);
+        return { status: 'previa', body };
+      }
+      await enqueueWhatsApp(pool, {
+        to: contract.whatsapp, body, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id,
+        ...(pdf?.ok ? { mediaUrl: pdf.url, mediaName: pdf.name } : {}),
+      });
+      await record(contract, 'obrigado', month, 'enviada', body, revenueId, pdf?.ok ? pdf.url : null);
+      return { status: 'enviada', body };
+    } finally {
+      thanking.delete(revenueId);
+    }
+  }
+
+  /** Varre as mensalidades pagas nos últimos 3 dias sem obrigado (pega a baixa manual do Financeiro). */
+  async function sweepThanks() {
+    await ensureSchema();
+    const { rows } = await pool.query(
+      `SELECT r.id FROM revenues r
+        WHERE r.status IN ('recebida', 'pago') AND r.recurrence_id IS NULL AND (r.description IS NULL OR btrim(r.description) = '')
+          AND r.paid_at IS NOT NULL AND r.paid_at::date >= current_date - 3
+          AND NOT EXISTS (SELECT 1 FROM billing_messages m WHERE m.revenue_id = r.id AND m.message_type = 'obrigado')
+        ORDER BY r.paid_at`
+    ).catch(() => ({ rows: [] }));
+    const results = [];
+    for (const r of rows) {
+      results.push({ revenue_id: r.id, ...(await thankRevenue(r.id).catch((error) => ({ error: error.message }))) });
+    }
+    return results;
+  }
+  // a cada 10 min (a baixa manual não avisa ninguém); a da InfinitePay chama thankRevenue na hora
+  if (process.env.NODE_ENV !== 'test') {
+    const timer = setInterval(() => sweepThanks().catch((error) => logger.error('[cobranca-isis] obrigado:', error.message)), 10 * 60 * 1000);
+    timer.unref?.();
   }
 
   /** Texto de uma etapa com o rodapé (contato da cidade do cliente) e o PDF a montar; { skip } quando não deve sair. */
@@ -442,7 +539,7 @@ export function registerBillingIsisRoutes(app, {
         has_pix: !!config?.pix_key,
         // as duas contas (Uruaçu e Minaçu): o Pix vem de Financeiro → Config da cidade; a InfiniteTag é editada aqui
         accounts: await accountsByCity(),
-        templates: Object.fromEntries(BILLING_STEPS.map((s) => [s, templateOf(config, s)])),
+        templates: Object.fromEntries(TEMPLATE_STEPS.map((s) => [s, templateOf(config, s)])),
         defaults: DEFAULT_TEMPLATES,
         footer: config?.msg_isis_rodape ?? DEFAULT_FOOTER,
         default_footer: DEFAULT_FOOTER,
@@ -507,7 +604,7 @@ export function registerBillingIsisRoutes(app, {
         params.push(f === DEFAULT_FOOTER ? null : f.slice(0, 500));
         sets.push(`msg_isis_rodape = $${params.length}`);
       }
-      for (const step of BILLING_STEPS) {
+      for (const step of TEMPLATE_STEPS) {
         const t = req.body?.templates?.[step];
         if (typeof t !== 'string') continue;
         // igual ao texto aprovado = guarda vazio (assim melhoria futura do padrão chega sozinha)
@@ -620,5 +717,24 @@ export function registerBillingIsisRoutes(app, {
     } catch (error) { sendError(res, error); }
   });
 
-  return { run, modeOf, ensureSchema };
+  // prévia do obrigado (texto que sairia) para a tela
+  app.get('/api/billing-isis/thanks-preview', async (req, res) => {
+    try {
+      await verifyAdmin(req);
+      await ensureSchema();
+      const contract = (await activeContracts()).find((c) => c.id === req.query.contract_id) || (await activeContracts())[0];
+      if (!contract) throw httpError(404, 'Sem contrato ativo');
+      const config = await paymentConfigFor(contract.city || contract.client_city);
+      const contact = contactForCity(contract.client_city || contract.city, config, await assistantNumbers());
+      const amount = Number(contract.contract_value) || 0;
+      const today = todayBr();
+      const body = withFooter(applyTemplate(templateOf(config, 'obrigado'), {
+        nome_cliente: String(contract.company_name || '').trim(), plano: contract.plan_name || 'plano mensal', valor: brl(amount),
+        mes_ref: nomeMes(today.slice(0, 7)), data_pagamento: dataBr(today), recibo: 'O recibo segue em anexo, para o seu controle.',
+      }), config?.msg_isis_rodape, contact);
+      res.json({ client: contract.company_name, body });
+    } catch (error) { sendError(res, error); }
+  });
+
+  return { run, modeOf, ensureSchema, thankRevenue, sweepThanks };
 }

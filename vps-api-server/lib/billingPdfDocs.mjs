@@ -201,6 +201,35 @@ export function relatorioDoc(d) {
   };
 }
 
+const METODO = { pix: 'Pix', credit_card: 'Cartão de crédito', debit_card: 'Cartão de débito', boleto: 'Boleto' };
+
+/**
+ * Recibo do pagamento (vai com o obrigado). d = { month, paidAt, amount, amountWords, method?, client, plan, issuer }
+ */
+export function reciboDoc(d) {
+  return {
+    kind: 'recibo',
+    title: `Recibo · mensalidade de ${monthName(d.month)}`,
+    subtitle: `Pagamento recebido em ${dataBr(d.paidAt)}`,
+    status: 'pago',
+    intro: `Recebemos de ${d.client.name} a importância de ${brl(d.amount)} (${d.amountWords}), referente à mensalidade de ${monthLabel(d.month)}${d.client.plan ? ` do ${d.client.plan}` : ''}, e damos plena quitação deste valor.`,
+    parties: [issuerParty(d.issuer), clientParty(d.client)],
+    meta: [
+      { label: 'Referência', value: comp(d.month) },
+      { label: 'Pago em', value: dataBr(d.paidAt) },
+      { label: 'Forma', value: METODO[d.method] || 'Pagamento confirmado' },
+      { label: 'Valor', value: brl(d.amount), color: '#1F9D55' },
+    ],
+    table: {
+      title: 'Discriminação',
+      columns: [{ label: 'Descrição' }, { label: 'Competência', width: 100, align: 'center' }, { label: 'Valor', width: 110, align: 'right' }],
+      rows: [[{ text: `Mensalidade · ${d.client.plan || 'plano mensal'}`, sub: planContents(d.plan), bold: true }, comp(d.month), brl(d.amount)]],
+      total: { label: 'Total pago', value: brl(d.amount) },
+    },
+    closing: { text: 'Obrigada pela parceria. Seguimos juntos!', ...SIGNATURE },
+  };
+}
+
 /**
  * Agradecimento (D−5). d = { ref, today, client, plan, attendance: { done, scheduled, cancelled, avg }, numbers?,
  * tip, dueDate, amount }

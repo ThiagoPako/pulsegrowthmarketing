@@ -16,7 +16,7 @@ const httpError = (status, message) => Object.assign(new Error(message), { statu
 const todayBr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
 export function registerInfinitePayRoutes(app, {
-  pool, verifyAdmin, paymentConfigFor, publicApiUrl, tableHasCityColumn, fetchImpl = fetch, logger = console,
+  pool, verifyAdmin, paymentConfigFor, publicApiUrl, tableHasCityColumn, fetchImpl = fetch, logger = console, onRevenuePaid = null,
 }) {
   const webhookUrl = `${String(publicApiUrl || 'https://agenciapulse.tech').replace(/\/+$/, '')}/api/webhooks/infinitepay`;
 
@@ -109,6 +109,8 @@ export function registerInfinitePayRoutes(app, {
       withCity ? [amount, `[Receita] ${label} - ID: ${revenueId}`, today, rev.city || rev.client_city || null]
         : [amount, `[Receita] ${label} - ID: ${revenueId}`, today]
     );
+    // obrigado ao cliente (billingIsisRoutes.mjs), sem travar a baixa
+    Promise.resolve().then(() => onRevenuePaid?.(revenueId)).catch((error) => console.error('[infinitepay] obrigado:', error.message));
     return true;
   }
 

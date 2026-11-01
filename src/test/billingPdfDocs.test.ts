@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cobrancaDoc, relatorioDoc, agradecimentoDoc, planContents, deliveryProgress } from '../../vps-api-server/lib/billingPdfDocs.mjs';
+import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, planContents, deliveryProgress } from '../../vps-api-server/lib/billingPdfDocs.mjs';
+import { valorPorExtenso, applyTemplate, DEFAULT_TEMPLATES } from '../../vps-api-server/lib/billingIsis.mjs';
 
 const client = { name: 'Cliente Teste Ltda', responsible: 'Maria Teste', city: 'uruacu', plan: 'Plano Pro' };
 const plan = { reels_qty: 4, creatives_qty: 0, stories_qty: 8, arts_qty: 6, recording_sessions: 3 };
@@ -51,5 +52,29 @@ describe('PDFs da Ísis: conteúdo', () => {
     const d = agradecimentoDoc({ ref: '2026-10', client, plan, numbers, attendance: { done: 2, scheduled: 3, cancelled: 1, avg: 4.5 }, tip: 'dica', dueDate: '2026-11-10', amount: 1500 });
     expect(d.cards[0].note).toBe('67% das agendas aproveitadas');
     expect(d.closing.text).toContain('10/11/2026');
+  });
+
+  it('recibo: valor por extenso, pago e quitação', () => {
+    expect(valorPorExtenso(1500)).toBe('mil e quinhentos reais');
+    expect(valorPorExtenso(1234.56)).toBe('mil, duzentos e trinta e quatro reais e cinquenta e seis centavos');
+    expect(valorPorExtenso(100)).toBe('cem reais');
+    expect(valorPorExtenso(101)).toBe('cento e um reais');
+    expect(valorPorExtenso(1)).toBe('um real');
+    expect(valorPorExtenso(2000000.01)).toBe('dois milhões de reais e um centavo');
+    const d = reciboDoc({ month: '2026-11', paidAt: '2026-11-09', amount: 1500, amountWords: valorPorExtenso(1500), method: 'pix', client, plan, issuer: {} });
+    expect(d.kind).toBe('recibo');
+    expect(d.status).toBe('pago');
+    expect(d.intro).toMatch(/R\$\s1\.500,00 \(mil e quinhentos reais\)/);
+    expect(d.meta.find((m: { label: string }) => m.label === 'Forma').value).toBe('Pix');
+  });
+
+  it('obrigado: texto com valor, referência e data; sem recibo, a linha some', () => {
+    const vars = { nome_cliente: 'Posto Naraely', plano: 'Plano Pro', valor: 'R$ 1.500,00', mes_ref: 'novembro', data_pagamento: '09/11/2026' };
+    const com = applyTemplate(DEFAULT_TEMPLATES.obrigado, { ...vars, recibo: 'O recibo segue em anexo, para o seu controle.' });
+    expect(com).toContain('Recebemos o pagamento da sua mensalidade de novembro (Plano Pro), no valor de *R$ 1.500,00*, em 09/11/2026.');
+    expect(com).toContain('O recibo segue em anexo');
+    const sem = applyTemplate(DEFAULT_TEMPLATES.obrigado, { ...vars, recibo: '' });
+    expect(sem).not.toContain('recibo');
+    expect(sem).not.toContain('{');
   });
 });

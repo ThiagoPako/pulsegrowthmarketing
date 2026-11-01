@@ -46,6 +46,14 @@ export const DEFAULT_TEMPLATES = {
     '_{aviso_cartao}_',
     'Se já pagou, pode desconsiderar. Obrigada pela confiança! 🧡',
   ].join('\n'),
+  // obrigado depois do pagamento confirmado (usuário, 01/11/2026: "uma mensagem profissional e bonita de agradecimento")
+  obrigado: [
+    'Olá, {nome_cliente}! Tudo bem?',
+    'Recebemos o pagamento da sua mensalidade de {mes_ref} ({plano}), no valor de *{valor}*, em {data_pagamento}. ✅',
+    'Muito obrigada pela confiança e pela parceria com a Pulse. É um prazer fazer parte da história de vocês e seguir construindo resultados juntos.',
+    '{recibo}',
+    'Conte sempre com a gente! 🧡',
+  ].join('\n'),
   lembrete: [
     'Oi, {nome_cliente}! Não localizamos ainda o pagamento da mensalidade de {mes_ref} ({valor}).',
     'Se já pagou, desconsidere e me desculpe 🙏. Se precisar, é só pagar por aqui (Pix ou cartão): {link_pagamento}',
@@ -171,6 +179,46 @@ export function pixPayload({ key, name, city, amount, txid = '***' }) {
     '6304',
   ].join('');
   return body + crc16(body);
+}
+
+const UNIDADES = ['zero', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez', 'onze', 'doze', 'treze',
+  'quatorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove'];
+const DEZENAS = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
+const CENTENAS = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos'];
+
+function ate999(n) {
+  if (n === 100) return 'cem';
+  const c = Math.floor(n / 100);
+  const r = n % 100;
+  const partes = [];
+  if (c) partes.push(CENTENAS[c]);
+  if (r) partes.push(r < 20 ? UNIDADES[r] : DEZENAS[Math.floor(r / 10)] + (r % 10 ? ` e ${UNIDADES[r % 10]}` : ''));
+  return partes.join(' e ');
+}
+
+/** Valor por extenso para o recibo: 1500 → "mil e quinhentos reais"; 1234,56 → "mil, duzentos e trinta e quatro reais e cinquenta e seis centavos". */
+export function valorPorExtenso(valor) {
+  const total = Math.round((Number(valor) || 0) * 100);
+  const reais = Math.floor(total / 100);
+  const centavos = total % 100;
+  const grupos = [];
+  const milhoes = Math.floor(reais / 1e6);
+  const milhares = Math.floor((reais % 1e6) / 1000);
+  const resto = reais % 1000;
+  if (milhoes) grupos.push(`${ate999(milhoes)} ${milhoes === 1 ? 'milhão' : 'milhões'}`);
+  if (milhares) grupos.push(milhares === 1 ? 'mil' : `${ate999(milhares)} mil`);
+  if (resto) grupos.push(ate999(resto));
+  // "e" antes do último grupo quando ele é redondo (cem, duzentos…) ou menor que cem; vírgula nos demais
+  let texto = '';
+  grupos.forEach((g, i) => {
+    if (i === 0) texto = g;
+    else if (i === grupos.length - 1 && (resto < 100 || resto % 100 === 0)) texto += ` e ${g}`;
+    else texto += `, ${g}`;
+  });
+  const partes = [];
+  if (reais) partes.push(`${texto}${milhoes && !milhares && !resto ? ' de' : ''} ${reais === 1 ? 'real' : 'reais'}`);
+  if (centavos) partes.push(`${ate999(centavos)} ${centavos === 1 ? 'centavo' : 'centavos'}`);
+  return partes.join(' e ') || 'zero real';
 }
 
 /** Modelo de cobrança salvo antes da página de pagamento: ganha a linha do link no fim (o cliente sempre recebe). */

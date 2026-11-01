@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  BILLING_STEPS, MODE_LABELS, STEP_LABELS, STEP_STATUS_LABELS, TEMPLATE_VARS, fetchBillingAgenda, fetchBillingConfig,
+  TEMPLATE_STEPS, TEMPLATE_LABELS, type TemplateStep, MODE_LABELS, STEP_LABELS, STEP_STATUS_LABELS, TEMPLATE_VARS, fetchBillingAgenda, fetchBillingConfig,
   fetchBillingPreview, saveBillingConfig, fetchPaymentLinks, createTestLink, recheckPaymentLink, openBillingPdfPreview,
   type BillingAgendaItem, type BillingMode, type BillingStep,
 } from '@/lib/billingIsis';
@@ -174,7 +174,7 @@ function BillingSettings() {
   const [handles, setHandles] = useState<Record<'uruacu' | 'minacu', string>>({ uruacu: '', minacu: '' });
   const [footer, setFooter] = useState('');
   const [contacts, setContacts] = useState<Record<'uruacu' | 'minacu', { name: string; phone: string }>>({ uruacu: { name: '', phone: '' }, minacu: { name: '', phone: '' } });
-  const [templates, setTemplates] = useState<Record<BillingStep, string>>({ relatorio_mensal: '', pre_vencimento: '', cobranca: '', lembrete: '' });
+  const [templates, setTemplates] = useState<Record<TemplateStep, string>>({ relatorio_mensal: '', pre_vencimento: '', cobranca: '', lembrete: '', obrigado: '' });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -255,10 +255,10 @@ function BillingSettings() {
         </CardContent>
       </Card>
 
-      {BILLING_STEPS.map((step) => (
+      {TEMPLATE_STEPS.map((step) => (
         <Card key={step}>
           <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">{STEP_LABELS[step]}</CardTitle>
+            <CardTitle className="text-base">{TEMPLATE_LABELS[step]}</CardTitle>
             <Button
               variant="ghost"
               size="sm"

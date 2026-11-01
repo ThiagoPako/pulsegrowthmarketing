@@ -12,6 +12,10 @@ export const STEP_LABELS: Record<BillingStep, string> = {
   cobranca: 'Dia D · cobrança',
   lembrete: 'D+3 · lembrete',
 };
+/** modelos editáveis: as 4 etapas do calendário + o obrigado depois do pagamento confirmado */
+export type TemplateStep = BillingStep | 'obrigado';
+export const TEMPLATE_STEPS: TemplateStep[] = [...BILLING_STEPS, 'obrigado'];
+export const TEMPLATE_LABELS: Record<TemplateStep, string> = { ...STEP_LABELS, obrigado: 'Pagamento confirmado · obrigado' };
 export const MODE_LABELS: Record<BillingMode, string> = {
   desligado: 'Desligado (cobrança antiga)',
   previa: 'Prévia (monta, ninguém recebe)',
@@ -28,11 +32,12 @@ export const STEP_STATUS_LABELS: Record<string, string> = {
   pulado: 'Pulado',
   conferir: 'Conferir dados',
 };
-export const TEMPLATE_VARS: Record<BillingStep, string[]> = {
+export const TEMPLATE_VARS: Record<TemplateStep, string[]> = {
   relatorio_mensal: ['nome_cliente', 'mes_anterior', 'mes_atual', 'qtd_videos', 'qtd_artes', 'qtd_posts', 'qtd_gravacoes', 'horas_dedicadas', 'resumo_rede', 'sugestoes', 'link_relatorio'],
   pre_vencimento: ['nome_cliente', 'mes_ref', 'gravacoes_feitas', 'gravacoes_marcadas', 'media_videos', 'dica_assiduidade', 'dia_vencimento'],
-  cobranca: ['nome_cliente', 'plano', 'valor', 'pix_copia_cola', 'chave_pix', 'nome_recebedor', 'link_infinitepay', 'aviso_cartao'],
-  lembrete: ['nome_cliente', 'mes_ref', 'valor', 'pix_copia_cola', 'link_infinitepay'],
+  cobranca: ['nome_cliente', 'plano', 'valor', 'link_pagamento', 'pix_copia_cola', 'chave_pix', 'nome_recebedor', 'link_infinitepay', 'aviso_cartao'],
+  lembrete: ['nome_cliente', 'mes_ref', 'valor', 'link_pagamento', 'pix_copia_cola', 'link_infinitepay'],
+  obrigado: ['nome_cliente', 'plano', 'valor', 'mes_ref', 'data_pagamento', 'recibo'],
 };
 
 export interface BillingConfig {
@@ -41,8 +46,8 @@ export interface BillingConfig {
   has_pix: boolean;
   /** as duas contas: Pix de Financeiro → Config da cidade (own = a cidade tem configuração própria) e a InfiniteTag */
   accounts: Record<'uruacu' | 'minacu', { own: boolean; pix_key: string; receiver: string; bank: string; infinitepay_handle: string }>;
-  templates: Record<BillingStep, string>;
-  defaults: Record<BillingStep, string>;
+  templates: Record<TemplateStep, string>;
+  defaults: Record<TemplateStep, string>;
   /** rodapé de mensagem automática em todas as mensagens ao cliente (vazio = sem rodapé) */
   footer: string;
   default_footer: string;
@@ -80,7 +85,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 export const fetchBillingConfig = () => call<BillingConfig>('/billing-isis/config');
 export const saveBillingConfig = (patch: Partial<Pick<BillingConfig, 'mode' | 'footer'>> & {
   infinitepay_handles?: Partial<Record<'uruacu' | 'minacu', string>>;
-  templates?: Partial<Record<BillingStep, string>>;
+  templates?: Partial<Record<TemplateStep, string>>;
   contacts?: Partial<Record<'uruacu' | 'minacu', { name: string; phone: string }>>;
 }) =>
   call<{ success: boolean }>('/billing-isis/config', { method: 'PUT', body: JSON.stringify(patch) });

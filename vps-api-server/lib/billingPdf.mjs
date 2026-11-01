@@ -175,8 +175,8 @@ async function payment(doc, pay) {
   doc.font('bold').fontSize(11).fillColor(C.texto).text('Cartão', x2 + 14, y + 12);
   if (pay.cardLink) {
     doc.font('regular').fontSize(9).fillColor(C.cinza).text('Pelo link da InfinitePay, em até 12x.', x2 + 14, y + 34, { width: w - 28 });
-    doc.font('bold').fontSize(18).fillColor(C.texto).text(pay.cardAmount || '', x2 + 14, y + 72, { width: w - 28 });
-    const by = y + 112;
+    doc.font('bold').fontSize(18).fillColor(C.texto).text(pay.cardAmount || '', x2 + 14, y + 60, { width: w - 28 });
+    const by = y + 98;
     doc.roundedRect(x2 + 14, by, w - 28, 30, 15).fill(C.laranja);
     doc.font('bold').fontSize(10).fillColor('#FFFFFF').text('Pagar no cartão', x2 + 14, by + 9, { width: w - 28, align: 'center', link: pay.cardLink, underline: false });
     doc.link(x2 + 14, by, w - 28, 30, pay.cardLink);

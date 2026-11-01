@@ -37,3 +37,32 @@ export function contactForCity(city, config = null, assistantNumbers = []) {
   }
   return { city: key, name, phone: formatPhoneBr(phone) };
 }
+
+/**
+ * Para o privado do PULSE (PR da "Marcely no WhatsApp"): lê a configuração da cidade e o Assistente PULSE no banco.
+ * city 'uruacu' | 'minacu' | null. Devolve { nome, telefone } com o telefone só em dígitos e com o 55, ou null quando
+ * não há contato com telefone. Cidade sem contato (ou null) usa o de Uruaçu (Thiago) com fallback: true.
+ */
+export async function contactInfo(pool, city) {
+  const [{ rows: configs }, { rows: numbers }] = await Promise.all([
+    pool.query('SELECT * FROM payment_config').catch(() => ({ rows: [] })),
+    pool.query('SELECT name, phone, active FROM assistant_numbers').catch(() => ({ rows: [] })),
+  ]);
+  const configFor = (c) => configs.find((r) => (normalizeCityValue(r.city) || 'minacu') === c) || null;
+  const digits = (v) => {
+    const d = String(v || '').replace(/\D/g, '');
+    if (!d) return null;
+    return d.length === 10 || d.length === 11 ? `55${d}` : d;
+  };
+  const key = normalizeCityValue(city);
+  if (key && DEFAULT_CONTACTS[key]) {
+    const c = contactForCity(key, configFor(key), numbers);
+    const raw = String(configFor(key)?.contact_phone || '').trim()
+      || (c.name === DEFAULT_CONTACTS[key].name ? DEFAULT_CONTACTS[key].phone : null)
+      || numbers.find((n) => n.active !== false && String(n.name || '').trim().toLowerCase().split(/\s+/)[0] === c.name.toLowerCase().split(/\s+/)[0])?.phone;
+    if (digits(raw)) return { nome: c.name, telefone: digits(raw), fallback: false };
+  }
+  const u = contactForCity('uruacu', configFor('uruacu'), numbers);
+  const rawU = String(configFor('uruacu')?.contact_phone || '').trim() || DEFAULT_CONTACTS.uruacu.phone;
+  return digits(rawU) ? { nome: u.name, telefone: digits(rawU), fallback: true } : null;
+}

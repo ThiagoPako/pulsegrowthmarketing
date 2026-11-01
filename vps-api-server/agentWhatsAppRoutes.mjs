@@ -11,17 +11,30 @@
 //   POST /api/agent/whatsapp/team                (chefe, social_media) { to (nome de quem está no Assistente PULSE), text, confirm }:
 //        aviso no privado de alguém da equipe pelo número do PULSE; sem confirm, só a prévia.
 //
+// Caixa da Marcely no WhatsApp (assistant/marcelyInbox.mjs; plano aprovado pelo usuário em 01/11/2026):
+//   GET  /api/agent/inbox?status=nova|aberta|todas&marcar=1&limit=   (chefe) itens da caixa; aberta (padrão) = nova ou
+//        lida sem resposta; marcar=1 marca as novas como lidas (sem ele só olha, como faz o `pulse esperar`)
+//   POST /api/agent/inbox/:id/reply   { text }   (chefe) resposta a quem mandou (origem equipe), pelo número do PULSE
+//   POST /api/agent/inbox/:id/done    { note }   (chefe) arquiva o item (resolvido, ou de grupo, que não tem resposta)
+//   POST /api/agent/whatsapp/avisar   { text, options?, preview? }  (chefe) aviso a quem tem a permissão "marcely"
+//        (o Thiago) quando algo precisa da decisão dele; options (2 a 12) vira enquete e o voto volta para a caixa.
+// Item de grupo de cliente não tem resposta por aqui: mensagem a cliente só com o ok do Thiago (POST .../send).
+//
 // Só manda para o grupo cadastrado de um cliente: número ou grupo digitado à mão não passa por aqui.
 
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import multer from 'multer';
-import { enqueueWhatsApp } from './whatsapp/shared.mjs';
-import { sendToNumber, remember, logEvent } from './assistant/common.mjs';
+import { enqueueWhatsApp, normalizePoll } from './whatsapp/shared.mjs';
+import { sendToNumber, remember, logEvent, clip } from './assistant/common.mjs';
+import { ensureAssistantSchema } from './assistant/schema.mjs';
+import { inboxView } from './assistant/marcelyInbox.mjs';
 
 const MEDIA_EXT = { '.png': 'png', '.jpg': 'jpg', '.jpeg': 'jpg', '.webp': 'webp', '.pdf': 'pdf', '.mp4': 'mp4' };
 const PURPOSES = new Set(['geral', 'aprovacao', 'assistente']);
+const SIGNATURE = '\n\n— Marcely (agentes da Pulse)';
+const AVISOS_POR_HORA = 20;
 
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
@@ -175,6 +188,118 @@ export function registerAgentWhatsAppRoutes(app, { pool, uploadRoot, publicUploa
       await remember(pool, number.id, 'assistant', body);
       await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'aviso_agente', text: text.slice(0, 200), detail: { agente: agent.name || null } });
       res.json({ success: true, to: number.name, text: body });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // ── Caixa da Marcely no WhatsApp ──
+  const isUuid = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
+  async function inboxItem(id) {
+    if (!isUuid(id)) throw Object.assign(new Error('id inválido'), { status: 400 });
+    await ensureAssistantSchema(pool);
+    const { rows: [item] } = await pool.query(`SELECT * FROM marcely_inbox WHERE id = $1`, [id]);
+    if (!item) throw Object.assign(new Error('Item não encontrado na caixa'), { status: 404 });
+    return item;
+  }
+
+  app.get('/api/agent/inbox', async (req, res) => {
+    try {
+      await chefe(req);
+      await ensureAssistantSchema(pool);
+      const status = ['nova', 'aberta', 'todas'].includes(req.query.status) ? req.query.status : 'aberta';
+      const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 100);
+      const where = { nova: `status = 'nova'`, aberta: `status IN ('nova', 'lida')`, todas: 'true' }[status];
+      const { rows } = await pool.query(
+        `SELECT * FROM marcely_inbox WHERE ${where} ORDER BY created_at ${status === 'todas' ? 'DESC' : 'ASC'} LIMIT $1`, [limit]
+      );
+      if (['1', 'true', 'sim'].includes(String(req.query.marcar || '').toLowerCase())) {
+        const novas = rows.filter((r) => r.status === 'nova').map((r) => r.id);
+        if (novas.length) await pool.query(`UPDATE marcely_inbox SET status = 'lida', read_at = now() WHERE id = ANY($1) AND status = 'nova'`, [novas]);
+      }
+      res.json({ items: rows.map(inboxView) });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/agent/inbox/:id/reply', async (req, res) => {
+    try {
+      const agent = await chefe(req);
+      const item = await inboxItem(req.params.id);
+      const text = String(req.body?.text || '').trim().slice(0, 3500);
+      if (!text) throw Object.assign(new Error('Escreva a resposta (text)'), { status: 400 });
+      if (item.origem !== 'equipe' || !item.number_id) {
+        throw Object.assign(new Error('Item de grupo de cliente não tem resposta por aqui: arquive (done) e, se for falar com o cliente, só com o ok do Thiago (pulse whatsapp enviar).'), { status: 409 });
+      }
+      const { rows: [number] } = await pool.query(`SELECT * FROM assistant_numbers WHERE id = $1 AND active`, [item.number_id]);
+      if (!number) throw Object.assign(new Error('Quem mandou não está mais ativo no Assistente PULSE'), { status: 409 });
+      const body = `${text}${SIGNATURE}`;
+      await sendToNumber(pool, number, body);
+      await remember(pool, number.id, 'assistant', body);
+      await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'resposta_marcely', text: text.slice(0, 200), detail: { inbox_id: item.id, agente: agent.name || null } });
+      const { rows: [saved] } = await pool.query(
+        `UPDATE marcely_inbox SET status = 'respondida', replied_at = now(), read_at = coalesce(read_at, now()),
+                reply = CASE WHEN reply IS NULL THEN $2 ELSE reply || E'\\n---\\n' || $2 END WHERE id = $1 RETURNING *`,
+        [item.id, text]
+      );
+      res.json({ success: true, to: number.name, item: inboxView(saved) });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/agent/inbox/:id/done', async (req, res) => {
+    try {
+      await chefe(req);
+      const item = await inboxItem(req.params.id);
+      const note = clip(req.body?.note, 1000) || null;
+      const { rows: [saved] } = await pool.query(
+        `UPDATE marcely_inbox SET status = 'arquivada', read_at = coalesce(read_at, now()), note = coalesce($2, note) WHERE id = $1 RETURNING *`,
+        [item.id, note]
+      );
+      res.json({ success: true, item: inboxView(saved) });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Aviso ao Thiago (quem tem a permissão "marcely") quando algo precisa da decisão dele. Com opções vai uma enquete;
+  // o voto chega como "Marcely, sobre …: <opção>" e cai direto na caixa (engine.mjs, callsMarcely).
+  app.post('/api/agent/whatsapp/avisar', async (req, res) => {
+    try {
+      const agent = await chefe(req);
+      await ensureAssistantSchema(pool);
+      const text = String(req.body?.text || '').trim().slice(0, 3000);
+      if (!text) throw Object.assign(new Error('Escreva o aviso (text)'), { status: 400 });
+      const preview = ['1', 'true', 'sim'].includes(String(req.body?.preview || '').toLowerCase());
+      let poll = null;
+      const options = Array.isArray(req.body?.options) ? req.body.options : [];
+      if (options.length) {
+        const question = clip(req.body?.question || text.split('\n')[0], 120);
+        try {
+          poll = normalizePoll({
+            name: question,
+            options: options.map((o) => ({ label: o, answer: `Marcely, sobre "${clip(question, 80)}": ${clip(o, 100)}` })),
+          });
+        } catch (error) {
+          throw Object.assign(new Error(error.message), { status: 400 });
+        }
+      }
+      const { rows: numbers } = await pool.query(`SELECT * FROM assistant_numbers WHERE active AND 'marcely' = ANY(permissions) ORDER BY name`);
+      if (!numbers.length) throw Object.assign(new Error('Ninguém tem a permissão "Falar com a Marcely" no Assistente PULSE (Configurações → Assistente PULSE)'), { status: 404 });
+      const body = `${text}${SIGNATURE}`;
+      if (preview) return res.json({ dry_run: true, to: numbers.map((n) => n.name), text: body, poll });
+      const { rows: [{ n }] } = await pool.query(
+        `SELECT count(*)::int AS n FROM assistant_log WHERE kind = 'aviso_marcely' AND created_at > now() - interval '1 hour'`
+      );
+      if (n >= AVISOS_POR_HORA * numbers.length) throw Object.assign(new Error(`Limite de ${AVISOS_POR_HORA} avisos por hora: junte os assuntos numa mensagem só`), { status: 429 });
+      for (const number of numbers) {
+        await sendToNumber(pool, number, body, { poll });
+        await remember(pool, number.id, 'assistant', poll ? `${body}\n[enquete enviada: ${poll.name} — opções: ${poll.options.map((o) => o.label).join(' | ')}]` : body);
+        await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'aviso_marcely', text: text.slice(0, 200), detail: { agente: agent.name || null, enquete: !!poll } });
+      }
+      res.json({ success: true, to: numbers.map((n) => n.name), text: body, poll });
     } catch (error) {
       sendError(res, error);
     }

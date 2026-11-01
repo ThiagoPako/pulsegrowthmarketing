@@ -23,6 +23,7 @@ export const PERMISSIONS = {
   agenda: 'Marcar, remarcar e cancelar gravações',
   cadastro_clientes: 'Ver e atualizar o cadastro dos clientes (e pré-cadastrar cliente novo)',
   comandar_agentes: 'Dar ordens aos agentes de IA (Marcely, Uriel, editores, designers), pausar e retomar',
+  marcely: 'Falar com a Marcely pelo WhatsApp (o que não é comando simples vai para a caixa dela; ela responde e avisa por aqui)',
 };
 
 export const CITIES = { minacu: 'Minaçu', uruacu: 'Uruaçu' };

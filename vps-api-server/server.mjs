@@ -27,6 +27,7 @@ import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerAgentTrainingRoutes } from './agentTrainingRoutes.mjs';
 import { registerVictoriaRoutes } from './victoriaRoutes.mjs';
 import { registerSocialReportRoutes } from './socialReportRoutes.mjs';
+import { registerHolidayArtsRoutes } from './holidayArtsRoutes.mjs';
 import { registerBillingIsisRoutes } from './billingIsisRoutes.mjs';
 import { registerInfinitePayRoutes } from './infinitePayRoutes.mjs';
 import { registerCampaignIsisRoutes } from './campaignIsisRoutes.mjs';
@@ -20415,6 +20416,9 @@ const victoria = registerVictoriaRoutes(app, {
   resolveAiModel,
   agentApi,
 });
+
+// ─── Aviso da manhã das artes de feriado (Ísis: pulse feriados) ──
+registerHolidayArtsRoutes(app, { pool, agentApi });
 
 // ─── Campanhas da Ísis: ela cria em rascunho, a equipe aprova a estratégia e a Victoria escreve os roteiros ──
 registerCampaignIsisRoutes(app, {

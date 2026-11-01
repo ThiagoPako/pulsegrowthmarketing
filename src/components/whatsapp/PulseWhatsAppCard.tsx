@@ -273,7 +273,7 @@ export default function PulseWhatsAppCard({ onChange }: { onChange?: () => void 
 
         {pulse && (
           <p className="text-[11px] text-muted-foreground">
-            ⚠️ Não adicione este número aos grupos dos clientes: ele é só para os comandos da equipe.
+            Pode ficar nos grupos dos clientes: no grupo ele só lê, e só responde comando de números cadastrados.
           </p>
         )}
       </CardContent>

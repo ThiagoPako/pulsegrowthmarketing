@@ -1,8 +1,10 @@
 // Assistente PULSE — comandos da equipe pelo WhatsApp.
 //
 // Lê wa_inbound com route = 'assistente' (privado do número com a função "assistente", gravado pelo pulse-wa):
-//   1. número fora da lista de autorizados → ignorado em silêncio (só log). Se a conexão também tiver outras
-//      funções, a mensagem volta para o fluxo normal (aprovação, confirmação de gravação);
+//   1. número fora da lista de autorizados → nunca vira comando. Se a conexão também tiver outras funções, a mensagem
+//      volta para o fluxo normal (aprovação, confirmação de gravação); senão, se o número é de um cliente conhecido
+//      (cadastro ou quem fala no grupo dele: o PULSE fica nos grupos desde 01/11/2026), vira item na caixa da Marcely,
+//      sem resposta; número de fora é ignorado em silêncio (só log);
 //   2. limite por número (padrão 30 comandos/hora);
 //   3. áudio → whisper.cpp; sem Whisper: "Não consegui ouvir o áudio, manda por escrito";
 //   4. "sim"/"não" com ações esperando → executa os payloads guardados / cancela (sem chamar o modelo);
@@ -17,14 +19,14 @@
 
 import {
   PERMISSIONS, CONFIRM_MINUTES, cityLabel, norm, brazilNowLabel, findNumberByPhone, getNumber, getSettings, logEvent,
-  remember, sendToNumber, clip, confirmPoll,
+  remember, sendToNumber, clip, confirmPoll, clientCity, canonicalPhone,
 } from './common.mjs';
 import { MATERIAL_TYPES, addMaterial, takeReadyBatches, batchPrompt, FLUSH_SECONDS } from './materials.mjs';
 import { proposeAction, confirmQuestion, confirmManyQuestion, executeAction, cancelAction } from './actions.mjs';
 import { createTurn } from './tools.mjs';
 import { transcribe, removeAudio } from './transcribe.mjs';
 import { ensureAssistantSchema } from './schema.mjs';
-import { addInboxItem, callsMarcely, MARCELY_RECEIVED } from './marcelyInbox.mjs';
+import { addInboxItem, callsMarcely, clientByPhone, MARCELY_RECEIVED } from './marcelyInbox.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { waPrivateDir } from '../whatsapp/shared.mjs';
@@ -284,18 +286,45 @@ export function createEngine({ pool, claude, tools, intervalMs = 1500, rateLimit
     return { marcely: item?.id || null };
   }
 
+  /**
+   * Cliente no privado do PULSE: vai para a caixa da Marcely como informação (origem "cliente"), sem resposta e sem
+   * passar pelo modelo. Áudio vira texto quando dá; o arquivo é apagado como nos outros casos.
+   */
+  async function clientToMarcely(client, row) {
+    let text = String(row.text || '').trim();
+    if (row.media_type === 'audio') {
+      const heard = row.media_path ? await transcribe(row.media_path) : { ok: false };
+      text = heard.ok ? `(áudio transcrito) ${clip(heard.text, 4000)}` : '[áudio que não deu para ouvir]';
+    } else if (!text && row.media_type) {
+      text = `[${row.media_type}]`;
+    }
+    await removeAudio(row.media_path);
+    const item = await addInboxItem(pool, {
+      origem: 'cliente', kind: 'privado', fromName: row.push_name || null, clientId: client.id, cliente: client.company_name,
+      cidade: clientCity(client), link: `https://wa.me/${canonicalPhone(row.phone)}`, texto: text || '(sem texto)',
+      resumo: client.outros.length ? `Também está ligado a: ${client.outros.join(', ')}` : null,
+      inboundId: row.id, sourceKey: `privado:${row.id}`,
+    });
+    await logEvent(pool, { phone: row.phone, kind: 'cliente_privado', text, detail: { client: client.company_name, via: client.via, inbox_id: item?.id || null } });
+    return { cliente_privado: client.id };
+  }
+
   async function handleRow(row, settings) {
     const number = await findNumberByPhone(pool, row.phone);
     if (!number || !number.active) {
       const { rows: [conn] } = await pool.query(`SELECT purposes FROM wa_connections WHERE id = $1`, [row.connection_id]);
       const shared = (conn?.purposes || []).some((p) => p !== 'assistente');
-      await logEvent(pool, { phone: row.phone, kind: 'ignorado', text: row.text || (row.media_type ? `[${row.media_type}]` : ''), detail: { push_name: row.push_name, devolvido_ao_fluxo: shared } });
-      await removeAudio(row.media_path);
       if (shared) {
+        await logEvent(pool, { phone: row.phone, kind: 'ignorado', text: row.text || (row.media_type ? `[${row.media_type}]` : ''), detail: { push_name: row.push_name, devolvido_ao_fluxo: true } });
+        await removeAudio(row.media_path);
         // a conexão também tem outras funções: o número não é da equipe, então pode ser cliente respondendo
         await pool.query(`UPDATE wa_inbound SET route = NULL, claimed_at = NULL, attempts = 0 WHERE id = $1`, [row.id]);
         return null;
       }
+      const client = number ? null : await clientByPhone(pool, row.phone); // número da equipe desativado não é cliente
+      if (client) return clientToMarcely(client, row);
+      await logEvent(pool, { phone: row.phone, kind: 'ignorado', text: row.text || (row.media_type ? `[${row.media_type}]` : ''), detail: { push_name: row.push_name, devolvido_ao_fluxo: false } });
+      await removeAudio(row.media_path);
       return { ignorado: 'nao_autorizado' };
     }
     if (!settings.enabled) {

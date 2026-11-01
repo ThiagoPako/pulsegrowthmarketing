@@ -254,8 +254,8 @@ export default function WhatsAppConnections() {
                   <p className="text-xs text-destructive">{c.last_error}</p>
                 )}
                 {c.purposes.includes('assistente') && (
-                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                    ⚠️ Número do Assistente PULSE (comandos da equipe): não adicione este número aos grupos dos clientes.
+                  <p className="text-[11px] text-muted-foreground">
+                    Número do Assistente PULSE: pode ficar nos grupos dos clientes. No grupo ele só lê, e só responde comando de números cadastrados.
                   </p>
                 )}
               </div>

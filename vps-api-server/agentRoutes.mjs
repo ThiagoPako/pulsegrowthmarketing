@@ -1530,13 +1530,47 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
            LEFT JOIN clients c ON c.id = t.client_id
            LEFT JOIN profiles pe ON pe.id = t.edited_by
            LEFT JOIN profiles pa ON pa.id = t.assigned_to
-          WHERE t.kanban_column IN ('edicao', 'pre_revisao', 'revisao', 'alteracao', 'envio')
+          WHERE t.kanban_column IN ('edicao', 'pre_revisao', 'revisao', 'alteracao', 'envio', 'acompanhamento', 'arquivado')
             AND ($1 = '' OR t.title ILIKE '%' || $1 || '%' OR c.company_name ILIKE '%' || $1 || '%' OR t.id::text LIKE $1 || '%')
           ORDER BY t.updated_at DESC
           LIMIT 50`,
         [search]
       );
       res.json({ tasks: rows });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Vídeos já POSTADOS (usuário, 01/11/2026: bruto e projeto só saem do PC depois que o card está postado; "finalizado
+  // eu digo postado"). Postado = card em Arquivado (o "Postado" do Agendamentos, da Entregas Social e do detalhe do card
+  // arquivam o card e põem a entrega em 'postado'). Qualquer agente lê.
+  //   GET /api/agent/posted?client=<nome ou id>&days=60
+  app.get('/api/agent/posted', async (req, res) => {
+    try {
+      await verifyAgent(req);
+      const client = String(req.query.client || '').trim();
+      const days = Math.min(365, Math.max(1, Number(req.query.days) || 60));
+      const { rows } = await pool.query(
+        `SELECT t.id, t.title, t.content_type, c.company_name AS client_name, pe.name AS edited_by_name,
+                COALESCE(d.posted_at::text, to_char(t.posting_at AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD'),
+                         to_char(t.updated_at AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD')) AS posted_on,
+                (SELECT COALESCE(NULLIF(p.display_name, ''), p.name) FROM task_history h JOIN profiles p ON p.id = h.user_id
+                  WHERE h.task_id = t.id AND h.action ILIKE 'postad%' ORDER BY h.created_at DESC LIMIT 1) AS marked_by
+           FROM content_tasks t
+           LEFT JOIN clients c ON c.id = t.client_id
+           LEFT JOIN profiles pe ON pe.id = t.edited_by
+           LEFT JOIN LATERAL (SELECT posted_at FROM social_media_deliveries sd
+                               WHERE sd.content_task_id = t.id AND sd.status = 'postado'
+                               ORDER BY sd.updated_at DESC NULLS LAST LIMIT 1) d ON true
+          WHERE t.kanban_column = 'arquivado'
+            AND t.updated_at > now() - ($2::int * interval '1 day')
+            AND ($1 = '' OR c.company_name ILIKE '%' || $1 || '%' OR t.client_id::text = $1)
+          ORDER BY posted_on DESC, t.updated_at DESC
+          LIMIT 200`,
+        [client, days]
+      );
+      res.json({ posted: rows });
     } catch (error) {
       sendError(res, error);
     }

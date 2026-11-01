@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, BellRing, CalendarClock, Check, Copy, Facebook, Instagram, Loader2, Repeat2, Sparkles, Trash2 } from 'lucide-react';
+import { AlertTriangle, BellRing, CalendarCheck2, CalendarClock, Check, Copy, Facebook, Instagram, Loader2, Repeat2, Sparkles, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,7 @@ import {
   DEFAULT_BUTTON_TEXTS, defaultRepeat, rememberTime, repeatFromRule, repeatPayload, repeatProblem, type RepeatDraft,
 } from '@/lib/storySeries';
 import {
-  cancelSchedule, generateCaption, rescheduleMaterial, saveCaption, scheduleMaterial, SchedulingApiError, type CaptionSource,
+  cancelSchedule, generateCaption, markMaterialPosted, rescheduleMaterial, saveCaption, scheduleMaterial, SchedulingApiError, type CaptionSource,
 } from '@/services/schedulingApi';
 import {
   cancelStoryOccurrence, cancelStorySeries, createStorySeries, updateStoryOccurrence, updateStorySeries,
@@ -362,6 +362,28 @@ export default function ScheduleDialog({
   };
 
   const whenLabel = `${item.title}${item.when ? ` · ${formatDayLabel(item.when.date)}${item.when.time ? ` às ${item.when.time}` : ''}` : ''}`;
+  // Postagem manual feita (01/11/2026): carimba o material como postado; aparece no portal do cliente e no Kanban
+  const canMarkPosted = !readOnly && !!item && !item.ghost && item.state === 'manual' && !isSeriesItem;
+  const askPosted = () => {
+    if (!item) return;
+    setConfirm({
+      title: 'Marcar como postado?',
+      description: `${whenLabel ? `${whenLabel} · ` : ''}O card fica carimbado como postado, o cliente vê no portal e a operação sabe que saiu.`,
+      confirmLabel: 'Sim, foi postado',
+      onConfirm: async () => {
+        setSaving(true);
+        try {
+          const r = await markMaterialPosted({ client_id: clientId, kind: item.kind, id: item.id });
+          onSaved(r.already ? 'Já estava marcado como postado' : '✅ Marcado como postado');
+        } catch (err) {
+          toast.error((err as Error).message || 'Não foi possível marcar como postado');
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
+  };
+
   const askCancel = () => {
     if (isSeriesItem && series) {
       setConfirm({
@@ -576,13 +598,23 @@ export default function ScheduleDialog({
             )}
           </div>
 
-          <DialogFooter className="flex-row items-center gap-2 border-t border-border p-4 sm:justify-between">
+          <DialogFooter className="flex-row flex-wrap items-center gap-2 border-t border-border p-4 sm:justify-between">
+            {canMarkPosted && (
+              <Button type="button" size="sm" onClick={askPosted} disabled={saving} className="order-first w-full gap-1.5 bg-emerald-600 text-white hover:bg-emerald-600/90 sm:order-none sm:hidden">
+                <CalendarCheck2 size={14} /> Marcar como postado
+              </Button>
+            )}
             {scheduled && !readOnly ? (
               <Button type="button" variant="ghost" size="sm" onClick={askCancel} disabled={saving} className="gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive">
                 <Trash2 size={14} /> {isSeriesItem ? (following ? 'Cancelar as próximas' : 'Cancelar data') : 'Cancelar agendamento'}
               </Button>
             ) : <span />}
             <div className="ml-auto flex gap-2">
+              {canMarkPosted && (
+                <Button type="button" size="sm" onClick={askPosted} disabled={saving} className="hidden gap-1.5 bg-emerald-600 text-white hover:bg-emerald-600/90 sm:inline-flex">
+                  <CalendarCheck2 size={14} /> Marcar como postado
+                </Button>
+              )}
               <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={saving}>Fechar</Button>
               {!readOnly && (
                 <Button type="button" size="sm" onClick={() => save(false)} disabled={saving || !date || !time} className="gap-1.5">

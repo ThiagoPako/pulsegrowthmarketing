@@ -1,4 +1,8 @@
 // Funções das chaves de agente (vps-api-server/agentRoutes.mjs AGENT_ROLES). Mude os dois lados juntos.
+// Chave gerada ou revogada (AgentKeysCard): o quadro dos computadores relê a lista de agentes na hora
+// (antes a Victoria, com chave nova, só aparecia em "Agentes neste computador" depois de recarregar a página).
+export const AGENT_KEYS_CHANGED_EVENT = 'pulse:agent-keys-changed';
+
 export const AGENT_ROLE_LABELS: Record<string, string> = {
   editor: 'Editor',
   revisor: 'Revisão',

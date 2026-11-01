@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
-import { AGENT_ROLE_LABELS } from '@/lib/agentRoles';
+import { AGENT_KEYS_CHANGED_EVENT, AGENT_ROLE_LABELS } from '@/lib/agentRoles';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -125,6 +125,13 @@ export default function AgentMachinesCard() {
       .finally(() => setLoading(false));
   }, [load]);
 
+  // chave nova ou revogada no quadro "Agentes de edição": a lista de agentes muda sem recarregar a página
+  useEffect(() => {
+    const reload = () => { load().catch(() => {}); };
+    window.addEventListener(AGENT_KEYS_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(AGENT_KEYS_CHANGED_EVENT, reload);
+  }, [load]);
+
   // enquanto a janela mostra o código, o sistema acompanha o Mac até a conexão terminar
   const pairStatus = pair?.pair_status;
   const pairFinished = pairStatus === 'conectado' || pairStatus === 'com_avisos' || pairStatus === 'vencido';
@@ -186,6 +193,7 @@ export default function AgentMachinesCard() {
     setIssued(null);
     setPair(null);
     setDialog({ mode: 'new' });
+    load().catch(() => {}); // lista fresca (agente cadastrado em outra aba)
   };
 
   const openCode = (machine: Machine) => {
@@ -194,6 +202,7 @@ export default function AgentMachinesCard() {
     setIssued(null);
     setPair(null);
     setDialog({ mode: 'code', machine });
+    load().catch(() => {}); // lista fresca (agente cadastrado em outra aba)
   };
 
   const toggle = (userId: string) =>

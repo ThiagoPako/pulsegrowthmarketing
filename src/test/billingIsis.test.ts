@@ -63,7 +63,7 @@ describe('cobranças da Ísis · textos', () => {
   it('dica de assiduidade pelo que aconteceu', () => {
     expect(attendanceTip({ done: 4, scheduled: 4, cancelled: 0, avg: 5 })).toMatch(/Agenda em dia/);
     expect(attendanceTip({ done: 4, scheduled: 4, cancelled: 0, avg: 2 })).toMatch(/3 ou 4 temas/);
-    expect(attendanceTip({ done: 2, scheduled: 3, cancelled: 1, avg: 5 })).toMatch(/1 gravação\(ões\) remarcada/);
+    expect(attendanceTip({ done: 2, scheduled: 3, cancelled: 1, avg: 5 })).toMatch(/1 gravação remarcada/);
   });
 
   it('sugestões viram tópicos', () => {

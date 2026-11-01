@@ -17,9 +17,9 @@ import fs from 'node:fs/promises';
 import {
   BILLING_STEPS, MODES, DEFAULT_TEMPLATES, monthName, previousMonth, nextMonth, stepDates, attendanceTip,
   brl, pixPayload, CARD_NOTICE, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
-  accountSummary,
 } from './lib/billingIsis.mjs';
 import { renderPdf } from './lib/billingPdf.mjs';
+import { cobrancaDoc, relatorioDoc, agradecimentoDoc } from './lib/billingPdfDocs.mjs';
 import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
 import { enqueueWhatsApp } from './whatsapp/shared.mjs';
@@ -38,7 +38,6 @@ const isPaid = (r) => r?.status === 'recebida' || r?.status === 'pago';
 // cidade de uma linha de payment_config (sem coluna de cidade: a única conta, tratada como Minaçu)
 const cityOf = (cfg) => normalizeCityValue(cfg?.city) || 'minacu';
 const dataBr = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '—');
-const monthLabel = (month) => `${monthName(`${month}-01`)} de ${month.slice(0, 4)}`;
 const DOC_NAMES = { relatorio_mensal: 'Relatorio', pre_vencimento: 'Agenda', cobranca: 'Cobranca', lembrete: 'Cobranca' };
 
 export function registerBillingIsisRoutes(app, {
@@ -81,9 +80,24 @@ export function registerBillingIsisRoutes(app, {
   const templateOf = (config, step) => (config?.[TEMPLATE_COLUMNS[step]] || '').trim() || DEFAULT_TEMPLATES[step];
   const modeOf = (config) => (MODES.includes(config?.isis_mode) ? config.isis_mode : 'desligado');
 
+  // dados do cliente, do plano e do emitente para os PDFs (lib/billingPdfDocs.mjs)
+  const clientOf = (contract) => ({
+    name: String(contract.company_name || '').trim(), responsible: String(contract.responsible_person || '').trim(),
+    city: normalizeCityValue(contract.client_city || contract.city) || '', plan: contract.plan_name || '',
+  });
+  const planOf = (contract) => ({
+    reels_qty: contract.reels_qty, creatives_qty: contract.creatives_qty, stories_qty: contract.stories_qty,
+    arts_qty: contract.arts_qty, recording_sessions: contract.recording_sessions,
+  });
+  const issuerOf = (contract, config) => ({
+    name: config?.receiver_name || 'Agência Pulse', document: config?.document || '',
+    city: normalizeCityValue(contract.client_city || contract.city) || '',
+  });
+
   async function activeContracts() {
     const { rows } = await pool.query(
-      `SELECT fc.*, c.company_name, c.whatsapp, c.city AS client_city, p.name AS plan_name
+      `SELECT fc.*, c.company_name, c.whatsapp, c.city AS client_city, c.responsible_person, p.name AS plan_name,
+              p.reels_qty, p.creatives_qty, p.stories_qty, p.arts_qty, p.recording_sessions
          FROM financial_contracts fc
          JOIN clients c ON c.id = fc.client_id
          LEFT JOIN plans p ON p.id = fc.plan_id
@@ -156,7 +170,10 @@ export function registerBillingIsisRoutes(app, {
       issued: dataBr(date),
       footerNote: note ? note.replace(/^—\s*/, '').replace(/_/g, '').trim() : '',
       footerContact: `${String(contract.company_name || '').trim()} · ${contact.city === 'uruacu' ? 'Uruaçu' : 'Minaçu'}`,
+      generated: `gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
     };
+    // contato da cidade no emitente
+    if (pdf?.parties?.[0] && contact?.phone) pdf.parties[0].lines[2] = `Contato: ${contact.name} · ${contact.phone}`;
     return { ...out, contact, pdf, body: withFooter(out.body, out.config?.msg_isis_rodape, contact) };
   }
 
@@ -195,32 +212,10 @@ export function registerBillingIsisRoutes(app, {
           report.network.current.interactions !== null ? `${Number(report.network.current.interactions).toLocaleString('pt-BR')} interações` : '',
         ].filter(Boolean).join(' · ')
         : '';
-      const tipos = n.deliveries.videos.by_type.map((t) => `${t.total} ${t.type}`).join(' · ');
-      const rec = n.deliveries.recordings;
-      const pdfRelatorio = {
-        kind: 'relatorio',
-        title: `Relatório de ${monthLabel(ref)}`,
-        cards: [
-          { label: 'Vídeos', value: n.deliveries.videos.total, highlight: true },
-          { label: 'Artes', value: n.deliveries.arts.total },
-          { label: 'Posts', value: n.deliveries.posts.total },
-          { label: 'Gravações', value: rec.done },
-        ],
-        sections: [
-          {
-            title: 'O que entregamos',
-            bullets: [
-              tipos ? `Vídeos: ${tipos}` : '',
-              n.deliveries.arts.total ? `${n.deliveries.arts.total} artes` : '',
-              n.deliveries.posts.total ? `${n.deliveries.posts.total} posts publicados` : '',
-              `${rec.done} gravações realizadas${rec.avg_videos_per_recording !== null ? `, média de ${rec.avg_videos_per_recording.toLocaleString('pt-BR')} vídeos por gravação` : ''}`,
-            ].filter(Boolean),
-          },
-          ...(n.time.total_hours > 0 ? [{ title: 'Tempo dedicado', text: `${n.time.total_hours.toLocaleString('pt-BR')} horas no seu perfil: gravação ${n.time.recording_hours.toLocaleString('pt-BR')} h · edição ${n.time.editing_hours.toLocaleString('pt-BR')} h · design ${n.time.design_hours.toLocaleString('pt-BR')} h.` }] : []),
-          ...(net ? [{ title: 'Rede social', text: net }] : []),
-          ...(report.draft.suggestions ? [{ title: `Sugestões para ${monthName(`${month}-01`)}`, bullets: bulletList(report.draft.suggestions).split('\n') }] : []),
-        ],
-      };
+      const pdfRelatorio = relatorioDoc({
+        ref, prev: previousMonth(`${ref}-01`), next: month, client: clientOf(contract), plan: planOf(contract), issuer: issuerOf(contract, config),
+        numbers: n, network: report.network, suggestions: report.draft.suggestions,
+      });
       return {
         config,
         pdf: pdfRelatorio,
@@ -253,16 +248,10 @@ export function registerBillingIsisRoutes(app, {
       const a = await attendance(contract.client_id, ref);
       return {
         config,
-        pdf: {
-          kind: 'agradecimento',
-          title: `Obrigada pela parceria em ${monthName(`${ref}-01`)}!`,
-          cards: [
-            { label: 'Gravações feitas', value: `${a.done} de ${a.scheduled}`, highlight: true },
-            { label: 'Vídeos por gravação', value: a.avg === null ? '—' : a.avg.toLocaleString('pt-BR') },
-            { label: 'Próximo vencimento', value: dataBr(dueDate) },
-          ],
-          sections: [{ title: 'Como melhorar a entrega', text: attendanceTip(a) }],
-        },
+        pdf: agradecimentoDoc({
+          ref, client: clientOf(contract), plan: planOf(contract), attendance: a, tip: attendanceTip(a), dueDate, amount,
+          numbers: (await socialReports.reportFor(contract.client_id, ref).catch(() => null))?.numbers || null,
+        }),
         body: applyTemplate(templateOf(config, step), {
           ...base, mes_ref: monthName(`${ref}-01`), gravacoes_feitas: a.done, gravacoes_marcadas: a.scheduled,
           media_videos: a.avg === null ? '' : a.avg.toLocaleString('pt-BR'),
@@ -278,31 +267,15 @@ export function registerBillingIsisRoutes(app, {
       return null;
     });
     const plano = contract.plan_name || 'plano mensal';
-    const conta = accountSummary(await previousRevenues(contract, month));
+    const history = await previousRevenues(contract, month);
     return {
       config,
       revenue,
-      pdf: {
-        kind: 'cobranca',
-        title: `Mensalidade de ${monthLabel(month)}`,
-        status: step === 'lembrete' ? 'vencido' : 'aberto',
-        cards: [
-          { label: 'Cliente', value: String(contract.company_name || '').trim(), small: true },
-          { label: 'Vencimento', value: dataBr(dueDate) },
-          { label: 'Valor', value: brl(amount), highlight: true },
-        ],
-        table: {
-          title: 'Serviços',
-          columns: [{ label: 'Descrição', width: 287 }, { label: 'Competência', width: 120 }, { label: 'Valor', width: 100, align: 'right' }],
-          rows: [[`Mensalidade ${plano}`, `${month.slice(5, 7)}/${month.slice(0, 4)}`, brl(amount)]],
-          total: { label: 'Total', value: brl(amount) },
-        },
+      pdf: cobrancaDoc({
+        month, today: date, dueDate, amount, status: step === 'lembrete' ? 'vencido' : 'aberto',
+        client: clientOf(contract), plan: planOf(contract), issuer: issuerOf(contract, config), history,
         payment: { pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(amount) : null, cardNotice: CARD_NOTICE },
-        sections: [
-          ...(conta.open.length ? [{ title: `Também em aberto (${brl(conta.openTotal)})`, bullets: conta.open }] : []),
-          ...(conta.paid.length ? [{ title: 'Últimos pagamentos', bullets: conta.paid }] : []),
-        ],
-      },
+      }),
       body: applyTemplate(templateOf(config, step), {
         ...base, plano, valor: brl(amount), mes_ref: monthName(`${month}-01`),
         pix_copia_cola: pix, chave_pix: config?.pix_key, nome_recebedor: config?.receiver_name,

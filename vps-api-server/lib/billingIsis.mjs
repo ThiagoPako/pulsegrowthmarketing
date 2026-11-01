@@ -123,7 +123,7 @@ export function attendanceTip({ done = 0, scheduled = 0, cancelled = 0, avg = nu
   }
   if (cancelled > 0 || done < scheduled) {
     const faltas = Math.max(cancelled, scheduled - done);
-    return `Tivemos ${faltas} gravação(ões) remarcada(s). Quanto mais gravações, mais conteúdo no ar: que tal já deixarmos as próximas datas marcadas?`;
+    return `Tivemos ${faltas} ${faltas === 1 ? 'gravação remarcada' : 'gravações remarcadas'}. Quanto mais gravações, mais conteúdo no ar: que tal já deixarmos as próximas datas marcadas?`;
   }
   return 'Que tal já deixarmos as próximas gravações marcadas? Assim o conteúdo não para.';
 }

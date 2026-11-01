@@ -28,6 +28,8 @@ export interface AgentCardFields {
   adjustment_notes?: string | null;
   agent_step?: string | null;
   agent_heartbeat_at?: string | null;
+  /** Quando o agente pegou o card (o servidor grava no `pulse pegar`): base do tempo estimado. */
+  editing_started_at?: string | null;
   /** Quem mandou a última etapa (o editor do card, ou a revisão/chefe conferindo na Análise). */
   agent_step_by?: string | null;
   agent_review_verdict?: string | null;
@@ -256,4 +258,71 @@ export const URGENT_COLUMNS = ['edicao', 'pre_revisao', 'alteracao'] as const;
 
 export function isUrgent(task: Pick<AgentCardFields, 'urgent_at' | 'kanban_column'>): boolean {
   return !!task.urgent_at && (URGENT_COLUMNS as readonly string[]).includes(String(task.kanban_column));
+}
+
+/**
+ * Etapas da edição por agente, na ordem do fluxo (`pulse etapa`), com a duração típica de cada uma em minutos.
+ * O texto da etapa é livre ("som: pronto (trilha…)", "conferindo"), então a etapa é achada por palavra-chave.
+ * Base: rodadas de 31/10–01/11/2026 no PC Windows (vídeo de 30–60 s); ajuste aqui se o ritmo mudar.
+ */
+const AGENT_STEPS: { key: string; match: RegExp; minutes: number }[] = [
+  { key: 'começando', match: /come[cç]|inici/i, minutes: 2 },
+  { key: 'baixando brutos', match: /baix|brut|download/i, minutes: 5 },
+  { key: 'cortando', match: /cort|transcr|prepar/i, minutes: 10 },
+  { key: 'cor', match: /\bcor\b|colori|look/i, minutes: 8 },
+  { key: 'plano', match: /plano|montag|legend|anima/i, minutes: 12 },
+  { key: 'som', match: /\bsom\b|trilha|[áa]udio/i, minutes: 8 },
+  { key: 'conferindo', match: /confer|portão|portao|still|quadro/i, minutes: 5 },
+  { key: 'renderizando', match: /render|export/i, minutes: 6 },
+];
+export const AGENT_TYPICAL_TOTAL_MINUTES = AGENT_STEPS.reduce((s, x) => s + x.minutes, 0);
+
+export interface AgentProgress {
+  /** 0–1: quanto do trabalho já foi (pelas etapas concluídas + o tempo na etapa atual). */
+  pct: number;
+  /** Minutos que faltam, estimados (≥ 1). */
+  etaMinutes: number;
+  /** Índice da etapa atual em AGENT_STEPS (−1 quando o texto não bate com nenhuma). */
+  stepIndex: number;
+}
+
+/**
+ * Progresso estimado de um card que um agente está fazendo (pedido do usuário, 01/11/2026: "os que estão sendo feitos
+ * ficam em cor vibrando mostrando o que está sendo feito e tempo estimado em barra de carregamento").
+ * `minutesInStep` = minutos desde a última etapa (agent_heartbeat_at); `minutesSinceStart` = desde editing_started_at.
+ * Dentro de uma etapa o avanço cresce com o tempo, mas para em 90% dela até a etapa seguinte chegar.
+ * Com o início conhecido e já 15% feito, o tempo que falta segue o ritmo real do card (não só a tabela).
+ */
+export function agentProgress(step: string | null | undefined, minutesInStep: number | null, minutesSinceStart?: number | null): AgentProgress {
+  const idx = step ? AGENT_STEPS.findIndex((s) => s.match.test(step)) : -1;
+  const total = AGENT_TYPICAL_TOTAL_MINUTES;
+  const before = idx > 0 ? AGENT_STEPS.slice(0, idx).reduce((s, x) => s + x.minutes, 0) : 0;
+  const cur = idx >= 0 ? AGENT_STEPS[idx].minutes : AGENT_STEPS[0].minutes;
+  const inStep = Math.min(Math.max(0, minutesInStep ?? 0), cur * 0.9);
+  const pct = Math.min(0.97, Math.max(0.03, (before + inStep) / total));
+  let eta = total * (1 - pct);
+  if (minutesSinceStart && minutesSinceStart > 0 && pct >= 0.15) {
+    eta = (minutesSinceStart / pct) * (1 - pct);
+  }
+  return { pct, etaMinutes: Math.max(1, Math.round(eta)), stepIndex: idx };
+}
+
+/**
+ * Como o card aparece no Kanban em relação à fila dos agentes (pedido do usuário, 01/11/2026):
+ *  - 'working': um agente está fazendo agora (sinal recente) → cor viva, brilho e barra de progresso;
+ *  - 'waiting': na fila (Edição/Alteração), livre ou com agente parado, sem ninguém fazendo → meio apagado;
+ *  - null: o resto (outras colunas, card com alguém da equipe, urgente 🔥, fixado).
+ */
+export function queueVisualState(
+  task: AgentCardFields,
+  options: { agentIds?: ReadonlySet<string>; now?: number } = {}
+): 'working' | 'waiting' | null {
+  const column = task.kanban_column;
+  if (column !== 'edicao' && column !== 'alteracao') return null;
+  const work = agentWorkState(task, options);
+  if (work?.state === 'working') return 'working';
+  if (task.urgent_at || task.pinned_at) return null;
+  // com alguém da equipe (humano) o card está sendo feito: não apaga
+  if (task.assigned_to && options.agentIds && options.agentIds.size > 0 && !options.agentIds.has(task.assigned_to)) return null;
+  return 'waiting';
 }

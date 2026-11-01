@@ -8,7 +8,7 @@ import AdjustmentRequestDialog from '@/components/kanban/AdjustmentRequestDialog
 import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
 import KanbanColumnJumpBar, { kanbanColumnDomId } from '@/components/kanban/KanbanColumnJumpBar';
 import { useAgentIds } from '@/hooks/useAgentIds';
-import { agentReviewOf, agentWorkState, isUrgent, matchesOwnerFilter, ownerFilterOptions, type OwnerFilter } from '@/lib/agentCardStatus';
+import { agentReviewOf, agentWorkState, isUrgent, matchesOwnerFilter, ownerFilterOptions, queueVisualState, type OwnerFilter } from '@/lib/agentCardStatus';
 import { usePulsePlus } from '@/hooks/usePulsePlus';
 import {
   ANALYSIS_FORBIDDEN_MSG, EDITING_NEEDS_FOOTAGE_MSG, SEND_TO_CLIENT_FORBIDDEN_MSG,
@@ -176,11 +176,14 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
     } catch { return { filled: 0, total: 0 }; }
   })();
 
+  // fila dos agentes (01/11/2026): na fila sem ninguém fazendo = meio apagado; agente fazendo agora = brilho pulsando
+  const fila = queueVisualState(task, { agentIds });
+  const filaClasse = fila === 'waiting' ? 'opacity-50 saturate-[0.35] hover:opacity-100 hover:saturate-100' : fila === 'working' ? 'animate-agent-glow !border-sky-400/80' : '';
   return (
     // Clique abre o detalhe (histórico, comentários, upload, pacote de stories) — antes só o de Otimização abria
     <div draggable onDragStart={e => onDragStart(e, task)} onClick={() => onOpenDetail(task)}
       className={`group relative bg-card border rounded-lg cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
-        draggedId === task.id ? 'opacity-40 scale-95' : ''
+        draggedId === task.id ? 'opacity-40 scale-95' : filaClasse
       } ${isOptimize
           ? 'border-fuchsia-500/60 bg-gradient-to-br from-fuchsia-500/10 via-purple-500/5 to-violet-500/10 ring-1 ring-fuchsia-500/30 shadow-fuchsia-500/20 shadow-md'
           : isReview ? 'border-teal-500/40 bg-teal-500/5' : 'border-border'

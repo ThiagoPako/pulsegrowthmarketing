@@ -1,5 +1,5 @@
 import { Pencil } from 'lucide-react';
-import { agentWorkState, formatSince, type AgentCardFields } from '@/lib/agentCardStatus';
+import { agentProgress, agentWorkState, formatSince, type AgentCardFields } from '@/lib/agentCardStatus';
 import { usePulsePlusKnown } from '@/hooks/usePulsePlus';
 
 /**
@@ -39,16 +39,38 @@ export default function AgentWorkBadge({ task, users, agentIds }: Props) {
       </div>
     );
   }
+  // barra de carregamento com o tempo estimado (pedido do usuário, 01/11/2026): etapas concluídas + tempo na atual
+  const started = task.editing_started_at ? new Date(task.editing_started_at).getTime() : NaN;
+  const sinceStart = Number.isFinite(started) ? Math.max(0, Math.round((Date.now() - started) / 60000)) : null;
+  const prog = agentProgress(work.step, work.minutes, sinceStart);
+  const pct = Math.round(prog.pct * 100);
+  const barra = (
+    <div className="px-3 pb-1.5 pt-1 bg-black/10" title={`${pct}% · faltam cerca de ${formatSince(prog.etaMinutes)} (estimativa pela etapa)`}>
+      <div className="flex items-center justify-between text-[9px] font-semibold text-white/90 mb-0.5">
+        <span>{pct}%</span>
+        <span>≈ {formatSince(prog.etaMinutes)} para entregar</span>
+      </div>
+      <div className="h-1.5 w-full rounded-full bg-white/25 overflow-hidden" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+        <div className="h-full rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.9)] transition-[width] duration-700 ease-out relative overflow-hidden" style={{ width: `${pct}%` }}>
+          <div className="absolute inset-0 animate-agent-shimmer bg-gradient-to-r from-transparent via-white/70 to-transparent" />
+        </div>
+      </div>
+    </div>
+  );
   if (isFix) {
     return (
-      <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 animate-pulse">
-        <span className="text-[9px] font-black text-white uppercase tracking-widest shrink-0">🔧 Em correção · {name}</span>
-        <span className="text-[9px] text-white/90 truncate" title={work.step}>{work.step}{when}</span>
+      <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 bg-[length:200%_100%] animate-agent-flow">
+        <div className="flex items-center gap-1.5 px-3 py-1">
+          <span className="text-[9px] font-black text-white uppercase tracking-widest shrink-0">🔧 Em correção · {name}</span>
+          <span className="text-[9px] text-white/90 truncate" title={work.step}>{work.step}{when}</span>
+        </div>
+        {barra}
       </div>
     );
   }
   return (
-    <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-sky-500 via-indigo-500 to-sky-500">
+    <div className="bg-gradient-to-r from-sky-500 via-indigo-500 to-sky-500 bg-[length:200%_100%] animate-agent-flow">
+    <div className="flex items-center gap-1.5 px-3 py-1">
       <span className="relative flex h-1.5 w-1.5 shrink-0">
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
         <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
@@ -56,6 +78,8 @@ export default function AgentWorkBadge({ task, users, agentIds }: Props) {
       <Pencil size={10} className="text-white shrink-0" aria-hidden />
       <span className="text-[9px] font-black text-white uppercase tracking-widest shrink-0">Editando · {name}</span>
       <span className="text-[9px] text-white/90 truncate" title={work.step}>{work.step}{when}</span>
+    </div>
+    {barra}
     </div>
   );
 }

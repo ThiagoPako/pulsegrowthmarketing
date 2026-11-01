@@ -33,6 +33,7 @@
 import { POSTING_TZ, DATE_KEY_RE, TIME_RE, brtParts, brtToIso, formatBrt } from './lib/postingTime.mjs';
 import { listOccurrences, occurrenceAt, ruleFromRow, ruleSummary } from './lib/storyRecurrence.mjs';
 import { isHttpsUrl, registerStoryRoutes } from './storySeries.mjs';
+import { createCaptionPrefetch } from './lib/captionPrefetch.mjs';
 
 export const SCHEDULING_MODULE = 'agendamentos';
 
@@ -1484,6 +1485,12 @@ export function registerSchedulingRoutes(app, deps) {
     return { client, material: { kind, title: (String(sp.caption || '').split('\n')[0] || 'Post').slice(0, 80), format: sp.publish_type, media_url: media.absolute(sp.media_url) } };
   }
 
+  // legenda escrita em segundo plano para o que vai ser postado (lib/captionPrefetch.mjs)
+  const captionPrefetch = createCaptionPrefetch({
+    pool, postCaption, captionContext, saveCaption, excludedDesignFormats: NON_SOCIAL_DESIGN_FORMATS, logger,
+  });
+  captionPrefetch.start({ after: ready });
+
   app.post('/api/scheduling/caption/generate', async (req, res) => {
     try {
       const { city } = await requireModule(req);
@@ -1492,8 +1499,10 @@ export function registerSchedulingRoutes(app, deps) {
       const client = await loadClient(body.client_id, city);
       const { kind, id } = readTarget(body);
       const ctx = await captionContext(kind, id, client.id);
+      const started = Date.now();
       const result = await postCaption.generate(ctx);
-      res.json({ success: true, ...result });
+      // tempo da IA no servidor (o painel mede do clique até a tela)
+      res.json({ success: true, ...result, ms: Date.now() - started });
     } catch (error) {
       // erro da API do Claude (chave, saldo, fora do ar): mensagem curta para a tela; o detalhe vai para o log
       if (error?.status && error?.error && !error.statusCode) {
@@ -1600,6 +1609,8 @@ export function registerSchedulingRoutes(app, deps) {
         }
         return { when: { at: whenIso, date, time }, mode };
       });
+      // sem legenda ainda: o servidor escreve agora, para estar pronta quando abrirem
+      captionPrefetch.enqueue(kind, id, client.id);
       res.json({ success: true, ...result });
     } catch (error) {
       sendError(res, error, logger);

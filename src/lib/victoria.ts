@@ -28,7 +28,16 @@ export interface VictoriaReply {
   referencias: { titulo: string; url: string; por_que: string }[];
   observacoes: string;
   aprendizados: VictoriaLesson[];
-  usados: { roteiros_cliente: number; roteiros_agencia: number; regras: number; pesquisou: boolean };
+  usados: { roteiros_cliente: number; roteiros_agencia: number; regras: number; pesquisou: boolean; contexto_em_cache?: boolean };
+  /** tempo no servidor, do pedido ao roteiro completo */
+  ms?: number;
+}
+
+export interface VictoriaPrepared {
+  ready: boolean;
+  research: 'pronta' | 'preparando';
+  research_date: string | null;
+  usados: { roteiros_cliente: number; roteiros_agencia: number; regras: number };
 }
 
 export interface VictoriaInfo {
@@ -48,13 +57,73 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 export const fetchVictoriaInfo = (clientId?: string) =>
   call<VictoriaInfo>(`/victoria/info${clientId ? `?client_id=${encodeURIComponent(clientId)}` : ''}`);
 
-export const askVictoria = (payload: {
+export interface VictoriaRequest {
   client_id: string;
   content_format: ScriptContentFormat;
   video_type: ScriptVideoType;
   conversation: { role: VictoriaRole; text: string }[];
   search: boolean;
-}) => call<VictoriaReply>('/victoria/roteiro', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+/** Ao escolher cliente e tipo: o servidor monta o contexto e deixa a pesquisa do nicho pronta (rápido depois). */
+export const prepareVictoria = (payload: Pick<VictoriaRequest, 'client_id' | 'content_format' | 'video_type'>) =>
+  call<VictoriaPrepared>('/victoria/prepare', { method: 'POST', body: JSON.stringify(payload) });
+
+/**
+ * Pede o roteiro e recebe o texto enquanto ela escreve (text/event-stream: "delta" com pedaços, "done" com o roteiro,
+ * "error"). onText recebe o texto acumulado até aqui. Servidor sem streaming responde JSON e também funciona.
+ */
+export async function askVictoria(payload: VictoriaRequest, onText?: (text: string) => void): Promise<VictoriaReply> {
+  const response = await vpsAuthedFetch('/victoria/roteiro', {
+    method: 'POST',
+    body: JSON.stringify({ ...payload, stream: true }),
+    headers: { Accept: 'text/event-stream' },
+  });
+  const type = response.headers.get('Content-Type') || '';
+  if (!response.ok || !type.includes('text/event-stream') || !response.body) {
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body?.error || 'A Victoria não respondeu. Tente de novo.');
+    return body as VictoriaReply;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let text = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let cut = buffer.indexOf('\n\n');
+    while (cut >= 0) {
+      const chunk = buffer.slice(0, cut);
+      buffer = buffer.slice(cut + 2);
+      cut = buffer.indexOf('\n\n');
+      const event = chunk.match(/^event: (.+)$/m)?.[1];
+      const data = chunk.match(/^data: (.*)$/m)?.[1];
+      if (!event || data == null) continue;
+      const parsed = JSON.parse(data);
+      if (event === 'delta') {
+        text += parsed.text || '';
+        onText?.(text);
+      } else if (event === 'done') {
+        return parsed as VictoriaReply;
+      } else if (event === 'error') {
+        throw new Error(parsed.error || 'A Victoria não respondeu. Tente de novo.');
+      }
+    }
+  }
+  throw new Error('A conexão caiu antes do fim do roteiro. Tente de novo.');
+}
+
+/** Pedaço do roteiro já escrito (entre ROTEIRO: e a próxima seção), mostrado enquanto a resposta chega. */
+export function partialScript(text: string): string {
+  const raw = String(text || '');
+  const start = raw.search(/^\s*(?:\*\*)?ROTEIRO(?:\*\*)?\s*:/im);
+  if (start < 0) return '';
+  const after = raw.slice(start).replace(/^\s*(?:\*\*)?ROTEIRO(?:\*\*)?\s*:\s*/i, '');
+  const end = after.search(/^\s*(?:\*\*)?(LEGENDA|OBSERVA[CÇ][OÕ]ES|APRENDIZADOS)(?:\*\*)?\s*:/im);
+  return (end >= 0 ? after.slice(0, end) : after).trim();
+}
 
 export const removeVictoriaLesson = (id: string) => call<{ ok: boolean }>(`/victoria/lessons/${id}`, { method: 'DELETE' });
 

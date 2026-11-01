@@ -4466,6 +4466,9 @@ function resolveAiModel(model, provider) {
     if (/^claude-(haiku|sonnet|opus)-5-5$/i.test(raw)) return raw;
     if (/haiku/i.test(raw)) return 'claude-haiku-5-5';
     if (/sonnet/i.test(raw)) return 'claude-sonnet-5-5';
+    // Modelo "rápido" de outro provedor (gemini-*-flash, *-lite, gpt-*-mini) vira o Sonnet, não o Opus: as
+    // ferramentas de IA da tela não podem demorar (pedido do usuário, 01/11/2026)
+    if (/flash|lite|mini|8b/i.test(raw)) return 'claude-sonnet-5-5';
     return 'claude-opus-5-5';
   }
   return raw;
@@ -4496,7 +4499,8 @@ async function callClaude(apiKey, model, messages, options = {}) {
   const response = await getAnthropicClient(apiKey).beta.messages.create({
     model,
     max_tokens: 16000,
-    output_config: { effort: options.effort || 'medium' },
+    // esforço baixo por padrão: a pessoa espera a resposta na tela (quem precisa de mais passa effort)
+    output_config: { effort: options.effort || 'low' },
     ...(system ? { system } : {}),
     messages: chat,
     ...(withFallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {}),

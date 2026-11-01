@@ -27,6 +27,7 @@ const STATUS_STYLE: Record<string, string> = {
   previa: 'bg-sky-500/15 text-sky-500 border-sky-500/30',
   aguardando_relatorio: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
   sem_whatsapp: 'bg-destructive/15 text-destructive border-destructive/30',
+  conferir: 'bg-destructive/15 text-destructive border-destructive/30',
 };
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 
@@ -147,6 +148,12 @@ function MessageDialog({ item, step, date, body, pdfUrl, month, onClose }: {
         {preview.isLoading && !body && <Loader2 className="animate-spin text-muted-foreground" size={18} />}
         {skip === 'aguardando_relatorio' && <p className="text-sm text-amber-500">O relatório do mês ainda não foi aprovado (Relatórios → Relatório mensal): sem aprovação, essa mensagem não sai.</p>}
         {skip === 'pago' && <p className="text-sm text-emerald-500">Mensalidade paga: a cobrança não sai.</p>}
+        {skip === 'conferir' && (
+          <div className="text-sm text-destructive space-y-1">
+            <p>Não bate com o Financeiro, então não sai (a Ísis avisa a equipe):</p>
+            <ul className="list-disc pl-5">{preview.data?.problems?.map((p) => <li key={p}>{p}</li>)}</ul>
+          </div>
+        )}
         {preview.error && <p className="text-sm text-destructive">{(preview.error as Error).message}</p>}
         {text && <pre className="whitespace-pre-wrap [overflow-wrap:anywhere] rounded-md bg-muted/50 p-3 text-sm font-sans max-h-[60vh] overflow-y-auto">{text}</pre>}
         {text && (

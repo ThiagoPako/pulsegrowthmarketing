@@ -193,3 +193,45 @@ export function bulletList(text) {
   return String(text || '').split('\n').map((s) => s.trim()).filter(Boolean)
     .map((t) => (/^[•\-–\d]/.test(t) ? t : `• ${t}`)).join('\n');
 }
+
+// ── Conferência antes de cobrar (usuário, 01/11/2026: "entenda os dados, crie o PDF, depois envia no WhatsApp";
+//    se algo não bater com o financeiro, não envia e avisa a equipe) ──
+const brMonth = (month) => `${month.slice(5, 7)}/${month.slice(0, 4)}`;
+
+/**
+ * Problemas que impedem a cobrança do mês; [] quando os números batem com o Financeiro.
+ * @param contractValue valor do contrato
+ * @param revenues      mensalidades lançadas no mês (revenues sem recorrência extra nem lançamento manual)
+ * @param month         "AAAA-MM"
+ */
+export function checkBillingData({ contractValue, revenues = [], month }) {
+  const problems = [];
+  const open = revenues.filter((r) => !['recebida', 'pago'].includes(r.status) && r.status !== 'cancelada');
+  if (!revenues.length) problems.push(`a mensalidade de ${brMonth(month)} não está lançada em Financeiro → Receitas`);
+  if (open.length > 1) problems.push(`há ${open.length} mensalidades de ${brMonth(month)} em aberto (lançamento repetido?)`);
+  const r = open[0] || revenues[0];
+  if (r) {
+    const amount = Number(r.amount);
+    if (!(amount > 0)) problems.push(`a mensalidade de ${brMonth(month)} está com valor zerado`);
+    else if (Number(contractValue) > 0 && Math.abs(amount - Number(contractValue)) > 0.009) {
+      problems.push(`a receita (${brl(amount)}) não bate com o contrato (${brl(contractValue)})`);
+    }
+    if (!r.due_date) problems.push(`a mensalidade de ${brMonth(month)} está sem vencimento`);
+  } else if (!(Number(contractValue) > 0)) {
+    problems.push('o contrato está sem valor');
+  }
+  return problems;
+}
+
+/** Situação da conta para o PDF: o que ficou em aberto antes e os últimos pagamentos. */
+export function accountSummary(previous = [], { limitPaid = 3 } = {}) {
+  const fmt = (r) => `Mensalidade ${brMonth(String(r.reference_month instanceof Date ? r.reference_month.toISOString() : r.reference_month).slice(0, 7))} · ${brl(r.amount)}`;
+  const due = (v) => (v ? String(v instanceof Date ? v.toISOString() : v).slice(0, 10).split('-').reverse().join('/') : '');
+  const open = previous.filter((r) => !['recebida', 'pago', 'cancelada'].includes(r.status));
+  const paid = previous.filter((r) => ['recebida', 'pago'].includes(r.status)).slice(0, limitPaid);
+  return {
+    open: open.map((r) => `${fmt(r)}${r.due_date ? ` · venceu em ${due(r.due_date)}` : ''}`),
+    openTotal: open.reduce((a, r) => a + (Number(r.amount) || 0), 0),
+    paid: paid.map((r) => `${fmt(r)}${r.paid_at ? ` · paga em ${due(r.paid_at)}` : ''}`),
+  };
+}

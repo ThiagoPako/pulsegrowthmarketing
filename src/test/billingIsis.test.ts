@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   stepsDueOn, stepDates, attendanceTip, cardAmount, crc16, pixPayload, applyTemplate, bulletList, nextMonth, previousMonth,
-  DEFAULT_TEMPLATES, DEFAULT_FOOTER, withFooter,
+  DEFAULT_TEMPLATES, DEFAULT_FOOTER, withFooter, checkBillingData, accountSummary,
 } from '../../vps-api-server/lib/billingIsis.mjs';
 import { contactForCity, formatPhoneBr } from '../../vps-api-server/lib/contactByCity.mjs';
 import { execFileSync } from 'node:child_process';
@@ -105,4 +105,26 @@ describe('cobranças da Ísis · PDF no modelo da Pulse', () => {
     expect(magic).toBe('%PDF-');
     expect(Number(size)).toBeGreaterThan(10_000);
   }, 30_000);
+});
+
+describe('cobranças da Ísis · conferência antes de cobrar', () => {
+  const rev = (o: Record<string, unknown>) => ({ amount: 1500, status: 'prevista', due_date: '2026-11-10', reference_month: '2026-11-01', ...o });
+  it('só cobra quando a mensalidade bate com o Financeiro', () => {
+    expect(checkBillingData({ contractValue: 1500, revenues: [rev({})], month: '2026-11' })).toEqual([]);
+    expect(checkBillingData({ contractValue: 1500, revenues: [], month: '2026-11' })).toEqual(['a mensalidade de 11/2026 não está lançada em Financeiro → Receitas']);
+    expect(checkBillingData({ contractValue: 1500, revenues: [rev({}), rev({})], month: '2026-11' })[0]).toMatch(/2 mensalidades de 11\/2026 em aberto/);
+    expect(checkBillingData({ contractValue: 1500, revenues: [rev({ amount: 1200 })], month: '2026-11' })[0]).toMatch(/não bate com o contrato/);
+    expect(checkBillingData({ contractValue: 1500, revenues: [rev({ amount: 0 })], month: '2026-11' })[0]).toMatch(/valor zerado/);
+    expect(checkBillingData({ contractValue: 1500, revenues: [rev({ due_date: null })], month: '2026-11' })[0]).toMatch(/sem vencimento/);
+  });
+
+  it('o PDF mostra o que ficou em aberto e os últimos pagamentos', () => {
+    const conta = accountSummary([
+      rev({ reference_month: '2026-10-01', due_date: '2026-10-10', status: 'em_atraso' }),
+      rev({ reference_month: '2026-09-01', status: 'recebida', paid_at: '2026-09-09' }),
+    ]);
+    expect(conta.open).toEqual(['Mensalidade 10/2026 · R$ 1.500,00 · venceu em 10/10/2026']);
+    expect(conta.openTotal).toBe(1500);
+    expect(conta.paid).toEqual(['Mensalidade 09/2026 · R$ 1.500,00 · paga em 09/09/2026']);
+  });
 });

@@ -16,10 +16,11 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import {
   BILLING_STEPS, MODES, DEFAULT_TEMPLATES, monthName, previousMonth, nextMonth, stepDates, attendanceTip,
-  cardAmount, brl, pixPayload, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText,
+  cardAmount, brl, pixPayload, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
+  accountSummary,
 } from './lib/billingIsis.mjs';
 import { renderPdf } from './lib/billingPdf.mjs';
-import { contactForCity } from './lib/contactByCity.mjs';
+import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
 import { enqueueWhatsApp } from './whatsapp/shared.mjs';
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -102,11 +103,24 @@ export function registerBillingIsisRoutes(app, {
     const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
     const day = Math.min(Math.max(Number(contract.due_day) || 10, 1), last);
     return {
+      rows,
       revenue: rows[0] || null,
       paid: rows.some(isPaid),
       dueDate: dateKey(rows[0]?.due_date) || `${month}-${pad2(day)}`,
       amount: Number(rows[0]?.amount ?? contract.contract_value) || 0,
     };
+  }
+
+  // mensalidades dos meses anteriores (o que ficou em aberto e os últimos pagamentos, para o PDF)
+  async function previousRevenues(contract, month) {
+    const { rows } = await pool.query(
+      `SELECT * FROM revenues
+        WHERE client_id = $1 AND recurrence_id IS NULL AND (description IS NULL OR btrim(description) = '')
+          AND (contract_id IS NULL OR contract_id = $2) AND to_char(reference_month, 'YYYY-MM') < $3
+        ORDER BY reference_month DESC LIMIT 12`,
+      [contract.client_id, contract.id, month]
+    ).catch(() => ({ rows: [] }));
+    return rows;
   }
 
   async function attendance(clientId, month) {
@@ -150,8 +164,12 @@ export function registerBillingIsisRoutes(app, {
     await fs.mkdir(dir, { recursive: true });
     const file = `${step}-${Date.now()}.pdf`;
     await fs.writeFile(path.join(dir, file), buffer);
+    // conferido: é PDF, tem conteúdo e foi gravado inteiro
+    const saved = await fs.stat(path.join(dir, file)).catch(() => null);
+    const ok = buffer.subarray(0, 5).toString() === '%PDF-' && buffer.length > 5000 && saved?.size === buffer.length;
     const slug = String(contract.company_name || 'cliente').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
     return {
+      ok,
       url: `${uploadsBase}/cobrancas/${contract.client_id}/${month}/${file}`,
       name: `${DOC_NAMES[step]}-Pulse-${slug}-${month}.pdf`,
     };
@@ -214,8 +232,12 @@ export function registerBillingIsisRoutes(app, {
       };
     }
 
-    const { revenue, paid, dueDate, amount } = await monthRevenue(contract, month);
+    const { rows: monthRows, revenue, paid, dueDate, amount } = await monthRevenue(contract, month);
     if (step !== 'pre_vencimento' && paid) return { skip: 'pago', config };
+    if (step === 'cobranca' || step === 'lembrete') {
+      const problems = checkBillingData({ contractValue: contract.contract_value, revenues: monthRows, month });
+      if (problems.length) return { skip: 'conferir', problems, config };
+    }
 
     if (step === 'pre_vencimento') {
       const ref = previousMonth(`${month}-01`);
@@ -247,6 +269,7 @@ export function registerBillingIsisRoutes(app, {
       return null;
     });
     const plano = contract.plan_name || 'plano mensal';
+    const conta = accountSummary(await previousRevenues(contract, month));
     return {
       config,
       revenue,
@@ -266,6 +289,10 @@ export function registerBillingIsisRoutes(app, {
           total: { label: 'Total', value: brl(amount) },
         },
         payment: { pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(card) : null },
+        sections: [
+          ...(conta.open.length ? [{ title: `Também em aberto (${brl(conta.openTotal)})`, bullets: conta.open }] : []),
+          ...(conta.paid.length ? [{ title: 'Últimos pagamentos', bullets: conta.paid }] : []),
+        ],
       },
       body: applyTemplate(templateOf(config, step), {
         ...base, plano, valor: brl(amount), mes_ref: monthName(`${month}-01`),
@@ -273,6 +300,19 @@ export function registerBillingIsisRoutes(app, {
         valor_cartao: link ? brl(card) : '', link_infinitepay: link,
       }),
     };
+  }
+
+  /** Não bateu com o Financeiro: avisa o contato da cidade (o da equipe) pelo número do PULSE. */
+  async function warnTeam(contract, step, month, problems) {
+    const who = await contactInfo(pool, contract.client_city || contract.city).catch(() => null);
+    if (!who?.telefone) return false;
+    const text = [
+      `⚠️ Ísis: não mandei ${step === 'lembrete' ? 'o lembrete' : 'a cobrança'} de ${String(contract.company_name || '').trim()} (${month.slice(5, 7)}/${month.slice(0, 4)}).`,
+      ...problems.map((p) => `• ${p}`),
+      'Confira em Financeiro → Receitas; a mensagem fica em Financeiro → Cobranças.',
+    ].join('\n');
+    await enqueueWhatsApp(pool, { to: who.telefone, body: text, purpose: 'assistente', triggerType: 'cobranca_conferir', history: false });
+    return true;
   }
 
   async function alreadyHandled(contract, step, month) {
@@ -312,6 +352,12 @@ export function registerBillingIsisRoutes(app, {
           if (await alreadyHandled(contract, step, month)) continue;
           const out = await compose(contract, step, today, month);
           if (out.skip === 'pago') continue;
+          if (out.skip === 'conferir') {
+            await record(contract, step, month, 'conferir', `Não bate com o Financeiro:\n${out.problems.map((p) => `• ${p}`).join('\n')}`);
+            const warned = mode === 'ativo' ? await warnTeam(contract, step, month, out.problems).catch(() => false) : false;
+            results.push({ client: contract.company_name, step, status: 'conferir', problems: out.problems, warned });
+            continue;
+          }
           if (out.skip) {
             // relatório ainda não aprovado: fica marcado (a agenda mostra) e não tenta de novo no mês
             await record(contract, step, month, out.skip === 'aguardando_relatorio' ? 'aguardando_relatorio' : 'pulado', null);
@@ -319,6 +365,13 @@ export function registerBillingIsisRoutes(app, {
           }
           // o PDF sai antes do envio e fica guardado (a agenda e a prévia mostram o mesmo arquivo)
           const pdf = out.pdf ? await savePdf(contract, step, month, out.pdf) : null;
+          // nada sai sem o PDF pronto e conferido
+          if (out.pdf && !pdf?.ok) {
+            await record(contract, step, month, 'conferir', 'O PDF não ficou pronto: nada foi enviado.');
+            if (mode === 'ativo') await warnTeam(contract, step, month, ['o PDF não ficou pronto']).catch(() => false);
+            results.push({ client: contract.company_name, step, status: 'conferir', problems: ['PDF'] });
+            continue;
+          }
           if (!contract.whatsapp) { await record(contract, step, month, 'sem_whatsapp', out.body, out.revenue?.id, pdf?.url); continue; }
           if (mode === 'previa') {
             await record(contract, step, month, 'previa', out.body, out.revenue?.id, pdf?.url);
@@ -472,12 +525,12 @@ export function registerBillingIsisRoutes(app, {
       const out = await compose(contract, step, date, month);
       // ?pdf=1: o PDF que sairia, gerado na hora e não guardado
       if (String(req.query.pdf || '') === '1') {
-        if (!out.pdf) throw httpError(409, out.skip === 'aguardando_relatorio' ? 'Relatório do mês ainda não aprovado' : out.skip === 'pago' ? 'Mensalidade paga: não sai cobrança' : 'Sem PDF para esta etapa');
+        if (!out.pdf) throw httpError(409, out.skip === 'aguardando_relatorio' ? 'Relatório do mês ainda não aprovado' : out.skip === 'pago' ? 'Mensalidade paga: não sai cobrança' : out.skip === 'conferir' ? `Não bate com o Financeiro: ${out.problems.join('; ')}` : 'Sem PDF para esta etapa');
         const buffer = await renderPdf(out.pdf);
         res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${step}-${month}.pdf"` });
         return res.send(buffer);
       }
-      res.json({ step, date, skip: out.skip || null, body: out.body || null, contact: out.contact || null });
+      res.json({ step, date, skip: out.skip || null, problems: out.problems || null, body: out.body || null, contact: out.contact || null });
     } catch (error) { sendError(res, error); }
   });
 

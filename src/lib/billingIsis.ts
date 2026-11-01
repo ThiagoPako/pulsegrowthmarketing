@@ -26,6 +26,7 @@ export const STEP_STATUS_LABELS: Record<string, string> = {
   aguardando_relatorio: 'Relatório não aprovado',
   sem_whatsapp: 'Sem WhatsApp',
   pulado: 'Pulado',
+  conferir: 'Conferir dados',
 };
 export const TEMPLATE_VARS: Record<BillingStep, string[]> = {
   relatorio_mensal: ['nome_cliente', 'mes_anterior', 'mes_atual', 'qtd_videos', 'qtd_artes', 'qtd_posts', 'qtd_gravacoes', 'horas_dedicadas', 'resumo_rede', 'sugestoes', 'link_relatorio'],
@@ -84,7 +85,7 @@ export const saveBillingConfig = (patch: Partial<Pick<BillingConfig, 'mode' | 'c
 export const fetchBillingAgenda = (month: string) =>
   call<{ month: string; today: string; items: BillingAgendaItem[] }>(`/billing-isis/agenda?month=${encodeURIComponent(month)}`);
 export const fetchBillingPreview = (contractId: string, step: BillingStep, date: string, month: string) =>
-  call<{ body: string | null; skip: string | null }>(
+  call<{ body: string | null; skip: string | null; problems: string[] | null }>(
     `/billing-isis/preview?contract_id=${contractId}&step=${step}&date=${date}&month=${month}`,
   );
 

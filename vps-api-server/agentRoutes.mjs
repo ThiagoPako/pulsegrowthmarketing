@@ -149,6 +149,14 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         // "Fixar" no Kanban de Edição: card reservado para a equipe presencial, fora da fila dos agentes
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ`);
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS pinned_by UUID`);
+        // capa do reels: o agente envia (POST /api/agent/tasks/:id/cover), a equipe aprova ou pede ajuste no Kanban de Conteúdo
+        // cover_status: pendente | aprovada | ajuste
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS cover_url TEXT`);
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS cover_status TEXT`);
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS cover_notes TEXT`);
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS cover_updated_at TIMESTAMPTZ`);
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS cover_reviewed_by UUID`);
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS cover_reviewed_at TIMESTAMPTZ`);
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_edit_versions_task ON edit_versions(task_id, version DESC)`).catch(() => {});
         // atividade geral (chefe, revisão, editor entre cards): online enquanto o status for recente
         await pool.query(`
@@ -1220,6 +1228,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     t.editing_started_at, t.agent_step, t.agent_heartbeat_at, t.position, t.created_at,
     t.script_id, t.script_alteration_type,
     t.agent_review_verdict, t.agent_review_notes, t.agent_review_at, t.pinned_at,
+    t.cover_url, t.cover_status, t.cover_notes, t.cover_updated_at,
     c.company_name AS client_name, c.niche AS client_niche, c.drive_link AS client_drive_link,
     c.drive_identidade_visual AS client_identity_link,
     s.title AS script_title, s.content AS script_content, s.video_type AS script_video_type,
@@ -1527,6 +1536,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
                 t.updated_at, t.description, t.content_type, t.script_alteration_notes,
                 t.script_alteration_type, t.immediate_alteration, t.editing_priority, t.agent_step, t.agent_heartbeat_at,
                 t.agent_review_verdict, t.agent_review_notes, t.agent_review_at,
+                t.cover_url, t.cover_status, t.cover_notes, t.cover_updated_at,
                 c.drive_link AS client_drive_link, c.drive_identidade_visual AS client_identity_link,
                 c.company_name AS client_name, pe.name AS edited_by_name, pa.name AS assigned_to_name,
                 s.title AS script_title, s.content AS script_content,
@@ -2151,6 +2161,106 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       cb(null, true);
     },
   }).array('stories', 30);
+
+  // ── Capa do reels ─────────────────────────────────────────
+  // multipart: cover (PNG/JPG/WEBP, 1080x1920) + notes. Não depende de assumir o card: a capa pode
+  // chegar junto da entrega ou depois (ajuste pedido no Kanban de Conteúdo). Cada envio volta a "pendente".
+  const COVER_ROLES = ['editor', 'revisor', 'chefe', 'designer'];
+  function safeImageExt(file) {
+    const original = String(file.originalname || '').toLowerCase();
+    if (file.mimetype === 'image/png' || /\.png$/.test(original)) return '.png';
+    if (file.mimetype === 'image/webp' || /\.webp$/.test(original)) return '.webp';
+    return '.jpg';
+  }
+  const coverUpload = multer({
+    storage: multer.diskStorage({
+      destination(req, _file, cb) {
+        try {
+          fs.mkdirSync(req.agentUploadDir, { recursive: true });
+          cb(null, req.agentUploadDir);
+        } catch (error) {
+          cb(error);
+        }
+      },
+      filename(_req, file, cb) {
+        cb(null, `capa_${Date.now()}_${crypto.randomBytes(6).toString('hex')}${safeImageExt(file)}`);
+      },
+    }),
+    limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+    fileFilter(_req, file, cb) {
+      if (!/^image\/(png|jpeg|webp)$/.test(file.mimetype) && !/\.(png|jpe?g|webp)$/i.test(file.originalname || '')) {
+        return cb(Object.assign(new Error('A capa precisa ser PNG, JPG ou WEBP'), { status: 400 }));
+      }
+      cb(null, true);
+    },
+  }).single('cover');
+
+  app.post('/api/agent/tasks/:id/cover', async (req, res) => {
+    let agent;
+    let task;
+    try {
+      agent = await verifyAgent(req);
+      if (!COVER_ROLES.includes(agent.role)) return res.status(403).json({ error: 'Sem permissão para enviar capa' });
+      const { rows } = await pool.query('SELECT id, client_id, kanban_column FROM content_tasks WHERE id = $1', [req.params.id]);
+      task = rows[0];
+      if (!task) return res.status(404).json({ error: 'Card não encontrado' });
+      const folder = path.join('content', task.client_id || 'avulso', task.id);
+      req.agentUploadDir = path.resolve(uploadRoot, folder);
+      if (!req.agentUploadDir.startsWith(path.resolve(uploadRoot))) return res.status(400).json({ error: 'Pasta inválida' });
+    } catch (error) {
+      return sendError(res, error);
+    }
+
+    coverUpload(req, res, async (uploadError) => {
+      if (uploadError) {
+        if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
+        const status = uploadError.status || (uploadError.code === 'LIMIT_FILE_SIZE' ? 413 : 500);
+        return res.status(status).json({ error: uploadError.message || 'Falha no upload' });
+      }
+      if (!req.file) return res.status(400).json({ error: 'Envie a imagem no campo "cover"' });
+      try {
+        const relative = path.relative(path.resolve(uploadRoot), req.file.path).split(path.sep).join('/');
+        const coverUrl = `${uploadsBase}/${relative}`;
+        const notes = String(req.body?.notes || '').slice(0, 2000) || null;
+        await pool.query(
+          `UPDATE content_tasks SET cover_url = $2, cover_status = 'pendente', cover_notes = NULL,
+                  cover_updated_at = now(), cover_reviewed_by = NULL, cover_reviewed_at = NULL, updated_at = now()
+            WHERE id = $1`,
+          [task.id, coverUrl]
+        );
+        await logHistory(task.id, agent.userId, 'Capa do reels enviada', notes ? `${coverUrl} · ${notes}` : coverUrl);
+        res.json({ ok: true, cover_url: coverUrl, cover_status: 'pendente' });
+      } catch (error) {
+        fs.promises.unlink(req.file.path).catch(() => {});
+        sendError(res, error);
+      }
+    });
+  });
+
+  // Capas por situação (padrão: ajuste pedido), para o agente achar o que refazer
+  app.get('/api/agent/covers', async (req, res) => {
+    try {
+      const agent = await verifyAgent(req);
+      if (!COVER_ROLES.includes(agent.role)) return res.status(403).json({ error: 'Sem permissão' });
+      const status = ['pendente', 'aprovada', 'ajuste', 'sem'].includes(req.query.status) ? req.query.status : 'ajuste';
+      const { rows } = await pool.query(
+        `SELECT t.id, t.title, t.kanban_column, t.content_type, t.edited_by, t.edited_video_link,
+                t.cover_url, t.cover_status, t.cover_notes, t.cover_updated_at, t.cover_reviewed_at,
+                c.company_name AS client_name
+           FROM content_tasks t LEFT JOIN clients c ON c.id = t.client_id
+          WHERE ${status === 'sem'
+            ? `t.cover_url IS NULL AND t.edited_video_link IS NOT NULL AND t.content_type IN ('reels', 'criativo')
+               AND t.kanban_column IN ('pre_revisao', 'revisao', 'envio', 'agendamentos')`
+            : 't.cover_status = $1'}
+          ORDER BY COALESCE(t.cover_reviewed_at, t.cover_updated_at, t.updated_at) DESC
+          LIMIT 100`,
+        status === 'sem' ? [] : [status]
+      );
+      res.json({ covers: rows });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
 
   app.post('/api/agent/tasks/:id/deliver-stories', async (req, res) => {
     let agent;

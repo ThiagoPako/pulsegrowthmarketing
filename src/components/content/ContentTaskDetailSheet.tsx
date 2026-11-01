@@ -25,6 +25,7 @@ import {
 import { formatPostingDate } from '@/lib/postingSchedule';
 import UserAvatar from '@/components/UserAvatar';
 import InlineVideoPlayer from '@/components/content/InlineVideoPlayer';
+import ReelsCoverPanel from '@/components/content/ReelsCoverPanel';
 import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
 import AgentReviewBadge from '@/components/kanban/AgentReviewBadge';
 import AgentReadinessBadge from '@/components/kanban/AgentReadinessBadge';
@@ -231,6 +232,10 @@ interface ContentTask {
   agent_review_notes?: string | null;
   agent_review_at?: string | null;
   agent_review_by?: string | null;
+  /** Capa do reels (pendente | aprovada | ajuste), enviada pela API dos agentes ou aqui. */
+  cover_url?: string | null;
+  cover_status?: string | null;
+  cover_notes?: string | null;
 }
 
 interface TaskHistory {
@@ -1760,6 +1765,11 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                 {/* Player inline do vídeo editado */}
                 {task.edited_video_link && (
                   <InlineVideoPlayer url={task.edited_video_link} />
+                )}
+
+                {/* Capa do reels: baixar, aprovar ou pedir ajuste */}
+                {(task.cover_url || (task.edited_video_link && ['reels', 'criativo'].includes(task.content_type))) && (
+                  <ReelsCoverPanel task={task} currentUserId={user?.id} onRefresh={onRefresh} />
                 )}
 
                 {/* Links */}

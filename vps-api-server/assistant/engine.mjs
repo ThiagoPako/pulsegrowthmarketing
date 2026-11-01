@@ -27,7 +27,7 @@ import { createTurn } from './tools.mjs';
 import { transcribe, removeAudio } from './transcribe.mjs';
 import { ensureAssistantSchema } from './schema.mjs';
 import { addInboxItem, callsMarcely, clientAutoReplyText, clientByPhone, MARCELY_RECEIVED } from './marcelyInbox.mjs';
-import { contactForCity } from '../lib/contactByCity.mjs';
+import { contactInfo } from '../lib/contactByCity.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { waPrivateDir } from '../whatsapp/shared.mjs';
@@ -290,7 +290,7 @@ export function createEngine({ pool, claude, tools, intervalMs = 1500, rateLimit
   /**
    * Resposta automática ao cliente no privado (usuário, 01/11/2026: "avisar que esse número é para mensagens
    * automáticas, um agente autônomo, e envie o número do Thiago se for de Uruaçu e se for de Minaçu o do Victor").
-   * Uma vez por telefone a cada 24 h; o contato vem da configuração por cidade (lib/contactByCity.mjs).
+   * Uma vez por telefone a cada 24 h; o contato vem da configuração por cidade (lib/contactByCity.mjs, contactInfo).
    */
   async function clientAutoReply(client, row) {
     const { rows: [recent] } = await pool.query(
@@ -299,7 +299,7 @@ export function createEngine({ pool, claude, tools, intervalMs = 1500, rateLimit
     );
     if (recent) return null;
     // null = cliente administrativo (vale nas duas cidades): o contato padrão, com aviso na caixa
-    const contact = await contactForCity(clientCity(client));
+    const contact = await contactInfo(pool, clientCity(client));
     if (!contact?.telefone) return null; // sem contato configurado: não manda nada pela metade
     const body = clientAutoReplyText({ name: row.push_name, contact });
     await sendToNumber(pool, { phone: canonicalPhone(row.phone) }, body, { connectionId: row.connection_id });

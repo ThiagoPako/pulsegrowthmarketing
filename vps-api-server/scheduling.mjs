@@ -15,6 +15,8 @@
 //   POST /api/scheduling/schedule    { client_id, kind, id, date, time, mode, platform, publish_type, caption, story_link, ... }
 //   POST /api/scheduling/reschedule  { client_id, kind, id, date, time?, allow_past? }  sem time: mantém a hora
 //   POST /api/scheduling/cancel      { client_id, kind, id }
+//   POST /api/scheduling/posted      { client_id, kind, id }  postagem manual feita: carimba o material como postado
+//        (card do Kanban → Arquivado/postado, entrega Social → postado, portal → publicado, histórico com quem marcou)
 //   POST /api/scheduling/caption     { client_id, kind, id, caption }  guarda a legenda (também no modo manual)
 //   POST /api/scheduling/caption/generate { client_id, kind, id }      legenda pela IA (roteiro, vídeo ou arte: lib/postCaption.mjs)
 //   GET  /api/scheduling/thumb?src=/uploads/…   miniatura (quadro JPEG) de um vídeo de /uploads, sem login (o vídeo já é público)
@@ -1637,6 +1639,90 @@ export function registerSchedulingRoutes(app, deps) {
         await markUnscheduled(db, { kind, material, user, currentDate: current?.date || null });
       });
       res.json({ success: true });
+    } catch (error) {
+      sendError(res, error, logger);
+    }
+  });
+
+  // Postagem manual feita (pedido do usuário, 01/11/2026: "arrastar os vídeos prontos, colocar na data e clicar como
+  // postado; o vídeo fica carimbado como postado no sistema, o cliente acompanha no portal e a operação sabe quando foi
+  // postado"). Mesmo efeito do "Postado" da Entregas Social e do detalhe do card: o card vai para Arquivado (postado),
+  // a entrega e o portal ficam postados/publicados, a postagem automática pendente é cancelada (o robô não posta de
+  // novo) e o histórico guarda quem marcou. Os agentes enxergam isso no `pulse postados`.
+  app.post('/api/scheduling/posted', async (req, res) => {
+    try {
+      const { user, city } = await requireModule(req);
+      const body = req.body || {};
+      const client = await loadClient(body.client_id, city);
+      const { kind, id } = readTarget(body);
+
+      const result = await withTransaction(async (db) => {
+        const material = await lockMaterial(db, kind, id, client.id);
+        const links = await linksOf(db, kind, material);
+        const posts = kind === 'post' ? await lockLinkedPosts(db, links) : withoutSeries(await lockLinkedPosts(db, links));
+        if (kind === 'post') {
+          if (material.status === 'publicado') return { already: true };
+          if (!['agendado', 'erro'].includes(material.status)) throw httpError(409, 'Só dá para marcar como postado um post agendado.', { code: 'not_scheduled' });
+          await db.query(
+            `UPDATE scheduled_posts SET status = 'publicado', published_at = now(), manual_posted_by = $2, last_error = NULL,
+                    result = $3::jsonb, updated_at = now() WHERE id = $1`,
+            [material.id, user.id, JSON.stringify([{ manual: true, via: 'agendamentos' }])]
+          );
+        } else {
+          const pending = posts.filter((p) => ['agendado', 'erro'].includes(p.status)).map((p) => p.id);
+          if (pending.length) {
+            await db.query(
+              `UPDATE scheduled_posts SET status = 'cancelado', last_error = 'Cancelado: marcado como postado manualmente.', updated_at = now()
+                WHERE id = ANY($1::uuid[]) AND status IN ('agendado', 'erro')`,
+              [pending]
+            );
+          }
+        }
+        if (kind === 'conteudo') {
+          if (material.kanban_column === 'arquivado') return { already: true };
+          if (!['agendamentos', 'acompanhamento'].includes(material.kanban_column)) {
+            throw httpError(409, `O card não está para postar (está em "${material.kanban_column}").`, { code: 'not_scheduled' });
+          }
+          await db.query(
+            `UPDATE content_tasks SET kanban_column = 'arquivado', posting_at = COALESCE(posting_at, now()), updated_at = now() WHERE id = $1`,
+            [material.id]
+          );
+          await db.query(
+            `UPDATE social_media_deliveries SET status = 'postado', posted_at = (now() AT TIME ZONE '${POSTING_TZ}')::date, updated_at = now()
+              WHERE content_task_id = $1`,
+            [material.id]
+          );
+          await db.query(
+            `UPDATE client_portal_contents SET status = 'publicado', updated_at = now()
+              WHERE content_task_id = $1 AND status IN ('aprovado', 'agendado')`,
+            [material.id]
+          );
+        } else if (kind === 'arte') {
+          if (material.kanban_column === 'postado') return { already: true };
+          await db.query(
+            `UPDATE design_tasks SET kanban_column = 'postado', posting_at = COALESCE(posting_at, now()), updated_at = now() WHERE id = $1`,
+            [material.id]
+          );
+          await db.query(
+            `UPDATE client_portal_contents SET status = 'publicado', updated_at = now()
+              WHERE design_task_id = $1 AND status IN ('aprovado', 'agendado')`,
+            [material.id]
+          );
+        } else if (kind === 'portal') {
+          if (material.status === 'publicado') return { already: true };
+          await db.query(
+            `UPDATE client_portal_contents SET status = 'publicado', posting_at = COALESCE(posting_at, now()), updated_at = now() WHERE id = $1`,
+            [material.id]
+          );
+        }
+        await insertHistory(db, kind, material, user, kind === 'arte' ? '✅ Postada' : 'Postado', 'Marcado como postado no Agendamentos (postagem manual)');
+        await db.query(
+          `INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, '✅ Conteúdo publicado', $2, 'success')`,
+          [client.id, `"${String(material.title || 'Seu conteúdo').slice(0, 80)}" foi publicado.`]
+        );
+        return { already: false };
+      });
+      res.json({ success: true, ...result });
     } catch (error) {
       sendError(res, error, logger);
     }

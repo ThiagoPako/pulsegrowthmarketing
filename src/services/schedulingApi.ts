@@ -70,6 +70,11 @@ export async function cancelSchedule(input: { client_id: string; kind: Schedulin
   await call('scheduling/cancel', { body: input });
 }
 
+/** Postagem manual feita: carimba o material como postado (card arquivado, entrega postada, portal publicado). */
+export async function markMaterialPosted(input: { client_id: string; kind: SchedulingKind; id: string }): Promise<{ already: boolean }> {
+  return call('scheduling/posted', { body: input });
+}
+
 /** Guarda a legenda do material (vale também no modo manual e para o post automático pendente). */
 export async function saveCaption(input: { client_id: string; kind: SchedulingKind; id: string; caption: string; generated?: boolean }): Promise<void> {
   await call('scheduling/caption', { body: input });

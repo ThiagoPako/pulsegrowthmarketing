@@ -64,11 +64,12 @@ import multer from 'multer';
 // colorista (Íris) e som (Caio), desde 31/10/2026: trabalham no projeto que o editor passa por recado; mandam
 // etapa nos cards do fluxo de edição, mas não pegam card da fila
 // roteirista (Victoria, desde 01/11/2026): escreve roteiros no módulo Copy (victoriaRoutes.mjs); não pega card
-const AGENT_ROLES = new Set(['editor', 'revisor', 'chefe', 'designer', 'revisor_arte', 'triagem', 'colorista', 'som', 'roteirista']);
+// social_media (Ísis, desde 01/11/2026): datas sazonais, relatório mensal, campanhas e cobranças; não pega card
+const AGENT_ROLES = new Set(['editor', 'revisor', 'chefe', 'designer', 'revisor_arte', 'triagem', 'colorista', 'som', 'roteirista', 'social_media']);
 const DESIGN_ONLY_ROLES = new Set(['designer', 'revisor_arte']);
 const SUPPORT_ROLES = new Set(['colorista', 'som']);
 // quem não edita vídeo: fila de edição vazia e o claim recusa
-const NO_VIDEO_ROLES = new Set([...DESIGN_ONLY_ROLES, 'triagem', ...SUPPORT_ROLES, 'roteirista']);
+const NO_VIDEO_ROLES = new Set([...DESIGN_ONLY_ROLES, 'triagem', ...SUPPORT_ROLES, 'roteirista', 'social_media']);
 // marcadores dos ajustes de um card em Alteração depois que o revisor traduz o pedido (o gatilho do banco lê o primeiro)
 const TRADUCAO_ALTERACAO = '🧭 TRADUÇÃO DA ALTERAÇÃO';
 const ORIGINAL_ALTERACAO = '\n\n— Pedido original da equipe: ';
@@ -1318,7 +1319,9 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           ? 'Cor e som não pegam card: trabalham no projeto que o editor passa por recado (pulse etapa <card> mostra o que está fazendo)'
           : agent.role === 'roteirista'
             ? 'A roteirista não pega vídeo: escreve roteiros no módulo Copy (pulse treino para os ensinamentos)'
-            : 'A triagem não pega vídeo: só cria cards (pulse triagem card-edicao / card-arte)' });
+            : agent.role === 'social_media'
+              ? 'A social media não pega vídeo: cuida das datas, relatórios, campanhas e cobranças (pulse treino para os ensinamentos)'
+              : 'A triagem não pega vídeo: só cria cards (pulse triagem card-edicao / card-arte)' });
       }
       const pause = await pauseStateFor(agent.userId);
       if (pause.paused) {

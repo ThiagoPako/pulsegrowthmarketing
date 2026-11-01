@@ -13,4 +13,6 @@ export const AGENT_ROLE_LABELS: Record<string, string> = {
   som: 'Som (sound designer)',
   // Victoria (desde 01/11/2026): escreve roteiros no módulo Copy; não pega card (victoriaRoutes.mjs)
   roteirista: 'Roteirista (Copy)',
+  // Ísis (desde 01/11/2026): social media; datas sazonais, relatório mensal, campanhas e cobranças; não pega card
+  social_media: 'Social media',
 };

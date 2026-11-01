@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   stepsDueOn, stepDates, attendanceTip, cardAmount, crc16, pixPayload, applyTemplate, bulletList, nextMonth, previousMonth,
-  DEFAULT_TEMPLATES, DEFAULT_FOOTER, withFooter, checkBillingData, accountSummary, ensurePayLink, payToken,
+  DEFAULT_TEMPLATES, DEFAULT_FOOTER, withFooter, checkBillingData, accountSummary, ensurePayLink, payToken, effectiveTemplate,
 } from '../../vps-api-server/lib/billingIsis.mjs';
 import { contactForCity, formatPhoneBr } from '../../vps-api-server/lib/contactByCity.mjs';
 import { execFileSync } from 'node:child_process';
@@ -74,9 +74,7 @@ describe('cobranças da Ísis · textos', () => {
       nome_cliente: 'Posto Naraely', plano: 'Plano Pulse', valor: 'R$ 1.500,00', pix_copia_cola: '000201…', chave_pix: 'pix@pulse.com.br',
       nome_recebedor: 'Agência Pulse', link_pagamento: 'https://agenciapulse.tech/pagar/abc', aviso_cartao: '',
     });
-    expect(body).toContain('Hoje é o vencimento da sua mensalidade Pulse (Plano Pulse): *R$ 1.500,00*.');
-    expect(body).toContain('👉 *Pague por aqui (Pix ou cartão):* https://agenciapulse.tech/pagar/abc');
-    expect(body).toContain('Pix Copia e Cola');
+    expect(body).toBe('Olá, Posto Naraely! 😊\n\nHoje vence sua mensalidade Pulse: *R$ 1.500,00*.\n\n👉 Pague aqui (Pix ou cartão):\nhttps://agenciapulse.tech/pagar/abc\n\nO código Pix vai na próxima mensagem.\n\nSe já pagou, desconsidere. Obrigada! 🧡');
     expect(body).not.toContain('000201');
     expect(body).not.toContain('{');
     expect(body.toLowerCase()).not.toContain('taxa');
@@ -85,7 +83,7 @@ describe('cobranças da Ísis · textos', () => {
   });
 
   it('modelo salvo antes da página ganha o link; token da página é URL-safe e imprevisível', () => {
-    expect(ensurePayLink('Olá {nome_cliente}')).toBe('Olá {nome_cliente}\n👉 Pague por aqui (Pix ou cartão): {link_pagamento}');
+    expect(ensurePayLink('Olá {nome_cliente}')).toBe('Olá {nome_cliente}\n\n👉 Pague aqui (Pix ou cartão):\n{link_pagamento}');
     expect(ensurePayLink('Pague: {link_pagamento}')).toBe('Pague: {link_pagamento}');
     expect(payToken((n: number) => Buffer.alloc(n, 255))).toMatch(/^[A-Za-z0-9_-]{22}$/);
   });
@@ -103,8 +101,11 @@ describe('cobranças da Ísis · textos', () => {
 
 describe('cobranças da Ísis · rodapé de mensagem automática', () => {
   it('vai no fim de toda mensagem, editável e desligável', () => {
-    expect(withFooter('Olá!', null)).toBe('Olá!\n\n—\n_Esta é uma mensagem automática. Para dúvidas, fale com o Thiago: (62) 98538-2981._');
-    expect(DEFAULT_FOOTER).toContain('{contato_nome}: {contato_telefone}');
+    expect(withFooter('Olá!', null)).toBe('Olá!\n\n—\n_Mensagem automática. Dúvidas: Thiago · (62) 98538-2981_');
+    expect(DEFAULT_FOOTER).toContain('{contato_nome} · {contato_telefone}');
+    // rodapé padrão antigo salvo no banco = não editado: sai o novo
+    expect(withFooter('Olá!', '—\n_Esta é uma mensagem automática. Para dúvidas, fale com o {contato_nome}: {contato_telefone}._'))
+      .toBe('Olá!\n\n—\n_Mensagem automática. Dúvidas: Thiago · (62) 98538-2981_');
     expect(withFooter('Olá!', 'Dúvidas: (62) 9999-0000')).toBe('Olá!\n\nDúvidas: (62) 9999-0000');
     expect(withFooter('Olá!', '  ')).toBe('Olá!');
   });
@@ -115,7 +116,7 @@ describe('cobranças da Ísis · rodapé de mensagem automática', () => {
     const min = contactForCity('minacu', null, numbers);
     expect(uru).toEqual({ city: 'uruacu', name: 'Thiago', phone: '(62) 98538-2981' });
     expect(min).toEqual({ city: 'minacu', name: 'Victor', phone: '(62) 99999-0000' });
-    expect(withFooter('Olá!', null, min)).toBe('Olá!\n\n—\n_Esta é uma mensagem automática. Para dúvidas, fale com o Victor: (62) 99999-0000._');
+    expect(withFooter('Olá!', null, min)).toBe('Olá!\n\n—\n_Mensagem automática. Dúvidas: Victor · (62) 99999-0000_');
     // configurado na tela vale por cima do padrão
     expect(contactForCity('minacu', { contact_name: 'Naay', contact_phone: '62 91111-2222' }, numbers)).toMatchObject({ name: 'Naay', phone: '(62) 91111-2222' });
     // sem telefone em lugar nenhum: o rodapé não sai pela metade
@@ -162,5 +163,26 @@ describe('cobranças da Ísis · conferência antes de cobrar', () => {
     expect(conta.open).toEqual(['Mensalidade 10/2026 · R$ 1.500,00 · venceu em 10/10/2026']);
     expect(conta.openTotal).toBe(1500);
     expect(conta.paid).toEqual(['Mensalidade 09/2026 · R$ 1.500,00 · paga em 09/09/2026']);
+  });
+});
+
+describe('cobranças da Ísis · respiro e modelos antigos', () => {
+  it('blocos separados por uma linha em branco; bloco vazio e chamada sem conteúdo somem sem deixar 3 quebras', () => {
+    const vars = { nome_cliente: 'X', mes_anterior: 'outubro', mes_atual: 'novembro', qtd_videos: 9, qtd_artes: 5, qtd_posts: 12, qtd_gravacoes: 2 };
+    const body = applyTemplate(DEFAULT_TEMPLATES.relatorio_mensal, { ...vars, horas_dedicadas: '', resumo_rede: '', sugestoes: '', link_relatorio: '' });
+    expect(body).not.toMatch(/\n{3,}/);
+    expect(body).not.toContain('Para novembro:');
+    expect(body).not.toContain('Relatório completo');
+    expect(body.split('\n\n')).toHaveLength(3);
+    const cheio = applyTemplate(DEFAULT_TEMPLATES.relatorio_mensal, { ...vars, horas_dedicadas: '11,5', resumo_rede: '18 mil contas', sugestoes: '• A\n• B', link_relatorio: 'https://x' });
+    expect(cheio).toContain('Para novembro:\n• A\n• B');
+    expect(cheio).not.toMatch(/\n{3,}/);
+  });
+
+  it('modelo salvo igual a um padrão antigo vira o padrão novo; editado de verdade fica', () => {
+    const antigo = "Olá, {nome_cliente}! Tudo bem? 😊\nHoje é o vencimento da sua mensalidade Pulse ({plano}): *{valor}*.\n💠 *Pix (preferencial):*\n{pix_copia_cola}\nChave: {chave_pix} · {nome_recebedor}\n💳 Prefere cartão? Pague pelo link: {link_infinitepay}\n_{aviso_cartao}_\nSe já pagou, pode desconsiderar. Obrigada pela confiança! 🧡";
+    expect(effectiveTemplate('cobranca', antigo)).toBe(DEFAULT_TEMPLATES.cobranca);
+    expect(effectiveTemplate('cobranca', null)).toBe(DEFAULT_TEMPLATES.cobranca);
+    expect(effectiveTemplate('cobranca', 'Oi {nome_cliente}, pague: {link_pagamento}')).toBe('Oi {nome_cliente}, pague: {link_pagamento}');
   });
 });

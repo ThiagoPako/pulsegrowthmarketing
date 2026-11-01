@@ -33,7 +33,8 @@ import { inboxView } from './assistant/marcelyInbox.mjs';
 
 const MEDIA_EXT = { '.png': 'png', '.jpg': 'jpg', '.jpeg': 'jpg', '.webp': 'webp', '.pdf': 'pdf', '.mp4': 'mp4' };
 const PURPOSES = new Set(['geral', 'aprovacao', 'assistente']);
-const SIGNATURE = '\n\n— Marcely (agentes da Pulse)';
+// sem assinatura: as mensagens não se identificam como agente (usuário, 01/11/2026)
+const SIGNATURE = '';
 const AVISOS_POR_HORA = 20;
 
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
@@ -196,8 +197,7 @@ export function registerAgentWhatsAppRoutes(app, { pool, uploadRoot, publicUploa
       if (!list.length) throw Object.assign(new Error(`Ninguém da equipe com "${to}" no Assistente PULSE (${rows.map((n) => n.name).join(', ')})`), { status: 404 });
       if (list.length > 1) throw Object.assign(new Error(`"${to}" bate com ${list.map((n) => n.name).join(', ')}. Use o nome exato.`), { status: 409 });
       const number = list[0];
-      const signature = agent.role === 'social_media' ? `${agent.name || 'Ísis'} (social media da Pulse)` : 'Marcely (agentes da Pulse)';
-      const body = `${text}\n\n— ${signature}`;
+      const body = text;
       const file = req.file?.originalname || null;
       if (!confirm) {
         remove();

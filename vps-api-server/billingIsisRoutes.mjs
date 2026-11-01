@@ -17,7 +17,7 @@ import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import {
   BILLING_STEPS, MODES, DEFAULT_TEMPLATES, monthName, previousMonth, nextMonth, stepDates, attendanceTip,
-  brl, pixPayload, CARD_NOTICE, ensurePayLink, payToken, valorPorExtenso, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
+  brl, pixPayload, CARD_NOTICE, ensurePayLink, payToken, valorPorExtenso, effectiveTemplate, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
 } from './lib/billingIsis.mjs';
 import { renderPdf } from './lib/billingPdf.mjs';
 import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, monthName as nomeMes } from './lib/billingPdfDocs.mjs';
@@ -105,7 +105,7 @@ export function registerBillingIsisRoutes(app, {
     res.status(status).json({ error: error?.message || 'Erro' });
   }
 
-  const templateOf = (config, step) => (config?.[TEMPLATE_COLUMNS[step]] || '').trim() || DEFAULT_TEMPLATES[step];
+  const templateOf = (config, step) => effectiveTemplate(step, config?.[TEMPLATE_COLUMNS[step]]);
   const modeOf = (config) => (MODES.includes(config?.isis_mode) ? config.isis_mode : 'desligado');
 
   // dados do cliente, do plano e do emitente para os PDFs (lib/billingPdfDocs.mjs)
@@ -253,7 +253,7 @@ export function registerBillingIsisRoutes(app, {
       const body = withFooter(applyTemplate(templateOf(config, 'obrigado'), {
         nome_cliente: String(contract.company_name || '').trim(), plano: contract.plan_name || 'plano mensal', valor: brl(amount),
         mes_ref: nomeMes(month), data_pagamento: dataBr(paidAt),
-        recibo: pdf?.ok ? 'O recibo segue em anexo, para o seu controle.' : '',
+        recibo: pdf?.ok ? 'Recibo em anexo.' : '',
       }), config?.msg_isis_rodape, contact);
       if (!contract.whatsapp) {
         await record(contract, 'obrigado', month, 'sem_whatsapp', body, revenueId, pdf?.ok ? pdf.url : null);
@@ -541,7 +541,8 @@ export function registerBillingIsisRoutes(app, {
         accounts: await accountsByCity(),
         templates: Object.fromEntries(TEMPLATE_STEPS.map((s) => [s, templateOf(config, s)])),
         defaults: DEFAULT_TEMPLATES,
-        footer: config?.msg_isis_rodape ?? DEFAULT_FOOTER,
+        footer: footerText(config?.msg_isis_rodape, { name: '{contato_nome}', phone: '{contato_telefone}' }) === footerText(null, { name: '{contato_nome}', phone: '{contato_telefone}' })
+          ? DEFAULT_FOOTER : (config?.msg_isis_rodape ?? DEFAULT_FOOTER),
         default_footer: DEFAULT_FOOTER,
         // contato do rodapé por cidade (Uruaçu → Thiago, Minaçu → Victor; telefone do Assistente PULSE se vazio)
         contacts: await contactsByCity(),
@@ -730,7 +731,7 @@ export function registerBillingIsisRoutes(app, {
       const today = todayBr();
       const body = withFooter(applyTemplate(templateOf(config, 'obrigado'), {
         nome_cliente: String(contract.company_name || '').trim(), plano: contract.plan_name || 'plano mensal', valor: brl(amount),
-        mes_ref: nomeMes(today.slice(0, 7)), data_pagamento: dataBr(today), recibo: 'O recibo segue em anexo, para o seu controle.',
+        mes_ref: nomeMes(today.slice(0, 7)), data_pagamento: dataBr(today), recibo: 'Recibo em anexo.',
       }), config?.msg_isis_rodape, contact);
       res.json({ client: contract.company_name, body });
     } catch (error) { sendError(res, error); }

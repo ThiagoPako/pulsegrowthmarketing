@@ -27,6 +27,7 @@ import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerAgentTrainingRoutes } from './agentTrainingRoutes.mjs';
 import { registerVictoriaRoutes } from './victoriaRoutes.mjs';
 import { registerSocialReportRoutes } from './socialReportRoutes.mjs';
+import { registerHolidayArtsRoutes } from './holidayArtsRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerAgentDriveRoutes } from './agentDriveRoutes.mjs';
 import { transcribeUrl } from './assistant/transcribe.mjs';
@@ -20398,6 +20399,9 @@ registerVictoriaRoutes(app, {
   resolveAiModel,
   agentApi,
 });
+
+// ─── Aviso da manhã das artes de feriado (Ísis: pulse feriados) ──
+registerHolidayArtsRoutes(app, { pool, agentApi });
 
 // ─── Relatório mensal da rede social de cada cliente (Ísis, social media; o envio ao cliente é a função de cobranças) ──
 registerSocialReportRoutes(app, {

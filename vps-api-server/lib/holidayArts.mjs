@@ -94,10 +94,10 @@ export function holidayStatus(holidays, clients, tasks) {
 const quando = (n) => (n === 0 ? 'hoje' : n === 1 ? 'amanhã' : `em ${n} dias`);
 
 /** Recado da manhã; null quando não há nada pendente. */
-export function morningMessage(status) {
+export function morningMessage(status, { city = null } = {}) {
   const pend = status.filter((h) => h.missing.length || h.open.length);
   if (!pend.length) return null;
-  const lines = ['Bom dia! ☀️ Artes de feriado que vencem em breve:'];
+  const lines = [`Bom dia! ☀️ Artes de feriado que vencem em breve${city ? ` (clientes de ${city})` : ''}:`];
   for (const h of pend) {
     lines.push('', `📅 *${h.label}* (${dataBr(h.date)}, ${quando(h.daysUntil)})`);
     if (h.missing.length) lines.push(`• Sem card (${h.missing.length}): ${h.missing.slice(0, 12).join(', ')}${h.missing.length > 12 ? '…' : ''}`);

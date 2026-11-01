@@ -21,6 +21,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Plus, Kanban, List, Clock, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame, Pause, AlertTriangle, Timer, Filter, X, ArrowRightLeft, FolderOpen, ClipboardList, ScanSearch, UserCog } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
+import IsisSuggestionsDialog, { pendingClientsFor } from '@/components/designer/IsisSuggestionsDialog';
+import { artSuggestions } from '@/lib/artSuggestions';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
 import { downloadSingleArt, downloadArtsAsPdf } from '@/lib/designerDownload';
 import { splitScheduledArts } from '@/lib/postingSchedule';
@@ -228,6 +230,8 @@ export default function DesignerKanban() {
   const { activeCity } = useCity();
   const [view, setView] = useState<'kanban' | 'lista' | 'agendamentos'>('kanban');
   const [createOpen, setCreateOpen] = useState(false);
+  // Ísis, a social media (01/11/2026): artes de feriado e datas do nicho para fazer
+  const [isisOpen, setIsisOpen] = useState(false);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   // Card que acabou de mudar de coluna: brilha e a tela rola até ele
@@ -278,6 +282,11 @@ export default function DesignerKanban() {
   const [pausePromptSubmitting, setPausePromptSubmitting] = useState(false);
 
   const tasks = tasksQuery.data || [];
+  // quantas sugestões da Ísis ainda têm cliente sem card (número no botão)
+  const isisPendentes = useMemo(
+    () => artSuggestions().filter((sg) => pendingClientsFor(sg, clients, tasks.map((t) => ({ client_id: t.client_id, title: t.title }))).length > 0).length,
+    [clients, tasks]
+  );
   const error = tasksQuery.error as any;
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
   const canDelete = currentUser?.role === 'admin';
@@ -747,6 +756,12 @@ export default function DesignerKanban() {
             </TabsList>
           </Tabs>
           {(currentUser?.role === 'admin' || currentUser?.role === 'social_media' || currentUser?.role === 'designer') && (
+            <Button size="sm" variant="outline" onClick={() => setIsisOpen(true)} className="gap-1.5 border-fuchsia-400/50 text-fuchsia-700 hover:bg-fuchsia-500/10 dark:text-fuchsia-300">
+              <Sparkles size={14} /> Ísis sugere
+              {isisPendentes > 0 && <span className="rounded-full bg-fuchsia-500 px-1.5 text-[10px] font-bold text-white">{isisPendentes}</span>}
+            </Button>
+          )}
+          {(currentUser?.role === 'admin' || currentUser?.role === 'social_media' || currentUser?.role === 'designer') && (
             <Button size="sm" onClick={() => setCreateOpen(true)}>
               <Plus size={16} className="mr-1" /> Nova Tarefa
             </Button>
@@ -1107,6 +1122,7 @@ export default function DesignerKanban() {
       )}
 
       <DesignTaskCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <IsisSuggestionsDialog open={isisOpen} onOpenChange={setIsisOpen} existing={tasks.map((t) => ({ client_id: t.client_id, title: t.title }))} />
       {selectedTask && (
         <DesignTaskDetailSheet task={selectedTask} open={!!selectedTask} onOpenChange={o => !o && setSelectedTaskId(null)} />
       )}

@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import {
   buildVictoriaPrompt, buildVictoriaContext, parseVictoriaReply, normalizeLessons, scriptPlainText, searchResultUrls,
   scriptToHtml as serverHtml, partialScript as serverPartial, parseResearch,
+  nicheKind, researchPrompt, suggestionsPrompt, parseSuggestions, VICTORIA_SYSTEM, scriptStatus,
 } from '../../vps-api-server/lib/victoria.mjs';
 import { conversationPayload, scriptToHtml, partialScript } from '@/lib/victoria';
 
@@ -58,7 +59,7 @@ describe('Victoria: pedido ao Claude', () => {
     expect(prompt).toContain('Aprendizados deste cliente (regras):\n- Sempre citar o café grátis');
     expect(prompt).toContain('Aprendizados gerais da agência (regras):\n- Gancho em até 2 frases');
     expect(prompt).toContain('· A3P');
-    expect(prompt).toContain('O que está em alta no nicho agora (pesquisa de 01/11/2026)');
+    expect(prompt).toContain('Datas sazonais, temas do momento e o que está em alta para este cliente (pesquisa de 01/11/2026)');
     expect(prompt).toContain('Correção da equipe:\n"""tira o preço"""');
     expect(prompt).toMatch(/Refaça o roteiro aplicando a correção/);
   });
@@ -68,7 +69,7 @@ describe('Victoria: pedido ao Claude', () => {
     expect(buildVictoriaContext(base)).toBe(buildVictoriaContext({ ...base, conversation: [{ role: 'pedido', text: 'outra' }] }));
     const prompt = buildVictoriaPrompt({ ...base, conversation: [{ role: 'pedido', text: 'ideia' }] });
     expect(prompt).toContain('Este cliente ainda não tem roteiro no sistema.');
-    expect(prompt).not.toContain('em alta no nicho agora');
+    expect(prompt).not.toContain('Datas sazonais, temas do momento');
     expect(prompt).toContain('Story');
     expect(prompt.trim().endsWith('Escreva o roteiro a partir da ideia.')).toBe(true);
   });
@@ -150,6 +151,93 @@ const reply = (extra = {}) => ({
   observacoes: '', aprendizados: [], usados: { roteiros_cliente: 3, roteiros_agencia: 2, regras: 1, pesquisou: true }, ...extra,
 });
 
+describe('Victoria: aprende com o que o cliente aprova', () => {
+  it('marca cada roteiro pelo que aconteceu com ele (postado > aprovado > gravado)', () => {
+    expect(scriptStatus({ status_rank: 3 })).toBe('POSTADO');
+    expect(scriptStatus({ status_rank: 2, recorded: true })).toBe('APROVADO pelo cliente');
+    expect(scriptStatus({ status_rank: 0, recorded: true })).toBe('gravado');
+    expect(scriptStatus({})).toBe('ainda não gravado');
+  });
+
+  it('o contexto pesa o aprovado e postado acima do editorial e lista o que evitar', () => {
+    const ctx = buildVictoriaContext({
+      client: { company_name: 'Dr. Sávio', niche: 'juridico', editorial: 'Direito do consumidor' },
+      format: 'reels', videoType: 'educacional',
+      ownScripts: [
+        { title: 'Golpe do Pix', content: '<p>"Caiu no golpe?"</p>', status_rank: 3, recorded: true },
+        { title: 'Plano de saúde negou', content: '<p>"Negaram seu exame?"</p>', status_rank: 2, recorded: true },
+      ],
+      avoid: [{ title: 'Pensão alimentícia', notes: 'cliente pediu para não falar de família' }, { title: 'Divórcio', notes: null }],
+    });
+    expect(ctx).toContain('2 aprovado(s)/postado(s)');
+    expect(ctx).toContain('pesam mais que o editorial escrito');
+    expect(ctx).toContain('Roteiro 1 · POSTADO');
+    expect(ctx).toContain('Roteiro 2 · APROVADO pelo cliente');
+    expect(ctx).toContain('O que evitar neste cliente');
+    expect(ctx).toContain('- "Pensão alimentícia": cliente pediu para não falar de família');
+    expect(ctx).toContain('- "Divórcio" (não foi gravado)');
+    expect(VICTORIA_SYSTEM).toMatch(/APROVOU e POSTOU pesa mais que o editorial/);
+  });
+
+  it('a pesquisa e as sugestões partem do que ele aprovou', () => {
+    const r = researchPrompt({ client: { company_name: 'Sorvemix', niche: 'alimentacao' }, format: 'reels', liked: ['Açaí de 1 litro', 'Bastidor da produção'], today: new Date('2026-11-01T12:00:00-03:00') });
+    expect(r).toContain('Roteiros que ele aprovou e postou');
+    expect(r).toContain('- Açaí de 1 litro');
+    expect(r).toMatch(/parecido com o que ele já aprovou/);
+    expect(suggestionsPrompt({ format: 'reels', kind: 'geral' })).toMatch(/partindo do que ele APROVOU e POSTOU/);
+  });
+});
+
+describe('Victoria: jeito alegre, temas do momento e sugestões', () => {
+  it('é alegre e prestativa no recado, com o roteiro profissional', () => {
+    expect(VICTORIA_SYSTEM).toMatch(/alegre/);
+    expect(VICTORIA_SYSTEM).toMatch(/sempre quer ajudar/);
+    expect(VICTORIA_SYSTEM).toContain('RECADO:');
+    expect(parseVictoriaReply('RECADO: Amei a ideia! 😊\nTÍTULO: T\nROTEIRO:\n"Oi"')).toMatchObject({ recado: 'Amei a ideia! 😊', titulo: 'T', roteiro: '"Oi"' });
+  });
+
+  it('reconhece agro e jurídico pelo nicho; o resto é geral', () => {
+    expect(nicheKind('agropecuaria')).toBe('agro');
+    expect(nicheKind('Loja Agropecuária')).toBe('agro');
+    expect(nicheKind('juridico')).toBe('juridico');
+    expect(nicheKind('Advocacia trabalhista')).toBe('juridico');
+    expect(nicheKind('saude')).toBe('geral');
+  });
+
+  it('pesquisa de cada cliente: o que ele faz, datas sazonais e o foco do nicho', () => {
+    const today = new Date('2026-11-01T15:00:00-03:00');
+    const agro = researchPrompt({ client: { company_name: 'A Casa do Fazendeiro', niche: 'agropecuaria', city: 'Minaçu', editorial: 'Ração, sal mineral e vacinas' }, format: 'reels', today });
+    expect(agro).toContain('Hoje é 01/11/2026 (novembro)');
+    expect(agro).toMatch(/safra, plantio, colheita, vacinação do rebanho, entressafra/);
+    expect(agro).toContain('Minaçu (Goiás)');
+    expect(agro).toContain('Ração, sal mineral e vacinas');
+    expect(agro).toMatch(/datas sazonais e comemorativas dos próximos 45 dias/);
+    const adv = researchPrompt({ client: { company_name: 'Dr. Sávio', niche: 'juridico' }, format: 'reels', today });
+    expect(adv).toMatch(/leis novas/);
+    expect(adv).toMatch(/datas sazonais/);
+    const sorvete = researchPrompt({ client: { company_name: 'Sorvemix', niche: 'alimentacao' }, format: 'story', today });
+    expect(sorvete).not.toMatch(/safra|STF/);
+    expect(sorvete).toMatch(/datas sazonais e comemorativas dos próximos 45 dias que fazem sentido para ESTE negócio/);
+    expect(sorvete).toMatch(/nada de inventar/);
+  });
+
+  it('sugestões pedem tema do momento conforme o nicho e são lidas da resposta', () => {
+    expect(suggestionsPrompt({ format: 'reels', kind: 'agro' })).toMatch(/período do campo/);
+    expect(suggestionsPrompt({ format: 'reels', kind: 'juridico' })).toMatch(/temas jurídicos do momento/);
+    expect(suggestionsPrompt({ format: 'reels', kind: 'geral' })).toMatch(/data sazonal/);
+    const items = parseSuggestions([
+      'Aqui vão:',
+      '- Vacinação de novembro | lembrar o produtor da campanha de vacinação do rebanho | campanha começa este mês | educacional',
+      '2) **Sal mineral na seca** | por que o sal mineral faz diferença no fim da seca | período de transição | Vendas',
+      '- curta | x | y | z',
+    ].join('\n'));
+    expect(items).toEqual([
+      { titulo: 'Vacinação de novembro', ideia: 'lembrar o produtor da campanha de vacinação do rebanho', por_que: 'campanha começa este mês', tipo: 'educacional' },
+      { titulo: 'Sal mineral na seca', ideia: 'por que o sal mineral faz diferença no fim da seca', por_que: 'período de transição', tipo: 'vendas' },
+    ]);
+  });
+});
+
 describe('Victoria: tela no Copy', () => {
   beforeEach(() => {
     askVictoria.mockReset();
@@ -206,6 +294,30 @@ describe('Victoria: tela no Copy', () => {
     expect(script).toMatchObject({ clientId: 'cli-1', contentFormat: 'criativo', videoType: 'vendas', title: 'Sexta do óleo', caption: 'Vem pro posto!', createdBy: 'u-naraely' });
     expect(script.content).toBe('<p>"Sexta tem óleo e café grátis"</p>');
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('abre com sugestões prontas e um toque já pede o roteiro', async () => {
+    prepareVictoria.mockResolvedValue({
+      ready: true, research: 'pronta', research_date: '01/11/2026', usados: { roteiros_cliente: 3, roteiros_agencia: 2, regras: 0 },
+      suggestions: { status: 'pronta', items: [
+        { titulo: 'Novembro Azul', ideia: 'convite para o check-up masculino no Novembro Azul', por_que: 'campanha do mês', tipo: 'educacional' },
+        { titulo: 'Bastidor da recepção', ideia: 'mostrar o acolhimento da recepção', por_que: 'gera confiança', tipo: 'bastidores' },
+      ] },
+    });
+    askVictoria.mockResolvedValue(reply({ recado: 'Que tema lindo para novembro! 💙' }));
+    render(<VictoriaDialog open onOpenChange={vi.fn()} />, { wrapper });
+    fireEvent.click(screen.getByRole('button', { name: /Clínica Sorriso/ }));
+    // escolher o cliente já prepara (reels)
+    expect(prepareVictoria).toHaveBeenCalledWith({ client_id: 'cli-2', content_format: 'reels', video_type: 'vendas' });
+    fireEvent.click(await screen.findByRole('button', { name: /Abrir a Victoria/ }));
+    expect(await screen.findByText(/Separei umas ideias para você/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Novembro Azul/ }));
+    await waitFor(() => expect(askVictoria).toHaveBeenCalled());
+    expect(askVictoria.mock.calls[0][0]).toMatchObject({
+      video_type: 'educacional',
+      conversation: [{ role: 'pedido', text: 'convite para o check-up masculino no Novembro Azul' }],
+    });
+    expect(await screen.findByText('Que tema lindo para novembro! 💙')).toBeInTheDocument();
   });
 
   it('erro da Victoria devolve o texto para a caixa', async () => {

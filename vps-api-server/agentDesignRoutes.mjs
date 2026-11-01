@@ -270,6 +270,7 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
       `SELECT dt.*, c.company_name AS client_name, c.niche AS client_niche, c.city AS client_city, c.color AS client_color,
               c.logo_url AS client_logo_url, c.editorial AS client_editorial, c.drive_link AS client_drive_link,
               c.drive_fotos AS client_drive_fotos, c.drive_identidade_visual AS client_drive_identidade,
+              c.drive_referencias_design AS client_drive_referencias,
               pa.name AS assigned_name, pd.name AS designed_name
          FROM design_tasks dt
          LEFT JOIN clients c ON c.id = dt.client_id
@@ -330,7 +331,7 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
         color: t.client_color,
         logo_url: t.client_logo_url,
         editorial: t.client_editorial,
-        drive: { geral: t.client_drive_link || null, fotos: t.client_drive_fotos || null, identidade_visual: t.client_drive_identidade || null },
+        drive: { geral: t.client_drive_link || null, fotos: t.client_drive_fotos || null, identidade_visual: t.client_drive_identidade || null, referencias_design: t.client_drive_referencias || null },
       } : { id: null, name: (t.prospect_name || 'avulso').trim(), unregistered: true },
       format,
       format_type: t.format_type,

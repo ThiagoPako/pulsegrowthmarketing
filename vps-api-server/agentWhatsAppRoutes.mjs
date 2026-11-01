@@ -8,7 +8,7 @@
 //   POST /api/agent/whatsapp/send                (chefe) multipart: file (PNG/JPG/WEBP/PDF/MP4, até 60 MB),
 //        to (nome ou id do cliente), text, purpose (geral|aprovacao|assistente), confirm=1
 //        Sem confirm=1 só responde o que seria enviado (cliente, grupo, conexão), sem pôr nada na fila.
-//   POST /api/agent/whatsapp/team                (chefe) { to (nome de quem está no Assistente PULSE), text, confirm }:
+//   POST /api/agent/whatsapp/team                (chefe, social_media) { to (nome de quem está no Assistente PULSE), text, confirm }:
 //        aviso no privado de alguém da equipe pelo número do PULSE; sem confirm, só a prévia.
 //
 // Caixa da Marcely no WhatsApp (assistant/marcelyInbox.mjs; plano aprovado pelo usuário em 01/11/2026):
@@ -75,6 +75,15 @@ export function registerAgentWhatsAppRoutes(app, { pool, uploadRoot, publicUploa
   async function chefe(req) {
     const agent = await verifyAgent(req);
     if (agent.role !== 'chefe') throw Object.assign(new Error('Só a chefe manda WhatsApp pelo sistema'), { status: 403 });
+    return agent;
+  }
+
+  // aviso à equipe: a chefe e a social media (Ísis, 01/11/2026: artes de feriado que vencem em breve). Cliente, não.
+  async function teamSender(req) {
+    const agent = await verifyAgent(req);
+    if (!['chefe', 'social_media'].includes(agent.role)) {
+      throw Object.assign(new Error('Só a chefe e a social media avisam a equipe pelo WhatsApp'), { status: 403 });
+    }
     return agent;
   }
 
@@ -161,7 +170,7 @@ export function registerAgentWhatsAppRoutes(app, { pool, uploadRoot, publicUploa
   //   POST /api/agent/whatsapp/team  { to (nome da pessoa), text, confirm }  — sem confirm, só a prévia
   app.post('/api/agent/whatsapp/team', async (req, res) => {
     try {
-      const agent = await chefe(req);
+      const agent = await teamSender(req);
       const to = String(req.body?.to || '').trim();
       const text = String(req.body?.text || '').trim().slice(0, 1500);
       const confirm = ['1', 'true', 'sim'].includes(String(req.body?.confirm || '').toLowerCase());
@@ -172,7 +181,8 @@ export function registerAgentWhatsAppRoutes(app, { pool, uploadRoot, publicUploa
       if (!list.length) throw Object.assign(new Error(`Ninguém da equipe com "${to}" no Assistente PULSE (${rows.map((n) => n.name).join(', ')})`), { status: 404 });
       if (list.length > 1) throw Object.assign(new Error(`"${to}" bate com ${list.map((n) => n.name).join(', ')}. Use o nome exato.`), { status: 409 });
       const number = list[0];
-      const body = `${text}${SIGNATURE}`;
+      const signature = agent.role === 'social_media' ? `${agent.name || 'Ísis'} (social media da Pulse)` : 'Marcely (agentes da Pulse)';
+      const body = `${text}\n\n— ${signature}`;
       if (!confirm) return res.json({ dry_run: true, to: number.name, text: body });
       await sendToNumber(pool, number, body);
       await remember(pool, number.id, 'assistant', body);

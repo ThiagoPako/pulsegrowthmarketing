@@ -54,6 +54,12 @@ describe('cobranças da Ísis · textos', () => {
     expect(body).not.toContain('{');
   });
 
+  it('a cobrança não fala de taxa (a InfinitePay repassa na hora do pagamento)', () => {
+    const body = applyTemplate(DEFAULT_TEMPLATES.cobranca, { nome_cliente: 'X', plano: 'P', valor: 'R$ 1,00', pix_copia_cola: '0002', chave_pix: 'k', nome_recebedor: 'r', link_infinitepay: 'https://checkout.infinitepay.io/a/b' });
+    expect(body).toContain('💳 Prefere cartão? Pague pelo link: https://checkout.infinitepay.io/a/b');
+    expect(body.toLowerCase()).not.toContain('taxa');
+  });
+
   it('dica de assiduidade pelo que aconteceu', () => {
     expect(attendanceTip({ done: 4, scheduled: 4, cancelled: 0, avg: 5 })).toMatch(/Agenda em dia/);
     expect(attendanceTip({ done: 4, scheduled: 4, cancelled: 0, avg: 2 })).toMatch(/3 ou 4 temas/);

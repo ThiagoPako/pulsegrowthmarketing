@@ -40,8 +40,7 @@ export const DEFAULT_TEMPLATES = {
     '💠 *Pix (preferencial):*',
     '{pix_copia_cola}',
     'Chave: {chave_pix} · {nome_recebedor}',
-    '💳 Prefere cartão? Pague pelo link (valor no cartão: {valor_cartao}, já com a taxa da operadora):',
-    '{link_infinitepay}',
+    '💳 Prefere cartão? Pague pelo link: {link_infinitepay}',
     'Se já pagou, pode desconsiderar. Obrigada pela confiança! 🧡',
   ].join('\n'),
   lembrete: [

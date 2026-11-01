@@ -49,7 +49,7 @@ export default function FinancialBilling() {
         <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')}><ArrowLeft size={18} /></Button>
         <div className="flex-1">
           <h1 className="text-2xl font-display font-bold flex items-center gap-2"><BellRing size={22} /> Cobranças</h1>
-          <p className="text-sm text-muted-foreground">A Ísis manda relatório, agradecimento, cobrança e lembrete pelo Assistente PULSE. Pix primeiro; cartão com a taxa repassada.</p>
+          <p className="text-sm text-muted-foreground">A Ísis manda relatório, agradecimento, cobrança e lembrete pelo Assistente PULSE. Pix primeiro; o cartão pelo link da InfinitePay.</p>
         </div>
       </div>
 
@@ -171,7 +171,6 @@ function BillingSettings() {
   const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: ['billing-isis-config'], queryFn: fetchBillingConfig });
   const [mode, setMode] = useState<BillingMode>('desligado');
-  const [fee, setFee] = useState('0');
   const [handle, setHandle] = useState('');
   const [footer, setFooter] = useState('');
   const [contacts, setContacts] = useState<Record<'uruacu' | 'minacu', { name: string; phone: string }>>({ uruacu: { name: '', phone: '' }, minacu: { name: '', phone: '' } });
@@ -181,7 +180,6 @@ function BillingSettings() {
   useEffect(() => {
     if (!data) return;
     setMode(data.mode);
-    setFee(String(data.card_fee_percent));
     setHandle(data.infinitepay_handle || '');
     setFooter(data.footer ?? '');
     if (data.contacts) setContacts({
@@ -195,7 +193,7 @@ function BillingSettings() {
   const save = async () => {
     setSaving(true);
     try {
-      await saveBillingConfig({ mode, card_fee_percent: Number(fee.replace(',', '.')) || 0, infinitepay_handle: handle, footer, contacts, templates });
+      await saveBillingConfig({ mode, infinitepay_handle: handle, footer, contacts, templates });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['billing-isis-config'] }),
         queryClient.invalidateQueries({ queryKey: ['billing-isis-agenda'] }),
@@ -212,7 +210,7 @@ function BillingSettings() {
     <div className="space-y-4">
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Modo</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-[1fr_200px]">
+        <CardContent>
           <div className="space-y-1.5">
             <Select value={mode} onValueChange={(v) => setMode(v as BillingMode)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -226,11 +224,6 @@ function BillingSettings() {
             </p>
             {!data.has_pix && <p className="text-xs text-destructive">Sem chave Pix em Financeiro → Config: a cobrança sai sem o Pix.</p>}
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="taxa">Taxa do cartão repassada (%)</Label>
-            <Input id="taxa" inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} />
-            <p className="text-[11px] text-muted-foreground">O valor no cartão é calculado para a Pulse receber a mensalidade inteira.</p>
-          </div>
         </CardContent>
       </Card>
 
@@ -243,7 +236,7 @@ function BillingSettings() {
               <Input id="infinitetag" placeholder="agenciapulse (sem o $)" value={handle} onChange={(e) => setHandle(e.target.value)} />
             </div>
             <p className="text-[11px] text-muted-foreground">
-              A tag do app da InfinitePay (não é senha). Com ela, cada mensalidade ganha um link no valor com a taxa; pagou, a receita é baixada sozinha
+              A tag do app da InfinitePay (não é senha). Com ela, cada mensalidade ganha um link no valor da mensalidade (a taxa do cartão a InfinitePay repassa na hora); pagou, a receita é baixada sozinha
               depois de conferida na InfinitePay. Sem ela, a cobrança sai só com o Pix.
             </p>
           </div>

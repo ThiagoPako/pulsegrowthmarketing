@@ -174,7 +174,7 @@ async function payment(doc, pay) {
   doc.roundedRect(x2, y, w, h, 12).fill('#F6F6F8');
   doc.font('bold').fontSize(11).fillColor(C.texto).text('Cartão', x2 + 14, y + 12);
   if (pay.cardLink) {
-    doc.font('regular').fontSize(9).fillColor(C.cinza).text('Pelo link da InfinitePay, em até 12x. A taxa da operadora já está no valor.', x2 + 14, y + 34, { width: w - 28 });
+    doc.font('regular').fontSize(9).fillColor(C.cinza).text('Pelo link da InfinitePay, em até 12x.', x2 + 14, y + 34, { width: w - 28 });
     doc.font('bold').fontSize(18).fillColor(C.texto).text(pay.cardAmount || '', x2 + 14, y + 72, { width: w - 28 });
     const by = y + 112;
     doc.roundedRect(x2 + 14, by, w - 28, 30, 15).fill(C.laranja);

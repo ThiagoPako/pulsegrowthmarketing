@@ -16,7 +16,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import {
   BILLING_STEPS, MODES, DEFAULT_TEMPLATES, monthName, previousMonth, nextMonth, stepDates, attendanceTip,
-  cardAmount, brl, pixPayload, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
+  brl, pixPayload, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
   accountSummary,
 } from './lib/billingIsis.mjs';
 import { renderPdf } from './lib/billingPdf.mjs';
@@ -263,8 +263,8 @@ export function registerBillingIsisRoutes(app, {
     }
 
     const pix = pixPayload({ key: config?.pix_key, name: config?.receiver_name, city: contract.city || contract.client_city, amount, txid: `PULSE${month.replace('-', '')}` });
-    const card = cardAmount(amount, config?.card_fee_percent);
-    const link = await paymentLink({ contract, revenue, amount: card, month }).catch((error) => {
+    // o link é no valor da mensalidade: a taxa do cartão a InfinitePay repassa na hora do pagamento (usuário, 01/11/2026)
+    const link = await paymentLink({ contract, revenue, amount, month }).catch((error) => {
       logger.error('[cobranca-isis] link de pagamento:', error.message);
       return null;
     });
@@ -288,7 +288,7 @@ export function registerBillingIsisRoutes(app, {
           rows: [[`Mensalidade ${plano}`, `${month.slice(5, 7)}/${month.slice(0, 4)}`, brl(amount)]],
           total: { label: 'Total', value: brl(amount) },
         },
-        payment: { pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(card) : null },
+        payment: { pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(amount) : null },
         sections: [
           ...(conta.open.length ? [{ title: `Também em aberto (${brl(conta.openTotal)})`, bullets: conta.open }] : []),
           ...(conta.paid.length ? [{ title: 'Últimos pagamentos', bullets: conta.paid }] : []),
@@ -297,7 +297,7 @@ export function registerBillingIsisRoutes(app, {
       body: applyTemplate(templateOf(config, step), {
         ...base, plano, valor: brl(amount), mes_ref: monthName(`${month}-01`),
         pix_copia_cola: pix, chave_pix: config?.pix_key, nome_recebedor: config?.receiver_name,
-        valor_cartao: link ? brl(card) : '', link_infinitepay: link,
+        link_infinitepay: link,
       }),
     };
   }

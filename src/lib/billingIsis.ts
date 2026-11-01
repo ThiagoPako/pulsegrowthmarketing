@@ -26,11 +26,12 @@ export const STEP_STATUS_LABELS: Record<string, string> = {
   aguardando_relatorio: 'Relatório não aprovado',
   sem_whatsapp: 'Sem WhatsApp',
   pulado: 'Pulado',
+  conferir: 'Conferir dados',
 };
 export const TEMPLATE_VARS: Record<BillingStep, string[]> = {
   relatorio_mensal: ['nome_cliente', 'mes_anterior', 'mes_atual', 'qtd_videos', 'qtd_artes', 'qtd_posts', 'qtd_gravacoes', 'horas_dedicadas', 'resumo_rede', 'sugestoes', 'link_relatorio'],
   pre_vencimento: ['nome_cliente', 'mes_ref', 'gravacoes_feitas', 'gravacoes_marcadas', 'media_videos', 'dica_assiduidade', 'dia_vencimento'],
-  cobranca: ['nome_cliente', 'plano', 'valor', 'pix_copia_cola', 'chave_pix', 'nome_recebedor', 'valor_cartao', 'link_infinitepay'],
+  cobranca: ['nome_cliente', 'plano', 'valor', 'pix_copia_cola', 'chave_pix', 'nome_recebedor', 'link_infinitepay', 'aviso_cartao'],
   lembrete: ['nome_cliente', 'mes_ref', 'valor', 'pix_copia_cola', 'link_infinitepay'],
 };
 
@@ -38,9 +39,21 @@ export interface BillingConfig {
   mode: BillingMode;
   card_fee_percent: number;
   has_pix: boolean;
-  infinitepay_handle: string;
+  /** as duas contas: Pix de Financeiro → Config da cidade (own = a cidade tem configuração própria) e a InfiniteTag */
+  accounts: Record<'uruacu' | 'minacu', { own: boolean; pix_key: string; receiver: string; bank: string; infinitepay_handle: string }>;
   templates: Record<BillingStep, string>;
   defaults: Record<BillingStep, string>;
+  /** rodapé de mensagem automática em todas as mensagens ao cliente (vazio = sem rodapé) */
+  footer: string;
+  default_footer: string;
+  /** contato do rodapé por cidade; resolved = o que sai na mensagem (telefone do Assistente PULSE se vazio) */
+  contacts: Record<'uruacu' | 'minacu', CityContact>;
+}
+
+export interface CityContact {
+  name: string;
+  phone: string;
+  resolved: { city: string; name: string; phone: string | null };
 }
 
 export interface BillingAgendaItem {
@@ -54,7 +67,7 @@ export interface BillingAgendaItem {
   has_whatsapp: boolean;
   billing_enabled: boolean;
   mode: BillingMode;
-  steps: { step: BillingStep; date: string; status: string; body: string | null }[];
+  steps: { step: BillingStep; date: string; status: string; body: string | null; pdf_url: string | null }[];
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -65,22 +78,38 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const fetchBillingConfig = () => call<BillingConfig>('/billing-isis/config');
-export const saveBillingConfig = (patch: Partial<Pick<BillingConfig, 'mode' | 'card_fee_percent' | 'infinitepay_handle'>> & { templates?: Partial<Record<BillingStep, string>> }) =>
+export const saveBillingConfig = (patch: Partial<Pick<BillingConfig, 'mode' | 'footer'>> & {
+  infinitepay_handles?: Partial<Record<'uruacu' | 'minacu', string>>;
+  templates?: Partial<Record<BillingStep, string>>;
+  contacts?: Partial<Record<'uruacu' | 'minacu', { name: string; phone: string }>>;
+}) =>
   call<{ success: boolean }>('/billing-isis/config', { method: 'PUT', body: JSON.stringify(patch) });
 export const fetchBillingAgenda = (month: string) =>
   call<{ month: string; today: string; items: BillingAgendaItem[] }>(`/billing-isis/agenda?month=${encodeURIComponent(month)}`);
 export const fetchBillingPreview = (contractId: string, step: BillingStep, date: string, month: string) =>
-  call<{ body: string | null; skip: string | null }>(
+  call<{ body: string | null; skip: string | null; problems: string[] | null }>(
     `/billing-isis/preview?contract_id=${contractId}&step=${step}&date=${date}&month=${month}`,
   );
 
+/** O PDF que sairia (gerado na hora, nada é guardado): abre numa aba. */
+export async function openBillingPdfPreview(contractId: string, step: BillingStep, date: string, month: string) {
+  const response = await vpsAuthedFetch(`/billing-isis/preview?contract_id=${contractId}&step=${step}&date=${date}&month=${month}&pdf=1`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body?.error || 'Não deu para montar o PDF.');
+  }
+  const url = URL.createObjectURL(await response.blob());
+  window.open(url, '_blank', 'noopener');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export interface PaymentLinkRow {
   id: string; order_nsu: string; month: string | null; amount: number; url: string; status: string; client: string | null;
-  capture_method: string | null; paid_at: string | null; receipt_url: string | null;
+  capture_method: string | null; paid_at: string | null; receipt_url: string | null; city: string | null;
 }
 export const fetchPaymentLinks = (month: string) =>
-  call<{ handle: string | null; webhook_url: string; links: PaymentLinkRow[] }>(`/infinitepay/links?month=${encodeURIComponent(month)}`);
-export const createTestLink = () =>
-  call<{ url: string }>('/infinitepay/test-link', { method: 'POST', body: JSON.stringify({ amount: 1 }) });
+  call<{ handle: string | null; handles: Record<'uruacu' | 'minacu', string | null>; webhook_url: string; links: PaymentLinkRow[] }>(`/infinitepay/links?month=${encodeURIComponent(month)}`);
+export const createTestLink = (city: 'uruacu' | 'minacu') =>
+  call<{ url: string }>('/infinitepay/test-link', { method: 'POST', body: JSON.stringify({ amount: 1, city }) });
 export const recheckPaymentLink = (id: string) =>
   call<{ paid: boolean; marked?: boolean }>(`/infinitepay/check/${id}`, { method: 'POST', body: '{}' });

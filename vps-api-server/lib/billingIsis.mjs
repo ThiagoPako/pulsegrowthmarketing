@@ -40,8 +40,8 @@ export const DEFAULT_TEMPLATES = {
     '💠 *Pix (preferencial):*',
     '{pix_copia_cola}',
     'Chave: {chave_pix} · {nome_recebedor}',
-    '💳 Prefere cartão? Pague pelo link (valor no cartão: {valor_cartao}, já com a taxa da operadora):',
-    '{link_infinitepay}',
+    '💳 Prefere cartão? Pague pelo link: {link_infinitepay}',
+    '_{aviso_cartao}_',
     'Se já pagou, pode desconsiderar. Obrigada pela confiança! 🧡',
   ].join('\n'),
   lembrete: [
@@ -51,6 +51,25 @@ export const DEFAULT_TEMPLATES = {
     '{link_infinitepay}',
   ].join('\n'),
 };
+
+// rodapé de toda mensagem ao cliente (pedido do usuário, 01/11/2026: "avisa que é um número de mensagem automática e
+// deixa o número do Thiago para entrar em contato"); o contato é o da cidade do cliente (lib/contactByCity.mjs:
+// Uruaçu → Thiago, Minaçu → Victor). Editável na tela, vazio = sem rodapé
+export const DEFAULT_FOOTER = '—\n_Esta é uma mensagem automática. Para dúvidas, fale com o {contato_nome}: {contato_telefone}._';
+
+/** O rodapé com o contato preenchido; null quando vazio ou sem telefone (não manda "fale com o Victor:" sem número). */
+export function footerText(footer, contact = {}) {
+  const f = footer === null || footer === undefined ? DEFAULT_FOOTER : String(footer).trim();
+  if (!f) return null;
+  const out = applyTemplate(f, { contato_nome: contact.name, contato_telefone: contact.phone });
+  return /[A-Za-zÀ-ú]/.test(out) ? out : null;
+}
+
+/** Mensagem + rodapé (null/undefined = o padrão; texto vazio = sem rodapé). */
+export function withFooter(body, footer, contact = { name: 'Thiago', phone: '(62) 98538-2981' }) {
+  const f = footerText(footer, contact);
+  return f ? `${String(body).trim()}\n\n${f}` : String(body).trim();
+}
 
 const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -108,6 +127,9 @@ export function attendanceTip({ done = 0, scheduled = 0, cancelled = 0, avg = nu
   }
   return 'Que tal já deixarmos as próximas gravações marcadas? Assim o conteúdo não para.';
 }
+
+// aviso discreto do cartão (usuário, 01/11/2026): a taxa é da facilitadora, a Pulse não cobra nada a mais
+export const CARD_NOTICE = 'No cartão de crédito há a taxa da transação, cobrada pela facilitadora de pagamentos. A Pulse não cobra nenhum valor a mais.';
 
 /** Valor no cartão com a taxa repassada: o líquido é a mensalidade (valor ÷ (1 − taxa)). */
 export function cardAmount(amount, feePercent) {
@@ -173,4 +195,46 @@ export function applyTemplate(template, vars) {
 export function bulletList(text) {
   return String(text || '').split('\n').map((s) => s.trim()).filter(Boolean)
     .map((t) => (/^[•\-–\d]/.test(t) ? t : `• ${t}`)).join('\n');
+}
+
+// ── Conferência antes de cobrar (usuário, 01/11/2026: "entenda os dados, crie o PDF, depois envia no WhatsApp";
+//    se algo não bater com o financeiro, não envia e avisa a equipe) ──
+const brMonth = (month) => `${month.slice(5, 7)}/${month.slice(0, 4)}`;
+
+/**
+ * Problemas que impedem a cobrança do mês; [] quando os números batem com o Financeiro.
+ * @param contractValue valor do contrato
+ * @param revenues      mensalidades lançadas no mês (revenues sem recorrência extra nem lançamento manual)
+ * @param month         "AAAA-MM"
+ */
+export function checkBillingData({ contractValue, revenues = [], month }) {
+  const problems = [];
+  const open = revenues.filter((r) => !['recebida', 'pago'].includes(r.status) && r.status !== 'cancelada');
+  if (!revenues.length) problems.push(`a mensalidade de ${brMonth(month)} não está lançada em Financeiro → Receitas`);
+  if (open.length > 1) problems.push(`há ${open.length} mensalidades de ${brMonth(month)} em aberto (lançamento repetido?)`);
+  const r = open[0] || revenues[0];
+  if (r) {
+    const amount = Number(r.amount);
+    if (!(amount > 0)) problems.push(`a mensalidade de ${brMonth(month)} está com valor zerado`);
+    else if (Number(contractValue) > 0 && Math.abs(amount - Number(contractValue)) > 0.009) {
+      problems.push(`a receita (${brl(amount)}) não bate com o contrato (${brl(contractValue)})`);
+    }
+    if (!r.due_date) problems.push(`a mensalidade de ${brMonth(month)} está sem vencimento`);
+  } else if (!(Number(contractValue) > 0)) {
+    problems.push('o contrato está sem valor');
+  }
+  return problems;
+}
+
+/** Situação da conta para o PDF: o que ficou em aberto antes e os últimos pagamentos. */
+export function accountSummary(previous = [], { limitPaid = 3 } = {}) {
+  const fmt = (r) => `Mensalidade ${brMonth(String(r.reference_month instanceof Date ? r.reference_month.toISOString() : r.reference_month).slice(0, 7))} · ${brl(r.amount)}`;
+  const due = (v) => (v ? String(v instanceof Date ? v.toISOString() : v).slice(0, 10).split('-').reverse().join('/') : '');
+  const open = previous.filter((r) => !['recebida', 'pago', 'cancelada'].includes(r.status));
+  const paid = previous.filter((r) => ['recebida', 'pago'].includes(r.status)).slice(0, limitPaid);
+  return {
+    open: open.map((r) => `${fmt(r)}${r.due_date ? ` · venceu em ${due(r.due_date)}` : ''}`),
+    openTotal: open.reduce((a, r) => a + (Number(r.amount) || 0), 0),
+    paid: paid.map((r) => `${fmt(r)}${r.paid_at ? ` · paga em ${due(r.paid_at)}` : ''}`),
+  };
 }

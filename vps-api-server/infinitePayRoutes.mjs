@@ -25,6 +25,8 @@ export function registerInfinitePayRoutes(app, {
     if (!schemaPromise) {
       schemaPromise = pool.query(`
         ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS infinitepay_handle TEXT;
+        ALTER TABLE payment_links ADD COLUMN IF NOT EXISTS handle TEXT;
+        ALTER TABLE payment_links ADD COLUMN IF NOT EXISTS city TEXT;
         CREATE TABLE IF NOT EXISTS payment_links (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           provider TEXT NOT NULL DEFAULT 'infinitepay',
@@ -79,10 +81,12 @@ export function registerInfinitePayRoutes(app, {
       handle, amount, orderNsu, webhookUrl,
       description: `Mensalidade Pulse ${month.split('-').reverse().join('/')} · ${name}`,
     }, fetchImpl);
+    // a conta (InfiniteTag) da cidade do cliente fica no link: o pagamento é conferido na mesma conta
     await pool.query(
-      `INSERT INTO payment_links (order_nsu, revenue_id, contract_id, client_id, month, amount, url, slug, raw)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [orderNsu, revenue?.id || null, contract.id, contract.client_id, month, amount, link.url, link.slug, JSON.stringify(link.response)]
+      `INSERT INTO payment_links (order_nsu, revenue_id, contract_id, client_id, month, amount, url, slug, raw, handle, city)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [orderNsu, revenue?.id || null, contract.id, contract.client_id, month, amount, link.url, link.slug, JSON.stringify(link.response),
+        handle, contract.client_city || contract.city || null]
     );
     return link.url;
   }
@@ -110,8 +114,8 @@ export function registerInfinitePayRoutes(app, {
 
   /** Confere o link na InfinitePay e dá baixa se pago. */
   async function verify(link, hint = {}) {
-    const config = await paymentConfigFor(null);
-    const handle = normalizeHandle(config?.infinitepay_handle);
+    // confere na conta que criou o link (cada cidade tem a sua)
+    const handle = normalizeHandle(link.handle) || normalizeHandle((await paymentConfigFor(link.city || null))?.infinitepay_handle);
     if (!handle) throw httpError(400, 'Sem InfiniteTag cadastrada');
     const check = await checkPayment({ handle, orderNsu: link.order_nsu, transactionNsu: hint.transactionNsu || link.transaction_nsu, slug: hint.slug || link.slug }, fetchImpl);
     if (!isPaidCheck(check)) {
@@ -152,13 +156,14 @@ export function registerInfinitePayRoutes(app, {
       const month = /^\d{4}-\d{2}$/.test(String(req.query.month || '')) ? req.query.month : todayBr().slice(0, 7);
       const { rows } = await pool.query(
         `SELECT l.id, l.order_nsu, l.month, l.amount, l.url, l.status, l.capture_method, l.paid_amount, l.paid_at, l.receipt_url, l.created_at,
-                c.company_name AS client
+                l.handle, l.city, c.company_name AS client
            FROM payment_links l LEFT JOIN clients c ON c.id = l.client_id
           WHERE l.month = $1 OR l.month IS NULL ORDER BY l.created_at DESC`,
         [month]
       );
-      const config = await paymentConfigFor(null);
-      res.json({ handle: normalizeHandle(config?.infinitepay_handle) || null, webhook_url: webhookUrl, links: rows });
+      const handles = {};
+      for (const city of ['uruacu', 'minacu']) handles[city] = normalizeHandle((await paymentConfigFor(city))?.infinitepay_handle) || null;
+      res.json({ handle: handles.uruacu || handles.minacu || null, handles, webhook_url: webhookUrl, links: rows });
     } catch (error) { sendError(res, error); }
   });
 
@@ -166,15 +171,15 @@ export function registerInfinitePayRoutes(app, {
     try {
       await verifyAdmin(req);
       await ensureSchema();
-      const config = await paymentConfigFor(null);
-      const handle = normalizeHandle(config?.infinitepay_handle);
-      if (!handle) throw httpError(400, 'Cadastre a InfiniteTag antes');
+      const city = ['uruacu', 'minacu'].includes(req.body?.city) ? req.body.city : 'uruacu';
+      const handle = normalizeHandle((await paymentConfigFor(city))?.infinitepay_handle);
+      if (!handle) throw httpError(400, `Cadastre a InfiniteTag de ${city === 'uruacu' ? 'Uruaçu' : 'Minaçu'} antes`);
       const amount = Math.max(1, Number(req.body?.amount) || 1);
       const orderNsu = `pulse-teste-${Date.now()}`;
       const link = await createCheckoutLink({ handle, amount, orderNsu, webhookUrl, description: 'Teste de link Pulse' }, fetchImpl);
       await pool.query(
-        `INSERT INTO payment_links (order_nsu, month, amount, url, slug, raw) VALUES ($1, NULL, $2, $3, $4, $5)`,
-        [orderNsu, amount, link.url, link.slug, JSON.stringify(link.response)]
+        `INSERT INTO payment_links (order_nsu, month, amount, url, slug, raw, handle, city) VALUES ($1, NULL, $2, $3, $4, $5, $6, $7)`,
+        [orderNsu, amount, link.url, link.slug, JSON.stringify(link.response), handle, city]
       );
       res.json({ success: true, url: link.url, response: link.response });
     } catch (error) {

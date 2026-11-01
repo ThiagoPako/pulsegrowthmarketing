@@ -20459,6 +20459,8 @@ const billingIsis = registerBillingIsisRoutes(app, {
   paymentConfigFor: paymentConfigForCity,
   socialReports,
   paymentLink: infinitePay.paymentLink,
+  uploadRoot: UPLOAD_ROOT,
+  publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
 });
 
 // ─── Portal: equipe manda o vídeo/arte direto no WhatsApp do cliente (grupo ou privado) ──

@@ -8,12 +8,20 @@
 // Rotas (só admin):
 //   GET /api/billing-isis/config · PUT /api/billing-isis/config { mode, card_fee_percent, templates{} }
 //   GET /api/billing-isis/agenda?month=AAAA-MM   contratos com as 4 etapas (data, status, mensagem guardada)
-//   GET /api/billing-isis/preview?contract_id=&step=&date=   texto que sairia (nada é gravado)
+//   GET /api/billing-isis/preview?contract_id=&step=&date=[&pdf=1]   texto (ou o PDF) que sairia (nada é gravado)
+// Toda mensagem leva o PDF no modelo da Pulse (lib/billingPdf.mjs; pedido do usuário, 01/11/2026), gerado e guardado
+// em uploads/cobrancas/ antes do envio, e o rodapé com o contato da cidade do cliente (lib/contactByCity.mjs).
 
+import path from 'node:path';
+import fs from 'node:fs/promises';
 import {
   BILLING_STEPS, MODES, DEFAULT_TEMPLATES, monthName, previousMonth, nextMonth, stepDates, attendanceTip,
-  cardAmount, brl, pixPayload, applyTemplate, bulletList,
+  brl, pixPayload, CARD_NOTICE, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
+  accountSummary,
 } from './lib/billingIsis.mjs';
+import { renderPdf } from './lib/billingPdf.mjs';
+import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
+import { normalizeCityValue } from './lib/cityResolution.mjs';
 import { enqueueWhatsApp } from './whatsapp/shared.mjs';
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -27,10 +35,17 @@ const TEMPLATE_COLUMNS = {
 const todayBr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 const dateKey = (v) => (!v ? '' : v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
 const isPaid = (r) => r?.status === 'recebida' || r?.status === 'pago';
+// cidade de uma linha de payment_config (sem coluna de cidade: a única conta, tratada como Minaçu)
+const cityOf = (cfg) => normalizeCityValue(cfg?.city) || 'minacu';
+const dataBr = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '—');
+const monthLabel = (month) => `${monthName(`${month}-01`)} de ${month.slice(0, 4)}`;
+const DOC_NAMES = { relatorio_mensal: 'Relatorio', pre_vencimento: 'Agenda', cobranca: 'Cobranca', lembrete: 'Cobranca' };
 
 export function registerBillingIsisRoutes(app, {
-  pool, verifyAdmin, paymentConfigFor, socialReports, paymentLink = async () => null, logger = console,
+  pool, verifyAdmin, paymentConfigFor, socialReports, paymentLink = async () => null, uploadRoot, publicUploadsUrl,
+  logger = console,
 }) {
+  const uploadsBase = String(publicUploadsUrl || 'https://agenciapulse.tech/uploads').replace(/\/+$/, '');
   let schemaPromise = null;
   function ensureSchema() {
     if (!schemaPromise) {
@@ -43,6 +58,10 @@ export function registerBillingIsisRoutes(app, {
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_pre TEXT;
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_cobranca TEXT;
           ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_lembrete TEXT;
+          ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS msg_isis_rodape TEXT;
+          ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS contact_name TEXT;
+          ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS contact_phone TEXT;
+          ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS pdf_url TEXT;
           ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS body TEXT;
           ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS reference_month TEXT;
           ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS contract_id UUID;
@@ -87,11 +106,24 @@ export function registerBillingIsisRoutes(app, {
     const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
     const day = Math.min(Math.max(Number(contract.due_day) || 10, 1), last);
     return {
+      rows,
       revenue: rows[0] || null,
       paid: rows.some(isPaid),
       dueDate: dateKey(rows[0]?.due_date) || `${month}-${pad2(day)}`,
       amount: Number(rows[0]?.amount ?? contract.contract_value) || 0,
     };
+  }
+
+  // mensalidades dos meses anteriores (o que ficou em aberto e os últimos pagamentos, para o PDF)
+  async function previousRevenues(contract, month) {
+    const { rows } = await pool.query(
+      `SELECT * FROM revenues
+        WHERE client_id = $1 AND recurrence_id IS NULL AND (description IS NULL OR btrim(description) = '')
+          AND (contract_id IS NULL OR contract_id = $2) AND to_char(reference_month, 'YYYY-MM') < $3
+        ORDER BY reference_month DESC LIMIT 12`,
+      [contract.client_id, contract.id, month]
+    ).catch(() => ({ rows: [] }));
+    return rows;
   }
 
   async function attendance(clientId, month) {
@@ -107,8 +139,46 @@ export function registerBillingIsisRoutes(app, {
     return { done, scheduled: rec.length - cancelled, cancelled, avg: dr.length ? Math.round((videos / dr.length) * 10) / 10 : null };
   }
 
-  /** Texto de uma etapa para um contrato (month = mês da mensalidade); { skip } quando não deve sair. */
+  async function assistantNumbers() {
+    const { rows } = await pool.query(`SELECT name, phone, active FROM assistant_numbers`).catch(() => ({ rows: [] }));
+    return rows;
+  }
+
+  /** Texto de uma etapa com o rodapé (contato da cidade do cliente) e o PDF a montar; { skip } quando não deve sair. */
   async function compose(contract, step, date, month = date.slice(0, 7)) {
+    const out = await composeBody(contract, step, date, month);
+    if (!out.body) return out;
+    const contact = contactForCity(contract.client_city || contract.city, out.config, await assistantNumbers());
+    const note = footerText(out.config?.msg_isis_rodape, contact);
+    const pdf = out.pdf && {
+      ...out.pdf,
+      number: `PULSE-${month.replace('-', '')}-${String(contract.id).slice(0, 4).toUpperCase()}`,
+      issued: dataBr(date),
+      footerNote: note ? note.replace(/^—\s*/, '').replace(/_/g, '').trim() : '',
+      footerContact: `${String(contract.company_name || '').trim()} · ${contact.city === 'uruacu' ? 'Uruaçu' : 'Minaçu'}`,
+    };
+    return { ...out, contact, pdf, body: withFooter(out.body, out.config?.msg_isis_rodape, contact) };
+  }
+
+  /** Gera o PDF e guarda em uploads/cobrancas/<cliente>/<mês>/; devolve { url, name }. */
+  async function savePdf(contract, step, month, spec) {
+    const buffer = await renderPdf(spec);
+    const dir = path.resolve(uploadRoot, 'cobrancas', String(contract.client_id), month);
+    await fs.mkdir(dir, { recursive: true });
+    const file = `${step}-${Date.now()}.pdf`;
+    await fs.writeFile(path.join(dir, file), buffer);
+    // conferido: é PDF, tem conteúdo e foi gravado inteiro
+    const saved = await fs.stat(path.join(dir, file)).catch(() => null);
+    const ok = buffer.subarray(0, 5).toString() === '%PDF-' && buffer.length > 5000 && saved?.size === buffer.length;
+    const slug = String(contract.company_name || 'cliente').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+    return {
+      ok,
+      url: `${uploadsBase}/cobrancas/${contract.client_id}/${month}/${file}`,
+      name: `${DOC_NAMES[step]}-Pulse-${slug}-${month}.pdf`,
+    };
+  }
+
+  async function composeBody(contract, step, date, month) {
     const config = await paymentConfigFor(contract.city || contract.client_city);
     const base = { nome_cliente: String(contract.company_name || '').trim() };
 
@@ -125,8 +195,35 @@ export function registerBillingIsisRoutes(app, {
           report.network.current.interactions !== null ? `${Number(report.network.current.interactions).toLocaleString('pt-BR')} interações` : '',
         ].filter(Boolean).join(' · ')
         : '';
+      const tipos = n.deliveries.videos.by_type.map((t) => `${t.total} ${t.type}`).join(' · ');
+      const rec = n.deliveries.recordings;
+      const pdfRelatorio = {
+        kind: 'relatorio',
+        title: `Relatório de ${monthLabel(ref)}`,
+        cards: [
+          { label: 'Vídeos', value: n.deliveries.videos.total, highlight: true },
+          { label: 'Artes', value: n.deliveries.arts.total },
+          { label: 'Posts', value: n.deliveries.posts.total },
+          { label: 'Gravações', value: rec.done },
+        ],
+        sections: [
+          {
+            title: 'O que entregamos',
+            bullets: [
+              tipos ? `Vídeos: ${tipos}` : '',
+              n.deliveries.arts.total ? `${n.deliveries.arts.total} artes` : '',
+              n.deliveries.posts.total ? `${n.deliveries.posts.total} posts publicados` : '',
+              `${rec.done} gravações realizadas${rec.avg_videos_per_recording !== null ? `, média de ${rec.avg_videos_per_recording.toLocaleString('pt-BR')} vídeos por gravação` : ''}`,
+            ].filter(Boolean),
+          },
+          ...(n.time.total_hours > 0 ? [{ title: 'Tempo dedicado', text: `${n.time.total_hours.toLocaleString('pt-BR')} horas no seu perfil: gravação ${n.time.recording_hours.toLocaleString('pt-BR')} h · edição ${n.time.editing_hours.toLocaleString('pt-BR')} h · design ${n.time.design_hours.toLocaleString('pt-BR')} h.` }] : []),
+          ...(net ? [{ title: 'Rede social', text: net }] : []),
+          ...(report.draft.suggestions ? [{ title: `Sugestões para ${monthName(`${month}-01`)}`, bullets: bulletList(report.draft.suggestions).split('\n') }] : []),
+        ],
+      };
       return {
         config,
+        pdf: pdfRelatorio,
         body: applyTemplate(templateOf(config, step), {
           ...base,
           mes_anterior: monthName(`${ref}-01`), mes_atual: monthName(`${month}-01`),
@@ -138,14 +235,34 @@ export function registerBillingIsisRoutes(app, {
       };
     }
 
-    const { revenue, paid, dueDate, amount } = await monthRevenue(contract, month);
+    const { rows: monthRows, revenue, paid, dueDate, amount } = await monthRevenue(contract, month);
     if (step !== 'pre_vencimento' && paid) return { skip: 'pago', config };
+    if (step === 'cobranca' || step === 'lembrete') {
+      const problems = checkBillingData({ contractValue: contract.contract_value, revenues: monthRows, month });
+      // duas contas (Uruaçu e Minaçu): sem a configuração da cidade do cliente, não cobra na conta da outra
+      const clientCity = normalizeCityValue(contract.client_city || contract.city) || 'minacu';
+      if (config && config.city !== undefined && cityOf(config) !== clientCity) {
+        problems.push(`${clientCity === 'uruacu' ? 'Uruaçu' : 'Minaçu'} está sem conta cadastrada em Financeiro → Config (o Pix sairia na conta da outra cidade)`);
+      }
+      if (!config?.pix_key) problems.push('a cidade do cliente está sem chave Pix em Financeiro → Config');
+      if (problems.length) return { skip: 'conferir', problems, config };
+    }
 
     if (step === 'pre_vencimento') {
       const ref = previousMonth(`${month}-01`);
       const a = await attendance(contract.client_id, ref);
       return {
         config,
+        pdf: {
+          kind: 'agradecimento',
+          title: `Obrigada pela parceria em ${monthName(`${ref}-01`)}!`,
+          cards: [
+            { label: 'Gravações feitas', value: `${a.done} de ${a.scheduled}`, highlight: true },
+            { label: 'Vídeos por gravação', value: a.avg === null ? '—' : a.avg.toLocaleString('pt-BR') },
+            { label: 'Próximo vencimento', value: dataBr(dueDate) },
+          ],
+          sections: [{ title: 'Como melhorar a entrega', text: attendanceTip(a) }],
+        },
         body: applyTemplate(templateOf(config, step), {
           ...base, mes_ref: monthName(`${ref}-01`), gravacoes_feitas: a.done, gravacoes_marcadas: a.scheduled,
           media_videos: a.avg === null ? '' : a.avg.toLocaleString('pt-BR'),
@@ -155,20 +272,56 @@ export function registerBillingIsisRoutes(app, {
     }
 
     const pix = pixPayload({ key: config?.pix_key, name: config?.receiver_name, city: contract.city || contract.client_city, amount, txid: `PULSE${month.replace('-', '')}` });
-    const card = cardAmount(amount, config?.card_fee_percent);
-    const link = await paymentLink({ contract, revenue, amount: card, month }).catch((error) => {
+    // o link é no valor da mensalidade: a taxa do cartão a InfinitePay repassa na hora do pagamento (usuário, 01/11/2026)
+    const link = await paymentLink({ contract, revenue, amount, month }).catch((error) => {
       logger.error('[cobranca-isis] link de pagamento:', error.message);
       return null;
     });
+    const plano = contract.plan_name || 'plano mensal';
+    const conta = accountSummary(await previousRevenues(contract, month));
     return {
       config,
       revenue,
+      pdf: {
+        kind: 'cobranca',
+        title: `Mensalidade de ${monthLabel(month)}`,
+        status: step === 'lembrete' ? 'vencido' : 'aberto',
+        cards: [
+          { label: 'Cliente', value: String(contract.company_name || '').trim(), small: true },
+          { label: 'Vencimento', value: dataBr(dueDate) },
+          { label: 'Valor', value: brl(amount), highlight: true },
+        ],
+        table: {
+          title: 'Serviços',
+          columns: [{ label: 'Descrição', width: 287 }, { label: 'Competência', width: 120 }, { label: 'Valor', width: 100, align: 'right' }],
+          rows: [[`Mensalidade ${plano}`, `${month.slice(5, 7)}/${month.slice(0, 4)}`, brl(amount)]],
+          total: { label: 'Total', value: brl(amount) },
+        },
+        payment: { pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(amount) : null, cardNotice: CARD_NOTICE },
+        sections: [
+          ...(conta.open.length ? [{ title: `Também em aberto (${brl(conta.openTotal)})`, bullets: conta.open }] : []),
+          ...(conta.paid.length ? [{ title: 'Últimos pagamentos', bullets: conta.paid }] : []),
+        ],
+      },
       body: applyTemplate(templateOf(config, step), {
-        ...base, plano: contract.plan_name || 'plano mensal', valor: brl(amount), mes_ref: monthName(`${month}-01`),
+        ...base, plano, valor: brl(amount), mes_ref: monthName(`${month}-01`),
         pix_copia_cola: pix, chave_pix: config?.pix_key, nome_recebedor: config?.receiver_name,
-        valor_cartao: link ? brl(card) : '', link_infinitepay: link,
+        link_infinitepay: link, aviso_cartao: link ? CARD_NOTICE : '',
       }),
     };
+  }
+
+  /** Não bateu com o Financeiro: avisa o contato da cidade (o da equipe) pelo número do PULSE. */
+  async function warnTeam(contract, step, month, problems) {
+    const who = await contactInfo(pool, contract.client_city || contract.city).catch(() => null);
+    if (!who?.telefone) return false;
+    const text = [
+      `⚠️ Ísis: não mandei ${step === 'lembrete' ? 'o lembrete' : 'a cobrança'} de ${String(contract.company_name || '').trim()} (${month.slice(5, 7)}/${month.slice(0, 4)}).`,
+      ...problems.map((p) => `• ${p}`),
+      'Confira em Financeiro → Receitas; a mensagem fica em Financeiro → Cobranças.',
+    ].join('\n');
+    await enqueueWhatsApp(pool, { to: who.telefone, body: text, purpose: 'assistente', triggerType: 'cobranca_conferir', history: false });
+    return true;
   }
 
   async function alreadyHandled(contract, step, month) {
@@ -179,11 +332,11 @@ export function registerBillingIsisRoutes(app, {
     return rows.length > 0;
   }
 
-  async function record(contract, step, month, status, body, revenueId = null) {
+  async function record(contract, step, month, status, body, revenueId = null, pdfUrl = null) {
     await pool.query(
-      `INSERT INTO billing_messages (client_id, revenue_id, message_type, status, body, reference_month, contract_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [contract.client_id, revenueId, step, status, body || null, month, contract.id]
+      `INSERT INTO billing_messages (client_id, revenue_id, message_type, status, body, reference_month, contract_id, pdf_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [contract.client_id, revenueId, step, status, body || null, month, contract.id, pdfUrl]
     );
   }
 
@@ -208,17 +361,35 @@ export function registerBillingIsisRoutes(app, {
           if (await alreadyHandled(contract, step, month)) continue;
           const out = await compose(contract, step, today, month);
           if (out.skip === 'pago') continue;
+          if (out.skip === 'conferir') {
+            await record(contract, step, month, 'conferir', `Não bate com o Financeiro:\n${out.problems.map((p) => `• ${p}`).join('\n')}`);
+            const warned = mode === 'ativo' ? await warnTeam(contract, step, month, out.problems).catch(() => false) : false;
+            results.push({ client: contract.company_name, step, status: 'conferir', problems: out.problems, warned });
+            continue;
+          }
           if (out.skip) {
             // relatório ainda não aprovado: fica marcado (a agenda mostra) e não tenta de novo no mês
             await record(contract, step, month, out.skip === 'aguardando_relatorio' ? 'aguardando_relatorio' : 'pulado', null);
             continue;
           }
-          if (!contract.whatsapp) { await record(contract, step, month, 'sem_whatsapp', out.body); continue; }
+          // o PDF sai antes do envio e fica guardado (a agenda e a prévia mostram o mesmo arquivo)
+          const pdf = out.pdf ? await savePdf(contract, step, month, out.pdf) : null;
+          // nada sai sem o PDF pronto e conferido
+          if (out.pdf && !pdf?.ok) {
+            await record(contract, step, month, 'conferir', 'O PDF não ficou pronto: nada foi enviado.');
+            if (mode === 'ativo') await warnTeam(contract, step, month, ['o PDF não ficou pronto']).catch(() => false);
+            results.push({ client: contract.company_name, step, status: 'conferir', problems: ['PDF'] });
+            continue;
+          }
+          if (!contract.whatsapp) { await record(contract, step, month, 'sem_whatsapp', out.body, out.revenue?.id, pdf?.url); continue; }
           if (mode === 'previa') {
-            await record(contract, step, month, 'previa', out.body, out.revenue?.id);
+            await record(contract, step, month, 'previa', out.body, out.revenue?.id, pdf?.url);
           } else {
-            await enqueueWhatsApp(pool, { to: contract.whatsapp, body: out.body, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id });
-            await record(contract, step, month, 'enviada', out.body, out.revenue?.id);
+            await enqueueWhatsApp(pool, {
+              to: contract.whatsapp, body: out.body, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id,
+              ...(pdf ? { mediaUrl: pdf.url, mediaName: pdf.name } : {}),
+            });
+            await record(contract, step, month, 'enviada', out.body, out.revenue?.id, pdf?.url);
           }
           results.push({ client: contract.company_name, step, status: mode === 'previa' ? 'previa' : 'enviada' });
         } catch (error) {
@@ -240,12 +411,45 @@ export function registerBillingIsisRoutes(app, {
         mode: modeOf(config),
         card_fee_percent: Number(config?.card_fee_percent) || 0,
         has_pix: !!config?.pix_key,
-        infinitepay_handle: config?.infinitepay_handle || '',
+        // as duas contas (Uruaçu e Minaçu): o Pix vem de Financeiro → Config da cidade; a InfiniteTag é editada aqui
+        accounts: await accountsByCity(),
         templates: Object.fromEntries(BILLING_STEPS.map((s) => [s, templateOf(config, s)])),
         defaults: DEFAULT_TEMPLATES,
+        footer: config?.msg_isis_rodape ?? DEFAULT_FOOTER,
+        default_footer: DEFAULT_FOOTER,
+        // contato do rodapé por cidade (Uruaçu → Thiago, Minaçu → Victor; telefone do Assistente PULSE se vazio)
+        contacts: await contactsByCity(),
       });
     } catch (error) { sendError(res, error); }
   });
+
+  async function accountsByCity() {
+    const out = {};
+    for (const city of ['uruacu', 'minacu']) {
+      const cfg = await paymentConfigFor(city);
+      const own = !!cfg && cityOf(cfg) === city;
+      out[city] = {
+        own,
+        pix_key: own ? cfg.pix_key || '' : '',
+        receiver: own ? cfg.receiver_name || '' : '',
+        bank: own ? cfg.bank || '' : '',
+        infinitepay_handle: own ? cfg.infinitepay_handle || '' : '',
+      };
+    }
+    return out;
+  }
+
+  async function contactsByCity() {
+    const { rows } = await pool.query('SELECT * FROM payment_config').catch(() => ({ rows: [] }));
+    const numbers = await assistantNumbers();
+    const out = {};
+    for (const city of ['uruacu', 'minacu']) {
+      const cfg = (await paymentConfigFor(city)) || {};
+      const resolved = contactForCity(city, cfg, numbers);
+      out[city] = { name: cfg.contact_name || '', phone: cfg.contact_phone || '', resolved, has_config: rows.length > 0 };
+    }
+    return out;
+  }
 
   // vale para todas as cidades (a chave Pix e o recebedor continuam por cidade em Configurações)
   app.put('/api/billing-isis/config', async (req, res) => {
@@ -256,12 +460,23 @@ export function registerBillingIsisRoutes(app, {
       const fee = req.body?.card_fee_percent === undefined ? null : Math.min(Math.max(Number(req.body.card_fee_percent) || 0, 0), 30);
       const sets = [];
       const params = [];
+      const contactUpdates = [];
       if (mode) { params.push(mode); sets.push(`isis_mode = $${params.length}`); }
       if (fee !== null) { params.push(fee); sets.push(`card_fee_percent = $${params.length}`); }
-      // InfiniteTag (pública, não é senha): cadastrada pelo Thiago; a coluna nasce em infinitePayRoutes.mjs
-      if (typeof req.body?.infinitepay_handle === 'string') {
-        params.push(req.body.infinitepay_handle.trim().replace(/^\$/, '').replace(/\s+/g, '').slice(0, 60) || null);
-        sets.push(`infinitepay_handle = $${params.length}`);
+      // InfiniteTag de cada cidade (pública, não é senha; cada cidade recebe na sua conta): na linha da cidade
+      for (const city of ['uruacu', 'minacu']) {
+        const tag = req.body?.infinitepay_handles?.[city];
+        if (typeof tag !== 'string') continue;
+        const cfg = await paymentConfigFor(city);
+        if (!cfg?.id || cityOf(cfg) !== city) continue;
+        contactUpdates.push(pool.query(`UPDATE payment_config SET infinitepay_handle = $2 WHERE id = $1`,
+          [cfg.id, tag.trim().replace(/^\$/, '').replace(/\s+/g, '').slice(0, 60) || null]));
+      }
+      // rodapé: igual ao padrão = guarda vazio (null); texto vazio = sem rodapé
+      if (typeof req.body?.footer === 'string') {
+        const f = req.body.footer.trim();
+        params.push(f === DEFAULT_FOOTER ? null : f.slice(0, 500));
+        sets.push(`msg_isis_rodape = $${params.length}`);
       }
       for (const step of BILLING_STEPS) {
         const t = req.body?.templates?.[step];
@@ -270,8 +485,20 @@ export function registerBillingIsisRoutes(app, {
         params.push(t.trim() === DEFAULT_TEMPLATES[step] ? null : t.trim().slice(0, 3000));
         sets.push(`${TEMPLATE_COLUMNS[step]} = $${params.length}`);
       }
-      if (!sets.length) throw httpError(400, 'Nada para salvar');
-      await pool.query(`UPDATE payment_config SET ${sets.join(', ')}`, params);
+      // contato por cidade: grava na linha da cidade (a mesma que paymentConfigFor devolve para ela)
+      for (const city of ['uruacu', 'minacu']) {
+        const c = req.body?.contacts?.[city];
+        if (!c || typeof c !== 'object') continue;
+        const cfg = await paymentConfigFor(city);
+        if (!cfg?.id) continue;
+        contactUpdates.push(pool.query(
+          `UPDATE payment_config SET contact_name = $2, contact_phone = $3 WHERE id = $1`,
+          [cfg.id, String(c.name || '').trim().slice(0, 60) || null, String(c.phone || '').replace(/[^\d+() -]/g, '').trim().slice(0, 25) || null]
+        ));
+      }
+      if (!sets.length && !contactUpdates.length) throw httpError(400, 'Nada para salvar');
+      if (sets.length) await pool.query(`UPDATE payment_config SET ${sets.join(', ')}`, params);
+      await Promise.all(contactUpdates);
       res.json({ success: true });
     } catch (error) { sendError(res, error); }
   });
@@ -283,7 +510,7 @@ export function registerBillingIsisRoutes(app, {
       const month = /^\d{4}-\d{2}$/.test(String(req.query.month || '')) ? req.query.month : todayBr().slice(0, 7);
       const today = todayBr();
       const { rows: sent } = await pool.query(
-        `SELECT id, client_id, message_type, status, body, sent_at FROM billing_messages WHERE reference_month = $1 ORDER BY sent_at`, [month]
+        `SELECT id, client_id, message_type, status, body, pdf_url, sent_at FROM billing_messages WHERE reference_month = $1 ORDER BY sent_at`, [month]
       );
       const items = [];
       for (const contract of await activeContracts()) {
@@ -307,7 +534,7 @@ export function registerBillingIsisRoutes(app, {
             const status = msg ? msg.status
               : paid && step !== 'relatorio_mensal' && step !== 'pre_vencimento' ? 'pago'
                 : date < today ? 'passou' : 'previsto';
-            return { step, date, status, body: msg?.body || null };
+            return { step, date, status, body: msg?.body || null, pdf_url: msg?.pdf_url || null };
           }),
         });
       }
@@ -326,7 +553,14 @@ export function registerBillingIsisRoutes(app, {
       const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? req.query.date : todayBr();
       const month = /^\d{4}-\d{2}$/.test(String(req.query.month || '')) ? req.query.month : date.slice(0, 7);
       const out = await compose(contract, step, date, month);
-      res.json({ step, date, skip: out.skip || null, body: out.body || null });
+      // ?pdf=1: o PDF que sairia, gerado na hora e não guardado
+      if (String(req.query.pdf || '') === '1') {
+        if (!out.pdf) throw httpError(409, out.skip === 'aguardando_relatorio' ? 'Relatório do mês ainda não aprovado' : out.skip === 'pago' ? 'Mensalidade paga: não sai cobrança' : out.skip === 'conferir' ? `Não bate com o Financeiro: ${out.problems.join('; ')}` : 'Sem PDF para esta etapa');
+        const buffer = await renderPdf(out.pdf);
+        res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${step}-${month}.pdf"` });
+        return res.send(buffer);
+      }
+      res.json({ step, date, skip: out.skip || null, problems: out.problems || null, body: out.body || null, contact: out.contact || null });
     } catch (error) { sendError(res, error); }
   });
 

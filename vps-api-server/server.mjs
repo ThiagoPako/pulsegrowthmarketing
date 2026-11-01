@@ -29,6 +29,7 @@ import { registerVictoriaRoutes } from './victoriaRoutes.mjs';
 import { registerSocialReportRoutes } from './socialReportRoutes.mjs';
 import { registerBillingIsisRoutes } from './billingIsisRoutes.mjs';
 import { registerInfinitePayRoutes } from './infinitePayRoutes.mjs';
+import { registerCampaignIsisRoutes } from './campaignIsisRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerAgentDriveRoutes } from './agentDriveRoutes.mjs';
 import { transcribeUrl } from './assistant/transcribe.mjs';
@@ -20406,13 +20407,22 @@ registerAgentTrainingRoutes(app, {
 });
 
 // ─── Victoria, a roteirista do módulo Copy (roteiro pela IA no padrão da agência, aprende com as correções) ──
-registerVictoriaRoutes(app, {
+const victoria = registerVictoriaRoutes(app, {
   pool,
   verifyUser,
   isStrictAdmin: (user) => (user?.role === 'admin' ? true : userHasAssignedRole(user, 'admin')),
   resolveAiConfig,
   resolveAiModel,
   agentApi,
+});
+
+// ─── Campanhas da Ísis: ela cria em rascunho, a equipe aprova a estratégia e a Victoria escreve os roteiros ──
+registerCampaignIsisRoutes(app, {
+  pool,
+  verifyUser,
+  canManage: (user) => userHasAnyRole(user, ['admin', 'social_media', 'gestor_projetos']),
+  agentApi,
+  victoria,
 });
 
 // ─── Relatório mensal da rede social de cada cliente (Ísis, social media; o envio ao cliente é a função de cobranças) ──

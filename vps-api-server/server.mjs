@@ -26,6 +26,7 @@ import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerAgentTrainingRoutes } from './agentTrainingRoutes.mjs';
 import { registerVictoriaRoutes } from './victoriaRoutes.mjs';
+import { registerSocialReportRoutes } from './socialReportRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerAgentDriveRoutes } from './agentDriveRoutes.mjs';
 import { transcribeUrl } from './assistant/transcribe.mjs';
@@ -20396,6 +20397,20 @@ registerVictoriaRoutes(app, {
   resolveAiConfig,
   resolveAiModel,
   agentApi,
+});
+
+// ─── Relatório mensal da rede social de cada cliente (Ísis, social media; o envio ao cliente é a função de cobranças) ──
+registerSocialReportRoutes(app, {
+  pool,
+  verifyUser,
+  canSeeReports: (user) => userHasAnyRole(user, ['admin', 'social_media', 'gestor_projetos']),
+  agentApi,
+  getClientInsights,
+  recordingMinutesFor: async (clientId) => {
+    const settings = await getCompanySettingsForCity(await getClientCityForAgenda(clientId));
+    const raw = Number(settings?.recording_duration) || 2;
+    return raw > 10 ? raw : raw * 60;
+  },
 });
 
 // ─── Portal: equipe manda o vídeo/arte direto no WhatsApp do cliente (grupo ou privado) ──

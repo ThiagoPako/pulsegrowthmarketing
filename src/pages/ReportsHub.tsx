@@ -1,12 +1,13 @@
 import { lazy, Suspense, useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { BarChart3, Palette, XCircle, Share2, ClipboardList } from 'lucide-react';
+import { BarChart3, Palette, XCircle, Share2, ClipboardList, CalendarRange } from 'lucide-react';
 
 const Reports = lazy(() => import('./Reports'));
 const DesignerReports = lazy(() => import('./DesignerReports'));
 const CancellationReports = lazy(() => import('./CancellationReports'));
 const SocialMediaDeliveries = lazy(() => import('./SocialMediaDeliveries'));
 const DeliveryRecords = lazy(() => import('./DeliveryRecords'));
+const SocialMonthlyReport = lazy(() => import('./SocialMonthlyReport'));
 
 const Loader = () => (
   <div className="flex items-center justify-center py-12">
@@ -18,6 +19,7 @@ const TABS = [
   { value: 'geral', label: 'Geral', icon: BarChart3, Comp: Reports },
   { value: 'designer', label: 'Produtividade Designer', icon: Palette, Comp: DesignerReports },
   { value: 'entregas-social', label: 'Entregas Social', icon: Share2, Comp: SocialMediaDeliveries },
+  { value: 'mensal', label: 'Relatório mensal', icon: CalendarRange, Comp: SocialMonthlyReport },
   { value: 'entregas', label: 'Entregas (Gravações)', icon: ClipboardList, Comp: DeliveryRecords },
   { value: 'cancelamentos', label: 'Cancelamentos', icon: XCircle, Comp: CancellationReports },
 ];

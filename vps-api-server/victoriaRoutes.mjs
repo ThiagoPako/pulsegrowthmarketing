@@ -652,4 +652,31 @@ export function registerVictoriaRoutes(app, {
       sendError(res, error);
     }
   });
+
+  // Campanhas da Ísis (campaignIsisRoutes.mjs): um roteiro por pedido único, com o mesmo contexto e as mesmas regras
+  async function writeScript({ clientId, format, videoType, text }) {
+    await ensureSchema();
+    const client = await loadClient(clientId);
+    const { format: f, videoType: v } = readRequest({ content_format: format, video_type: videoType });
+    const ctx = await clientContext(client, f, v, { withResearch: true });
+    const anthropic = await claude();
+    const m = model();
+    const message = await anthropic.beta.messages.create({
+      model: m,
+      ...fallbackParams(m),
+      max_tokens: 4000,
+      output_config: { effort: 'low' },
+      system: [
+        { type: 'text', text: VICTORIA_SYSTEM },
+        { type: 'text', text: ctx.context, cache_control: { type: 'ephemeral' } },
+      ],
+      messages: [{ role: 'user', content: buildVictoriaTurns([{ role: 'pedido', text }]) }],
+    });
+    if (message.stop_reason === 'refusal') throw httpError(422, 'A IA não quis escrever esse roteiro');
+    const reply = parseVictoriaReply(message.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
+    if (!reply?.roteiro) throw httpError(502, 'A Victoria não devolveu o roteiro');
+    return { ...reply, format: f, videoType: v, author: await victoriaProfile() };
+  }
+
+  return { writeScript };
 }

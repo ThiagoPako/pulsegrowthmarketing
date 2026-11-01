@@ -26,6 +26,7 @@ import {
   formatBrDate, recordingDeadline, isSlotDelayed,
 } from '@/lib/campaignsUtils';
 import SlotScriptManager from '@/components/campaigns/SlotScriptManager';
+import IsisCampaignPanel from '@/components/campaigns/IsisCampaignPanel';
 
 
 interface Campaign {
@@ -151,6 +152,8 @@ export default function CampaignDetail() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
+
+      <IsisCampaignPanel campaign={campaign} onChanged={() => load({ silent: true })} />
 
       <Card className="p-4">
         <div className="flex items-center justify-between text-sm mb-2">

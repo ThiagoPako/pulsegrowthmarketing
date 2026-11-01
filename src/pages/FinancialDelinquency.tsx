@@ -28,7 +28,8 @@ export default function FinancialDelinquency() {
         const diasAtraso = dueKey ? Math.max(0, differenceInDays(today, new Date(dueKey + 'T12:00:00'))) : 0;
 
         const lastMsg = billingMessages
-          .filter(m => m.client_id === r.client_id && m.revenue_id === r.id)
+          // só o que saiu de verdade (as cobranças da Ísis em prévia também ficam em billing_messages)
+          .filter(m => m.client_id === r.client_id && m.revenue_id === r.id && (m.status || 'enviada') === 'enviada')
           .sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime())[0];
         return {
           ...r,

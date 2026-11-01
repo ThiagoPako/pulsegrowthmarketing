@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
-import { AGENT_ROLE_LABELS } from '@/lib/agentRoles';
+import { AGENT_KEYS_CHANGED_EVENT, AGENT_ROLE_LABELS } from '@/lib/agentRoles';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -84,6 +84,7 @@ export default function AgentKeysCard() {
       setNewKey({ key: body.key, name: body.name });
       setMemberId('');
       await loadKeys();
+      window.dispatchEvent(new Event(AGENT_KEYS_CHANGED_EVENT));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -100,6 +101,7 @@ export default function AgentKeysCard() {
     }
     toast.success('Chave revogada');
     await loadKeys();
+    window.dispatchEvent(new Event(AGENT_KEYS_CHANGED_EVENT));
   };
 
   const copyKey = async () => {

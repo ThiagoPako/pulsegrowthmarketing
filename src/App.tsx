@@ -59,6 +59,7 @@ const FinancialRevenues = lazy(() => import("@/pages/FinancialRevenues"));
 const FinancialExpenses = lazy(() => import("@/pages/FinancialExpenses"));
 const FinancialInvestments = lazy(() => import("@/pages/FinancialInvestments"));
 const FinancialDelinquency = lazy(() => import("@/pages/FinancialDelinquency"));
+const FinancialBilling = lazy(() => import("@/pages/FinancialBilling"));
 const FinancialReports = lazy(() => import("@/pages/FinancialReports"));
 const FinancialSettings = lazy(() => import("@/pages/FinancialSettings"));
 const FinancialCashReserve = lazy(() => import("@/pages/FinancialCashReserve"));
@@ -364,6 +365,7 @@ function AppRoutes() {
         <Route path="/financeiro/despesas" element={<ProtectedRoute><FinancialExpenses /></ProtectedRoute>} />
         <Route path="/financeiro/investimentos" element={<ProtectedRoute><FinancialInvestments /></ProtectedRoute>} />
         <Route path="/financeiro/inadimplencia" element={<ProtectedRoute><FinancialDelinquency /></ProtectedRoute>} />
+        <Route path="/financeiro/cobrancas" element={<ProtectedRoute><FinancialBilling /></ProtectedRoute>} />
         <Route path="/financeiro/relatorios" element={<ProtectedRoute><FinancialReports /></ProtectedRoute>} />
         <Route path="/financeiro/configuracoes" element={<ProtectedRoute><FinancialSettings /></ProtectedRoute>} />
         <Route path="/financeiro/caixa" element={<ProtectedRoute><FinancialCashReserve /></ProtectedRoute>} />

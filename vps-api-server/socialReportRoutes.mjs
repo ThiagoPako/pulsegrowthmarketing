@@ -248,4 +248,12 @@ export function registerSocialReportRoutes(app, {
       res.json({ success: true, client: String(client.company_name).trim(), month, status: 'rascunho' });
     } catch (error) { sendError(res, error); }
   });
+
+  // Cobranças da Ísis (billingIsisRoutes.mjs): o relatório do mês e se a equipe já aprovou
+  return {
+    async reportFor(clientId, month) {
+      const client = await findClient(clientId);
+      return buildReport(client, monthOf(month));
+    },
+  };
 }

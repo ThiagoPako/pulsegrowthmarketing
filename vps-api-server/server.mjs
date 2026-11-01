@@ -27,6 +27,8 @@ import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerAgentTrainingRoutes } from './agentTrainingRoutes.mjs';
 import { registerVictoriaRoutes } from './victoriaRoutes.mjs';
 import { registerSocialReportRoutes } from './socialReportRoutes.mjs';
+import { registerBillingIsisRoutes } from './billingIsisRoutes.mjs';
+import { registerInfinitePayRoutes } from './infinitePayRoutes.mjs';
 import { registerCampaignIsisRoutes } from './campaignIsisRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerAgentDriveRoutes } from './agentDriveRoutes.mjs';
@@ -10878,6 +10880,8 @@ async function runBillingAutomation() {
 
       const contractCity = normalizeCityValue(contract.city) || normalizeCityValue(clientData.city) || 'minacu';
       const paymentConfig = paymentConfigByCity.get(contractCity) || paymentConfigByCity.get('minacu') || paymentConfigRows[0];
+      // cidade com as cobranças da Ísis em prévia ou ativo: quem cobra é ela (billingIsisRoutes.mjs)
+      if (paymentConfig?.isis_mode && paymentConfig.isis_mode !== 'desligado') continue;
 
       const value = Number(revenue?.amount ?? contract.contract_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       let paymentInfo = '';
@@ -10910,8 +10914,20 @@ async function runBillingAutomation() {
         } catch (err) { results.push({ client: clientData.company_name, status: 'error', error: String(err) }); }
       }
     }
+    // cobranças da Ísis (dia 1, D−5, D, D+3) nas cidades em prévia ou ativo
+    const isis = await billingIsis.run().catch((err) => [{ status: 'erro', error: `Ísis: ${err.message}` }]);
+    results.push(...isis);
     return { results, processed: results.length };
   }
+}
+
+/** Configuração de cobrança (Pix, textos) da cidade; sem a da cidade, a de Minaçu ou a primeira (como a cobrança antiga). */
+async function paymentConfigForCity(city) {
+  const hasCity = await tableHasCityColumn('payment_config');
+  const { rows } = await pool.query('SELECT * FROM payment_config');
+  const key = normalizeCityValue(city) || 'minacu';
+  const byCity = (c) => rows.find((r) => (hasCity ? (normalizeCityValue(r.city) || 'minacu') : 'minacu') === c);
+  return byCity(key) || byCity('minacu') || rows[0] || null;
 }
 
 // ─── 16. WhatsApp Webhook ───────────────────────────────────
@@ -20410,7 +20426,7 @@ registerCampaignIsisRoutes(app, {
 });
 
 // ─── Relatório mensal da rede social de cada cliente (Ísis, social media; o envio ao cliente é a função de cobranças) ──
-registerSocialReportRoutes(app, {
+const socialReports = registerSocialReportRoutes(app, {
   pool,
   verifyUser,
   canSeeReports: (user) => userHasAnyRole(user, ['admin', 'social_media', 'gestor_projetos']),
@@ -20421,6 +20437,24 @@ registerSocialReportRoutes(app, {
     const raw = Number(settings?.recording_duration) || 2;
     return raw > 10 ? raw : raw * 60;
   },
+});
+
+// ─── InfinitePay: link de cada mensalidade e baixa automática (webhook conferido no payment_check) ──
+const infinitePay = registerInfinitePayRoutes(app, {
+  pool,
+  verifyAdmin,
+  paymentConfigFor: paymentConfigForCity,
+  publicApiUrl: process.env.PUBLIC_APP_URL,
+  tableHasCityColumn,
+});
+
+// ─── Cobranças da Ísis pelo Assistente PULSE (Financeiro → Cobranças; desligado = a cobrança antiga segue igual) ──
+const billingIsis = registerBillingIsisRoutes(app, {
+  pool,
+  verifyAdmin,
+  paymentConfigFor: paymentConfigForCity,
+  socialReports,
+  paymentLink: infinitePay.paymentLink,
 });
 
 // ─── Portal: equipe manda o vídeo/arte direto no WhatsApp do cliente (grupo ou privado) ──

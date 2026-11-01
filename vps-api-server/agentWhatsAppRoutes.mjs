@@ -8,7 +8,7 @@
 //   POST /api/agent/whatsapp/send                (chefe) multipart: file (PNG/JPG/WEBP/PDF/MP4, até 60 MB),
 //        to (nome ou id do cliente), text, purpose (geral|aprovacao|assistente), confirm=1
 //        Sem confirm=1 só responde o que seria enviado (cliente, grupo, conexão), sem pôr nada na fila.
-//   POST /api/agent/whatsapp/team                (chefe, social_media) { to (nome de quem está no Assistente PULSE), text, confirm }:
+//   POST /api/agent/whatsapp/team                (chefe, social_media) { to (nome de quem está no Assistente PULSE), text, confirm, file? }:
 //        aviso no privado de alguém da equipe pelo número do PULSE; sem confirm, só a prévia.
 //
 // Caixa da Marcely no WhatsApp (assistant/marcelyInbox.mjs; plano aprovado pelo usuário em 01/11/2026):
@@ -168,13 +168,28 @@ export function registerAgentWhatsAppRoutes(app, { pool, uploadRoot, publicUploa
   // Aviso a alguém da equipe no privado, pelo número do PULSE (pedido do usuário, 31/10/2026: "avisa a Naay pra ela
   // olhar o sistema"). Só para quem está cadastrado no Assistente PULSE (assistant_numbers ativo), pelo nome.
   //   POST /api/agent/whatsapp/team  { to (nome da pessoa), text, confirm }  — sem confirm, só a prévia
+  // aceita também um arquivo (multipart "file": PDF, imagem ou vídeo), ex.: os PDFs de exemplo da cobrança (01/11/2026)
   app.post('/api/agent/whatsapp/team', async (req, res) => {
+    let agent;
     try {
-      const agent = await teamSender(req);
+      agent = await teamSender(req);
+    } catch (error) {
+      return sendError(res, error);
+    }
+    upload(req, res, async (uploadError) => {
+    const remove = () => { if (req.file?.path) fs.rm(req.file.path, { force: true }, () => {}); };
+    try {
+      if (uploadError) {
+        throw Object.assign(new Error(uploadError.code === 'LIMIT_FILE_SIZE' ? 'Arquivo acima de 60 MB' : uploadError.message), { status: uploadError.status || 400 });
+      }
       const to = String(req.body?.to || '').trim();
       const text = String(req.body?.text || '').trim().slice(0, 1500);
       const confirm = ['1', 'true', 'sim'].includes(String(req.body?.confirm || '').toLowerCase());
       if (!to || !text) throw Object.assign(new Error('Diga a pessoa (to) e o texto (text)'), { status: 400 });
+      if (req.file) {
+        const declared = MEDIA_EXT[path.extname(req.file.originalname).toLowerCase()];
+        if (sniff(req.file.path) !== declared) throw Object.assign(new Error(`"${req.file.originalname}" não é um ${declared.toUpperCase()} válido`), { status: 400 });
+      }
       const { rows } = await pool.query(`SELECT * FROM assistant_numbers WHERE active ORDER BY name`);
       const exact = rows.filter((n) => semAcento(n.name) === semAcento(to));
       const list = exact.length ? exact : rows.filter((n) => semAcento(n.name).includes(semAcento(to)));
@@ -183,14 +198,23 @@ export function registerAgentWhatsAppRoutes(app, { pool, uploadRoot, publicUploa
       const number = list[0];
       const signature = agent.role === 'social_media' ? `${agent.name || 'Ísis'} (social media da Pulse)` : 'Marcely (agentes da Pulse)';
       const body = `${text}\n\n— ${signature}`;
-      if (!confirm) return res.json({ dry_run: true, to: number.name, text: body });
-      await sendToNumber(pool, number, body);
-      await remember(pool, number.id, 'assistant', body);
-      await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'aviso_agente', text: text.slice(0, 200), detail: { agente: agent.name || null } });
-      res.json({ success: true, to: number.name, text: body });
+      const file = req.file?.originalname || null;
+      if (!confirm) {
+        remove();
+        return res.json({ dry_run: true, to: number.name, text: body, file });
+      }
+      const mediaUrl = req.file ? `${uploadsBase}/${path.relative(path.resolve(uploadRoot), req.file.path).split(path.sep).join('/')}` : null;
+      const mediaName = req.file ? req.file.originalname.replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80) : null;
+      await sendToNumber(pool, number, body, { mediaUrl, mediaName });
+      await remember(pool, number.id, 'assistant', file ? `${body}
+[arquivo: ${file}]` : body);
+      await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'aviso_agente', text: text.slice(0, 200), detail: { agente: agent.name || null, file } });
+      res.json({ success: true, to: number.name, text: body, file, media_url: mediaUrl });
     } catch (error) {
+      remove();
       sendError(res, error);
     }
+    });
   });
 
   // ── Caixa da Marcely no WhatsApp ──

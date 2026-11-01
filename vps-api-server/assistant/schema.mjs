@@ -7,11 +7,13 @@
 //   assistant_log             comandos, ações, negações e números ignorados (também serve de limite por hora)
 //   assistant_demands         demandas detectadas nos grupos dos clientes
 //   agent_jobs                pedidos para os agentes dos PCs (relatório mensal)
+//   marcely_inbox             caixa da Marcely no WhatsApp (pedidos da equipe e o que importa dos grupos; marcelyInbox.mjs)
 //
 // Nenhuma tabela com client_id tem a coluna "city": o gatilho global de cidade (trg_global_client_city) só
 // entra em tabelas com city + client_id, e aqui a cidade é guardada à parte (coluna "cidade").
 
 import { ensureWhatsAppSchema } from '../whatsapp/shared.mjs';
+import { ensureInboxSchema } from './marcelyInbox.mjs';
 
 let ready = null;
 
@@ -130,6 +132,7 @@ export function ensureAssistantSchema(pool) {
       `);
       await pool.query(`ALTER TABLE agent_jobs ADD COLUMN IF NOT EXISTS sent_to_client_at TIMESTAMPTZ`);
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_jobs_status ON agent_jobs (status, created_at)`);
+      await ensureInboxSchema(pool);
     })().catch((error) => {
       ready = null;
       throw error;

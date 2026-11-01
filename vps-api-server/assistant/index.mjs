@@ -7,6 +7,8 @@
 //   actions.mjs    ações que esperam o "sim" e executam o payload guardado
 //   finance.mjs    contas do financeiro iguais às telas
 //   monitor.mjs    demandas pedidas pelos clientes nos grupos → aviso aos números com "alertas_grupos"
+//   marcelyInbox.mjs caixa da Marcely no WhatsApp: pedidos de quem tem "marcely" + pedido/reclamação/aprovação/recusa
+//                  dos grupos (rotas /api/agent/inbox em agentWhatsAppRoutes.mjs)
 //   temperature.mjs temperatura do cliente (dados + falas no grupo) → aviso aos números com "alertas_satisfacao"
 //                  (temperatureSignals.mjs: sinais de dados; temperatureScore.mjs: pesos e notas; temperatureRoutes.mjs: tela)
 //   jobs.mjs       pedidos para os agentes dos PCs (/api/agent/jobs) e dados do relatório mensal

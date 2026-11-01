@@ -12,6 +12,7 @@ import {
 } from './common.mjs';
 import { financialSummary, delinquents } from './finance.mjs';
 import { materialsByCode } from './materials.mjs';
+import { addInboxItem, MARCELY_RECEIVED } from './marcelyInbox.mjs';
 import {
   CONTENT_TYPES, DESIGN_FORMATS, DESIGN_PRIORITIES, REVENUE_CATEGORIES, SUMMARIES, CONTENT_COLUMNS, DESIGN_COLUMNS,
   RECORDING_TYPES, ALWAYS_CONFIRM, loadClient, isUuid, recordingConflict,
@@ -1002,6 +1003,28 @@ export function createTools({ pool, publicUploadsUrl }) {
       },
     },
 
+    // Caixa da Marcely no WhatsApp (marcelyInbox.mjs): o pedido vai inteiro para ela, que responde por este número
+    passar_para_marcely: {
+      permission: 'marcely',
+      strict: false,
+      description: 'Passa a mensagem para a Marcely, a chefe dos agentes, que responde por este mesmo WhatsApp. Use quando não é um comando simples que as outras ferramentas resolvem na hora: demanda ou ideia para a operação, pergunta sobre como estão os vídeos/agentes/clientes que pede análise ("como está o G4?"), pedido que precisa de agente (editar, refazer, priorizar, organizar a fila), conversa com a Marcely ou resposta a uma mensagem dela (as dela terminam com "— Marcely"). A mensagem original vai junto sozinha; escreva no resumo o que a pessoa quer, com cliente, card e prazo se ela disse. Uma vez por mensagem.',
+      input_schema: loose({
+        tipo: strEnum(['pedido', 'pergunta', 'resposta'], 'pedido (fazer algo), pergunta (quer saber algo) ou resposta (responde a uma mensagem da Marcely).'),
+        resumo: str('O que a pessoa quer, em uma ou duas frases, com os nomes certos (cliente, card, agente, prazo).'),
+      }, ['tipo', 'resumo']),
+      async run(number, input, turn) {
+        need(!turn.marcely, 'Já passei esta mensagem para a Marcely.');
+        const item = await addInboxItem(pool, {
+          origem: 'equipe', kind: ['pedido', 'pergunta', 'resposta'].includes(input.tipo) ? input.tipo : 'pedido',
+          numberId: number.id, fromName: number.user_name || number.name,
+          texto: turn.sourceText || input.resumo, resumo: text(input.resumo, 1200, 'Resumo'), inboundId: turn.inboundId || null,
+        });
+        turn.marcely = item.id;
+        turn.done.push({ kind: 'marcely', summary: 'Passado para a Marcely', ok: true, message: MARCELY_RECEIVED });
+        return { status: 'feito', mensagem: MARCELY_RECEIVED, instrucao: `Responda só: "${MARCELY_RECEIVED}" (e o que você mesmo fez nesta mensagem, se fez algo). Não responda pela Marcely nem diga o que ela vai fazer.` };
+      },
+    },
+
     pausar_retomar_agentes: {
       permission: 'comandar_agentes',
       strict: false,
@@ -1085,8 +1108,11 @@ export function createTools({ pool, publicUploadsUrl }) {
  * com dúvida — ou o que sai para o cliente (ALWAYS_CONFIRM) — fica na lista de propostas, que o motor grava depois
  * que o laço termina bem (sem confirmação órfã se a IA falhar no meio) e manda num resumo só pedindo "sim".
  */
-export function createTurn({ execute = null } = {}) {
+export function createTurn({ execute = null, sourceText = null, inboundId = null } = {}) {
   const turn = {
+    sourceText, // a mensagem como a pessoa mandou (passar_para_marcely guarda ela, não a paráfrase do modelo)
+    inboundId,
+    marcely: null,
     proposals: [],
     done: [],
     poll: null,

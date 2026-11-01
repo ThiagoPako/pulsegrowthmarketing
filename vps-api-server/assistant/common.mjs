@@ -24,6 +24,7 @@ export const PERMISSIONS = {
   cadastro_clientes: 'Ver e atualizar o cadastro dos clientes (e pré-cadastrar cliente novo)',
   comandar_agentes: 'Dar ordens aos agentes de IA (Marcely, Uriel, editores, designers), pausar e retomar',
   marcely: 'Falar com a Marcely pelo WhatsApp (o que não é comando simples vai para a caixa dela; ela responde e avisa por aqui)',
+  decisoes_marcely: 'Receber os avisos de decisão da Marcely (o dono da agência; sem ninguém marcado, ela só avisa quando uma pessoa só fala com ela)',
 };
 
 export const CITIES = { minacu: 'Minaçu', uruacu: 'Uruaçu' };

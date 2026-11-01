@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, DollarSign, CreditCard, AlertTriangle,
-  BarChart3, ArrowLeftRight, Wallet, Users, Settings, MessageCircle, Plug, HeartPulse, Hammer
+  BarChart3, ArrowLeftRight, Wallet, Users, Settings, MessageCircle, Plug, HeartPulse, Hammer, BellRing
 } from 'lucide-react';
 
 const navItems = [
@@ -14,6 +14,7 @@ const navItems = [
   { path: '/financeiro/movimentacoes', label: 'Movimentações', icon: ArrowLeftRight },
   { path: '/financeiro/caixa', label: 'Caixa', icon: Wallet },
   { path: '/financeiro/inadimplencia', label: 'Inadimplência', icon: AlertTriangle },
+  { path: '/financeiro/cobrancas', label: 'Cobranças', icon: BellRing },
   { path: '/financeiro/parceiros', label: 'Parceiros', icon: Users },
   { path: '/financeiro/relatorios', label: 'Relatórios', icon: BarChart3 },
   { path: '/financeiro/saude', label: 'Empresa Saúde', icon: HeartPulse },

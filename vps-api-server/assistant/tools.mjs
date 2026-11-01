@@ -35,6 +35,27 @@ const CLAREZA = strEnum(['clara', 'duvida'],
   'clara = a pessoa disse sem ambiguidade o que fazer, em quem/qual card e com os valores; executa na hora. duvida = você deduziu algo, '
   + 'escolheu entre opções parecidas ou o áudio pode ter sido mal entendido; vai pedir "sim" antes.');
 
+// strict: true vai só nestas (ação com dinheiro, card ou mensagem ao cliente, onde argumento fora do esquema faz
+// estrago) e com folga dos limites da API (20 ferramentas strict, 16 campos com anyOf, e um limite interno do tamanho
+// da gramática, que estourou com 18). As outras vão sem strict.
+export const STRICT_TOOLS = new Set([
+  'lancar_despesa', 'lancar_receita', 'criar_card_video', 'criar_card_design', 'enviar_cliente', 'enviar_relatorio_cliente',
+  'guardar_material', 'pedir_relatorio_mensal',
+]);
+export const STRICT_LIMITS = { tools: 8, unions: 10 };
+
+/** Campos com anyOf ou lista de tipos (o que a API conta como "union") num esquema, inclusive aninhados. */
+export function unionCount(schema) {
+  if (!schema || typeof schema !== 'object') return 0;
+  let n = 0;
+  for (const v of Object.values(schema.properties || {})) {
+    if (v?.anyOf || Array.isArray(v?.type)) n++;
+    n += unionCount(v);
+    for (const alt of v?.anyOf || []) n += unionCount(alt);
+  }
+  return n + (schema.items ? unionCount(schema.items) : 0);
+}
+
 // Ferramentas novas (sem strict): campos opcionais de verdade; o servidor confere tudo em run().
 const loose = (properties, required = []) => ({ type: 'object', additionalProperties: false, required, properties });
 const optDate = (description) => ({ type: 'string', format: 'date', description });
@@ -1072,10 +1093,27 @@ export function createTools({ pool, publicUploadsUrl }) {
     return (Array.isArray(permission) ? permission : [permission]).some((p) => own.includes(p));
   };
 
-  /** Ferramentas que este número pode usar (o modelo só recebe estas). Ordem fixa: o prompt fica em cache. */
-  function definitionsFor(number) {
+  /**
+   * Ferramentas que este número pode usar (o modelo só recebe estas). Ordem fixa: o prompt fica em cache.
+   * strict: true só nas de STRICT_TOOLS e dentro de STRICT_LIMITS: com 18 ferramentas strict a API recusou com 400
+   * "The compiled grammar is too large" (01/11/2026). As consultas vão sem strict; o servidor confere tudo em run().
+   * { strict: false } manda todas sem strict (nova tentativa do claude.mjs quando o esquema é recusado).
+   */
+  function definitionsFor(number, { strict = true } = {}) {
+    let strictCount = 0;
+    let unions = 0;
     return Object.entries(TOOLS).filter(([, t]) => hasPermission(number, t.permission))
-      .map(([name, t]) => ({ name, description: t.description, input_schema: t.input_schema, ...(t.strict === false ? {} : { strict: true }) }));
+      .map(([name, t]) => {
+        const def = { name, description: t.description, input_schema: t.input_schema };
+        const u = unionCount(t.input_schema);
+        if (strict && t.strict !== false && STRICT_TOOLS.has(name)
+          && strictCount < STRICT_LIMITS.tools && unions + u <= STRICT_LIMITS.unions) {
+          strictCount++;
+          unions += u;
+          def.strict = true;
+        }
+        return def;
+      });
   }
 
   /** Roda uma chamada do modelo. Permissão conferida aqui de novo; erro de uso volta como is_error. */

@@ -356,7 +356,7 @@ try {
   assert.equal(q1.body.thinking, undefined, 'pensamento adaptativo (campo omitido)');
   assert.deepEqual(q1.body.tool_choice, { type: 'auto' });
   assert.ok(q1.body.tools.every((t) => t.input_schema.additionalProperties === false), 'esquemas fechados');
-  assert.ok(q1.body.tools.filter((t) => t.strict === true).length <= 20, 'no máximo 20 ferramentas strict por pedido');
+  assert.ok(q1.body.tools.filter((t) => t.strict === true).length <= 8, 'no máximo 8 ferramentas strict por pedido (com 18 a API recusou: "compiled grammar is too large")');
   assert.ok(q1.body.tools.some((t) => t.name === 'lancar_despesa' && t.strict === true), 'as ferramentas antigas seguem strict');
   // cache do prompt: instruções e a última mensagem marcadas
   assert.deepEqual(q1.body.system.at(-1).cache_control, { type: 'ephemeral' }, 'instruções em cache');

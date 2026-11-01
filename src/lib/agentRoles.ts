@@ -11,4 +11,6 @@ export const AGENT_ROLE_LABELS: Record<string, string> = {
   // apoio da edição (desde 31/10/2026): não pegam card; trabalham no projeto do editor e mandam etapa no card
   colorista: 'Colorista (cor)',
   som: 'Som (sound designer)',
+  // Victoria (desde 01/11/2026): escreve roteiros no módulo Copy; não pega card (victoriaRoutes.mjs)
+  roteirista: 'Roteirista (Copy)',
 };

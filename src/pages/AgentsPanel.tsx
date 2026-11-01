@@ -10,6 +10,7 @@ import { uploadFileToVps } from '@/services/vpsApi';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DriveIntakePanel } from '@/components/agents/DriveIntakePanel';
+import { AgentTrainingDialog } from '@/components/agents/AgentTrainingDialog';
 
 interface PauseRow {
   scope: string;
@@ -100,6 +101,8 @@ export default function AgentsPanel() {
   // Falha ao carregar: aviso fixo na página (antes saía um toast novo a cada 15 s)
   const [loadError, setLoadError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
+  // clicar no agente abre a conversa de treino (ensinar como é feito, com anexos)
+  const [training, setTraining] = useState<{ id: string; name: string } | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
@@ -307,7 +310,14 @@ export default function AgentsPanel() {
                     }}
                   />
                 </label>
-                <span className="text-base font-semibold">{label}</span>
+                <button
+                  type="button"
+                  className="text-base font-semibold hover:text-primary hover:underline"
+                  title={`Treinar ${label}`}
+                  onClick={() => setTraining({ id: agent.user_id, name: label })}
+                >
+                  {label}
+                </button>
                 {agent.roles.split(',').map((role) => (
                   <Badge key={role} variant="outline">{AGENT_ROLE_LABELS[role] || role}</Badge>
                 ))}
@@ -320,7 +330,10 @@ export default function AgentsPanel() {
                   <Badge variant="secondary">Livre</Badge>
                 )}
                 <span className="text-xs text-muted-foreground">último contato {ago(agent.last_used_at)}</span>
-                <div className="ml-auto">
+                <div className="ml-auto flex items-center gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => setTraining({ id: agent.user_id, name: label })}>
+                    <GraduationCap size={14} className="mr-1" /> Treinar
+                  </Button>
                   {agent.paused ? (
                     <Button size="sm" variant="outline" onClick={() => setPause(agent.user_id, false, label)} disabled={busy === agent.user_id}>
                       <Play size={14} className="mr-1" /> Retomar
@@ -374,6 +387,13 @@ export default function AgentsPanel() {
           );
         })}
       </div>
+
+      <AgentTrainingDialog
+        agentId={training?.id ?? null}
+        agentName={training?.name || 'Agente'}
+        open={!!training}
+        onOpenChange={(open) => { if (!open) setTraining(null); }}
+      />
 
       <DriveIntakePanel />
 

@@ -51,6 +51,7 @@ const ContentKanban = lazy(() => import("@/pages/ContentKanban"));
 const EditorDashboard = lazy(() => import("@/pages/EditorDashboard"));
 const EditorKanban = lazy(() => import("@/pages/EditorKanban"));
 const AgentsPanel = lazy(() => import("@/pages/AgentsPanel"));
+const AgentTraining = lazy(() => import("@/pages/AgentTraining"));
 const FinancialDashboard = lazy(() => import("@/pages/FinancialDashboard"));
 const FinancialContracts = lazy(() => import("@/pages/FinancialContracts"));
 const ContractsManagement = lazy(() => import("@/pages/ContractsManagement"));
@@ -341,6 +342,8 @@ function AppRoutes() {
         <Route path="/edicao" element={<ProtectedRoute><EditorDashboard /></ProtectedRoute>} />
         <Route path="/edicao/kanban" element={<ProtectedRoute><EditorKanban /></ProtectedRoute>} />
         <Route path="/agentes" element={<ProtectedRoute><RequireModuleAccess module="pulse_plus"><AgentsPanel /></RequireModuleAccess></ProtectedRoute>} />
+        {/* Treinar agentes: quem tem Pulse Plus ou a função "Treina os agentes" (tela Equipe) */}
+        <Route path="/treinar-agentes" element={<ProtectedRoute><RequireModuleAccess module={['pulse_plus', 'treino_agentes']}><AgentTraining /></RequireModuleAccess></ProtectedRoute>} />
         <Route path="/videomakers" element={<ProtectedRoute><VideomakerDashboard /></ProtectedRoute>} />
         <Route path="/designer" element={<ProtectedRoute><DesignerKanban /></ProtectedRoute>} />
         <Route path="/designer/relatorios" element={<ProtectedRoute><DesignerReports /></ProtectedRoute>} />

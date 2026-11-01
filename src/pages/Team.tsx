@@ -27,6 +27,7 @@ import TeamMemberStats from '@/components/TeamMemberStats';
 import { CITY_LABELS, useCity, type CityCode } from '@/contexts/CityContext';
 import { usePulsePlus } from '@/hooks/usePulsePlus';
 import PulsePlusAccessSwitch, { useTeamPulsePlus } from '@/components/team/PulsePlusAccessSwitch';
+import AgentTrainerSwitch, { useAgentTrainers } from '@/components/team/AgentTrainerSwitch';
 
 const ALL_CITIES: CityCode[] = ['minacu', 'uruacu'];
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
@@ -141,6 +142,8 @@ export default function Team() {
   const isAdminRole = currentUser?.role === 'admin' || currentUser?.roles?.includes('admin') === true;
   const canGrantPulsePlus = isAdminRole && pulsePlus;
   const { data: pulsePlusMembers } = useTeamPulsePlus(canGrantPulsePlus);
+  // quem pode treinar os agentes (Treinar agentes / módulo Agentes): o mesmo admin com Pulse Plus marca
+  const { data: agentTrainers } = useAgentTrainers(canGrantPulsePlus);
 
   const fetchMembers = async () => {
     const [{ data }, rolesRes] = await Promise.all([
@@ -790,6 +793,9 @@ export default function Team() {
                 <div className="flex items-center gap-3">
                   {canGrantPulsePlus && pulsePlusMembers && (
                     <PulsePlusAccessSwitch userId={u.id} name={u.displayName || u.name} members={pulsePlusMembers} />
+                  )}
+                  {canGrantPulsePlus && agentTrainers && (
+                    <AgentTrainerSwitch userId={u.id} name={u.displayName || u.name} members={agentTrainers} />
                   )}
                   {canManageTeam && u.id !== currentUser?.id ? (
                     <Select value={u.role} onValueChange={v => handleChangeRole(u, v as UserRole)}>

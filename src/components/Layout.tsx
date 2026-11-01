@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { ROLE_LABELS } from '@/types';
 import { useMyPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
 import { useModuleAccess } from '@/hooks/useModuleAccess';
-import { CalendarClock } from 'lucide-react';
+import { CalendarClock, GraduationCap } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import pulseLogo from '@/assets/pulse_logo.png';
 import { Input } from '@/components/ui/input';
@@ -103,6 +103,8 @@ const navCategories: NavCategory[] = [
       { path: '/edicao', label: 'Edição', icon: Scissors, roles: ['admin', 'editor', 'social_media', 'videomaker', 'gestor_projetos'] },
       { path: '/edicao/kanban', label: 'Kanban Edição', icon: Kanban, roles: ['admin', 'editor', 'social_media', 'videomaker', 'gestor_projetos'] },
       { path: '/agentes', label: 'Agentes', icon: Cpu, roles: ['admin'], module: 'pulse_plus' },
+      // quem tem a função "Treina os agentes" (tela Equipe); quem tem Pulse Plus treina pelo módulo Agentes
+      { path: '/treinar-agentes', label: 'Treinar agentes', icon: GraduationCap, roles: ['admin', 'videomaker', 'social_media', 'editor', 'designer', 'fotografo', 'endomarketing', 'copywriter', 'gestor_projetos'], module: 'treino_agentes' },
       { path: '/videomakers', label: 'Videomakers', icon: Video, roles: ['admin', 'videomaker', 'social_media', 'gestor_projetos'] },
     ],
   },

@@ -53,7 +53,7 @@ const emptyClient = (): Partial<Client> & { clientType?: string } => ({
   weeklyReels: 0, weeklyCreatives: 0, weeklyGoal: 0,
   hasEndomarketing: false, hasVehicleFlyer: false, weeklyStories: 0, presenceDays: 1,
   monthlyRecordings: 4, niche: '', artRequestsLimit: null as number | null,
-  clientLogin: '', clientPassword: '', driveLink: '', driveFotos: '', driveIdentidadeVisual: '',
+  clientLogin: '', clientPassword: '', driveLink: '', driveFotos: '', driveIdentidadeVisual: '', driveReferenciasDesign: '',
   editorial: '',
   fullShiftRecording: false, preferredShift: 'manha',
   companyBirthday: '', owners: [],
@@ -1327,6 +1327,11 @@ export default function Clients() {
         <div className="space-y-1">
           <Label className="flex items-center gap-1"><FolderOpen size={12} /> Drive de Identidade Visual</Label>
           <Input value={form.driveIdentidadeVisual || ''} onChange={e => setForm({ ...form, driveIdentidadeVisual: e.target.value })} placeholder="https://drive.google.com/..." />
+        </div>
+        <div className="space-y-1">
+          <Label className="flex items-center gap-1"><FolderOpen size={12} /> Pasta de referências de design</Label>
+          <Input value={form.driveReferenciasDesign || ''} onChange={e => setForm({ ...form, driveReferenciasDesign: e.target.value })} placeholder="https://drive.google.com/..." />
+          <p className="text-[11px] text-muted-foreground">Referência não é cópia: mostra como a agência acha bonito, e o designer adapta à identidade do cliente.</p>
         </div>
         <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
           <div>

@@ -42,7 +42,7 @@ export interface VictoriaReply {
   referencias: { titulo: string; url: string; por_que: string }[];
   observacoes: string;
   aprendizados: VictoriaLesson[];
-  usados: { roteiros_cliente: number; roteiros_agencia: number; regras: number; pesquisou: boolean; contexto_em_cache?: boolean };
+  usados: { roteiros_cliente: number; roteiros_aprovados?: number; roteiros_agencia: number; regras: number; pesquisou: boolean; contexto_em_cache?: boolean };
   /** tempo no servidor, do pedido ao roteiro completo */
   ms?: number;
 }
@@ -51,7 +51,7 @@ export interface VictoriaPrepared {
   ready: boolean;
   research: 'pronta' | 'preparando';
   research_date: string | null;
-  usados: { roteiros_cliente: number; roteiros_agencia: number; regras: number };
+  usados: { roteiros_cliente: number; roteiros_aprovados?: number; roteiros_agencia: number; regras: number };
   suggestions?: VictoriaSuggestions;
 }
 

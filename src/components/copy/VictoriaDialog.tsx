@@ -75,7 +75,7 @@ function ReplyCard({ reply, onUse, latest }: { reply: VictoriaReply; onUse: () =
       )}
       <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
         <span>
-          Estudou {reply.usados.roteiros_cliente} roteiro(s) do cliente, {reply.usados.roteiros_agencia} da agência
+          Estudou {reply.usados.roteiros_cliente} roteiro(s) do cliente{reply.usados.roteiros_aprovados ? ` (${reply.usados.roteiros_aprovados} aprovado(s)/postado(s))` : ''}, {reply.usados.roteiros_agencia} da agência
           {reply.usados.regras ? ` e ${reply.usados.regras} regra(s)` : ''}{reply.usados.pesquisou ? ' · usou o que está em alta no nicho' : ''}
           {reply.ms ? ` · ${(reply.ms / 1000).toFixed(1).replace('.', ',')} s` : ''}
         </span>
@@ -388,7 +388,7 @@ export default function VictoriaDialog({ open, onOpenChange }: { open: boolean; 
               <div className="flex gap-2">
                 <VictoriaAvatar url={victoriaAvatar} name={victoriaName} />
                 <div className="rounded-2xl rounded-tl-sm bg-muted px-3 py-2 text-sm">
-                  Oiê! Que bom te ver por aqui 😊 Já dei uma olhada no editorial de {client.companyName}, nos roteiros que vocês já gravaram e no que está rolando no nicho agora.
+                  Oiê! Que bom te ver por aqui 😊 Já estudei o que {client.companyName} aprovou e postou, o editorial e o que está rolando no nicho agora.
                   {turns.length === 0 && (suggestions?.items.length
                     ? ' Separei umas ideias para você: é só tocar numa delas, ou me contar a sua (pode falar no microfone)!'
                     : ` Me conta a ideia do ${SCRIPT_CONTENT_FORMAT_LABELS[format].toLowerCase()} (pode falar no microfone) que eu escrevo rapidinho no padrão da agência!`)}

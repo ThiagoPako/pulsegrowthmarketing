@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import {
   buildVictoriaPrompt, buildVictoriaContext, parseVictoriaReply, normalizeLessons, scriptPlainText, searchResultUrls,
   scriptToHtml as serverHtml, partialScript as serverPartial, parseResearch,
-  nicheKind, researchPrompt, suggestionsPrompt, parseSuggestions, VICTORIA_SYSTEM,
+  nicheKind, researchPrompt, suggestionsPrompt, parseSuggestions, VICTORIA_SYSTEM, scriptStatus,
 } from '../../vps-api-server/lib/victoria.mjs';
 import { conversationPayload, scriptToHtml, partialScript } from '@/lib/victoria';
 
@@ -149,6 +149,43 @@ function wrapper({ children }: { children: ReactNode }) {
 const reply = (extra = {}) => ({
   titulo: 'Sexta do óleo', roteiro: '"Sexta tem troca de óleo"\n[take da bomba]', legenda: 'Vem pro posto!', referencias: [],
   observacoes: '', aprendizados: [], usados: { roteiros_cliente: 3, roteiros_agencia: 2, regras: 1, pesquisou: true }, ...extra,
+});
+
+describe('Victoria: aprende com o que o cliente aprova', () => {
+  it('marca cada roteiro pelo que aconteceu com ele (postado > aprovado > gravado)', () => {
+    expect(scriptStatus({ status_rank: 3 })).toBe('POSTADO');
+    expect(scriptStatus({ status_rank: 2, recorded: true })).toBe('APROVADO pelo cliente');
+    expect(scriptStatus({ status_rank: 0, recorded: true })).toBe('gravado');
+    expect(scriptStatus({})).toBe('ainda não gravado');
+  });
+
+  it('o contexto pesa o aprovado e postado acima do editorial e lista o que evitar', () => {
+    const ctx = buildVictoriaContext({
+      client: { company_name: 'Dr. Sávio', niche: 'juridico', editorial: 'Direito do consumidor' },
+      format: 'reels', videoType: 'educacional',
+      ownScripts: [
+        { title: 'Golpe do Pix', content: '<p>"Caiu no golpe?"</p>', status_rank: 3, recorded: true },
+        { title: 'Plano de saúde negou', content: '<p>"Negaram seu exame?"</p>', status_rank: 2, recorded: true },
+      ],
+      avoid: [{ title: 'Pensão alimentícia', notes: 'cliente pediu para não falar de família' }, { title: 'Divórcio', notes: null }],
+    });
+    expect(ctx).toContain('2 aprovado(s)/postado(s)');
+    expect(ctx).toContain('pesam mais que o editorial escrito');
+    expect(ctx).toContain('Roteiro 1 · POSTADO');
+    expect(ctx).toContain('Roteiro 2 · APROVADO pelo cliente');
+    expect(ctx).toContain('O que evitar neste cliente');
+    expect(ctx).toContain('- "Pensão alimentícia": cliente pediu para não falar de família');
+    expect(ctx).toContain('- "Divórcio" (não foi gravado)');
+    expect(VICTORIA_SYSTEM).toMatch(/APROVOU e POSTOU pesa mais que o editorial/);
+  });
+
+  it('a pesquisa e as sugestões partem do que ele aprovou', () => {
+    const r = researchPrompt({ client: { company_name: 'Sorvemix', niche: 'alimentacao' }, format: 'reels', liked: ['Açaí de 1 litro', 'Bastidor da produção'], today: new Date('2026-11-01T12:00:00-03:00') });
+    expect(r).toContain('Roteiros que ele aprovou e postou');
+    expect(r).toContain('- Açaí de 1 litro');
+    expect(r).toMatch(/parecido com o que ele já aprovou/);
+    expect(suggestionsPrompt({ format: 'reels', kind: 'geral' })).toMatch(/partindo do que ele APROVOU e POSTOU/);
+  });
 });
 
 describe('Victoria: jeito alegre, temas do momento e sugestões', () => {

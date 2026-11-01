@@ -192,7 +192,7 @@ export function registerVictoriaRoutes(app, {
       const started = Date.now();
       const anthropic = await claude();
       const m = model();
-      const messages = [{ role: 'user', content: researchPrompt({ client, format }) }];
+      const messages = [{ role: 'user', content: researchPrompt({ client, format, liked: await approvedTitles(client.id) }) }];
       const tools = [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4, user_location: { type: 'approximate', country: 'BR', region: 'Goiás', timezone: 'America/Sao_Paulo', ...(client.city ? { city: client.city } : {}) } }];
       const content = [];
       for (let round = 0; round < 3; round++) {
@@ -222,6 +222,43 @@ export function registerVictoriaRoutes(app, {
     return job;
   }
 
+  // ── O que o cliente aprova (pedido do usuário, 01/11/2026: "não apenas o editorial, mas entendendo os roteiros que
+  // já foram aprovados, do que o cliente gosta e aprova") ──
+  // Situação de cada roteiro pelo card ligado a ele: 3 = postado (Acompanhamento/Arquivado), 2 = aprovado pelo
+  // cliente (approved_at ou Agendamentos), 0 = o resto (gravado ou não, visto em scripts.recorded).
+  const STATUS_RANK_SQL = `
+    (SELECT max(CASE WHEN ct.kanban_column IN ('acompanhamento', 'arquivado') THEN 3
+                     WHEN ct.approved_at IS NOT NULL OR ct.kanban_column = 'agendamentos' THEN 2
+                     ELSE 0 END)
+       FROM content_tasks ct WHERE ct.script_id = s.id)`;
+
+  async function approvedTitles(clientId) {
+    const { rows } = await pool.query(
+      `SELECT s.title FROM scripts s
+        WHERE s.client_id = $1 AND coalesce(${STATUS_RANK_SQL}, 0) >= 2
+        ORDER BY s.updated_at DESC NULLS LAST LIMIT 8`,
+      [clientId]
+    ).catch(() => ({ rows: [] }));
+    return rows.map((r) => r.title).filter(Boolean);
+  }
+
+  /** Roteiros alterados na gravação (com a nota do que mudou) e os que nunca foram gravados (45 dias ou mais). */
+  async function avoidList(clientId) {
+    const { rows } = await pool.query(
+      `SELECT s.title, max(ct.script_alteration_notes) FILTER (WHERE ct.script_alteration_type IN ('altered', 'verbal')) AS notes,
+              bool_or(ct.script_alteration_type IN ('altered', 'verbal')) AS altered, bool_or(s.recorded) AS recorded,
+              max(s.created_at) AS created_at
+         FROM scripts s LEFT JOIN content_tasks ct ON ct.script_id = s.id
+        WHERE s.client_id = $1
+        GROUP BY s.id, s.title
+       HAVING bool_or(ct.script_alteration_type IN ('altered', 'verbal')) OR (NOT bool_or(s.recorded) AND max(s.created_at) < now() - interval '45 days')
+        ORDER BY max(s.created_at) DESC
+        LIMIT 6`,
+      [clientId]
+    ).catch(() => ({ rows: [] }));
+    return rows.map((r) => ({ title: r.title, notes: r.altered ? (r.notes || 'roteiro alterado na gravação') : null }));
+  }
+
   // ── Contexto do cliente em memória (refeito só quando muda) ──
   const contexts = new Map(); // `${client}|${format}|${type}` → { fingerprint, context, usados, lessons }
 
@@ -229,10 +266,11 @@ export function registerVictoriaRoutes(app, {
     const { rows: [f] } = await pool.query(
       `SELECT (SELECT md5(coalesce(company_name, '') || coalesce(niche, '') || coalesce(city, '') || coalesce(editorial, '')) FROM clients WHERE id = $1) AS c,
               (SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') FROM scripts WHERE client_id = $1) AS s,
-              (SELECT count(*) || ':' || coalesce(max(created_at)::text, '') FROM victoria_lessons WHERE active AND (client_id = $1 OR client_id IS NULL)) AS l`,
+              (SELECT count(*) || ':' || coalesce(max(created_at)::text, '') FROM victoria_lessons WHERE active AND (client_id = $1 OR client_id IS NULL)) AS l,
+              (SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') FROM content_tasks WHERE client_id = $1 AND script_id IS NOT NULL) AS t`,
       [clientId]
     );
-    return `${f.c}|${f.s}|${f.l}`;
+    return `${f.c}|${f.s}|${f.l}|${f.t}`;
   }
 
   async function clientContext(client, format, videoType, { withResearch }) {
@@ -245,12 +283,14 @@ export function registerVictoriaRoutes(app, {
     const researchStamp = research?.at ? String(research.at) : '';
     if (cached && cached.fingerprint === fp && cached.researchStamp === researchStamp) return { ...cached, research, fromCache: true };
 
-    const [{ rows: ownScripts }, { rows: agencyScripts }, lessons] = await Promise.all([
+    const [{ rows: ownScripts }, { rows: agencyScripts }, lessons, avoid] = await Promise.all([
+      // o que o cliente aprovou e postou primeiro (pesa mais que o editorial escrito)
       pool.query(
-        `SELECT title, content, content_format, video_type, recorded FROM scripts
-          WHERE client_id = $1 AND length(coalesce(content, '')) > 50
-          ORDER BY recorded DESC, (content_format = $2) DESC, updated_at DESC NULLS LAST
-          LIMIT 5`,
+        `SELECT s.title, s.content, s.content_format, s.video_type, s.recorded, coalesce(${STATUS_RANK_SQL}, 0) AS status_rank
+           FROM scripts s
+          WHERE s.client_id = $1 AND length(coalesce(s.content, '')) > 50
+          ORDER BY status_rank DESC, s.recorded DESC, (s.content_format = $2) DESC, s.updated_at DESC NULLS LAST
+          LIMIT 6`,
         [client.id, format]
       ),
       pool.query(
@@ -263,12 +303,18 @@ export function registerVictoriaRoutes(app, {
         [client.id, format]
       ),
       loadLessons(client.id),
+      avoidList(client.id),
     ]);
     const entry = {
       fingerprint: fp,
       researchStamp,
-      context: buildVictoriaContext({ client, format, videoType, ownScripts, agencyScripts, lessons, research }),
-      usados: { roteiros_cliente: ownScripts.length, roteiros_agencia: agencyScripts.length, regras: lessons.length },
+      context: buildVictoriaContext({ client, format, videoType, ownScripts, agencyScripts, lessons, research, avoid }),
+      usados: {
+        roteiros_cliente: ownScripts.length,
+        roteiros_aprovados: ownScripts.filter((s) => Number(s.status_rank) >= 2).length,
+        roteiros_agencia: agencyScripts.length,
+        regras: lessons.length,
+      },
     };
     contexts.delete(key);
     contexts.set(key, entry);
@@ -288,6 +334,7 @@ export function registerVictoriaRoutes(app, {
   // entram na próxima rodada. A rodada de aquecimento (warm) deixa as de reels prontas para os clientes ativos.
   const suggestionKey = (client, format) => `${client.id}|${format}`;
   const suggesting = new Map();
+  const suggestionsFailedAt = new Map(); // falhou: não tenta de novo por 10 min (a tela pergunta a cada 3 s)
 
   async function storedSuggestions(client, format) {
     const research = await storedResearch(client, format);
@@ -329,6 +376,7 @@ export function registerVictoriaRoutes(app, {
       });
       const items = parseSuggestions(message.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
       if (!items.length) throw new Error('nenhuma sugestão');
+      suggestionsFailedAt.delete(key);
       await pool.query(
         `INSERT INTO victoria_suggestions (key, client_id, content_format, items, research_at, created_at)
          VALUES ($1, $2, $3, $4::jsonb, $5, now())
@@ -338,6 +386,7 @@ export function registerVictoriaRoutes(app, {
       logger.log?.(`[victoria] ${items.length} sugestões de ${String(client.company_name || '').trim()} (${format}) em ${Math.round((Date.now() - started) / 1000)} s`);
       return items;
     })().catch((error) => {
+      suggestionsFailedAt.set(key, Date.now());
       logger.warn?.('[victoria] sugestões:', error?.message || error);
       return null;
     }).finally(() => suggesting.delete(key));
@@ -348,6 +397,8 @@ export function registerVictoriaRoutes(app, {
   async function suggestionsState(client, format) {
     const { items } = await storedSuggestions(client, format);
     if (items) return { status: 'pronta', items };
+    const failedAt = suggestionsFailedAt.get(suggestionKey(client, format));
+    if (failedAt && Date.now() - failedAt < 10 * 60_000) return { status: 'pronta', items: [] };
     startSuggestions(client, format);
     return { status: 'preparando', items: [] };
   }

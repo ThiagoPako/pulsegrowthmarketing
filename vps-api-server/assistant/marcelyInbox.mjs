@@ -59,6 +59,25 @@ export async function ensureInboxSchema(pool) {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_marcely_inbox_status ON marcely_inbox (status, created_at)`);
 }
 
+/** "5562985382981" → "(62) 98538-2981" (sem o 55; fixo de 10 dígitos → "(62) 3333-4444"). */
+export function formatPhoneBR(phone) {
+  let d = String(phone || '').replace(/\D/g, '');
+  if (d.startsWith('55') && d.length > 11) d = d.slice(2);
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return d;
+}
+
+/** Resposta automática ao cliente que escreve no privado do PULSE (contato = responsável da cidade do cliente). */
+export function clientAutoReplyText({ name, contact }) {
+  // "Seu Alves" → "Alves", "Dra. Ana" → "Ana": o tratamento sozinho não vira nome
+  const first = String(name || '').replace(/[^\p{L}\p{M}' -]/gu, ' ').trim().split(/\s+/)
+    .find((w) => !/^(seu|sr|sra|senhor|senhora|dona|dr|dra|doutor|doutora)$/i.test(w));
+  const hello = first && first.length >= 2 && first.length <= 20 ? `Oi, ${first}!` : 'Oi!';
+  return `${hello} Este número é de mensagens automáticas (um agente autônomo da Pulse) e não responde por aqui. `
+    + `Para falar com a gente: ${contact.nome} — ${formatPhoneBR(contact.telefone)}.`;
+}
+
 /** "Marcely, …", "@Marcely …", "Marceli: …" no começo: vai direto para ela, sem passar pelo modelo. */
 export function callsMarcely(text) {
   const n = norm(text).replace(/^[@*_~\s]+/, '');

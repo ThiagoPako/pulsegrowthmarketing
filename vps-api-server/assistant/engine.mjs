@@ -19,14 +19,15 @@
 
 import {
   PERMISSIONS, CONFIRM_MINUTES, cityLabel, norm, brazilNowLabel, findNumberByPhone, getNumber, getSettings, logEvent,
-  remember, sendToNumber, clip, confirmPoll, clientCity, canonicalPhone,
+  remember, sendToNumber, clip, confirmPoll, clientCity, canonicalPhone, phoneVariants,
 } from './common.mjs';
 import { MATERIAL_TYPES, addMaterial, takeReadyBatches, batchPrompt, FLUSH_SECONDS } from './materials.mjs';
 import { proposeAction, confirmQuestion, confirmManyQuestion, executeAction, cancelAction } from './actions.mjs';
 import { createTurn } from './tools.mjs';
 import { transcribe, removeAudio } from './transcribe.mjs';
 import { ensureAssistantSchema } from './schema.mjs';
-import { addInboxItem, callsMarcely, clientByPhone, MARCELY_RECEIVED } from './marcelyInbox.mjs';
+import { addInboxItem, callsMarcely, clientAutoReplyText, clientByPhone, MARCELY_RECEIVED } from './marcelyInbox.mjs';
+import { contactForCity } from '../lib/contactByCity.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { waPrivateDir } from '../whatsapp/shared.mjs';
@@ -287,8 +288,28 @@ export function createEngine({ pool, claude, tools, intervalMs = 1500, rateLimit
   }
 
   /**
-   * Cliente no privado do PULSE: vai para a caixa da Marcely como informação (origem "cliente"), sem resposta e sem
-   * passar pelo modelo. Áudio vira texto quando dá; o arquivo é apagado como nos outros casos.
+   * Resposta automática ao cliente no privado (usuário, 01/11/2026: "avisar que esse número é para mensagens
+   * automáticas, um agente autônomo, e envie o número do Thiago se for de Uruaçu e se for de Minaçu o do Victor").
+   * Uma vez por telefone a cada 24 h; o contato vem da configuração por cidade (lib/contactByCity.mjs).
+   */
+  async function clientAutoReply(client, row) {
+    const { rows: [recent] } = await pool.query(
+      `SELECT 1 FROM assistant_log WHERE kind = 'resposta_auto_cliente' AND phone = ANY($1) AND created_at > now() - interval '24 hours' LIMIT 1`,
+      [phoneVariants(row.phone)]
+    );
+    if (recent) return null;
+    // null = cliente administrativo (vale nas duas cidades): o contato padrão, com aviso na caixa
+    const contact = await contactForCity(clientCity(client));
+    if (!contact?.telefone) return null; // sem contato configurado: não manda nada pela metade
+    const body = clientAutoReplyText({ name: row.push_name, contact });
+    await sendToNumber(pool, { phone: canonicalPhone(row.phone) }, body, { connectionId: row.connection_id });
+    await logEvent(pool, { phone: row.phone, kind: 'resposta_auto_cliente', text: body, detail: { client: client.company_name, contato: contact.nome, fallback: !!contact.fallback } });
+    return contact;
+  }
+
+  /**
+   * Cliente no privado do PULSE: vai para a caixa da Marcely como informação (origem "cliente"), sem passar pelo
+   * modelo; o cliente só recebe a resposta automática com o contato da cidade. Áudio vira texto quando dá.
    */
   async function clientToMarcely(client, row) {
     let text = String(row.text || '').trim();
@@ -299,11 +320,18 @@ export function createEngine({ pool, claude, tools, intervalMs = 1500, rateLimit
       text = `[${row.media_type}]`;
     }
     await removeAudio(row.media_path);
+    const contact = await clientAutoReply(client, row).catch((error) => {
+      console.error('[assistente] resposta automática ao cliente:', error.message);
+      return null;
+    });
+    const notes = [
+      client.outros.length ? `Também está ligado a: ${client.outros.join(', ')}` : null,
+      contact ? `Resposta automática enviada com o contato de ${contact.nome}${contact.fallback ? ` (a cidade ${cityLabel(clientCity(client))} não tem responsável configurado: usei o padrão)` : ''}.` : null,
+    ].filter(Boolean);
     const item = await addInboxItem(pool, {
       origem: 'cliente', kind: 'privado', fromName: row.push_name || null, clientId: client.id, cliente: client.company_name,
       cidade: clientCity(client), link: `https://wa.me/${canonicalPhone(row.phone)}`, texto: text || '(sem texto)',
-      resumo: client.outros.length ? `Também está ligado a: ${client.outros.join(', ')}` : null,
-      inboundId: row.id, sourceKey: `privado:${row.id}`,
+      resumo: notes.join(' ') || null, inboundId: row.id, sourceKey: `privado:${row.id}`,
     });
     await logEvent(pool, { phone: row.phone, kind: 'cliente_privado', text, detail: { client: client.company_name, via: client.via, inbox_id: item?.id || null } });
     return { cliente_privado: client.id };

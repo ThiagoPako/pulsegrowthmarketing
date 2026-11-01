@@ -25,6 +25,7 @@ import UserAvatar from '@/components/UserAvatar';
 import type { Script, ScriptVideoType, ScriptContentFormat } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_CONTENT_FORMAT_LABELS } from '@/types';
 import SentScriptsDialog from '@/components/copy/SentScriptsDialog';
+import VictoriaDialog from '@/components/copy/VictoriaDialog';
 import { sanitizeScriptHtml } from '@/lib/highlightQuotes';
 
 interface PendingTask {
@@ -247,6 +248,8 @@ export default function Copy() {
     weekDate: new Date().toISOString().slice(0, 10), // YYYY-MM-DD (data de referência da semana)
   });
   const [singleGenBusy, setSingleGenBusy] = useState(false);
+  // Victoria, a roteirista: cliente → tipo → conversa (texto ou voz) → roteiro salvo no cliente
+  const [victoriaOpen, setVictoriaOpen] = useState(false);
 
   const [form, setForm] = useState({
     title: '',
@@ -1196,6 +1199,9 @@ export default function Copy() {
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <Button onClick={() => setVictoriaOpen(true)} className="bg-red-600 hover:bg-red-700 text-white gap-1.5 h-9 px-4 font-black uppercase italic tracking-widest text-[10px]">
+              <Sparkles size={12} /> Criar roteiro com a Victoria
+            </Button>
             <Button onClick={() => setSingleGenOpen(true)} className="bg-white/10 hover:bg-white/20 text-white gap-1.5 h-9 px-4 font-black uppercase italic tracking-widest text-[10px] border border-white/10">
               <Target size={12} /> Gerar por cliente
             </Button>
@@ -2131,6 +2137,8 @@ export default function Copy() {
 
 
       {/* ── DIALOG: Roteiros enviados pela Copy ── */}
+      <VictoriaDialog open={victoriaOpen} onOpenChange={setVictoriaOpen} />
+
       <SentScriptsDialog
         open={sentDialogOpen}
         onOpenChange={setSentDialogOpen}

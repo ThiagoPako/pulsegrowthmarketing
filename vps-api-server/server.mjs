@@ -24,6 +24,8 @@ import cors from 'cors';
 import compression from 'compression';
 import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
+import { registerAgentTrainingRoutes } from './agentTrainingRoutes.mjs';
+import { registerVictoriaRoutes } from './victoriaRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerAgentDriveRoutes } from './agentDriveRoutes.mjs';
 import { transcribeUrl } from './assistant/transcribe.mjs';
@@ -20367,6 +20369,27 @@ const agentApi = registerAgentRoutes(app, {
   verifyUser,
   isStrictAdmin: (user) => (user?.role === 'admin' ? true : userHasAssignedRole(user, 'admin')),
   publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
+});
+
+// ─── Treino dos agentes (quem tem Pulse Plus ou a função 'treino_agentes' ensina; o agente lê com `pulse treino`) ──
+registerAgentTrainingRoutes(app, {
+  pool,
+  verifyUser,
+  isStrictAdmin: (user) => (user?.role === 'admin' ? true : userHasAssignedRole(user, 'admin')),
+  hasPulsePlus: pulsePlus.hasPulsePlus,
+  getLinkedUserIds,
+  agentApi,
+  publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
+});
+
+// ─── Victoria, a roteirista do módulo Copy (roteiro pela IA no padrão da agência, aprende com as correções) ──
+registerVictoriaRoutes(app, {
+  pool,
+  verifyUser,
+  isStrictAdmin: (user) => (user?.role === 'admin' ? true : userHasAssignedRole(user, 'admin')),
+  resolveAiConfig,
+  resolveAiModel,
+  agentApi,
 });
 
 // ─── Portal: equipe manda o vídeo/arte direto no WhatsApp do cliente (grupo ou privado) ──

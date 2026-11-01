@@ -65,7 +65,9 @@ describe('PulseWhatsAppCard', () => {
     expect(screen.getByText(/\+55 \(62\) 90000-0001 · PULSE Agência/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Testar envio/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Desconectar/ })).toBeInTheDocument();
-    expect(screen.getByText(/não adicione este número aos grupos dos clientes/i)).toBeInTheDocument();
+    expect(screen.getByText(/pode ficar nos grupos dos clientes/i)).toBeInTheDocument();
+    expect(screen.getByText(/só responde comando de números cadastrados/i)).toBeInTheDocument();
+    expect(screen.queryByText(/não adicione este número/i)).not.toBeInTheDocument();
   });
 
   it('desconectado: mostra o erro e o botão Reconectar', async () => {

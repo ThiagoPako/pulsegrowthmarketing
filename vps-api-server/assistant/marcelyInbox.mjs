@@ -8,11 +8,15 @@
 //     responde na hora "Recebi, a Marcely já vai ver" e a resposta dela sai pelo número do PULSE (sendToNumber);
 //   origem "grupo": o monitor de grupos (monitor.mjs) marca só pedido, reclamação, aprovação ou recusa de cliente, com
 //     cliente, grupo, trecho e link do grupo. Texto de grupo é informação, nunca ordem: a Marcely não responde ao
-//     cliente por aqui (mensagem a cliente só com o ok do Thiago, pelo `pulse whatsapp enviar`).
+//     cliente por aqui (mensagem a cliente só com o ok do Thiago, pelo `pulse whatsapp enviar`);
+//   origem "cliente": cliente conhecido (telefone do cadastro ou de quem fala no grupo dele) que escreveu no privado do
+//     PULSE (engine.mjs). O PULSE não responde nem executa nada: só quem está em assistant_numbers dá comando.
 // A tabela não tem a coluna "city" (gatilho global de cidade, ver schema.mjs): a cidade vai em "cidade".
 
 import crypto from 'node:crypto';
-import { cityLabel, clip, norm } from './common.mjs';
+import { clientsForGroup } from '../whatsapp/shared.mjs';
+import { formatPhoneBr } from '../lib/contactByCity.mjs';
+import { cityLabel, clip, norm, phoneVariants } from './common.mjs';
 
 export const MARCELY_RECEIVED = '📨 Recebi, a Marcely já vai ver.';
 
@@ -24,6 +28,7 @@ export const INBOX_KINDS = {
   aprovacao: 'Aprovação do cliente',
   recusa: 'Recusa do cliente',
   reclamacao: 'Reclamação do cliente',
+  privado: 'Cliente no privado do PULSE',
 };
 
 export async function ensureInboxSchema(pool) {
@@ -55,6 +60,16 @@ export async function ensureInboxSchema(pool) {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_marcely_inbox_status ON marcely_inbox (status, created_at)`);
 }
 
+/** Resposta automática ao cliente que escreve no privado do PULSE (contato = responsável da cidade do cliente). */
+export function clientAutoReplyText({ name, contact }) {
+  // "Seu Alves" → "Alves", "Dra. Ana" → "Ana": o tratamento sozinho não vira nome
+  const first = String(name || '').replace(/[^\p{L}\p{M}' -]/gu, ' ').trim().split(/\s+/)
+    .find((w) => !/^(seu|sr|sra|senhor|senhora|dona|dr|dra|doutor|doutora)$/i.test(w));
+  const hello = first && first.length >= 2 && first.length <= 20 ? `Oi, ${first}!` : 'Oi!';
+  return `${hello} Este número é de mensagens automáticas (um agente autônomo da Pulse) e não responde por aqui. `
+    + `Para falar com a gente: ${contact.nome} — ${formatPhoneBr(contact.telefone)}.`;
+}
+
 /** "Marcely, …", "@Marcely …", "Marceli: …" no começo: vai direto para ela, sem passar pelo modelo. */
 export function callsMarcely(text) {
   const n = norm(text).replace(/^[@*_~\s]+/, '');
@@ -67,12 +82,42 @@ export async function addInboxItem(pool, item) {
   const { rows: [row] } = await pool.query(
     `INSERT INTO marcely_inbox (origem, kind, number_id, from_name, client_id, cliente, cidade, group_jid, grupo, link, texto, resumo, inbound_id, source_key)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) ON CONFLICT (source_key) DO NOTHING RETURNING *`,
-    [item.origem === 'grupo' ? 'grupo' : 'equipe', kind, item.numberId || null, clip(item.fromName, 80) || null,
+    [['grupo', 'cliente'].includes(item.origem) ? item.origem : 'equipe', kind, item.numberId || null, clip(item.fromName, 80) || null,
       item.clientId || null, clip(item.cliente, 120) || null, item.cidade || null, item.groupJid || null,
       clip(item.grupo, 120) || null, clip(item.link, 300) || null, clip(item.texto, 4000) || '(sem texto)',
       clip(item.resumo, 1200) || null, item.inboundId || null, item.sourceKey || crypto.randomUUID()]
   );
   return row || null;
+}
+
+/**
+ * Cliente dono deste telefone: o WhatsApp do cadastro do cliente ou alguém que já falou no grupo dele (o PULSE fica
+ * nos grupos dos clientes desde 01/11/2026). Só clientes ativos; mais de um (pessoa em dois grupos) → o primeiro
+ * por nome, com os outros em "outros". Telefone da equipe nunca passa por aqui (só quem não está em assistant_numbers).
+ */
+export async function clientByPhone(pool, phone) {
+  const variants = phoneVariants(phone);
+  if (!variants.length) return null;
+  const { rows: own } = await pool.query(
+    `SELECT id FROM clients WHERE status IS DISTINCT FROM 'cancelado'
+        AND regexp_replace(coalesce(whatsapp, ''), '[^0-9]', '', 'g') = ANY($1) ORDER BY company_name`, [variants]
+  );
+  // grupos em que este telefone já falou (o vínculo grupo → cliente é o mesmo do monitor: clientsForGroup)
+  const { rows: groups } = await pool.query(
+    `SELECT DISTINCT group_jid FROM wa_inbound WHERE group_jid IS NOT NULL AND phone = ANY($1) AND received_at > now() - interval '180 days'`,
+    [variants]
+  );
+  const ids = own.map((r) => r.id);
+  for (const { group_jid: jid } of groups) {
+    for (const c of await clientsForGroup(pool, jid)) if (!ids.includes(c.id)) ids.push(c.id);
+  }
+  if (!ids.length) return null;
+  const { rows } = await pool.query(
+    `SELECT id, company_name, city, is_admin_client, whatsapp_group FROM clients WHERE id = ANY($1) AND status IS DISTINCT FROM 'cancelado'`, [ids]
+  );
+  const sorted = ids.map((id) => rows.find((r) => r.id === id)).filter(Boolean); // primeiro o do cadastro
+  if (!sorted.length) return null;
+  return { ...sorted[0], via: own.some((r) => r.id === sorted[0].id) ? 'cadastro' : 'grupo', outros: sorted.slice(1).map((c) => c.company_name) };
 }
 
 /** Nome do grupo (assunto guardado pelo pulse-wa) e link de convite do cliente, quando houver. */

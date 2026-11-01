@@ -16,8 +16,8 @@
 //        lida sem resposta; marcar=1 marca as novas como lidas (sem ele só olha, como faz o `pulse esperar`)
 //   POST /api/agent/inbox/:id/reply   { text }   (chefe) resposta a quem mandou (origem equipe), pelo número do PULSE
 //   POST /api/agent/inbox/:id/done    { note }   (chefe) arquiva o item (resolvido, ou de grupo, que não tem resposta)
-//   POST /api/agent/whatsapp/avisar   { text, options?, preview? }  (chefe) aviso a quem tem a permissão "marcely"
-//        (o Thiago) quando algo precisa da decisão dele; options (2 a 12) vira enquete e o voto volta para a caixa.
+//   POST /api/agent/whatsapp/avisar   { text, options?, to?, preview? }  (chefe) aviso ao dono (permissão "decisoes_marcely")
+//        quando algo precisa da decisão dele, ou a uma pessoa (to); options (2 a 12) vira enquete e o voto volta à caixa.
 // Item de grupo de cliente não tem resposta por aqui: mensagem a cliente só com o ok do Thiago (POST .../send).
 //
 // Só manda para o grupo cadastrado de um cliente: número ou grupo digitado à mão não passa por aqui.
@@ -264,8 +264,33 @@ export function registerAgentWhatsAppRoutes(app, { pool, uploadRoot, publicUploa
     }
   });
 
-  // Aviso ao Thiago (quem tem a permissão "marcely") quando algo precisa da decisão dele. Com opções vai uma enquete;
-  // o voto chega como "Marcely, sobre …: <opção>" e cai direto na caixa (engine.mjs, callsMarcely).
+  // Para quem vai o aviso de decisão (correção de 01/11/2026: o primeiro avisar foi a todos com "Falar com a Marcely",
+  // e o usuário marcou essa permissão em mais gente da equipe). Padrão: só quem tem "decisoes_marcely" (o dono, o
+  // Thiago). Sem ninguém marcado, só se houver um número com "marcely"; senão recusa, sem adivinhar.
+  // `to` (nome) manda para uma pessoa só, entre quem fala com a Marcely.
+  async function decisionTargets(to) {
+    const { rows } = await pool.query(
+      `SELECT * FROM assistant_numbers WHERE active AND permissions && '{marcely,decisoes_marcely}'::text[] ORDER BY name`
+    );
+    const name = String(to || '').trim();
+    if (name) {
+      const exact = rows.filter((n) => semAcento(n.name) === semAcento(name));
+      const list = exact.length ? exact : rows.filter((n) => semAcento(n.name).includes(semAcento(name)));
+      if (!list.length) throw Object.assign(new Error(`Ninguém com "${name}" fala com a Marcely no Assistente PULSE (${rows.map((n) => n.name).join(', ') || 'ninguém'})`), { status: 404 });
+      if (list.length > 1) throw Object.assign(new Error(`"${name}" bate com ${list.map((n) => n.name).join(', ')}. Use o nome exato.`), { status: 409 });
+      return list;
+    }
+    const owners = rows.filter((n) => (n.permissions || []).includes('decisoes_marcely'));
+    if (owners.length) return owners;
+    const talkers = rows.filter((n) => (n.permissions || []).includes('marcely'));
+    if (talkers.length === 1) return talkers;
+    throw Object.assign(new Error(talkers.length
+      ? `Ninguém marcado para "Receber as decisões da Marcely" (Configurações → Assistente PULSE) e ${talkers.length} pessoas falam com ela (${talkers.map((n) => n.name).join(', ')}): marque o dono ou use --para <nome>`
+      : 'Ninguém fala com a Marcely no Assistente PULSE (Configurações → Assistente PULSE)'), { status: 409 });
+  }
+
+  // Aviso ao dono (o Thiago, permissão "decisoes_marcely") quando algo precisa da decisão dele. Com opções vai uma
+  // enquete; o voto chega como "Marcely, sobre …: <opção>" e cai direto na caixa (engine.mjs, callsMarcely).
   app.post('/api/agent/whatsapp/avisar', async (req, res) => {
     try {
       const agent = await chefe(req);
@@ -286,8 +311,7 @@ export function registerAgentWhatsAppRoutes(app, { pool, uploadRoot, publicUploa
           throw Object.assign(new Error(error.message), { status: 400 });
         }
       }
-      const { rows: numbers } = await pool.query(`SELECT * FROM assistant_numbers WHERE active AND 'marcely' = ANY(permissions) ORDER BY name`);
-      if (!numbers.length) throw Object.assign(new Error('Ninguém tem a permissão "Falar com a Marcely" no Assistente PULSE (Configurações → Assistente PULSE)'), { status: 404 });
+      const numbers = await decisionTargets(req.body?.to);
       const body = `${text}${SIGNATURE}`;
       if (preview) return res.json({ dry_run: true, to: numbers.map((n) => n.name), text: body, poll });
       const { rows: [{ n }] } = await pool.query(

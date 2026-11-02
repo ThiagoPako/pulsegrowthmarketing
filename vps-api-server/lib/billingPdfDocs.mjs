@@ -72,6 +72,8 @@ export function deliveredItems(numbers, plan = {}) {
     { label: 'Stories', done: byType.Stories || 0, goal: plan.stories_qty, one: 'story', unit: 'stories' },
     { label: 'Artes', done: numbers.deliveries.arts.total, goal: plan.arts_qty, one: 'arte', unit: 'artes' },
     { label: 'Gravações', done: numbers.deliveries.recordings.done, goal: plan.recording_sessions, one: 'gravação', unit: 'gravações' },
+    // coberturas de evento em tempo real (02/11/2026): entram como entrega, sem meta do plano
+    { label: 'Coberturas de evento', done: numbers.deliveries.events?.total || 0, goal: null, one: 'cobertura', unit: 'coberturas' },
   ];
   for (const t of numbers.deliveries.videos.by_type || []) {
     if (!['Reels', 'Criativos', 'Stories'].includes(t.type)) rows.push({ label: t.type, done: t.total, goal: 0, one: t.type, unit: t.type });
@@ -330,8 +332,37 @@ export function reciboDoc(d) {
   };
 }
 
+/** "12 h" / "2h30" a partir de horas decimais. */
+const horas = (h) => {
+  const t = Math.round((Number(h) || 0) * 60);
+  const hh = Math.floor(t / 60);
+  const mm = t % 60;
+  return mm ? `${hh}h${String(mm).padStart(2, '0')}` : `${hh} h`;
+};
+const faixa = (r) => (!r || (!r.min && !r.max) ? '' : r.min === r.max ? horas(r.min) : `${horas(r.min)} a ${horas(r.max)}`);
+
 /**
- * Agradecimento (D−5): agradece e mostra o que o mês rendeu. Nada que soe como cobrança de gravação (usuário,
+ * Dedicação da equipe (D−2; usuário, 02/11/2026): gravações feitas e canceladas, tempo de gravação (cronômetro do
+ * videomaker) e de espera, edição de vídeo (2 a 3 h por vídeo), artes (1 h a 1h30 por arte) e o total, para o cliente
+ * ver todo o trabalho do mês.
+ */
+function dedicationRows(d) {
+  const a = d.attendance || {};
+  const t = d.numbers?.time;
+  const rows = [];
+  if (a.done) rows.push(['Gravações feitas', String(a.done)]);
+  if (a.cancelled) rows.push(['Gravações canceladas', String(a.cancelled)]);
+  if (t?.recording_hours) rows.push([t.recording_real ? 'Tempo de gravação (cronômetro do videomaker)' : 'Tempo de gravação', horas(t.recording_hours)]);
+  if (t?.wait_hours) rows.push(['Tempo de espera do videomaker no local', horas(t.wait_hours)]);
+  if (t?.editing_range?.max) rows.push([`Edição de ${d.numbers.deliveries.videos.total} vídeo(s)`, faixa(t.editing_range)]);
+  if (t?.design_range?.max) rows.push([`Criação de ${d.numbers.deliveries.arts.total} arte(s)`, faixa(t.design_range)]);
+  if (d.numbers?.deliveries?.events?.total) rows.push(['Coberturas de evento', String(d.numbers.deliveries.events.total)]);
+  if (t?.total_range?.max) rows.push([{ text: 'Total dedicado ao seu perfil', bold: true }, { text: faixa(t.total_range), bold: true }]);
+  return rows;
+}
+
+/**
+ * Agradecimento (D−2): agradece e mostra o que o mês rendeu. Nada que soe como cobrança de gravação (usuário,
  * 01/11/2026): só o que foi feito; a dica entra quando ajuda e em tom positivo.
  * d = { ref, today, client, plan, attendance: { done, scheduled, cancelled, avg }, numbers?, tip, dueDate, amount }
  */
@@ -353,6 +384,11 @@ export function agradecimentoDoc(d) {
     sections: [
       ...(acima ? [{ type: 'callout', heading: 'Acima do plano contratado', text: acima }] : []),
       ...(items.length ? [{ title: `O que entregamos em ${monthName(d.ref)}`, type: 'tiles', rows: deliveryTiles(items) }] : []),
+      ...(dedicationRows(d).length ? [{
+        title: `Dedicação da equipe em ${monthName(d.ref)}`, type: 'table', plain: true,
+        columns: [{ label: 'O que fizemos' }, { label: 'Tempo / quantidade', width: 150, align: 'right' }],
+        rows: dedicationRows(d),
+      }] : []),
     ],
     closing: {
       // Pix Automático (02/11/2026): sem cobrança, só o aviso de que o débito é automático no vencimento

@@ -109,7 +109,7 @@ export function summarizeNetwork(insights, prevInsights) {
  * @param {object[]} p.deliveryRecords registros de entrega por gravação (delivery_records)
  * @param {number}  p.recordingMinutes duração padrão de uma gravação (Configurações da empresa)
  */
-export function buildMonthlyNumbers({ month, contentTasks = [], designTasks = [], posts = [], recordings = [], deliveryRecords = [], recordingMinutes = 90 }) {
+export function buildMonthlyNumbers({ month, contentTasks = [], designTasks = [], posts = [], recordings = [], deliveryRecords = [], events = [], recordingMinutes = 90 }) {
   const r = monthRange(month);
 
   const videos = contentTasks.filter((t) => (t.approved_at
@@ -130,10 +130,22 @@ export function buildMonthlyNumbers({ month, contentTasks = [], designTasks = []
   const records = deliveryRecords.filter((d) => inRange(d.date, r));
   const recordedVideos = records.reduce((a, d) => a + (Number(d.videos_recorded) || 0), 0);
 
-  // horas: design pelo cronômetro das artes do mês; edição pelo tempo de cada vídeo; gravação pela duração padrão
-  const designSeconds = arts.reduce((a, t) => a + (Number(t.time_spent_seconds) || 0), 0);
-  const editingSeconds = videos.reduce((a, t) => a + editSeconds(t), 0);
-  const recordingSeconds = done.length * recordingMinutes * 60;
+  // tempo dedicado (usuário, 02/11/2026): edição de vídeo conta de 2 a 3 h por vídeo, arte de 1 h a 1h30 por arte;
+  // gravação pelo cronômetro do videomaker (iniciar/encerrar no sistema), com a espera do videomaker à parte; sem o
+  // cronômetro, a duração padrão das Configurações
+  const realRecording = records.reduce((a, d) => a + (Number(d.recording_duration_seconds) || 0), 0);
+  const waitSeconds = records.reduce((a, d) => a + (Number(d.wait_duration_seconds) || 0), 0);
+  const recordingSeconds = realRecording > 0 ? realRecording : done.length * recordingMinutes * 60;
+  const editing = { min: videos.length * 2, max: videos.length * 3 };
+  const design = { min: arts.length * 1, max: arts.length * 1.5 };
+  const editingSeconds = ((editing.min + editing.max) / 2) * 3600;
+  const designSeconds = ((design.min + design.max) / 2) * 3600;
+
+  // coberturas de evento: eventos concluídos no mês (agenda do videomaker) e cards marcados como cobertura
+  const isCoverage = (t) => /cobertura de evento|cobertura do evento|evento em tempo real/i.test(`${t.title || ''} ${t.description || ''}`);
+  const monthEvents = events.filter((e) => ['concluido', 'concluida', 'realizado'].includes(e.status) && inRange(e.date, r));
+  const coverageCards = videos.filter(isCoverage);
+  const eventTitles = [...monthEvents.map((e) => String(e.title || '').trim() || 'Evento'), ...coverageCards.map((t) => String(t.title || '').trim())];
 
   return {
     month: r.month,
@@ -143,6 +155,7 @@ export function buildMonthlyNumbers({ month, contentTasks = [], designTasks = []
       videos: { total: videos.length, by_type: Object.entries(byType).map(([type, titles]) => ({ type, total: titles.length, titles: titles.slice(0, 12) })) },
       arts: { total: arts.length, titles: arts.map((a) => String(a.title || '').trim() || 'Sem título').slice(0, 12) },
       posts: { total: donePosts.length },
+      events: { total: Math.max(monthEvents.length, coverageCards.length ? new Set(eventTitles).size : 0), titles: [...new Set(eventTitles)].slice(0, 12) },
       recordings: {
         scheduled: monthRecordings.length - cancelled.length,
         done: done.length,
@@ -153,9 +166,14 @@ export function buildMonthlyNumbers({ month, contentTasks = [], designTasks = []
     },
     time: {
       recording_hours: hours(recordingSeconds),
+      recording_real: realRecording > 0,
+      wait_hours: hours(waitSeconds),
       editing_hours: hours(editingSeconds),
+      editing_range: editing,
       design_hours: hours(designSeconds),
+      design_range: design,
       total_hours: hours(recordingSeconds + editingSeconds + designSeconds),
+      total_range: { min: hours(recordingSeconds) + editing.min + design.min, max: hours(recordingSeconds) + editing.max + design.max },
       recording_minutes_each: recordingMinutes,
     },
   };

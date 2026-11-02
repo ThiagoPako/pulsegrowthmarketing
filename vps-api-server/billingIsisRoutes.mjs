@@ -24,6 +24,7 @@ import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, monthName as no
 import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
 import { monthCalendar } from './lib/monthDates.mjs';
+import { videoFrame } from './lib/videoFrame.mjs';
 import { enqueueWhatsApp } from './whatsapp/shared.mjs';
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -218,6 +219,23 @@ export function registerBillingIsisRoutes(app, {
     }
   }
 
+  /** O vídeo para o ffmpeg: upload local vira caminho no disco; link http(s) vai direto; o resto (Drive) não serve. */
+  function videoInput(link) {
+    const raw = String(link || '').trim();
+    if (!raw) return null;
+    try {
+      const abs = new URL(raw, appBase);
+      const i = abs.pathname.indexOf('/uploads/');
+      if (i >= 0) {
+        const file = path.resolve(uploadRoot, decodeURIComponent(abs.pathname.slice(i + '/uploads/'.length)));
+        if (file.startsWith(path.resolve(uploadRoot))) return file;
+      }
+      return /^https?:$/.test(abs.protocol) && !/drive\.google|docs\.google/.test(abs.hostname) ? abs.href : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function reportExtras(contract, ref, next, config) {
     const q = (sql, params) => pool.query(sql, params).then((r) => r.rows).catch(() => []);
     const [client] = await q(`SELECT logo_url FROM clients WHERE id = $1`, [contract.client_id]);
@@ -225,10 +243,18 @@ export function registerBillingIsisRoutes(app, {
       `SELECT date, start_time FROM recordings WHERE client_id = $1 AND to_char(date, 'YYYY-MM') = $2
           AND coalesce(status, '') NOT IN ('cancelada', 'cancelado') ORDER BY date, start_time`, [contract.client_id, next]
     );
+    // destaques: a capa do card ou, sem capa, um quadro do próprio vídeo editado
     const covers = await q(
-      `SELECT title, cover_url, content_type FROM content_tasks
-        WHERE client_id = $1 AND cover_url IS NOT NULL AND btrim(cover_url) <> '' AND to_char(coalesce(approved_at, updated_at), 'YYYY-MM') = $2
-        ORDER BY approved_at DESC NULLS LAST LIMIT 3`, [contract.client_id, ref]
+      `SELECT title, cover_url, edited_video_link, content_type FROM content_tasks
+        WHERE client_id = $1 AND to_char(coalesce(approved_at, updated_at), 'YYYY-MM') = $2
+          AND (nullif(btrim(cover_url), '') IS NOT NULL OR nullif(btrim(edited_video_link), '') IS NOT NULL)
+        ORDER BY (content_type = 'story') ASC, approved_at DESC NULLS LAST LIMIT 6`, [contract.client_id, ref]
+    );
+    // stories postados no mês (social_media_deliveries)
+    const [stories] = await q(
+      `SELECT count(*)::int AS n FROM social_media_deliveries
+        WHERE client_id = $1 AND content_type ILIKE 'stor%' AND status IN ('postado', 'entregue', 'concluido')
+          AND to_char(coalesce(posted_at, delivered_at), 'YYYY-MM') = $2`, [contract.client_id, ref]
     );
     // quem trabalhou nos cards e nas gravações do cliente no mês
     const ids = new Set();
@@ -257,14 +283,17 @@ export function registerBillingIsisRoutes(app, {
     }
     const highlights = [];
     for (const c of covers) {
-      const image = await loadImage(c.cover_url);
-      if (image) highlights.push({ image, title: String(c.title || '').trim() || 'Vídeo', tag: { reels: 'REELS', reel: 'REELS', criativo: 'CRIATIVO', story: 'STORY' }[c.content_type] || 'VÍDEO' });
+      if (highlights.length >= 3) break;
+      const image = (await loadImage(c.cover_url)) || (await videoFrame(videoInput(c.edited_video_link)));
+      // sem quadro bom, o vídeo não entra nos destaques (nada de imagem ilustrativa)
+      if (image) highlights.push({ image, title: String(c.title || '').trim() || 'Vídeo' });
     }
     const contact = contactForCity(contract.client_city || contract.city, config, await assistantNumbers());
     return {
       clientLogo: await loadImage(client?.logo_url),
       recordings: recordings.map((r) => ({ date: dateKey(r.date), time: r.start_time })),
       highlights,
+      storiesPosted: stories ? stories.n : null,
       team: { people: people.slice(0, 8), agents: agents.slice(0, 8) },
       portalUrl: `${appBase}/portal/${contract.client_id}`,
       contact: contact?.phone ? `${contact.name} · ${contact.phone}` : null,
@@ -440,8 +469,9 @@ export function registerBillingIsisRoutes(app, {
         numbers: n, network: report.network, suggestions: report.draft.suggestions,
         // calendário editorial do mês que começa: feriados (arte de aviso) e datas do nicho do cliente
         calendar: monthCalendar(month, contract.niche),
-        // capa, gravações agendadas, destaques, portal e equipe
+        // resumo, gravações agendadas, stories, destaques, portal e equipe
         ...(await reportExtras(contract, ref, month, config)),
+        instagram: /^@/.test(String(report.network?.account || '')) ? report.network.account : null,
       });
       return {
         config,

@@ -49,7 +49,7 @@ describe('PDFs da Ísis: conteúdo', () => {
   it('relatório: sem rede social nem horas, esses blocos não aparecem', () => {
     const d = relatorioDoc({ ref: '2026-10', next: '2026-11', client, plan, numbers, network: null, suggestions: '' });
     const titles = d.sections.map((s: { title: string }) => s.title);
-    expect(titles).toContain('Entregas do mês');
+    expect(d.sections[0].type).toBe('stats');
     expect(titles.some((t: string) => /Rede social|Tempo dedicado|Artes entregues|Ideias/.test(t))).toBe(false);
     // nada negativo no relatório
     expect(JSON.stringify(d)).not.toMatch(/faltou|pendente|Canceladas| de 8/i);
@@ -95,11 +95,21 @@ describe('relatório premium', () => {
   };
   const base = { ref: '2026-10', next: '2026-11', client: { name: 'Clínica X', responsible: 'Ana Souza' }, plan: { reels_qty: 4 }, numbers, network: null, suggestions: '' };
 
-  it('capa com o agradecimento e o selo do que passou do plano', () => {
+  it('1ª página de resumo: faixa do cliente, agradecimento e quadros entregue × plano', () => {
     const d = relatorioDoc(base);
-    expect(d.cover.title).toBe('O que entregamos para você');
-    expect(d.cover.thanks).toContain('Ana');
-    expect(d.cover.badge).toBe('+3 ENTREGAS ALÉM DO PLANO');
+    expect(d.cover).toBeUndefined();
+    expect(d.summary).toMatchObject({ client: 'Clínica X', month: 'outubro de 2026' });
+    expect(d.intro).toContain('Ana');
+    const stats = d.sections.find((s: { type?: string }) => s.type === 'stats');
+    expect(stats.items[0]).toMatchObject({ icon: 'video', label: 'Reels', value: 7, plan: 4, extra: 3 });
+  });
+
+  it('stories: quadro próprio quando o plano prevê stories', () => {
+    const d = relatorioDoc({ ...base, plan: { reels_qty: 4, stories_qty: 30 }, storiesPosted: 34 });
+    const st = d.sections.find((s: { title?: string }) => s.title === 'Stories do mês');
+    expect(st.items.map((i: { value: number }) => i.value)).toEqual([34, 30, 34]);
+    expect(st.items[2].note).toBe('+4 além do plano');
+    expect(relatorioDoc(base).sections.some((s: { title?: string }) => s.title === 'Stories do mês')).toBe(false);
   });
 
   it('calendário: gravações do mês, feriados com arte de aviso e o pedido de confirmar no portal', () => {
@@ -111,7 +121,7 @@ describe('relatório premium', () => {
       team: { people: [{ name: 'Rafael', role: 'Videomaker' }], agents: [{ name: 'Davi', role: 'Edição de vídeo' }] },
     });
     const cal = d.sections.find((s: { type?: string }) => s.type === 'calendar');
-    expect(cal.marks.map((m: { kind: string; short: string }) => `${m.kind}:${m.short}`)).toEqual(['sazonal:Novembro Azul', 'feriado:Arte de aviso', 'gravacao:Gravação 9h']);
+    expect(cal.marks.map((m: { kind: string; name: string; tag: string }) => `${m.kind}:${m.name}:${m.tag}`)).toEqual(['sazonal:Novembro Azul:Arte comemorativa', 'feriado:Finados:Arte de aviso', 'gravacao:Gravação:9h']);
     expect(d.sections.some((s: { heading?: string }) => s.heading === 'Confirme suas gravações no portal')).toBe(true);
     expect(d.sections.find((s: { type?: string }) => s.type === 'portal').url).toBe('https://agenciapulse.tech/portal/x');
     expect(d.sections.filter((s: { type?: string }) => s.type === 'team')).toHaveLength(2);

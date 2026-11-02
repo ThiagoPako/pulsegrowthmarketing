@@ -445,52 +445,139 @@ function avatar(doc, x, y, size, image, name, { ring = C.laranja } = {}) {
   doc.font('bold').fontSize(size * 0.36).fillColor('#FFFFFF').text(iniciais(name), x, y + size * 0.3, { width: size, align: 'center' });
 }
 
-/** Capa: grafite, logo da Pulse, logo do cliente num círculo, o mês e o agradecimento. */
-function cover(doc, c) {
-  doc.rect(0, 0, W, H).fill(C.fundo);
-  doc.rect(0, 0, 8, H).fill(C.laranja);
-  const logo = path.join(ASSETS, 'pulse-logo.png');
-  if (fs.existsSync(logo)) doc.image(logo, M + 10, 54, { height: 30 });
-  doc.font('bold').fontSize(9).fillColor(C.laranja).text((c.kicker || 'RELATÓRIO DO MÊS').toUpperCase(), M, 64, { width: CW, align: 'right', characterSpacing: 2 });
-  // logo do cliente num círculo branco
-  const size = 132;
-  const cx = M + 10;
-  const cy = 210;
-  doc.circle(cx + size / 2, cy + size / 2, size / 2 + 4).fill(C.laranja);
-  doc.circle(cx + size / 2, cy + size / 2, size / 2).fill('#FFFFFF');
+/**
+ * Faixa do topo do relatório (usuário, 01/11/2026: "essa capa preta eu não gostei"): fundo claro, logo e nome do
+ * cliente, o mês; à direita, o selo da Pulse. A 1ª página já é o resumo de bater o olho.
+ */
+function summaryHeader(doc, c) {
+  const h = 92;
+  doc.rect(0, 0, W, h).fill('#FFFFFF');
+  doc.rect(0, h, W, 3).fill(C.laranja);
+  const size = 52;
+  const x = M;
+  const y = (h - size) / 2;
+  doc.circle(x + size / 2, y + size / 2, size / 2 + 2).fill(C.laranja);
+  doc.circle(x + size / 2, y + size / 2, size / 2).fill(c.logo ? '#FFFFFF' : C.laranjaClaro);
   let drew = false;
   if (c.logo) {
     try {
       doc.save();
-      doc.circle(cx + size / 2, cy + size / 2, size / 2 - 6).clip();
-      doc.image(c.logo, cx + 12, cy + 12, { fit: [size - 24, size - 24], align: 'center', valign: 'center' });
+      doc.circle(x + size / 2, y + size / 2, size / 2 - 3).clip();
+      doc.image(c.logo, x + 5, y + 5, { fit: [size - 10, size - 10], align: 'center', valign: 'center' });
       doc.restore();
       drew = true;
     } catch {
       doc.restore();
     }
   }
-  if (!drew) doc.font('bold').fontSize(44).fillColor(C.fundo).text(iniciais(c.client), cx, cy + 40, { width: size, align: 'center' });
-  doc.font('semibold').fontSize(13).fillColor('#BDBDC5').text(c.client, M + 10, 372, { width: CW - 20 });
-  doc.font('bold').fontSize(12).fillColor(C.laranja).text(String(c.month || '').toUpperCase(), M + 10, 394, { width: CW - 20, characterSpacing: 2 });
-  doc.font('bold').fontSize(40).fillColor('#FFFFFF').text(c.title || 'O que entregamos para você', M + 10, 430, { width: CW - 40, lineGap: -4 });
-  doc.rect(M + 10, doc.y + 18, 56, 4).fill(C.laranja);
-  if (c.thanks) doc.font('regular').fontSize(13).fillColor('#D8D8DE').text(c.thanks, M + 10, doc.y + 40, { width: CW - 80, lineGap: 4 });
-  if (c.badge) {
-    doc.font('bold').fontSize(10);
-    const bw = doc.widthOfString(c.badge, { characterSpacing: 1 }) + 28;
-    doc.roundedRect(M + 10, H - 150, bw, 28, 14).fill(C.laranja);
-    doc.fillColor('#FFFFFF').text(c.badge, M + 24, H - 141, { characterSpacing: 1, lineBreak: false });
+  if (!drew) doc.font('bold').fontSize(18).fillColor(C.laranja).text(iniciais(c.client), x, y + 16, { width: size, align: 'center' });
+  doc.font('bold').fontSize(15).fillColor(C.texto).text(c.client, x + size + 14, y + 7, { width: 300, height: 20, ellipsis: true });
+  doc.font('bold').fontSize(9).fillColor(C.laranja).text(String(c.month || '').toUpperCase(), x + size + 14, y + 30, { width: 300, characterSpacing: 1.5 });
+  // selo da Pulse (o logo é branco: vai numa pílula grafite)
+  doc.roundedRect(W - M - 130, (h - 36) / 2, 130, 36, 18).fill(C.fundo);
+  const logo = path.join(ASSETS, 'pulse-logo.png');
+  if (fs.existsSync(logo)) doc.image(logo, W - M - 115, (h - 36) / 2 + 10, { fit: [100, 16], align: 'center', valign: 'center' });
+  doc.y = h + 24;
+}
+
+/** Ícones simples desenhados (sem emoji: a fonte do PDF não tem). */
+function icon(doc, kind, cx, cy, r, color) {
+  doc.save();
+  doc.fillColor(color).strokeColor(color).lineWidth(1.6);
+  if (kind === 'video') doc.polygon([cx - r * 0.35, cy - r * 0.5], [cx - r * 0.35, cy + r * 0.5], [cx + r * 0.55, cy]).fill();
+  else if (kind === 'story') { doc.circle(cx, cy, r * 0.6).stroke(); doc.circle(cx, cy, r * 0.28).fill(); }
+  else if (kind === 'arte') { doc.roundedRect(cx - r * 0.6, cy - r * 0.6, r * 1.2, r * 1.2, 3).stroke(); doc.circle(cx - r * 0.18, cy - r * 0.15, r * 0.16).fill(); doc.polygon([cx - r * 0.55, cy + r * 0.5], [cx, cy], [cx + r * 0.55, cy + r * 0.5]).fill(); }
+  else if (kind === 'post') { const g = r * 0.5; for (const [dx, dy] of [[-1, -1], [0.1, -1], [-1, 0.1], [0.1, 0.1]]) doc.rect(cx + dx * g, cy + dy * g, g * 0.85, g * 0.85).fill(); }
+  else if (kind === 'gravacao') { doc.roundedRect(cx - r * 0.65, cy - r * 0.4, r * 0.95, r * 0.8, 2).fill(); doc.polygon([cx + r * 0.35, cy], [cx + r * 0.7, cy - r * 0.35], [cx + r * 0.7, cy + r * 0.35]).fill(); }
+  else if (kind === 'horas') { doc.circle(cx, cy, r * 0.62).stroke(); doc.moveTo(cx, cy).lineTo(cx, cy - r * 0.38).stroke(); doc.moveTo(cx, cy).lineTo(cx + r * 0.3, cy + r * 0.1).stroke(); }
+  else doc.circle(cx, cy, r * 0.4).fill();
+  doc.restore();
+}
+
+/**
+ * Quadros grandes do resumo: ícone, número entregue, nome e "plano 12 → +3" (selo laranja quando passou do plano;
+ * abaixo do plano, só o número, neutro). items = [{ icon, label, value, plan?, extra? }], 3 por linha.
+ */
+function stats(doc, items) {
+  const per = 3;
+  const gap = 10;
+  const w = (CW - gap * (per - 1)) / per;
+  const h = 104;
+  for (let i = 0; i < items.length; i += per) {
+    ensure(doc, h + 10);
+    const y = doc.y;
+    items.slice(i, i + per).forEach((it, j) => {
+      const x = M + j * (w + gap);
+      const up = it.extra > 0;
+      doc.roundedRect(x, y, w, h, 12).fill(up ? C.laranjaClaro : C.cinzaClaro);
+      doc.circle(x + 26, y + 26, 13).fill(up ? C.laranja : '#FFFFFF');
+      icon(doc, it.icon, x + 26, y + 26, 11, up ? '#FFFFFF' : C.laranja);
+      doc.font('bold').fontSize(30).fillColor(up ? C.laranja : C.texto).text(String(it.value), x + 48, y + 9, { width: w - 60, height: 36 });
+      doc.font('semibold').fontSize(10).fillColor(C.texto).text(it.label, x + 14, y + 50, { width: w - 28, height: 14, ellipsis: true });
+      if (it.plan) {
+        doc.font('regular').fontSize(8.5).fillColor(C.cinza).text(`plano ${it.plan}`, x + 14, y + 70, { width: w - 28, lineBreak: false });
+        if (up) {
+          const t = `+${it.extra} além do plano`;
+          doc.font('bold').fontSize(8);
+          const bw = doc.widthOfString(t) + 14;
+          doc.roundedRect(x + 14, y + 83, bw, 14, 7).fill(C.laranja);
+          doc.fillColor('#FFFFFF').text(t, x + 14, y + 86.5, { width: bw, align: 'center' });
+        } else if (it.value >= it.plan) {
+          doc.font('semibold').fontSize(8).fillColor(C.cinza).text('plano completo', x + 14, y + 85, { width: w - 28 });
+        }
+      }
+    });
+    doc.y = y + h + gap;
   }
-  doc.font('regular').fontSize(9).fillColor('#8C8C96').text('Agência Pulse · @agenciapulse', M + 10, H - 70, { width: CW - 20 });
-  doc.font('regular').fontSize(9).fillColor('#8C8C96').text(c.footer || '', M + 10, H - 70, { width: CW - 20, align: 'right' });
+  doc.y += 6;
+}
+
+/**
+ * Destaque em moldura de post do Instagram (topo com a foto e o @, ícones de curtir/comentar/enviar, legenda com o
+ * título): o cliente vê que o vídeo foi postado. items = [{ image, title }], handle = '@cliente', logo = buffer.
+ */
+function igPosts(doc, { items, handle, logo }) {
+  const per = 3;
+  const gap = 12;
+  const w = (CW - gap * (per - 1)) / per;
+  const ih = w * 1.25;
+  const h = 30 + ih + 26 + 30;
+  for (let i = 0; i < items.length; i += per) {
+    ensure(doc, h + 10);
+    const y = doc.y;
+    items.slice(i, i + per).forEach((it, j) => {
+      const x = M + j * (w + gap);
+      doc.roundedRect(x, y, w, h, 8).fill('#FFFFFF');
+      doc.roundedRect(x, y, w, h, 8).lineWidth(1).strokeColor(C.linha).stroke();
+      avatar(doc, x + 8, y + 7, 16, logo, handle, { ring: C.laranja });
+      doc.font('bold').fontSize(7.5).fillColor(C.texto).text(handle, x + 30, y + 11, { width: w - 50, height: 10, ellipsis: true, lineBreak: false });
+      for (const k of [0, 1, 2]) doc.circle(x + w - 18 + k * 4, y + 15, 0.9).fill(C.texto);
+      doc.save();
+      doc.rect(x, y + 30, w, ih).clip();
+      doc.rect(x, y + 30, w, ih).fill(C.fundo2);
+      try { doc.image(it.image, x, y + 30, { cover: [w, ih], align: 'center', valign: 'center' }); } catch { /* fica o fundo */ }
+      doc.restore();
+      // curtir, comentar, enviar e salvar
+      const iy = y + 30 + ih + 13;
+      doc.save().lineWidth(1.2).strokeColor(C.texto);
+      const hx = x + 14;
+      doc.moveTo(hx, iy + 3).bezierCurveTo(hx - 7, iy - 2, hx - 4, iy - 8, hx, iy - 4).bezierCurveTo(hx + 4, iy - 8, hx + 7, iy - 2, hx, iy + 3).fill('#E0245E');
+      doc.circle(x + 32, iy - 2, 4.5).stroke();
+      doc.polygon([x + 44, iy - 6], [x + 54, iy - 2], [x + 44, iy + 2]).stroke();
+      doc.moveTo(x + w - 16, iy - 6).lineTo(x + w - 16, iy + 4).lineTo(x + w - 12, iy).lineTo(x + w - 8, iy + 4).lineTo(x + w - 8, iy - 6).closePath().stroke();
+      doc.restore();
+      doc.font('bold').fontSize(7.5).fillColor(C.texto).text(`${handle} `, x + 8, y + 30 + ih + 26, { width: w - 16, continued: true, lineBreak: true, height: 24 })
+        .font('regular').text(it.title, { width: w - 16, height: 24, ellipsis: true });
+    });
+    doc.y = y + h + 14;
+  }
 }
 
 const SEMANA = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
 const MARK = {
-  gravacao: { fill: C.laranja, fg: '#FFFFFF', legend: 'Gravação agendada' },
-  feriado: { fill: C.fundo2, fg: '#FFFFFF', legend: 'Feriado · arte de aviso' },
-  sazonal: { fill: C.laranjaClaro, fg: C.laranja, legend: 'Data do seu nicho' },
+  gravacao: { fill: C.laranja, fg: '#FFFFFF', name: C.laranja, legend: 'Gravação agendada' },
+  feriado: { fill: C.fundo2, fg: '#FFFFFF', name: C.texto, legend: 'Feriado · vamos criar a arte de aviso' },
+  sazonal: { fill: C.laranjaClaro, fg: C.laranja, name: C.texto, legend: 'Data do seu segmento · arte comemorativa' },
 };
 
 /** Calendário editorial do mês: grade domingo a sábado com as marcas e a legenda. */
@@ -500,7 +587,7 @@ function calendar(doc, { month, marks = [] }) {
   const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const weeks = Math.ceil((first + days) / 7);
   const cw = CW / 7;
-  const ch = 64;
+  const ch = 78;
   ensure(doc, 26 + weeks * ch + 40);
   let top = doc.y;
   // cabeçalho dos dias da semana
@@ -517,12 +604,17 @@ function calendar(doc, { month, marks = [] }) {
     doc.roundedRect(x + 2, yy + 2, cw - 4, ch - 4, 6).fill(list.length ? '#FFFFFF' : C.cinzaClaro);
     if (list.length) doc.roundedRect(x + 2, yy + 2, cw - 4, ch - 4, 6).lineWidth(1).strokeColor(C.linha).stroke();
     doc.font('bold').fontSize(10).fillColor(list.length ? C.texto : '#A6A6AE').text(String(day), x + 8, yy + 7, { width: cw - 16 });
-    let my = yy + 22;
+    let my = yy + 20;
     for (const mk of list.slice(0, 2)) {
       const st = MARK[mk.kind] || MARK.sazonal;
-      doc.roundedRect(x + 5, my, cw - 10, 17, 4).fill(st.fill);
-      doc.font('semibold').fontSize(6.3).fillColor(st.fg).text(mk.short || mk.text, x + 8, my + 3.5, { width: cw - 16, height: 11, ellipsis: true, lineBreak: false });
-      my += 19;
+      // o nome da data (Finados, Dia do Médico, Gravação) e, embaixo, o que vamos fazer
+      doc.font('bold').fontSize(6.2).fillColor(st.name);
+      const nh = Math.min(doc.heightOfString(mk.name || '', { width: cw - 12 }), 17);
+      doc.text(mk.name || '', x + 6, my, { width: cw - 12, height: 17, ellipsis: true });
+      my += nh + 1.5;
+      doc.roundedRect(x + 5, my, cw - 10, 11, 3).fill(st.fill);
+      doc.font('semibold').fontSize(5.6).fillColor(st.fg).text(mk.tag || '', x + 7, my + 2.6, { width: cw - 14, height: 8, ellipsis: true, lineBreak: false });
+      my += 14;
     }
   }
   doc.y = top + weeks * ch + 8;
@@ -533,8 +625,8 @@ function calendar(doc, { month, marks = [] }) {
     const st = MARK[kind];
     doc.roundedRect(lx, doc.y + 2, 10, 10, 2).fill(st.fill);
     if (kind === 'sazonal') doc.roundedRect(lx, doc.y + 2, 10, 10, 2).lineWidth(0.8).strokeColor(C.laranja).stroke();
-    doc.font('regular').fontSize(8.5).fillColor(C.cinza).text(st.legend, lx + 15, doc.y + 2, { lineBreak: false });
-    lx += doc.widthOfString(st.legend) + 40;
+    doc.font('regular').fontSize(8).fillColor(C.cinza).text(st.legend, lx + 15, doc.y + 2, { lineBreak: false });
+    lx += doc.widthOfString(st.legend) + 30;
   }
   doc.y += 26;
 }
@@ -626,7 +718,7 @@ function footer(doc, { note, contact, generated, skipFirst = false }) {
 
 async function block(doc, s) {
   // o título não fica sozinho no pé da página: reserva o começo do bloco junto
-  const need = { table: 110, compare: 110, progress: 90, bars: 80, callout: 90, tiles: 110, calendar: 440, gallery: 260, portal: 160, team: 130 }[s.type] || 60;
+  const need = { table: 110, compare: 110, progress: 90, bars: 80, callout: 90, tiles: 110, calendar: 540, gallery: 260, portal: 160, team: 130, stats: 120, cards: 90, igposts: 300 }[s.type] || 60;
   if (s.title) section(doc, s.title, need);
   switch (s.type) {
     case 'table': table(doc, s.columns, s.rows, { totals: s.totals, total: s.total }); break;
@@ -637,6 +729,9 @@ async function block(doc, s) {
     case 'tiles': tiles(doc, s.rows); break;
     case 'calendar': calendar(doc, s); break;
     case 'gallery': gallery(doc, s.items); break;
+    case 'stats': stats(doc, s.items); break;
+    case 'cards': cards(doc, s.items); break;
+    case 'igposts': igPosts(doc, s); break;
     case 'portal': await portal(doc, { url: s.url, title: s.heading, text: s.text }); break;
     case 'team': team(doc, s.people); break;
     default:
@@ -660,9 +755,9 @@ export async function renderPdf(d) {
   doc.on('data', (c) => chunks.push(c));
   const done = new Promise((resolve, reject) => { doc.on('end', resolve); doc.on('error', reject); });
   fonts(doc);
-  // capa (relatório premium): página inteira, sem rodapé; o conteúdo começa na página seguinte
-  if (d.cover) { cover(doc, d.cover); doc.addPage(); }
-  header(doc, { kicker: { cobranca: 'Cobrança', relatorio: 'Relatório do mês', agradecimento: 'Agenda e parceria', recibo: 'Recibo' }[d.kind] || 'Pulse', number: d.number, issued: d.issued });
+  // relatório: a 1ª página já é o resumo, com a faixa clara do cliente no lugar do cabeçalho grafite
+  if (d.summary) summaryHeader(doc, d.summary);
+  else header(doc, { kicker: { cobranca: 'Cobrança', relatorio: 'Relatório do mês', agradecimento: 'Agenda e parceria', recibo: 'Recibo' }[d.kind] || 'Pulse', number: d.number, issued: d.issued });
   title(doc, d.title, d.status, d.subtitle);
   if (d.intro) intro(doc, d.intro);
   if (d.parties?.length) parties(doc, d.parties);
@@ -672,7 +767,7 @@ export async function renderPdf(d) {
   if (d.payment) { section(doc, 'Como pagar', 200); await payment(doc, d.payment); }
   for (const s of d.sections || []) await block(doc, s);
   if (d.closing) closing(doc, d.closing);
-  footer(doc, { note: d.footerNote, contact: d.footerContact, generated: d.generated, skipFirst: !!d.cover });
+  footer(doc, { note: d.footerNote, contact: d.footerContact, generated: d.generated });
   doc.end();
   await done;
   return Buffer.concat(chunks);

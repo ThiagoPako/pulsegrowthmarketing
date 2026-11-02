@@ -161,12 +161,12 @@ const NET_ROWS = [
 ];
 
 /**
- * Relatório do mês, premium (usuário, 01/11/2026): capa com o agradecimento; o que entregamos em destaque (o que
- * passou do plano com selo laranja; o que não foi entregue não aparece); calendário editorial do mês que começa
- * (gravações agendadas, feriados com arte de aviso, datas do nicho) com o pedido de confirmar as gravações; o portal
- * do cliente; a equipe do projeto (pessoas e agentes) e o fecho com o contato.
+ * Relatório do mês (usuário, 01/11/2026): a 1ª página já é o resumo de bater o olho (faixa clara com o cliente, o
+ * agradecimento em uma linha e os números em quadros com ícone, "entregue × plano", selo laranja no que passou);
+ * stories do mês quando o plano tem stories; destaques em moldura de post; calendário editorial com o nome de cada
+ * data e o que vamos fazer; portal; equipe; fecho. O que não foi entregue não aparece com destaque.
  * d = { ref, prev, next, client, plan, numbers, network, suggestions, clientLogo?, portalUrl?, recordings?,
- *       calendar?, highlights?, team?: { people, agents }, contact? }
+ *       calendar?, highlights?, instagram?, storiesPosted?, team?: { people, agents }, contact? }
  */
 export function relatorioDoc(d) {
   const n = d.numbers;
@@ -176,50 +176,61 @@ export function relatorioDoc(d) {
     .map(([k, label]) => ({ label, previous: net.previous?.[k] ?? null, current: net.current[k], change: net.change?.[k] ?? null })) : [];
   const items = deliveredItems(n, d.plan);
   const acima = aboveSummary(items);
-  const extraTotal = items.reduce((a, r) => a + r.extra, 0);
   const suggestions = String(d.suggestions || '').split('\n').map((s) => s.replace(/^[•\-–*]\s*/, '').trim()).filter(Boolean);
   const period = n.period ? `${dataBr(n.period.since)} a ${dataBr(n.period.until)}` : monthLabel(d.ref);
   const nome = first(d.client.responsible) || d.client.name;
+  const handle = d.instagram || `@${String(d.client.name || 'cliente').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
 
-  // calendário editorial: gravações agendadas + feriados (arte de aviso) + datas do nicho
+  // stories: quadro próprio quando o plano prevê stories (plano diário)
+  const storiesPlan = Number(d.plan?.stories_qty) || 0;
+  const storiesProduced = items.find((r) => r.label === 'Stories')?.done || 0;
+  const storiesPosted = d.storiesPosted ?? storiesProduced;
+  const storiesTotal = Math.max(storiesPosted, storiesProduced);
+  const storiesExtra = storiesPlan && storiesTotal > storiesPlan ? storiesTotal - storiesPlan : 0;
+
+  const ICON = { Reels: 'video', Criativos: 'video', Stories: 'story', Artes: 'arte', Gravações: 'gravacao' };
+  const stats = [
+    ...items.filter((r) => !(storiesPlan && r.label === 'Stories'))
+      .map((r) => ({ icon: ICON[r.label] || 'video', label: r.label, value: r.done, plan: r.goal || 0, extra: r.extra })),
+    ...(n.deliveries.posts.total ? [{ icon: 'post', label: 'Posts publicados', value: n.deliveries.posts.total }] : []),
+    ...(n.time.total_hours > 0 ? [{ icon: 'horas', label: 'Horas dedicadas', value: `${num(n.time.total_hours)} h` }] : []),
+  ];
+
+  // calendário editorial: gravações agendadas + feriados (arte de aviso) + datas do segmento (arte comemorativa)
   const hora = (t) => {
     const [h, mi] = String(t || '').split(':');
     return h ? `${Number(h)}h${mi && mi !== '00' ? mi : ''}` : '';
   };
   const recs = (d.recordings || []).filter((r) => String(r.date).slice(0, 7) === d.next);
   const marks = [
-    ...recs.map((r) => ({ date: String(r.date).slice(0, 10), kind: 'gravacao', short: `Gravação ${hora(r.time)}`.trim(), text: `Gravação${r.time ? ` às ${hora(r.time)}` : ''}` })),
+    ...recs.map((r) => ({ date: String(r.date).slice(0, 10), kind: 'gravacao', name: 'Gravação', tag: hora(r.time) || 'agendada', time: hora(r.time) })),
     ...(d.calendar || []).map((x) => (x.kind === 'feriado'
-      ? { date: x.date, kind: 'feriado', short: 'Arte de aviso', text: `${x.label}: arte de aviso do feriado` }
-      : { date: x.date, kind: 'sazonal', short: x.label, text: `${x.label}: ${x.idea}` })),
+      ? { date: x.date, kind: 'feriado', name: x.label, tag: 'Arte de aviso', idea: x.idea }
+      : { date: x.date, kind: 'sazonal', name: x.label, tag: 'Arte comemorativa', idea: x.idea })),
   ].sort((a, b) => a.date.localeCompare(b.date) || (a.kind === 'gravacao' ? -1 : 1));
   const semana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
-  const diaSemana = (iso) => semana[new Date(`${iso}T12:00:00Z`).getUTCDay()];
+  const dia = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)} · ${semana[new Date(`${iso}T12:00:00Z`).getUTCDay()]}`;
+  const ideia = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : '');
 
   return {
     kind: 'relatorio',
-    cover: {
-      client: d.client.name,
-      logo: d.clientLogo || null,
-      month: monthLabel(d.ref),
-      title: 'O que entregamos para você',
-      thanks: `Obrigada por mais um mês com a Pulse, ${nome}! Foi um prazer cuidar do seu perfil em ${monthName(d.ref)}. Aqui está tudo o que construímos juntos e o que vem por aí em ${monthName(d.next)}.`,
-      badge: extraTotal > 0 ? `+${extraTotal} ${extraTotal === 1 ? 'ENTREGA' : 'ENTREGAS'} ALÉM DO PLANO` : null,
-      footer: `Período de ${period}`,
-    },
+    summary: { client: d.client.name, logo: d.clientLogo || null, month: monthLabel(d.ref) },
     title: `O que entregamos em ${monthName(d.ref)}`,
-    subtitle: `${d.client.name} · período de ${period}`,
     status: acima ? 'acima' : null,
-    cards: [
-      { label: 'Vídeos entregues', value: n.deliveries.videos.total, highlight: true },
-      { label: 'Artes', value: n.deliveries.arts.total },
-      { label: 'Posts publicados', value: n.deliveries.posts.total },
-      { label: 'Horas dedicadas', value: n.time.total_hours > 0 ? `${num(n.time.total_hours)} h` : '—' },
-    ],
+    intro: `Obrigada por mais um mês com a Pulse, ${nome}! Aqui está, de relance, tudo o que fizemos juntos em ${monthName(d.ref)}.`,
     sections: [
+      ...(stats.length ? [{ type: 'stats', items: stats }] : []),
       ...(acima ? [{ type: 'callout', heading: 'Acima do plano contratado', text: acima }] : []),
-      ...(items.length ? [{ title: 'Entregas do mês', type: 'tiles', rows: deliveryTiles(items) }] : []),
-      ...((d.highlights || []).length ? [{ title: 'Destaques do mês', type: 'gallery', items: d.highlights }] : []),
+      ...(storiesPlan ? [{
+        title: 'Stories do mês',
+        type: 'cards',
+        items: [
+          { label: 'Stories postados', value: storiesPosted, highlight: true },
+          { label: 'Previstos no plano', value: storiesPlan },
+          { label: 'Entrega total', value: storiesTotal, highlight: storiesExtra > 0, note: storiesExtra ? `+${storiesExtra} além do plano` : storiesTotal >= storiesPlan ? 'plano completo' : '' },
+        ],
+      }] : []),
+      ...((d.highlights || []).length ? [{ title: 'Destaques do mês', type: 'igposts', items: d.highlights, handle, logo: d.clientLogo || null }] : []),
       ...(n.deliveries.videos.by_type.length ? [{
         title: 'Vídeos entregues',
         type: 'table',
@@ -253,9 +264,14 @@ export function relatorioDoc(d) {
       { title: `Calendário editorial de ${monthName(d.next)}`, type: 'calendar', month: d.next, marks },
       ...(marks.length ? [{
         type: 'table',
-        columns: [{ label: 'Data', width: 90 }, { label: 'O que acontece' }],
-        rows: marks.map((mk) => [{ text: `${mk.date.slice(8, 10)}/${mk.date.slice(5, 7)} · ${diaSemana(mk.date)}`, bold: true }, mk.kind === 'gravacao' ? { text: mk.text, bold: true, color: '#F15A24' } : mk.text]),
+        columns: [{ label: 'Dia', width: 78 }, { label: 'Data', width: 190 }, { label: 'O que vamos fazer' }],
+        rows: marks.map((mk) => (mk.kind === 'gravacao'
+          ? [{ text: dia(mk.date), bold: true }, { text: 'Gravação agendada', bold: true, color: '#F15A24' }, { text: mk.time ? `Às ${mk.time}, com a nossa equipe` : 'Com a nossa equipe', color: '#F15A24' }]
+          : mk.kind === 'feriado'
+            ? [{ text: dia(mk.date), bold: true }, { text: mk.name, bold: true, sub: 'feriado' }, 'Vamos criar a arte de aviso do feriado']
+            : [{ text: dia(mk.date), bold: true }, { text: mk.name, bold: true, sub: 'data do seu segmento' }, `Arte comemorativa: ${ideia(mk.idea)}`])),
       }] : []),
+      ...(marks.some((mk) => mk.kind !== 'gravacao') ? [{ note: 'Estas artes já estão no nosso planejamento: você recebe para aprovar no portal antes de postar.' }] : []),
       ...(recs.length ? [{
         type: 'callout',
         heading: 'Confirme suas gravações no portal',
@@ -277,6 +293,7 @@ export function relatorioDoc(d) {
       ...SIGNATURE,
       band: d.contact ? `Dúvidas: ${d.contact}` : 'Agência Pulse',
     },
+    footerPeriod: period,
   };
 }
 

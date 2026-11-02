@@ -396,11 +396,160 @@ function footer(doc, { note, contact, generated }) {
   }
 }
 
+// ── Resumo do dia (pedido do usuário, 01/11/2026: "um PDF, com a foto de todo mundo, o que cada um fez durante o dia,
+// quais foram as entregas, com ícones, bonitinho") ──
+// Ícones desenhados em vetor (a DM Sans não tem emoji): um círculo de fundo e o desenho em traço por cima.
+export const ICONS = ['edicao', 'arte', 'post', 'gravacao', 'aprovacao', 'atendimento', 'cards', 'entrada', 'saida', 'alteracao', 'alerta', 'caixa'];
+
+function icon(doc, name, x, y, size = 22, { fg = C.laranja, bg = C.laranjaClaro } = {}) {
+  const s = size / 24; // desenho numa grade de 24
+  const px = (v) => x + v * s;
+  const py = (v) => y + v * s;
+  doc.save();
+  doc.circle(x + size / 2, y + size / 2, size / 2).fill(bg);
+  doc.lineWidth(Math.max(1, 1.6 * s)).strokeColor(fg).fillColor(fg).lineCap('round').lineJoin('round');
+  switch (name) {
+    case 'edicao': // claquete
+      doc.roundedRect(px(6), py(10), 12 * s, 8 * s, 1.5 * s).stroke();
+      doc.moveTo(px(6), py(10)).lineTo(px(17), py(6.5)).stroke();
+      doc.moveTo(px(9.5), py(9)).lineTo(px(11), py(7.6)).moveTo(px(13), py(7.8)).lineTo(px(14.4), py(6.6)).stroke();
+      break;
+    case 'arte': // paleta
+      doc.circle(px(12), py(12), 6.5 * s).stroke();
+      [[9.3, 10], [12, 8.4], [14.8, 10], [14.6, 13.4]].forEach(([a, b]) => doc.circle(px(a), py(b), 1 * s).fill());
+      break;
+    case 'post': // celular com seta
+      doc.roundedRect(px(8), py(5), 8 * s, 14 * s, 1.6 * s).stroke();
+      doc.moveTo(px(12), py(14.5)).lineTo(px(12), py(9)).moveTo(px(9.8), py(11)).lineTo(px(12), py(8.8)).lineTo(px(14.2), py(11)).stroke();
+      break;
+    case 'gravacao': // câmera
+      doc.roundedRect(px(5), py(8), 10 * s, 8 * s, 1.6 * s).stroke();
+      doc.moveTo(px(15), py(11)).lineTo(px(19), py(8.8)).lineTo(px(19), py(15.2)).lineTo(px(15), py(13)).closePath().stroke();
+      break;
+    case 'aprovacao': // visto
+      doc.moveTo(px(7), py(12.5)).lineTo(px(10.5), py(16)).lineTo(px(17), py(8.5)).stroke();
+      break;
+    case 'atendimento': // balão de conversa
+      doc.roundedRect(px(5.5), py(6.5), 13 * s, 9 * s, 3 * s).stroke();
+      doc.moveTo(px(9), py(15.5)).lineTo(px(8), py(18.5)).lineTo(px(12), py(15.5)).stroke();
+      break;
+    case 'cards': // setas trocando de coluna
+      doc.moveTo(px(6), py(9.5)).lineTo(px(17), py(9.5)).moveTo(px(14.5), py(7)).lineTo(px(17), py(9.5)).lineTo(px(14.5), py(12)).stroke();
+      doc.moveTo(px(18), py(14.5)).lineTo(px(7), py(14.5)).moveTo(px(9.5), py(12)).lineTo(px(7), py(14.5)).lineTo(px(9.5), py(17)).stroke();
+      break;
+    case 'entrada': // seta para cima
+      doc.moveTo(px(12), py(18)).lineTo(px(12), py(6.5)).moveTo(px(7.5), py(11)).lineTo(px(12), py(6.5)).lineTo(px(16.5), py(11)).stroke();
+      break;
+    case 'saida': // seta para baixo
+      doc.moveTo(px(12), py(6)).lineTo(px(12), py(17.5)).moveTo(px(7.5), py(13)).lineTo(px(12), py(17.5)).lineTo(px(16.5), py(13)).stroke();
+      break;
+    case 'alteracao': // lápis
+      doc.moveTo(px(7), py(17)).lineTo(px(8), py(13.5)).lineTo(px(15), py(6.5)).lineTo(px(17.5), py(9)).lineTo(px(10.5), py(16)).closePath().stroke();
+      break;
+    case 'alerta': // triângulo com !
+      doc.moveTo(px(12), py(5.5)).lineTo(px(19), py(18)).lineTo(px(5), py(18)).closePath().stroke();
+      doc.moveTo(px(12), py(10)).lineTo(px(12), py(13.5)).stroke();
+      doc.circle(px(12), py(15.8), 0.9 * s).fill();
+      break;
+    case 'caixa': // carteira
+      doc.roundedRect(px(5), py(8), 14 * s, 10 * s, 2 * s).stroke();
+      doc.moveTo(px(7), py(8)).lineTo(px(15), py(5.5)).lineTo(px(16), py(8)).stroke();
+      doc.circle(px(15.5), py(13), 1 * s).fill();
+      break;
+    default:
+      doc.circle(px(12), py(12), 2.5 * s).fill();
+  }
+  doc.restore();
+}
+
+/** Quadros de números com ícone, em linhas de até 4: [{ icon, label, value, note?, highlight? }]. */
+function kpis(doc, items) {
+  const perRow = 4;
+  const gap = 10;
+  const w = (CW - gap * (perRow - 1)) / perRow;
+  const h = 78;
+  for (let i = 0; i < items.length; i += perRow) {
+    ensure(doc, h + 10);
+    const y = doc.y;
+    items.slice(i, i + perRow).forEach((it, j) => {
+      const x = M + j * (w + gap);
+      doc.roundedRect(x, y, w, h, 12).fill(it.highlight ? C.laranjaClaro : C.cinzaClaro);
+      icon(doc, it.icon, x + 12, y + 12, 24, it.highlight ? { fg: '#FFFFFF', bg: C.laranja } : {});
+      // valor em dinheiro ("R$ 12.500,00") diminui até caber ao lado do ícone, sem cortar
+      const value = String(it.value ?? '—');
+      let size = it.small ? 14 : 20;
+      doc.font('bold');
+      while (size > 8 && doc.fontSize(size).widthOfString(value) > w - 52) size -= 0.5;
+      doc.fontSize(size).fillColor(C.texto).text(value, x + 44, y + 12 + (20 - size) / 2, { width: w - 52, height: 26, lineBreak: false });
+      doc.font('semibold').fontSize(8).fillColor(C.cinza).text(String(it.label).toUpperCase(), x + 12, y + 44, { width: w - 24, characterSpacing: 0.6, height: 12, ellipsis: true });
+      if (it.note) doc.font('regular').fontSize(7.5).fillColor(C.cinza).text(it.note, x + 12, y + 57, { width: w - 24, height: 18, ellipsis: true });
+    });
+    doc.y = y + h + gap;
+  }
+  doc.y += 8;
+}
+
+/** Foto redonda (buffer PNG/JPEG) ou a inicial na cor da marca. */
+function avatar(doc, person, x, y, size) {
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  if (person.photo) {
+    try {
+      doc.save();
+      doc.circle(cx, cy, size / 2).clip();
+      doc.image(person.photo, x, y, { cover: [size, size], align: 'center', valign: 'center' });
+      doc.restore();
+      doc.circle(cx, cy, size / 2).lineWidth(1.5).strokeColor('#FFFFFF').stroke();
+      return;
+    } catch {
+      doc.restore();
+    }
+  }
+  doc.circle(cx, cy, size / 2).fill(person.agent ? C.fundo2 : C.laranja);
+  const initial = String(person.name || '?').trim().charAt(0).toUpperCase() || '?';
+  doc.font('bold').fontSize(size * 0.42).fillColor('#FFFFFF').text(initial, x, cy - size * 0.27, { width: size, align: 'center' });
+}
+
+/**
+ * Pessoas do dia: [{ name, role, agent, photo?, items: [{ icon, text }] }] — foto, nome, função e uma linha com ícone
+ * por coisa feita. Cartão com altura pelo conteúdo; não quebra no meio.
+ */
+function people(doc, list) {
+  const size = 40;
+  for (const p of list) {
+    doc.font('regular').fontSize(9.5);
+    const lines = (p.items || []).map((it) => Math.max(18, doc.heightOfString(it.text, { width: CW - 110 }) + 6));
+    const h = Math.max(size + 24, 44 + lines.reduce((a, b) => a + b, 0)) + 6;
+    ensure(doc, h + 8);
+    const y = doc.y;
+    doc.roundedRect(M, y, CW, h, 12).lineWidth(1).strokeColor(C.linha).stroke();
+    avatar(doc, p, M + 14, y + 14, size);
+    doc.font('bold').fontSize(11.5).fillColor(C.texto).text(p.name, M + 66, y + 14, { width: CW - 200, height: 15, ellipsis: true });
+    if (p.agent) {
+      doc.font('bold').fontSize(7);
+      const tw = doc.widthOfString('AGENTE DE IA') + 14;
+      doc.roundedRect(W - M - 14 - tw, y + 15, tw, 15, 7.5).fill(C.fundo2);
+      doc.fillColor('#FFFFFF').text('AGENTE DE IA', W - M - 14 - tw, y + 19, { width: tw, align: 'center', characterSpacing: 0.6 });
+    }
+    doc.font('regular').fontSize(8.5).fillColor(C.cinza).text(p.role || '', M + 66, y + 30, { width: CW - 200, height: 12, ellipsis: true });
+    let ly = y + 50;
+    (p.items || []).forEach((it, i) => {
+      icon(doc, it.icon, M + 66, ly - 2, 16);
+      doc.font('regular').fontSize(9.5).fillColor(C.texto).text(it.text, M + 90, ly, { width: CW - 110 });
+      ly += lines[i];
+    });
+    doc.y = y + h + 8;
+  }
+  doc.y += 6;
+}
+
 async function block(doc, s) {
   // o título não fica sozinho no pé da página: reserva o começo do bloco junto
-  const need = { table: 110, compare: 110, progress: 90, bars: 80, callout: 90 }[s.type] || 60;
+  const need = s.need || { table: 110, compare: 110, progress: 90, bars: 80, callout: 90, kpis: 100, people: 110 }[s.type] || 60;
   if (s.title) section(doc, s.title, need);
   switch (s.type) {
+    case 'kpis': kpis(doc, s.items); break;
+    case 'people': people(doc, s.people); break;
     case 'table': table(doc, s.columns, s.rows, { totals: s.totals, total: s.total }); break;
     case 'progress': progress(doc, s.rows); break;
     case 'bars': bars(doc, s.rows); break;
@@ -427,7 +576,7 @@ export async function renderPdf(d) {
   doc.on('data', (c) => chunks.push(c));
   const done = new Promise((resolve, reject) => { doc.on('end', resolve); doc.on('error', reject); });
   fonts(doc);
-  header(doc, { kicker: { cobranca: 'Cobrança', relatorio: 'Relatório do mês', agradecimento: 'Agenda e parceria', recibo: 'Recibo' }[d.kind] || 'Pulse', number: d.number, issued: d.issued });
+  header(doc, { kicker: { cobranca: 'Cobrança', relatorio: 'Relatório do mês', agradecimento: 'Agenda e parceria', recibo: 'Recibo', resumo: 'Resumo do dia' }[d.kind] || 'Pulse', number: d.number, issued: d.issued });
   title(doc, d.title, d.status, d.subtitle);
   if (d.intro) intro(doc, d.intro);
   if (d.parties?.length) parties(doc, d.parties);

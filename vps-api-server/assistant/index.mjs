@@ -91,8 +91,8 @@ export function registerAssistant(app, {
     monitor.start();
   }
   if (process.env.ASSISTANT_DISABLED !== '1' && process.env.TEMPERATURE_DISABLED !== '1') temperature.start();
-  // resumo do dia às 18h no WhatsApp dos números com "resumo_diario" (dailyReport.mjs)
-  const dailyReport = createDailyReport({ pool, hour: envHour('ASSISTANT_DAILY_REPORT_HOUR', 18), intervalMs: envNumber('ASSISTANT_DAILY_REPORT_TICK_MS', 300_000) });
+  // resumo do dia às 18h (PDF) no WhatsApp dos números com "resumo_diario" (dailyReport.mjs + dailyReportPdf.mjs)
+  const dailyReport = createDailyReport({ pool, uploadRoot, publicUploadsUrl, hour: envHour('ASSISTANT_DAILY_REPORT_HOUR', 18), intervalMs: envNumber('ASSISTANT_DAILY_REPORT_TICK_MS', 300_000) });
   if (process.env.ASSISTANT_DISABLED !== '1') dailyReport.start();
   // vídeo em Revisão ("aviso_revisao"), arte em aprovação e vídeo urgente ("aviso_aprovacao") → WhatsApp (revisionAlert.mjs)
   const revisionAlert = createRevisionAlert({ pool, intervalMs: envNumber('ASSISTANT_REVISION_ALERT_TICK_MS', 60_000) });

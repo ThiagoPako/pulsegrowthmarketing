@@ -6,7 +6,15 @@
 // números são os do sistema, e o texto não custa nada): histórico dos cards de vídeo (task_history) e de design
 // (design_task_history), versões entregues (edit_versions), gravações (recordings), cards novos e a fila agora.
 // Marcado em pulse_job_runs (job "resumo_diario"): reinício do servidor não manda duas vezes.
+// Desde 01/11/2026 (pedido do usuário) vai em PDF (dailyReportPdf.mjs + lib/billingPdf.mjs): a mensagem é só "Resumo do
+// dia dd/mm 📊" com o PDF anexado. A seção financeira só entra para quem tem "consultar_financeiro". Se o PDF falhar,
+// manda o texto de antes (formatDay), para o resumo não faltar.
+import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { getSettings, logEvent, remember, sendToNumber, brazilToday, cityLabel, clip } from './common.mjs';
+import { collectDayPdf, dailyPdfSpec } from './dailyReportPdf.mjs';
+import { renderPdf } from '../lib/billingPdf.mjs';
 
 const JOB = 'resumo_diario';
 const TZ = 'America/Sao_Paulo';
@@ -148,7 +156,30 @@ export function formatDay(d, cities, date = new Date()) {
   return linhas.join('\n');
 }
 
-export function createDailyReport({ pool, hour = 18, intervalMs = 300_000 }) {
+/**
+ * Gera o PDF do resumo e grava em uploads/resumos/<dia>/ com nome aleatório (tem dado financeiro: o link não é
+ * adivinhável). Apaga os resumos com mais de 15 dias. Devolve { url, name, buffer }.
+ */
+export async function buildDailyPdf(pool, cities, { financeiro, uploadRoot, publicUploadsUrl, date = new Date() }) {
+  const data = await collectDayPdf(pool, cities, { financeiro, publicUploadsUrl });
+  const buffer = await renderPdf(dailyPdfSpec(data, { date, financeiro }));
+  if (buffer.subarray(0, 5).toString() !== '%PDF-') throw new Error('PDF do resumo saiu inválido');
+  const day = brazilToday(date);
+  const base = path.resolve(uploadRoot || 'uploads', 'resumos');
+  const dir = path.join(base, day);
+  await fs.mkdir(dir, { recursive: true });
+  const file = `resumo-${day}-${crypto.randomBytes(12).toString('hex')}.pdf`;
+  await fs.writeFile(path.join(dir, file), buffer);
+  for (const old of await fs.readdir(base).catch(() => [])) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(old) && old < brazilToday(new Date(date.getTime() - 15 * 86400_000))) {
+      await fs.rm(path.join(base, old), { recursive: true, force: true }).catch(() => {});
+    }
+  }
+  const uploadsBase = String(publicUploadsUrl || 'https://agenciapulse.tech/uploads').replace(/\/+$/, '');
+  return { url: `${uploadsBase}/resumos/${day}/${file}`, name: `Resumo-do-dia-${dayLabel(date).replace('/', '-')}.pdf`, buffer, data };
+}
+
+export function createDailyReport({ pool, hour = 18, intervalMs = 300_000, uploadRoot, publicUploadsUrl }) {
   let running = false;
   async function runDaily({ force = false } = {}) {
     if (running) return null;
@@ -173,13 +204,33 @@ export function createDailyReport({ pool, hour = 18, intervalMs = 300_000 }) {
         `SELECT * FROM assistant_numbers WHERE active AND 'resumo_diario' = ANY(permissions)`
       );
       let sent = 0;
+      const pdfs = new Map(); // mesmo PDF para quem tem as mesmas cidades e a mesma permissão financeira
       for (const number of numbers) {
         try {
           const cities = number.cities || [];
-          const body = formatDay(await collectDay(pool, cities), cities);
-          await sendToNumber(pool, number, body);
-          await remember(pool, number.id, 'assistant', body);
-          await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'resumo_diario', text: today });
+          const financeiro = (number.permissions || []).includes('consultar_financeiro');
+          const key = `${[...cities].sort().join(',')}|${financeiro}`;
+          let pdf = pdfs.get(key);
+          if (pdf === undefined) {
+            pdf = await buildDailyPdf(pool, cities, { financeiro, uploadRoot, publicUploadsUrl }).catch((error) => {
+              console.error('[resumo do dia] PDF:', error.message);
+              return null;
+            });
+            pdfs.set(key, pdf);
+          }
+          if (pdf) {
+            const body = `Resumo do dia ${dayLabel()} 📊`;
+            await sendToNumber(pool, number, body, { mediaUrl: pdf.url, mediaName: pdf.name });
+            const n = pdf.data.numeros;
+            await remember(pool, number.id, 'assistant', `${body} [PDF anexado: ${n.videos} vídeo(s) entregue(s), ${n.artes} arte(s), ${n.posts} post(s), ${n.gravacoes} gravação(ões), ${pdf.data.pessoas.length} pessoa(s) com atividade${pdf.data.financeiro ? `, caixa +${pdf.data.financeiro.entradas} / −${pdf.data.financeiro.saidas}` : ''}]`);
+            await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'resumo_diario', text: today, detail: { pdf: pdf.url, financeiro } });
+          } else {
+            // sem PDF: o texto de antes, para o resumo não faltar
+            const body = formatDay(await collectDay(pool, cities), cities);
+            await sendToNumber(pool, number, body);
+            await remember(pool, number.id, 'assistant', body);
+            await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'resumo_diario', text: today, detail: { pdf: null } });
+          }
           sent++;
         } catch (error) {
           console.error('[resumo do dia]', number.name, error.message);

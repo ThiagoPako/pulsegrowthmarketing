@@ -145,6 +145,7 @@ export function cobrancaDoc(d) {
         title: 'Informações',
         bullets: [
           d.payment?.payUrl ? 'No botão "Pagar agora" (ou no link da mensagem), você copia o Pix com um toque ou paga no cartão.' : '',
+          d.payment?.cardHint ? 'Também dá para pagar no cartão de crédito, em até 12x, pelo botão "Pagar agora".' : '',
           d.payment?.cardLink ? 'No cartão, pelo link da Efí, a confirmação do pagamento é automática.' : '',
           d.payment?.pixAuto ? 'Pix Automático: ative na página de pagamento e a mensalidade é debitada só no vencimento. Cancela quando quiser.' : '',
           'O QR Code e o Pix copia e cola já levam o valor desta mensalidade.',

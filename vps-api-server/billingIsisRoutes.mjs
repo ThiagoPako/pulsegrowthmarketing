@@ -24,6 +24,8 @@ import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, monthName as no
 import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
 import { staticTxid } from './lib/pixReceipt.mjs';
 import { OFFER_LINE } from './lib/pixAutomatico.mjs';
+
+const CARD_LINE = '💳 Se preferir, dá para pagar no cartão de crédito, em até 12x, pelo mesmo link.';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
 import { monthCalendar } from './lib/monthDates.mjs';
 import { videoFrame } from './lib/videoFrame.mjs';
@@ -554,6 +556,11 @@ export function registerBillingIsisRoutes(app, {
       return null;
     });
     // convite do Pix Automático em toda cobrança de quem ainda não aderiu (a página tem o botão)
+    // não pagou no Pix (usuário, 02/11/2026: "as próximas cobranças já avisa que temos outras formas de pagamento para pagar
+    // no cartão"): lembrete, débito automático que não passou e a cobrança do mês seguinte a um atraso lembram do cartão
+    const late = (history || []).slice(0, 1).some((h) => !isPaid(h)
+      || (h.paid_at && h.due_date && String(dateKey(h.paid_at)) > String(dateKey(h.due_date))));
+    const cardHint = !!link && (step === 'lembrete' || autoFailed || late);
     const offer = !!payUrl && !autoDebit && (await autoDebitFor(contract.id).catch(() => ({})))?.status !== 'ativo'
       && await pixAutoAvailable(normalizeCityValue(contract.client_city || contract.city) || 'minacu').catch(() => false);
     return {
@@ -562,7 +569,7 @@ export function registerBillingIsisRoutes(app, {
       pdf: cobrancaDoc({
         month, today: date, dueDate, amount, status: step === 'lembrete' ? 'vencido' : 'aberto',
         client: clientOf(contract), plan: planOf(contract), issuer: issuerOf(contract, config), history,
-        payment: { pixAuto: offer, pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(cardTotal) : null, cardNotice: CARD_NOTICE, payUrl, amount: brl(amount) },
+        payment: { pixAuto: offer, cardHint, pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(cardTotal) : null, cardNotice: CARD_NOTICE, payUrl, amount: brl(amount) },
       }),
       payUrl,
       // o código Pix sozinho, numa mensagem logo depois, para o cliente tocar, segurar e copiar (nada além do código)
@@ -572,11 +579,12 @@ export function registerBillingIsisRoutes(app, {
         `Olá, ${base.nome_cliente}! 😊`, '',
         `Não conseguimos debitar a mensalidade de ${monthName(`${month}-01`)} (*${brl(amount)}*) pelo Pix Automático.`, '',
         '👉 Pague aqui (Pix ou cartão):', payUrl, '', 'O código Pix vai na próxima mensagem.',
+        ...(cardHint ? ['', CARD_LINE] : []),
       ].join('\n') : applyTemplate(payUrl ? ensurePayLink(templateOf(config, step)) : templateOf(config, step), {
         ...base, link_pagamento: payUrl, plano, valor: brl(amount), mes_ref: monthName(`${month}-01`),
         pix_copia_cola: pix, chave_pix: config?.pix_key, nome_recebedor: config?.receiver_name,
         link_infinitepay: link, aviso_cartao: link ? CARD_NOTICE : '',
-      }) + (offer ? `\n\n${OFFER_LINE}` : ''),
+      }) + (cardHint ? `\n\n${CARD_LINE}` : '') + (offer ? `\n\n${OFFER_LINE}` : ''),
     };
   }
 

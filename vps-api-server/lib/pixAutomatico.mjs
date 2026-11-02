@@ -123,6 +123,17 @@ export function cobrState(cobr) {
   return { state: 'aberta' };
 }
 
+/**
+ * Data do débito (regra do usuário, 02/11/2026: "não pode errar cobrança; não pode debitar nada de cliente antes do dia
+ * do vencimento"): o vencimento do Financeiro, mas nunca antes do dia do contrato no mês. Com ajusteDiaUtil, a Efí só
+ * empurra para o próximo dia útil (fim de semana e feriado), nunca para antes.
+ */
+export function debitDate(financeDue, month, dueDay) {
+  const contractDue = dueDateOf(month, dueDay);
+  const fin = /^\d{4}-\d{2}-\d{2}$/.test(String(financeDue || '')) ? String(financeDue) : contractDue;
+  return fin > contractDue ? fin : contractDue;
+}
+
 /** A cobrança do mês sai entre 2 e 8 dias antes do vencimento (a regra do Pix Automático pede antecedência). */
 export function cobrWindow(today, dueDate) {
   const days = Math.round((Date.parse(`${dueDate}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86400000);

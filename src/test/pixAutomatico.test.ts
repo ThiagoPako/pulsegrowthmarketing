@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  devedorDoc, maskDoc, firstDebitDate, recBody, cobrBody, recState, cobrState, cobrWindow,
+  devedorDoc, maskDoc, firstDebitDate, recBody, cobrBody, recState, cobrState, cobrWindow, debitDate,
 } from '../../vps-api-server/lib/pixAutomatico.mjs';
 import { recipientsFor } from '../../vps-api-server/lib/teamAlerts.mjs';
 import { registerPixAutomaticoRoutes } from '../../vps-api-server/pixAutomaticoRoutes.mjs';
@@ -40,6 +40,14 @@ describe('Pix Automático · regras', () => {
     expect(cobrState({ status: 'CONCLUIDA' }).state).toBe('pago');
     expect(cobrState({ status: 'ATIVA', tentativas: [{ status: 'EXPIRADA' }] }).state).toBe('falhou');
     expect(cobrState({ status: 'ATIVA', tentativas: [{ status: 'AGENDADA' }] }).state).toBe('aberta');
+  });
+
+  it('nunca debita antes do vencimento: o mais tarde entre o Financeiro e o dia do contrato; dia útil só empurra para depois', () => {
+    expect(debitDate('2026-12-10', '2026-12', 10)).toBe('2026-12-10');
+    expect(debitDate('2026-12-05', '2026-12', 10)).toBe('2026-12-10');
+    expect(debitDate('2026-12-12', '2026-12', 10)).toBe('2026-12-12');
+    expect(debitDate(null, '2027-02', 31)).toBe('2027-02-28');
+    expect(cobrBody({ idRec: 'RR1', dueDate: '2026-12-10', amount: 1 })).toMatchObject({ calendario: { dataDeVencimento: '2026-12-10' }, ajusteDiaUtil: true });
   });
 
   it('a cobrança do mês sai de 2 a 8 dias antes do vencimento', () => {

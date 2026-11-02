@@ -2,10 +2,12 @@
 // Pedido do usuário (01/11/2026): "uma forma do cliente copiar o pagamento ou clicar para pagar ... aquele botão de
 // clique para copiar". Mostra valor e vencimento, o botão de copiar o Pix copia e cola, o botão do checkout da
 // InfinitePay (Pix ou cartão) e o passo a passo. Não abre o app do banco direto: não há padrão que sirva a todos.
-import { useEffect, useState } from 'react';
+// Pix pela chave (02/11/2026, "crie uma forma de autenticar esse pagamento"): depois de pagar, o cliente manda o
+// comprovante aqui mesmo; o servidor lê e confere, e a baixa sai quando o dinheiro aparece no banco.
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
-import { Check, Copy, CreditCard, Loader2 } from 'lucide-react';
+import { Check, Copy, CreditCard, FileUp, Loader2 } from 'lucide-react';
 import logo from '@/assets/pulse-logo-branco.png';
 
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
@@ -22,6 +24,8 @@ export interface PayPageData {
   pix_key: string | null;
   receiver: string | null;
   card_link: string | null;
+  receipt_sent?: boolean;
+  pix_auto?: boolean;
 }
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -154,6 +158,8 @@ export default function PayBilling({ preview }: { preview?: PayPageData }) {
               </section>
             )}
 
+            {!data.paid && data.pix_payload && !data.pix_auto && <ReceiptUpload token={token || ''} sent={!!data.receipt_sent} demo={!!preview} />}
+
             {!data.paid && data.card_link && (
               <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm">
                 <a
@@ -178,5 +184,54 @@ export default function PayBilling({ preview }: { preview?: PayPageData }) {
         )}
       </main>
     </div>
+  );
+}
+
+/** "Já pagou? Envie o comprovante": foto (print) ou PDF; a resposta do servidor aparece logo abaixo. */
+function ReceiptUpload({ token, sent, demo }: { token: string; sent: boolean; demo: boolean }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [state, setState] = useState<'idle' | 'sending' | 'ok' | 'revisar' | 'erro'>(sent ? 'ok' : 'idle');
+  const [message, setMessage] = useState(sent ? 'Comprovante recebido. Assim que o pagamento for confirmado, você recebe o recibo pelo WhatsApp.' : '');
+
+  const send = async (file: File | undefined) => {
+    if (!file || demo) return;
+    setState('sending');
+    setMessage('');
+    try {
+      const form = new FormData();
+      form.append('arquivo', file);
+      const r = await fetch(`${VPS_API_BASE}/public/cobranca/${encodeURIComponent(token)}/comprovante`, { method: 'POST', body: form });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || 'Não deu para enviar. Tente de novo.');
+      setState(body.status === 'revisar' ? 'revisar' : 'ok');
+      setMessage(body.message || '');
+    } catch (e) {
+      setState('erro');
+      setMessage((e as Error).message);
+    } finally {
+      if (input.current) input.current.value = '';
+    }
+  };
+
+  return (
+    <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm">
+      <p className="text-[15px] font-bold">Já pagou?</p>
+      <p className="mt-1 text-sm text-[#6B6B73]">Envie o comprovante do Pix para confirmarmos o pagamento.</p>
+      <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={(e) => send(e.target.files?.[0])} />
+      <button
+        type="button"
+        onClick={() => input.current?.click()}
+        disabled={state === 'sending'}
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#0E0E10] px-4 py-3.5 text-base font-bold active:scale-[0.98] disabled:opacity-60"
+      >
+        {state === 'sending' ? <><Loader2 className="h-5 w-5 animate-spin" /> Enviando…</> : <><FileUp className="h-5 w-5" /> {state === 'ok' ? 'Enviar outro comprovante' : 'Enviar comprovante'}</>}
+      </button>
+      {message && (
+        <p aria-live="polite" className={`mt-3 text-center text-sm ${state === 'ok' ? 'text-[#1F9D55]' : 'text-[#B4232C]'}`}>
+          {state === 'ok' && <Check className="mr-1 inline h-4 w-4" />}{message}
+        </p>
+      )}
+      <p className="mt-2 text-center text-[11px] text-[#8C8C96]">Foto da tela (print) ou PDF do comprovante.</p>
+    </section>
   );
 }

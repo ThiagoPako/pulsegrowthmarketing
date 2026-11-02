@@ -22,6 +22,7 @@ import {
 import { renderPdf } from './lib/billingPdf.mjs';
 import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, monthName as nomeMes } from './lib/billingPdfDocs.mjs';
 import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
+import { staticTxid } from './lib/pixReceipt.mjs';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
 import { monthCalendar } from './lib/monthDates.mjs';
 import { videoFrame } from './lib/videoFrame.mjs';
@@ -47,7 +48,7 @@ const dataBr = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().joi
 const DOC_NAMES = { relatorio_mensal: 'Relatorio', pre_vencimento: 'Agenda', cobranca: 'Cobranca', lembrete: 'Cobranca', obrigado: 'Recibo' };
 
 export function registerBillingIsisRoutes(app, {
-  pool, verifyAdmin, paymentConfigFor, socialReports, paymentLink = async () => null, pixCharge = async () => null, uploadRoot, publicUploadsUrl,
+  pool, verifyAdmin, paymentConfigFor, socialReports, paymentLink = async () => null, pixCharge = async () => null, lastReceipt = async () => null, uploadRoot, publicUploadsUrl,
   publicAppUrl = process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech', logger = console,
 }) {
   const appBase = String(publicAppUrl).replace(/\/+$/, '');
@@ -529,7 +530,7 @@ export function registerBillingIsisRoutes(app, {
       }
     }
     const pix = efiPix?.pixCopiaECola
-      || pixPayload({ key: config?.pix_key, name: config?.receiver_name, city: contract.city || contract.client_city, amount, txid: `PULSE${month.replace('-', '')}` });
+      || pixPayload({ key: config?.pix_key, name: config?.receiver_name, city: contract.city || contract.client_city, amount, txid: staticTxid(contract.id, month) });
     // o link é no valor da mensalidade: a taxa do cartão a InfinitePay repassa na hora do pagamento (usuário, 01/11/2026)
     const link = await paymentLink({ contract, revenue, amount, month }).catch((error) => {
       logger.error('[cobranca-isis] link de pagamento:', error.message);
@@ -837,6 +838,10 @@ export function registerBillingIsisRoutes(app, {
         paid, paid_at: paid ? rev.paid_at : null,
         pix_payload: paid ? null : p.pix_payload, pix_key: p.pix_key, receiver: p.receiver_name,
         card_link: paid ? null : p.card_link, city: p.city,
+        // comprovante já enviado (Pix pela chave): a página mostra "recebido" em vez de pedir de novo
+        // Pix dinâmico (Efí) se identifica sozinho; o estático (pela chave) pede o comprovante
+        pix_auto: /br\.gov\.bcb\.pix25/i.test(String(p.pix_payload || '')),
+        receipt_sent: paid ? false : !!(await lastReceipt(token).catch(() => null)),
       });
     } catch (error) { sendError(res, error); }
   });

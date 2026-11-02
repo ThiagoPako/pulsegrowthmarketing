@@ -32,6 +32,7 @@ import { registerBillingIsisRoutes } from './billingIsisRoutes.mjs';
 import { registerPaymentAccountsRoutes } from './paymentAccountsRoutes.mjs';
 import { registerInfinitePayRoutes } from './infinitePayRoutes.mjs';
 import { registerEfiPixRoutes } from './efiPixRoutes.mjs';
+import { registerPixReceiptRoutes } from './pixReceiptRoutes.mjs';
 import { registerCampaignIsisRoutes } from './campaignIsisRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerAgentDriveRoutes } from './agentDriveRoutes.mjs';
@@ -20482,6 +20483,30 @@ const efiPix = registerEfiPixRoutes(app, {
   publicApiUrl: process.env.EFI_WEBHOOK_BASE_URL || process.env.PUBLIC_APP_URL,
 });
 
+// ─── Pix pela chave: comprovante na página /pagar, lido pela IA, e baixa pelo extrato (.ofx) ou pela gestão ──
+const pixReceipts = registerPixReceiptRoutes(app, {
+  pool,
+  verifyAdmin,
+  paymentConfigFor: paymentConfigForCity,
+  markRevenuePaid: infinitePay.markRevenuePaid,
+  // fora de /var/www/uploads (público no nginx): comprovante tem dado bancário do cliente
+  privateRoot: process.env.PRIVATE_FILES_ROOT || path.resolve(UPLOAD_ROOT, '..', 'pulse-privado'),
+  readReceipt: async ({ data, mime, prompt }) => {
+    const ai = await resolveAiConfig(null);
+    if (ai.provider !== 'claude') throw new Error('Leitura do comprovante precisa da chave do Claude');
+    const file = mime === 'application/pdf'
+      ? { type: 'document', source: { type: 'base64', media_type: mime, data } }
+      : { type: 'image', source: { type: 'base64', media_type: mime, data } };
+    const response = await getAnthropicClient(ai.key).beta.messages.create({
+      model: 'claude-sonnet-5-5',
+      max_tokens: 4000,
+      output_config: { effort: 'low' },
+      messages: [{ role: 'user', content: [file, { type: 'text', text: prompt }] }],
+    });
+    return response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+  },
+});
+
 // ─── Cobranças da Ísis pelo Assistente PULSE (Financeiro → Cobranças; desligado = a cobrança antiga segue igual) ──
 const billingIsis = registerBillingIsisRoutes(app, {
   pool,
@@ -20490,6 +20515,7 @@ const billingIsis = registerBillingIsisRoutes(app, {
   socialReports,
   paymentLink: infinitePay.paymentLink,
   pixCharge: efiPix.pixCharge,
+  lastReceipt: pixReceipts.lastReceipt,
   uploadRoot: UPLOAD_ROOT,
   publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
 });

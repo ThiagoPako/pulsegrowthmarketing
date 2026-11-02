@@ -272,6 +272,7 @@ export function relatorioDoc(d) {
       { title: `Calendário editorial de ${monthName(d.next)}`, type: 'calendar', month: d.next, marks },
       ...(marks.length ? [{
         type: 'table',
+        plain: true,
         columns: [{ label: 'Dia', width: 78 }, { label: 'Data', width: 190 }, { label: 'O que vamos fazer' }],
         rows: marks.map((mk) => (mk.kind === 'gravacao'
           ? [{ text: dia(mk.date), bold: true }, { text: 'Gravação agendada', bold: true, color: '#F15A24' }, { text: mk.time ? `Às ${mk.time}, com a nossa equipe` : 'Com a nossa equipe', color: '#F15A24' }]
@@ -348,7 +349,7 @@ export function agradecimentoDoc(d) {
       { label: 'Próximo vencimento', value: dataBr(d.dueDate), note: d.amount ? brl(d.amount) : '' },
     ],
     sections: [
-      ...(acima ? [{ type: 'callout', tone: 'verde', heading: 'Acima do plano contratado', text: acima }] : []),
+      ...(acima ? [{ type: 'callout', heading: 'Acima do plano contratado', text: acima }] : []),
       ...(items.length ? [{ title: `O que entregamos em ${monthName(d.ref)}`, type: 'tiles', rows: deliveryTiles(items) }] : []),
     ],
     closing: {

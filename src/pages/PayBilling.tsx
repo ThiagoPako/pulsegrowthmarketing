@@ -377,7 +377,7 @@ function PixAutoSection({ token, info, demo }: {
         <span className="rounded-full bg-[#EEF4FF] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#2B5BD7]">novo</span>
       </div>
       <p className="mt-1 text-sm text-[#6B6B73]">
-        Ative e pronto: a mensalidade se paga sozinha no dia do vencimento e você não recebe mais mensagens de cobrança 😊 Cancela quando quiser, pelo app do seu banco.
+        Ative e pronto: a mensalidade se paga sozinha no dia do vencimento e você não recebe mais mensagens de cobrança 😊 Cancela quando quiser pelo app do seu banco, ou chame a gente que cancelamos para você.
       </p>
 
       {code ? (

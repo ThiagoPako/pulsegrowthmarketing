@@ -144,4 +144,5 @@ export function cobrWindow(today, dueDate) {
 /** Linha do convite nas cobranças (curta; a página explica o resto). */
 // sem "pagar na mão" (usuário, 02/11/2026: "coloque ative Pix Automático")
 // leve e feliz (usuário, 02/11/2026): ative o Pix Automático e as mensagens de cobrança param de chegar
-export const OFFER_LINE = '✨ Que tal ativar o Pix Automático? A mensalidade se paga sozinha no vencimento e você não recebe mais mensagens de cobrança 😊 É só um toque na página de pagamento.';
+// e lembrar que cancela quando quiser, ou a gente cancela por ele (usuário, 02/11/2026)
+export const OFFER_LINE = '✨ Que tal ativar o Pix Automático? A mensalidade se paga sozinha no vencimento e você não recebe mais mensagens de cobrança 😊 É só um toque na página de pagamento. Você cancela quando quiser e, se tiver qualquer dúvida, é só chamar a gente que cancelamos para você.';

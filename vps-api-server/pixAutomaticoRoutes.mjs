@@ -12,7 +12,7 @@
 //   POST /api/public/cobranca/:token/pix-automatico { documento, nome }   gera o código de autorização     público
 //   GET  /api/pix-automatico                                              adesões (tela do Financeiro)     admin
 
-import { cobrBody, cobrState, cobrWindow, devedorDoc, dueDateOf, firstDebitDate, maskDoc, recBody, recState } from './lib/pixAutomatico.mjs';
+import { cobrBody, cobrState, cobrWindow, debitDate, devedorDoc, firstDebitDate, maskDoc, recBody, recState } from './lib/pixAutomatico.mjs';
 import { encryptSecret } from './lib/paymentAccounts.mjs';
 import { alertTeam, brl, CITY_NAME } from './lib/teamAlerts.mjs';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
@@ -207,8 +207,9 @@ export function registerPixAutomaticoRoutes(app, {
         for (const month of [today.slice(0, 7), nextMonth(today.slice(0, 7))]) {
           if (month < startMonth) continue;
           const info = await monthInfo(contract, month);
-          const dueDate = info?.dueDate || dueDateOf(month, contract.due_day);
-          if (!cobrWindow(today, dueDate) || info?.paid) continue;
+          // nunca antes do vencimento: o mais tarde entre o vencimento do Financeiro e o dia do contrato
+          const dueDate = debitDate(info?.dueDate, month, contract.due_day);
+          if (dueDate <= today || !cobrWindow(today, dueDate) || info?.paid) continue;
           const { rows: [had] } = await pool.query(`SELECT 1 FROM pix_auto_cobr WHERE id_rec = $1 AND month = $2`, [r.id_rec, month]);
           if (had) continue;
           const pc = await pixClient(r.city);

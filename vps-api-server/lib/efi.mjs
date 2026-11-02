@@ -216,6 +216,8 @@ export function createEfiClient({ clientId, clientSecret, env = 'producao', p12 
       }
       return all;
     },
+    /** Um Pix recebido pelo ID da transação (E2E); 404 = não caiu nesta conta. */
+    getPix: (e2e) => call('GET', `/v2/pix/${enc(e2e)}`),
     saldo: () => call('GET', '/v2/gn/saldo/'),
     putWebhook: (chave, webhookUrl) => call('PUT', `/v2/webhook/${enc(chave)}`, { webhookUrl }),
     getWebhook: (chave) => call('GET', `/v2/webhook/${enc(chave)}`),

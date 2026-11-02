@@ -16,8 +16,9 @@ const STOP = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'ltda', 'me', 'eireli
  * 11 letras/números = 32 caracteres. Devolve null se o formato não é esse.
  */
 export function parseE2E(id) {
-  const s = String(id || '').replace(/\s+/g, '').toUpperCase();
-  const m = /^E(\d{8})(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})([A-Z0-9]{11})$/.exec(s);
+  // o fim do ID diferencia maiúscula de minúscula (a API da Efí procura pelo ID exato): só o "E" do começo é normalizado
+  const s = String(id || '').replace(/\s+/g, '').replace(/^e/, 'E');
+  const m = /^E(\d{8})(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})([A-Za-z0-9]{11})$/.exec(s);
   if (!m) return null;
   const [, ispb, y, mo, d, h, mi] = m;
   const at = new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi));

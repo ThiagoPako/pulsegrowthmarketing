@@ -190,9 +190,13 @@ export default function PayBilling({ preview }: { preview?: PayPageData }) {
   );
 }
 
-/** "Já pagou? Envie o comprovante": foto (print) ou PDF; a resposta do servidor aparece logo abaixo. */
+/**
+ * "Já pagou?": o botão confere o Pix na conta na hora (API da Efí, sem cobrança) e, se não achar, o comprovante (foto
+ * ou PDF) vai para a conferência. Pago, a página recarrega e mostra "Paga".
+ */
 function ReceiptUpload({ token, sent, demo }: { token: string; sent: boolean; demo: boolean }) {
   const input = useRef<HTMLInputElement>(null);
+  const [checking, setChecking] = useState(false);
   const [state, setState] = useState<'idle' | 'sending' | 'ok' | 'revisar' | 'erro'>(sent ? 'ok' : 'idle');
   const [message, setMessage] = useState(sent ? 'Comprovante recebido. Assim que o pagamento for confirmado, você recebe o recibo pelo WhatsApp.' : '');
 
@@ -208,6 +212,7 @@ function ReceiptUpload({ token, sent, demo }: { token: string; sent: boolean; de
       if (!r.ok) throw new Error(body.error || 'Não deu para enviar. Tente de novo.');
       setState(body.status === 'revisar' ? 'revisar' : 'ok');
       setMessage(body.message || '');
+      if (body.status === 'pago') window.setTimeout(() => window.location.reload(), 2500);
     } catch (e) {
       setState('erro');
       setMessage((e as Error).message);
@@ -216,16 +221,43 @@ function ReceiptUpload({ token, sent, demo }: { token: string; sent: boolean; de
     }
   };
 
+  const check = async () => {
+    if (demo) return;
+    setChecking(true);
+    setMessage('');
+    try {
+      const r = await fetch(`${VPS_API_BASE}/public/cobranca/${encodeURIComponent(token)}/conferir`, { method: 'POST' });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || 'Não deu para conferir agora. Tente de novo.');
+      setState(body.paid ? 'ok' : 'idle');
+      setMessage(body.message || '');
+      if (body.paid) window.setTimeout(() => window.location.reload(), 2500);
+    } catch (e) {
+      setState('erro');
+      setMessage((e as Error).message);
+    } finally {
+      setChecking(false);
+    }
+  };
+
   return (
     <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm">
       <p className="text-[15px] font-bold">Já pagou?</p>
-      <p className="mt-1 text-sm text-[#6B6B73]">Envie o comprovante do Pix para confirmarmos o pagamento.</p>
+      <p className="mt-1 text-sm text-[#6B6B73]">Toque para conferirmos o seu Pix agora. Se preferir, envie o comprovante.</p>
+      <button
+        type="button"
+        onClick={check}
+        disabled={checking || state === 'sending'}
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#0E0E10] px-4 py-3.5 text-base font-bold text-white active:scale-[0.98] disabled:opacity-60"
+      >
+        {checking ? <><Loader2 className="h-5 w-5 animate-spin" /> Conferindo…</> : <><Check className="h-5 w-5" /> Já paguei</>}
+      </button>
       <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={(e) => send(e.target.files?.[0])} />
       <button
         type="button"
         onClick={() => input.current?.click()}
         disabled={state === 'sending'}
-        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#0E0E10] px-4 py-3.5 text-base font-bold active:scale-[0.98] disabled:opacity-60"
+        className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#0E0E10] px-4 py-3.5 text-base font-bold active:scale-[0.98] disabled:opacity-60"
       >
         {state === 'sending' ? <><Loader2 className="h-5 w-5 animate-spin" /> Enviando…</> : <><FileUp className="h-5 w-5" /> {state === 'ok' ? 'Enviar outro comprovante' : 'Enviar comprovante'}</>}
       </button>

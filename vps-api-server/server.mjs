@@ -20504,6 +20504,9 @@ const pixReceipts = registerPixReceiptRoutes(app, {
   markRevenuePaid: infinitePay.markRevenuePaid,
   // fora de /var/www/uploads (público no nginx): comprovante tem dado bancário do cliente
   privateRoot: process.env.PRIVATE_FILES_ROOT || path.resolve(UPLOAD_ROOT, '..', 'pulse-privado'),
+  // Pix pela chave conferido na API da Efí (comprovante e "Já paguei"), sem gerar cobrança
+  checkOnBank: (args) => efiPix.checkReceiptOnBank(args),
+  checkPagePaid: (page) => efiPix.checkPagePaid(page),
   readReceipt: async ({ data, mime, prompt }) => {
     const ai = await resolveAiConfig(null);
     if (ai.provider !== 'claude') throw new Error('Leitura do comprovante precisa da chave do Claude');

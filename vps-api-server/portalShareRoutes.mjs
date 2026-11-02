@@ -7,6 +7,11 @@
 //
 //   GET  /api/public/aprovar/:token                  o conteúdo, o cliente e o "perfil" do Instagram dele
 //   POST /api/public/aprovar/:token { action: approve|adjust, notes?, name? }
+//
+// Link da equipe (usuário, 02/11/2026): "quando um vídeo entrar para aprovação… já manda o link estilo Instagram para
+// a gente aprovar". Vídeo que entra em Revisão (revisao_interna no portal) gera um link próprio da equipe, enviado aos
+// números do Assistente com a permissão "aprovar_videos" da cidade do cliente (Uruaçu: Thiago e Naay; Minaçu: Thiago
+// e Victor). Aprovar manda o card para o cliente (envio); Pedir alteração devolve ao editor (alteração).
 
 import crypto from 'node:crypto';
 
@@ -14,7 +19,7 @@ const httpError = (status, message) => Object.assign(new Error(message), { statu
 
 export function registerPortalShareRoutes(app, {
   pool, approveContent, adjustContent, publicAppUrl = process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech', logger = console,
-  verifyAgent = null, sendToTeam = null,
+  verifyAgent = null, sendToTeam = null, moveCard = null, enqueue = null,
 }) {
   const appBase = String(publicAppUrl).replace(/\/+$/, '');
   let schemaPromise = null;
@@ -29,6 +34,15 @@ export function registerPortalShareRoutes(app, {
           decided_at TIMESTAMPTZ,
           decision TEXT,
           created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+              CREATE TABLE IF NOT EXISTS portal_team_links (
+          token TEXT PRIMARY KEY,
+          content_id UUID NOT NULL UNIQUE,
+          file_url TEXT,
+          notified_at TIMESTAMPTZ,
+          opened_at TIMESTAMPTZ,
+          decided_at TIMESTAMPTZ,
+          decision TEXT
         );
       `).catch((error) => { schemaPromise = null; throw error; });
     }
@@ -56,9 +70,87 @@ export function registerPortalShareRoutes(app, {
     return `${appBase}/aprovar/${row.token}`;
   }
 
+  /** Link da equipe de um conteúdo em revisão interna (um por conteúdo; a versão nova reabre a decisão). */
+  async function teamLink(contentId, fileUrl) {
+    await ensureSchema();
+    const token = crypto.randomBytes(18).toString('base64url');
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO portal_team_links (token, content_id, file_url, notified_at) VALUES ($1, $2, $3, now())
+       ON CONFLICT (content_id) DO UPDATE SET file_url = EXCLUDED.file_url, notified_at = now(), decided_at = NULL, decision = NULL
+       RETURNING token`,
+      [token, contentId, fileUrl || null]
+    );
+    return `${appBase}/aprovar/${row.token}`;
+  }
+
+  /** Quem aprova os vídeos da cidade: permissão "aprovar_videos" e a cidade na lista do número (vazia = as duas). */
+  async function approversFor(city) {
+    const { rows } = await pool.query(`SELECT * FROM assistant_numbers WHERE active AND 'aprovar_videos' = ANY(permissions)`)
+      .catch(() => ({ rows: [] }));
+    return rows.filter((n) => !(n.cities || []).length || (n.cities || []).includes(city));
+  }
+
+  /** Vídeo novo (ou versão nova) em Revisão → o link da equipe no WhatsApp de quem aprova a cidade do cliente. */
+  async function notifyTeamReview() {
+    if (!enqueue) return 0;
+    await ensureSchema();
+    // na primeira vez, o que já estava em revisão antes deste aviso existir não gera mensagem
+    const { rows: first } = await pool.query(
+      `INSERT INTO wa_job_runs (job, day) VALUES ('equipe_aprovacao_inicio', '2000-01-01') ON CONFLICT DO NOTHING RETURNING job`
+    ).catch(() => ({ rows: [] }));
+    if (first.length) {
+      await pool.query(
+        `INSERT INTO portal_team_links (token, content_id, file_url, notified_at)
+         SELECT md5(random()::text || id::text), id, file_url, now() FROM client_portal_contents WHERE status = 'revisao_interna'
+         ON CONFLICT (content_id) DO NOTHING`
+      ).catch(() => {});
+      return 0;
+    }
+    // espera 60 s sem mudança no conteúdo (o vídeo termina de subir) e manda uma vez por versão do arquivo
+    const { rows } = await pool.query(
+      `SELECT pc.id, pc.title, pc.file_url, cl.company_name, cl.city
+         FROM client_portal_contents pc
+         JOIN clients cl ON cl.id = pc.client_id
+         LEFT JOIN portal_team_links l ON l.content_id = pc.id
+        WHERE pc.status = 'revisao_interna' AND pc.content_task_id IS NOT NULL AND nullif(btrim(pc.file_url), '') IS NOT NULL
+          AND coalesce(pc.updated_at, pc.created_at) < now() - interval '60 seconds'
+          AND (l.content_id IS NULL OR l.file_url IS DISTINCT FROM pc.file_url)
+        ORDER BY pc.created_at LIMIT 20`
+    );
+    let sent = 0;
+    for (const c of rows) {
+      const link = await teamLink(c.id, c.file_url);
+      const city = String(c.city || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('minacu') ? 'minacu' : 'uruacu';
+      const body = [
+        `🎬 *Vídeo para aprovar* · ${String(c.company_name || '').trim()}`,
+        `"${String(c.title || '').trim()}"`,
+        '',
+        'Assista como no Instagram e toque em *Aprovar* (vai para o cliente) ou *Pedir alteração* (volta para o editor):',
+        link,
+      ].join('\n');
+      for (const n of await approversFor(city)) {
+        await enqueue(n.phone, body).catch((error) => logger.error('[aprovar] equipe:', n.name, error.message));
+        sent += 1;
+      }
+    }
+    return sent;
+  }
+  if (enqueue) {
+    const timer = setInterval(() => notifyTeamReview().catch((error) => logger.error('[aprovar] equipe:', error.message)), 60 * 1000);
+    timer.unref?.();
+  }
+
   async function byToken(token) {
     if (!/^[A-Za-z0-9_-]{16,64}$/.test(String(token || ''))) throw httpError(404, 'Link não encontrado');
     await ensureSchema();
+    const { rows: [team] } = await pool.query(
+      `SELECT l.token, l.decision, true AS team, c.*, cl.company_name, cl.logo_url
+         FROM portal_team_links l
+         JOIN client_portal_contents c ON c.id = l.content_id
+         LEFT JOIN clients cl ON cl.id = c.client_id
+        WHERE l.token = $1`, [token]
+    );
+    if (team) return team;
     const { rows: [row] } = await pool.query(
       `SELECT l.token, l.decision, c.*, cl.company_name, cl.logo_url
          FROM portal_share_links l
@@ -73,7 +165,7 @@ export function registerPortalShareRoutes(app, {
   app.get('/api/public/aprovar/:token', async (req, res) => {
     try {
       const row = await byToken(req.params.token);
-      await pool.query(`UPDATE portal_share_links SET opened_at = coalesce(opened_at, now()) WHERE token = $1`, [row.token]).catch(() => {});
+      await pool.query(`UPDATE ${row.team ? 'portal_team_links' : 'portal_share_links'} SET opened_at = coalesce(opened_at, now()) WHERE token = $1`, [row.token]).catch(() => {});
       // "perfil" do Instagram do cliente (conta conectada) e a legenda do post, quando houver
       const { rows: [ig] } = await pool.query(
         `SELECT username, profile_picture_url FROM social_accounts WHERE client_id = $1 AND platform ILIKE 'instagram%' ORDER BY created_at DESC LIMIT 1`,
@@ -90,7 +182,10 @@ export function registerPortalShareRoutes(app, {
         thumbnail_url: row.thumbnail_url || null,
         client: { name: String(row.company_name || '').trim(), logo: row.logo_url || null, username: ig?.username || null, avatar: ig?.profile_picture_url || row.logo_url || null },
         caption: cap?.caption || null,
-        decided: ['aprovado', 'agendado', 'publicado'].includes(row.status) ? 'aprovado' : row.status === 'ajuste_solicitado' ? 'ajuste' : null,
+        decided: row.team
+          ? (row.status === 'revisao_interna' ? (row.decision || null) : row.decision || 'aprovado')
+          : ['aprovado', 'agendado', 'publicado'].includes(row.status) ? 'aprovado' : row.status === 'ajuste_solicitado' ? 'ajuste' : null,
+        team: !!row.team,
         portal_url: `${appBase}/portal/${row.client_id}`,
         signup_url: `${appBase}/portal-registro/${row.client_id}`,
       });
@@ -101,7 +196,8 @@ export function registerPortalShareRoutes(app, {
     try {
       const row = await byToken(req.params.token);
       const action = req.body?.action;
-      const name = String(req.body?.name || '').trim().slice(0, 80) || 'Cliente';
+      const name = String(req.body?.name || '').trim().slice(0, 80) || (row.team ? 'Equipe' : 'Cliente');
+      if (row.team) return res.json(await decideTeam(row, req.body?.action, String(req.body?.notes || '').trim().slice(0, 2000)));
       if (action === 'approve') {
         const { rows: [done] } = await pool.query(
           `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW()
@@ -137,6 +233,25 @@ export function registerPortalShareRoutes(app, {
     } catch (error) { sendError(res, error); }
   });
 
+  /** Decisão da equipe: Aprovar = o card vai ao cliente (envio); Pedir alteração = volta ao editor com o pedido. */
+  async function decideTeam(row, action, notes) {
+    if (!moveCard) throw httpError(501, 'Indisponível');
+    if (row.decision || row.status !== 'revisao_interna') throw httpError(409, 'Este vídeo já foi decidido por alguém da equipe.');
+    if (!row.content_task_id) throw httpError(409, 'Este vídeo não tem card ligado. Decida pelo sistema.');
+    if (action === 'approve') {
+      await moveCard(row.content_task_id, 'envio', { human: true, reason: 'Aprovado pela equipe no link de aprovação' });
+      await pool.query(`UPDATE portal_team_links SET decided_at = now(), decision = 'aprovado' WHERE token = $1`, [row.token]);
+      return { success: true, decided: 'aprovado' };
+    }
+    if (action === 'adjust') {
+      if (notes.length < 3) throw httpError(400, 'Conte o que precisa mudar no vídeo');
+      await moveCard(row.content_task_id, 'alteracao', { notes, reason: 'Alteração pedida pela equipe no link de aprovação' });
+      await pool.query(`UPDATE portal_team_links SET decided_at = now(), decision = 'ajuste' WHERE token = $1`, [row.token]);
+      return { success: true, decided: 'ajuste' };
+    }
+    throw httpError(400, 'Ação inválida');
+  }
+
   // teste para a equipe (chefe): o link sem login do conteúdo mais recente que espera aprovação, só para quem pediu
   //   POST /api/agent/portal/test-share { only?, client? }
   app.post('/api/agent/portal/test-share', async (req, res) => {
@@ -164,5 +279,5 @@ export function registerPortalShareRoutes(app, {
     } catch (error) { sendError(res, error); }
   });
 
-  return { shareLink, ensureSchema };
+  return { shareLink, teamLink, notifyTeamReview, ensureSchema };
 }

@@ -20418,6 +20418,9 @@ const portalShare = registerPortalShareRoutes(app, {
     for (const n of to) await enqueueWhatsApp(pool, { to: n.phone, body, purpose: 'assistente', triggerType: 'portal_teste', history: false });
     return to.map((n) => n.name);
   },
+  // link da equipe (02/11/2026): Aprovar manda ao cliente, Pedir alteração devolve ao editor; aviso a quem aprova a cidade
+  moveCard: (taskId, column, opts) => agentApi.moveEditCard(taskId, column, opts),
+  enqueue: (to, body) => enqueueWhatsApp(pool, { to, body, purpose: 'assistente', triggerType: 'aprovacao_equipe', history: false }),
 });
 registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, verifyTeamManager, handleWhatsAppReply, runBillingAutomation, runConfirmationCron, hasPulsePlus: pulsePlus.hasPulsePlus, shareLink: portalShare.shareLink });
 

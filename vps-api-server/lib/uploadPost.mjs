@@ -12,7 +12,8 @@
 // Rotas (registerUploadPostRoutes):
 //   GET  /api/upload-post/config                 (admin) chave configurada?, plano e perfis usados/limite
 //   PUT  /api/upload-post/config { api_key }     (admin) confere a chave na Upload-Post e grava
-//   POST /api/upload-post/clients/:id/connect    (equipe social) link de conexão do cliente (vale 48 h)
+//   GET  /api/upload-post/clients/:id            (equipe social) redes escolhidas e contas conectadas do cliente
+//   POST /api/upload-post/clients/:id/connect { networks? }  link de conexão só das redes marcadas (vale 48 h)
 //   POST /api/upload-post/clients/:id/sync       (equipe social) lê as contas conectadas e grava em social_accounts
 // A cada 15 min, uma chamada lê todos os perfis e atualiza as contas (o cliente pode ter conectado pelo link).
 
@@ -82,6 +83,8 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
           facebook_pages JSONB,
           synced_at TIMESTAMPTZ
         );
+        -- redes que a Pulse cuida do cliente (cadastro do cliente, 02/11/2026): o link pede login só nelas
+        ALTER TABLE clients ADD COLUMN IF NOT EXISTS social_networks TEXT[];
       `).catch((error) => { schemaPromise = null; throw error; });
     }
     return schemaPromise;
@@ -141,8 +144,15 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
   }
 
   /** Link da página de conexão da Upload-Post (em português, com a Pulse), para a equipe ou o cliente. */
-  async function connectLink(clientId) {
+  async function connectLink(clientId, networks = null) {
     const { client, username } = await ensureProfile(clientId);
+    if (Array.isArray(networks)) {
+      const chosen = UP_PLATFORMS.filter((p) => networks.includes(p));
+      if (!chosen.length) throw Object.assign(new Error('Marque pelo menos uma rede.'), { status: 400 });
+      await pool.query(`UPDATE clients SET social_networks = $2 WHERE id = $1`, [clientId, chosen]);
+    }
+    const { rows: [saved] } = await pool.query(`SELECT social_networks FROM clients WHERE id = $1`, [clientId]);
+    const platforms = (saved?.social_networks || []).filter((p) => UP_PLATFORMS.includes(p));
     const name = String(client.company_name || '').trim();
     const r = await call('POST', '/uploadposts/users/generate-jwt', {
       json: {
@@ -152,12 +162,12 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
         logo_image: `${appBase}/pulse-logo.png`,
         connect_title: `Conecte as redes de ${name}`.slice(0, 120),
         connect_description: 'Entre em cada rede que a Pulse vai cuidar. É seguro: a gente só publica os conteúdos que você aprovou.',
-        platforms: UP_PLATFORMS,
+        platforms: platforms.length ? platforms : UP_PLATFORMS,
         show_calendar: false,
         language: 'pt',
       },
     });
-    return { url: r.access_url, expires_hours: 48 };
+    return { url: r.access_url, expires_hours: 48, networks: platforms.length ? platforms : UP_PLATFORMS };
   }
 
   /** Páginas do Facebook do perfil: com uma só, é ela; com várias, mantém a escolhida antes (ou nenhuma, e avisa). */
@@ -228,6 +238,16 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     return n;
   }
 
+  /** Para o cadastro do cliente: redes escolhidas e as contas já conectadas pela Upload-Post. */
+  async function clientInfo(clientId) {
+    await ensureSchema();
+    const { rows: [c] } = await pool.query(`SELECT social_networks FROM clients WHERE id = $1`, [clientId]);
+    const { rows: accounts } = await pool.query(
+      `SELECT platform, account_name, username, status FROM social_accounts WHERE client_id = $1 AND api_base = 'upload_post' ORDER BY platform`, [clientId]
+    );
+    return { networks: c?.social_networks || [], accounts, configured: !!(await apiKey()) };
+  }
+
   async function status(key) {
     const r = await call('GET', '/uploadposts/users', { key });
     return { plan: r.plan || null, limit: r.limit ?? null, used: (r.profiles || []).length };
@@ -272,7 +292,7 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     return { id: result.post_id || result.platform_post_id || null, url: result.url || result.post_url || null, provider: 'upload_post' };
   }
 
-  return { ensureSchema, apiKey, saveKey, call, ensureProfile, connectLink, sync, syncAll, status, publish };
+  return { ensureSchema, apiKey, saveKey, call, ensureProfile, connectLink, clientInfo, sync, syncAll, status, publish };
 }
 
 export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager, logger = console }) {
@@ -308,7 +328,14 @@ export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifyS
   app.post('/api/upload-post/clients/:id/connect', async (req, res) => {
     try {
       await verifySocialManager(req);
-      res.json(await uploadPost.connectLink(req.params.id));
+      res.json(await uploadPost.connectLink(req.params.id, Array.isArray(req.body?.networks) ? req.body.networks.map(String) : null));
+    } catch (error) { fail(res, error); }
+  });
+
+  app.get('/api/upload-post/clients/:id', async (req, res) => {
+    try {
+      await verifySocialManager(req);
+      res.json(await uploadPost.clientInfo(req.params.id));
     } catch (error) { fail(res, error); }
   });
 

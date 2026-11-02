@@ -35,6 +35,7 @@ import ClientGoalRocket from '@/components/ClientGoalRocket';
 import { syncFinancialContract } from '@/lib/financialContracts';
 import ProposalChecklist from '@/components/ProposalChecklist';
 import ClientTemperatureBadge from '@/components/clients/ClientTemperatureBadge';
+import ClientSocialNetworks from '@/components/social/ClientSocialNetworks';
 import { useClientTemperatures } from '@/hooks/useClientTemperatures';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -1160,6 +1161,9 @@ export default function Clients() {
         <Label>Grupo WhatsApp (opcional)</Label>
         <WhatsAppGroupPicker value={form.whatsappGroup || ''} onChange={v => setForm({ ...form, whatsappGroup: v })} />
       </div>
+
+      {/* redes sociais do cliente (02/11/2026): escolher as redes e gerar o link de login (Upload-Post) */}
+      {editing?.id && <ClientSocialNetworks clientId={editing.id} whatsapp={form.whatsapp} />}
 
       {/* financeiro do cliente (02/11/2026): quem recebe as cobranças e quem recebe os recibos */}
       <div className="p-4 rounded-xl border space-y-4">

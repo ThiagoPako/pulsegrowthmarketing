@@ -84,3 +84,32 @@ describe('Upload-Post · contas e perfis', () => {
     expect(n).toBe(3);
   });
 });
+
+describe('Upload-Post · link do cliente com as redes marcadas', () => {
+  it('guarda as redes do cadastro e o link pede login só nelas', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const fetchImpl = async (url: string, init: RequestInit) => {
+      if (init.body && typeof init.body === 'string') bodies.push(JSON.parse(init.body));
+      if (url.includes('/generate-jwt')) return new Response(JSON.stringify({ success: true, access_url: 'https://app.upload-post.com/connect?token=t' }), { status: 200 });
+      return new Response(JSON.stringify({ success: true, profile: {} }), { status: 200 });
+    };
+    let saved: string[] = [];
+    const pool = {
+      query: async (sql: string, params: unknown[] = []) => {
+        if (/api_key/.test(sql)) return { rows: [{ api_key: 'chave-de-teste-123456' }] };
+        if (/SELECT id, company_name/.test(sql)) return { rows: [{ id: 'c1', company_name: 'Loja X' }] };
+        if (/UPDATE clients SET social_networks/.test(sql)) { saved = params[1] as string[]; return { rows: [] }; }
+        if (/SELECT social_networks/.test(sql)) return { rows: [{ social_networks: saved }] };
+        return { rows: [] };
+      },
+    };
+    const up = createUploadPost({ pool, fetchImpl: fetchImpl as unknown as typeof fetch });
+    const r = await up.connectLink('c1', ['tiktok', 'instagram', 'orkut']);
+    expect(saved).toEqual(['instagram', 'tiktok']);
+    expect(r.url).toBe('https://app.upload-post.com/connect?token=t');
+    const jwt = bodies.find((b) => 'platforms' in b) as { platforms: string[]; language: string };
+    expect(jwt.platforms).toEqual(['instagram', 'tiktok']);
+    expect(jwt.language).toBe('pt');
+    await expect(up.connectLink('c1', [])).rejects.toThrow('Marque pelo menos uma rede');
+  });
+});

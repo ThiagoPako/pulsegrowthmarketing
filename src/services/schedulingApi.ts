@@ -45,6 +45,9 @@ export interface ScheduleInput {
   time: string;
   mode: 'auto' | 'manual';
   platform: PublishTarget;
+  /** postagem automática: as redes marcadas e a legenda de cada uma */
+  platforms?: string[];
+  captions?: Record<string, string>;
   publish_type?: PublishFormat;
   caption?: string;
   story_link?: string | null;
@@ -83,6 +86,6 @@ export async function saveCaption(input: { client_id: string; kind: SchedulingKi
 export type CaptionSource = 'roteiro' | 'video' | 'arte' | 'titulo';
 
 /** Legenda escrita pela IA a partir do roteiro, do próprio vídeo (quadros e fala) ou da arte. */
-export async function generateCaption(input: { client_id: string; kind: SchedulingKind; id: string }): Promise<{ caption: string; fonte: CaptionSource }> {
+export async function generateCaption(input: { client_id: string; kind: SchedulingKind; id: string; network?: string }): Promise<{ caption: string; fonte: CaptionSource }> {
   return call('scheduling/caption/generate', { body: input });
 }

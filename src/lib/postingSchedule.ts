@@ -13,6 +13,10 @@ export type SchedulingKind = 'conteudo' | 'arte' | 'portal' | 'post' | 'serie';
 export type SchedulingState = 'nao_agendado' | 'agendado' | 'manual' | 'publicando' | 'publicado' | 'erro' | 'cancelado';
 export type SchedulingType = 'reels' | 'story' | 'carrossel' | 'arte' | 'feed';
 export type PublishTarget = 'instagram' | 'facebook' | 'both';
+/** Redes de um post automático (Instagram e Facebook pela Meta ou pela Upload-Post; as outras só pela Upload-Post). */
+export type Network = 'instagram' | 'facebook' | 'tiktok' | 'linkedin' | 'youtube';
+export const NETWORK_LABELS: Record<Network, string> = { instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', linkedin: 'LinkedIn', youtube: 'YouTube' };
+export const NETWORK_MAX: Record<Network, number> = { instagram: 2200, facebook: 2200, tiktok: 2200, linkedin: 3000, youtube: 5000 };
 export type PublishFormat = 'reels' | 'feed' | 'stories' | 'carousel';
 
 export interface SchedulingWhen {
@@ -26,6 +30,9 @@ export interface SchedulingPost {
   id: string;
   status: string;
   platform: PublishTarget;
+  /** redes do post (Upload-Post, 02/11/2026) e a legenda de cada uma; null nos posts antigos */
+  platforms?: Network[] | null;
+  captions?: Partial<Record<Network, string>> | null;
   publish_type: PublishFormat;
   caption: string;
   media_url: string | null;
@@ -118,7 +125,8 @@ export interface SchedulingClient {
 
 export interface SchedulingAccount {
   id: string;
-  platform: 'instagram' | 'facebook';
+  platform: Network;
+  api_base?: string;
   account_name: string;
   username?: string | null;
   profile_picture_url?: string | null;

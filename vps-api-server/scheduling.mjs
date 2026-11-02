@@ -171,6 +171,8 @@ function postSummary(p) {
     id: p.id,
     status: p.status,
     platform: p.platform,
+    platforms: Array.isArray(p.platforms) && p.platforms.length ? p.platforms : null,
+    captions: p.captions && typeof p.captions === 'object' ? p.captions : null,
     publish_type: p.publish_type,
     caption: p.caption || '',
     media_url: p.media_url || null,
@@ -1286,6 +1288,9 @@ export function registerSchedulingRoutes(app, deps) {
       if (kind === 'post' && mode !== 'auto') throw httpError(400, 'Este post só existe na fila de postagem');
       pastCheck(whenIso, mode, !!body.allow_past);
       const platform = ['instagram', 'facebook', 'both'].includes(body.platform) ? body.platform : 'instagram';
+      // redes marcadas no agendamento (02/11/2026) e a legenda de cada uma; sem a lista, vale o "platform" antigo
+      const platforms = Array.isArray(body.platforms) ? [...new Set(body.platforms.map(String))] : null;
+      const captions = body.captions && typeof body.captions === 'object' && !Array.isArray(body.captions) ? body.captions : null;
       // Story: "Postar sozinho" (o robô publica) ou "Lembrete com link" (avisa a equipe, que posta pelo app)
       const storyMode = mode === 'auto' && body.publish_type === 'stories'
         ? (body.story_mode === 'lembrete' ? 'lembrete' : 'auto') : null;
@@ -1337,6 +1342,8 @@ export function registerSchedulingRoutes(app, deps) {
           prepared = await prepareScheduledPost({
             client_id: client.id,
             platform,
+            platforms,
+            captions: body.publish_type === 'stories' ? null : captions,
             publish_type: body.publish_type,
             media_items: mediaItems,
             media_url: mediaUrl,
@@ -1369,8 +1376,8 @@ export function registerSchedulingRoutes(app, deps) {
           const { rows: [created] } = await db.query(
             `INSERT INTO scheduled_posts
                (client_id, delivery_id, content_task_id, design_task_id, portal_content_id, platform, publish_type,
-                media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text, story_mode)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text, story_mode, platforms, captions)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
              RETURNING *`,
             [
               client.id,
@@ -1382,6 +1389,7 @@ export function registerSchedulingRoutes(app, deps) {
               prepared.items.length ? JSON.stringify(prepared.items) : null,
               prepared.caption, prepared.when.toISOString(), user?.id || null,
               prepared.story_link, prepared.story_link_text, storyMode,
+              prepared.platforms, prepared.captions ? JSON.stringify(prepared.captions) : null,
             ]
           );
           post = created;
@@ -1500,7 +1508,7 @@ export function registerSchedulingRoutes(app, deps) {
       const { kind, id } = readTarget(body);
       const ctx = await captionContext(kind, id, client.id);
       const started = Date.now();
-      const result = await postCaption.generate(ctx);
+      const result = await postCaption.generate({ ...ctx, network: String(body.network || 'instagram') });
       // tempo da IA no servidor (o painel mede do clique até a tela)
       res.json({ success: true, ...result, ms: Date.now() - started });
     } catch (error) {

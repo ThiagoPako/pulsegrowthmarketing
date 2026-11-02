@@ -277,7 +277,7 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
 
 export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager, logger = console }) {
   const fail = (res, error) => {
-    const status = Number(error?.status) >= 400 && Number(error?.status) < 600 ? Number(error.status) : /admin|acesso|permiss/i.test(error?.message || '') ? 403 : 500;
+    const status = Number(error?.status) >= 400 && Number(error?.status) < 600 ? Number(error.status) : /unauthori|login|token/i.test(error?.message || '') ? 401 : /admin|acesso|permiss/i.test(error?.message || '') ? 403 : 500;
     if (status >= 500) logger.error('[upload-post]', error?.message);
     res.status(status).json({ error: error?.message || 'Erro' });
   };

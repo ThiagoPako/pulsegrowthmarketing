@@ -84,7 +84,6 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const fetchBillingConfig = () => call<BillingConfig>('/billing-isis/config');
 export const saveBillingConfig = (patch: Partial<Pick<BillingConfig, 'mode' | 'footer'>> & {
-  infinitepay_handles?: Partial<Record<'uruacu' | 'minacu', string>>;
   templates?: Partial<Record<TemplateStep, string>>;
   contacts?: Partial<Record<'uruacu' | 'minacu', { name: string; phone: string }>>;
 }) =>

@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
   TEMPLATE_STEPS, TEMPLATE_LABELS, type TemplateStep, MODE_LABELS, STEP_LABELS, STEP_STATUS_LABELS, TEMPLATE_VARS, fetchBillingAgenda, fetchBillingConfig,
-  fetchBillingPreview, saveBillingConfig, fetchPaymentLinks, createTestLink, recheckPaymentLink, openBillingPdfPreview,
+  fetchBillingPreview, saveBillingConfig, openBillingPdfPreview,
   type BillingAgendaItem, type BillingMode, type BillingStep,
 } from '@/lib/billingIsis';
 
@@ -168,10 +168,10 @@ function MessageDialog({ item, step, date, body, pdfUrl, month, onClose }: {
 }
 
 function BillingSettings() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: ['billing-isis-config'], queryFn: fetchBillingConfig });
   const [mode, setMode] = useState<BillingMode>('desligado');
-  const [handles, setHandles] = useState<Record<'uruacu' | 'minacu', string>>({ uruacu: '', minacu: '' });
   const [footer, setFooter] = useState('');
   const [contacts, setContacts] = useState<Record<'uruacu' | 'minacu', { name: string; phone: string }>>({ uruacu: { name: '', phone: '' }, minacu: { name: '', phone: '' } });
   const [templates, setTemplates] = useState<Record<TemplateStep, string>>({ relatorio_mensal: '', pre_vencimento: '', cobranca: '', lembrete: '', obrigado: '' });
@@ -180,7 +180,6 @@ function BillingSettings() {
   useEffect(() => {
     if (!data) return;
     setMode(data.mode);
-    if (data.accounts) setHandles({ uruacu: data.accounts.uruacu.infinitepay_handle, minacu: data.accounts.minacu.infinitepay_handle });
     setFooter(data.footer ?? '');
     if (data.contacts) setContacts({
       uruacu: { name: data.contacts.uruacu.name, phone: data.contacts.uruacu.phone },
@@ -193,7 +192,7 @@ function BillingSettings() {
   const save = async () => {
     setSaving(true);
     try {
-      await saveBillingConfig({ mode, infinitepay_handles: handles, footer, contacts, templates });
+      await saveBillingConfig({ mode, footer, contacts, templates });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['billing-isis-config'] }),
         queryClient.invalidateQueries({ queryKey: ['billing-isis-agenda'] }),
@@ -222,36 +221,29 @@ function BillingSettings() {
               Desligado: a cobrança antiga (vencimento e +3 dias) segue igual. Prévia: a Ísis monta as 4 mensagens no dia certo e guarda aqui, ninguém recebe.
               Ativo: envia ao WhatsApp do cliente pelo número do Assistente PULSE (e a cobrança antiga para).
             </p>
-            {!data.has_pix && <p className="text-xs text-destructive">Sem chave Pix em Financeiro → Config: a cobrança sai sem o Pix.</p>}
+            {!data.has_pix && <p className="text-xs text-destructive">Sem chave Pix em Financeiro → Pagamentos: a cobrança sai sem o Pix.</p>}
           </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Contas que recebem (uma por cidade)</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {(['uruacu', 'minacu'] as const).map((city) => {
-              const acc = data.accounts?.[city];
-              return (
-                <div key={city} className="space-y-1.5 rounded-md border p-2">
-                  <div className="text-xs font-semibold">{city === 'uruacu' ? 'Uruaçu' : 'Minaçu'}</div>
-                  {acc?.own ? (
-                    <p className="text-[11px] text-muted-foreground">Pix: {acc.pix_key || 'sem chave'}{acc.receiver ? ` · ${acc.receiver}` : ''}{acc.bank ? ` · ${acc.bank}` : ''}</p>
-                  ) : (
-                    <p className="text-[11px] text-destructive">Sem conta desta cidade em Financeiro → Config: as cobranças dela ficam em "Conferir dados".</p>
-                  )}
-                  <Label htmlFor={`tag-${city}`} className="text-[11px]">InfiniteTag</Label>
-                  <Input id={`tag-${city}`} placeholder="tag da conta (sem o $)" disabled={!acc?.own} value={handles[city]} onChange={(e) => setHandles((h) => ({ ...h, [city]: e.target.value }))} />
-                </div>
-              );
-            })}
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            Cada cliente paga na conta da cidade dele. A tag do app da InfinitePay não é senha: com ela, cada mensalidade ganha um link no valor da mensalidade
-            (a taxa do cartão a InfinitePay repassa na hora); pagou, a receita é baixada sozinha depois de conferida na conta certa. Sem ela, a cobrança sai só com o Pix.
-          </p>
-          <PaymentLinksPanel />
+        <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Contas que recebem</CardTitle>
+          <Button size="sm" variant="outline" onClick={() => navigate('/financeiro/pagamentos')}>Pagamentos · InfinitePay</Button>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          {(['uruacu', 'minacu'] as const).map((city) => {
+            const acc = data.accounts?.[city];
+            return (
+              <p key={city} className="text-xs">
+                <b>{city === 'uruacu' ? 'Uruaçu' : 'Minaçu'}:</b>{' '}
+                {acc?.own && acc.pix_key
+                  ? <span className="text-muted-foreground">Pix {acc.pix_key}{acc.receiver ? ` · ${acc.receiver}` : ''}{acc.infinitepay_handle ? ` · InfiniteTag ${acc.infinitepay_handle}` : ' · sem InfiniteTag (só Pix)'}</span>
+                  : <span className="text-destructive">sem conta configurada: as cobranças desta cidade ficam em "Conferir dados".</span>}
+              </p>
+            );
+          })}
+          <p className="text-[11px] text-muted-foreground">InfiniteTag, chave Pix e recebedor de cada cidade ficam só em Financeiro → Pagamentos · InfinitePay. Aqui ficam o modo e os textos.</p>
         </CardContent>
       </Card>
 
@@ -315,47 +307,3 @@ function BillingSettings() {
   );
 }
 
-function PaymentLinksPanel() {
-  const queryClient = useQueryClient();
-  const month = thisMonth();
-  const links = useQuery({ queryKey: ['infinitepay-links', month], queryFn: () => fetchPaymentLinks(month) });
-  const [busy, setBusy] = useState(false);
-  const run = async (fn: () => Promise<unknown>, ok: string) => {
-    setBusy(true);
-    try {
-      await fn();
-      toast.success(ok);
-      await queryClient.invalidateQueries({ queryKey: ['infinitepay-links'] });
-    } catch (error) {
-      toast.error((error as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  if (!links.data) return null;
-  return (
-    <div className="space-y-2 border-t pt-2">
-      <div className="flex flex-wrap items-center gap-2">
-        {(['uruacu', 'minacu'] as const).map((city) => (
-          <Button key={city} size="sm" variant="outline" disabled={busy || !links.data.handles?.[city]} onClick={() => run(async () => {
-            const d = await createTestLink(city);
-            window.open(d.url, '_blank', 'noopener');
-          }, 'Link de teste criado (R$ 1,00)')}>
-            Link de teste {city === 'uruacu' ? 'Uruaçu' : 'Minaçu'} (R$ 1,00)
-          </Button>
-        ))}
-        <span className="text-[11px] text-muted-foreground">Webhook: {links.data.webhook_url}</span>
-      </div>
-      {links.data.links.map((l) => (
-        <div key={l.id} className="flex flex-wrap items-center gap-2 text-xs">
-          <Badge variant={l.status === 'pago' ? 'default' : 'outline'}>{l.status === 'pago' ? `pago${l.capture_method ? ` · ${l.capture_method}` : ''}` : 'aberto'}</Badge>
-          <span>{l.client || 'teste'} · {brl(Number(l.amount))}{l.city ? ` · ${l.city === 'uruacu' ? 'Uruaçu' : 'Minaçu'}` : ''}</span>
-          <a className="text-primary underline truncate max-w-[220px]" href={l.url} target="_blank" rel="noreferrer">{l.url}</a>
-          {l.status !== 'pago' && (
-            <Button size="sm" variant="ghost" className="h-6 px-2" disabled={busy} onClick={() => run(() => recheckPaymentLink(l.id), 'Conferido na InfinitePay')}>Conferir</Button>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}

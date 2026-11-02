@@ -29,6 +29,7 @@ import { registerVictoriaRoutes } from './victoriaRoutes.mjs';
 import { registerSocialReportRoutes } from './socialReportRoutes.mjs';
 import { registerHolidayArtsRoutes } from './holidayArtsRoutes.mjs';
 import { registerBillingIsisRoutes } from './billingIsisRoutes.mjs';
+import { registerPaymentAccountsRoutes } from './paymentAccountsRoutes.mjs';
 import { registerInfinitePayRoutes } from './infinitePayRoutes.mjs';
 import { registerCampaignIsisRoutes } from './campaignIsisRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
@@ -10923,12 +10924,20 @@ async function runBillingAutomation() {
 }
 
 /** Configuração de cobrança (Pix, textos) da cidade; sem a da cidade, a de Minaçu ou a primeira (como a cobrança antiga). */
-async function paymentConfigForCity(city) {
+async function legacyPaymentConfigForCity(city) {
   const hasCity = await tableHasCityColumn('payment_config');
   const { rows } = await pool.query('SELECT * FROM payment_config');
   const key = normalizeCityValue(city) || 'minacu';
   const byCity = (c) => rows.find((r) => (hasCity ? (normalizeCityValue(r.city) || 'minacu') : 'minacu') === c);
   return byCity(key) || byCity('minacu') || rows[0] || null;
+}
+
+// Pagamentos · InfinitePay (paymentAccountsRoutes.mjs): a conta da cidade é a única fonte de InfiniteTag, Pix e
+// recebedor; vai por cima da configuração antiga (que segue com os textos, o modo e o resto)
+let paymentAccountsModule = null;
+async function paymentConfigForCity(city) {
+  const row = await legacyPaymentConfigForCity(city);
+  return paymentAccountsModule ? paymentAccountsModule.overlay(city, row) : row;
 }
 
 // ─── 16. WhatsApp Webhook ───────────────────────────────────
@@ -20444,6 +20453,13 @@ const socialReports = registerSocialReportRoutes(app, {
 });
 
 // ─── InfinitePay: link de cada mensalidade e baixa automática (webhook conferido no payment_check) ──
+paymentAccountsModule = registerPaymentAccountsRoutes(app, {
+  pool,
+  verifyAdmin,
+  legacyConfigFor: legacyPaymentConfigForCity,
+  tableHasCityColumn,
+  publicApiUrl: process.env.PUBLIC_APP_URL,
+});
 const infinitePay = registerInfinitePayRoutes(app, {
   pool,
   verifyAdmin,

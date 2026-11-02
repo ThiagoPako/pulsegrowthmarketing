@@ -83,7 +83,7 @@ export function createRevisionAlert({ pool, intervalMs = 60_000 }) {
           console.error(`[aviso ${w.kind}]`, error.message);
           return [];
         });
-        if (cards.length) blocos.push({ permission: w.permission, title: w.title, cards });
+        if (cards.length) blocos.push({ kind: w.kind, permission: w.permission, title: w.title, cards });
       }
       if (!blocos.length) return { avisados: 0 };
       const { rows: numbers } = await pool.query(
@@ -95,6 +95,9 @@ export function createRevisionAlert({ pool, intervalMs = 60_000 }) {
         const partes = [];
         for (const b of blocos) {
           if (!(number.permissions || []).includes(b.permission)) continue;
+          // quem aprova vídeos pelo link estilo Instagram já recebe o vídeo com o link (portalShareRoutes): o aviso de
+          // texto de vídeo em Revisão sai para ele (usuário, 02/11/2026: "essa outra você pode cancelar")
+          if (['revisao', 'video_urgente'].includes(b.kind) && (number.permissions || []).includes('aprovar_videos')) continue;
           const meus = b.cards.filter((c) => !cities.length || cities.includes(c.city));
           if (!meus.length) continue;
           partes.push([

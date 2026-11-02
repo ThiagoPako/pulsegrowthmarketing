@@ -108,9 +108,10 @@ export function registerPortalShareRoutes(app, {
     }
     // espera 60 s sem mudança no conteúdo (o vídeo termina de subir) e manda uma vez por versão do arquivo
     const { rows } = await pool.query(
-      `SELECT pc.id, pc.title, pc.file_url, cl.company_name, cl.city
+      `SELECT pc.id, pc.title, pc.file_url, cl.company_name, cl.city, t.urgent_at IS NOT NULL AS urgente
          FROM client_portal_contents pc
          JOIN clients cl ON cl.id = pc.client_id
+         LEFT JOIN content_tasks t ON t.id = pc.content_task_id
          LEFT JOIN portal_team_links l ON l.content_id = pc.id
         WHERE pc.status = 'revisao_interna' AND pc.content_task_id IS NOT NULL AND nullif(btrim(pc.file_url), '') IS NOT NULL
           AND coalesce(pc.updated_at, pc.created_at) < now() - interval '60 seconds'
@@ -122,7 +123,7 @@ export function registerPortalShareRoutes(app, {
       const link = await teamLink(c.id, c.file_url);
       const city = String(c.city || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('minacu') ? 'minacu' : 'uruacu';
       const body = [
-        `🎬 *Vídeo para aprovar* · ${String(c.company_name || '').trim()}`,
+        `${c.urgente ? '🔥 *Vídeo URGENTE para aprovar*' : '🎬 *Vídeo para aprovar*'} · ${String(c.company_name || '').trim()}`,
         `"${String(c.title || '').trim()}"`,
         '',
         'Assista como no Instagram e toque em *Aprovar* (vai para o cliente) ou *Pedir alteração* (volta para o editor):',

@@ -47,7 +47,7 @@ const dataBr = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().joi
 const DOC_NAMES = { relatorio_mensal: 'Relatorio', pre_vencimento: 'Agenda', cobranca: 'Cobranca', lembrete: 'Cobranca', obrigado: 'Recibo' };
 
 export function registerBillingIsisRoutes(app, {
-  pool, verifyAdmin, paymentConfigFor, socialReports, paymentLink = async () => null, uploadRoot, publicUploadsUrl,
+  pool, verifyAdmin, paymentConfigFor, socialReports, paymentLink = async () => null, pixCharge = async () => null, uploadRoot, publicUploadsUrl,
   publicAppUrl = process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech', logger = console,
 }) {
   const appBase = String(publicAppUrl).replace(/\/+$/, '');
@@ -517,7 +517,19 @@ export function registerBillingIsisRoutes(app, {
       };
     }
 
-    const pix = pixPayload({ key: config?.pix_key, name: config?.receiver_name, city: contract.city || contract.client_city, amount, txid: `PULSE${month.replace('-', '')}` });
+    // cidade com a Efí ligada: Pix dinâmico da Efí (já com o valor e baixa automática); sem ela, o Pix estático de antes
+    let efiPix = null;
+    if (config?.pix_provider === 'efi') {
+      efiPix = await pixCharge({ contract, revenue, amount, month, dueDate }).catch((error) => {
+        logger.error('[cobranca-isis] Pix da Efí:', error.message);
+        return { error: error.message };
+      });
+      if (efiPix?.error || !efiPix?.pixCopiaECola) {
+        return { skip: 'conferir', problems: [`a Efí não gerou o Pix (${efiPix?.error || 'sem resposta'})`], config };
+      }
+    }
+    const pix = efiPix?.pixCopiaECola
+      || pixPayload({ key: config?.pix_key, name: config?.receiver_name, city: contract.city || contract.client_city, amount, txid: `PULSE${month.replace('-', '')}` });
     // o link é no valor da mensalidade: a taxa do cartão a InfinitePay repassa na hora do pagamento (usuário, 01/11/2026)
     const link = await paymentLink({ contract, revenue, amount, month }).catch((error) => {
       logger.error('[cobranca-isis] link de pagamento:', error.message);

@@ -16,9 +16,7 @@ export interface PaymentAccount {
   document: string;
   bank: string;
   active: boolean;
-  api_client_id: string;
-  has_api_secret: boolean;
-  api_secret_last4: string;
+  efi: EfiAccount;
   last_test_at: string | null;
   last_test_ok: boolean | null;
   last_test_error: string | null;
@@ -26,6 +24,38 @@ export interface PaymentAccount {
   updated_by: string | null;
   status: PaymentAccountStatus;
 }
+
+export type EfiStatus = 'nao_configurado' | 'incompleto' | 'testar' | 'com_erro' | 'pronto' | 'ligado';
+
+/** A conta Efí da cidade como a tela vê: segredos e certificado nunca voltam, só se existem e os 4 últimos caracteres. */
+export interface EfiAccount {
+  active: boolean;
+  env: 'producao' | 'homologacao';
+  pix_key: string;
+  has_client_id: boolean;
+  client_id_last4: string;
+  has_client_secret: boolean;
+  client_secret_last4: string;
+  has_cert: boolean;
+  cert_name: string;
+  cert_uploaded_at: string | null;
+  last_test_at: string | null;
+  last_test_ok: boolean | null;
+  last_test_error: string | null;
+  scopes_missing: string[];
+  webhook_at: string | null;
+  webhook_error: string | null;
+  status: EfiStatus;
+}
+
+export const EFI_STATUS_LABELS: Record<EfiStatus, string> = {
+  nao_configurado: 'Não configurada',
+  incompleto: 'Incompleta',
+  testar: 'Falta testar',
+  com_erro: 'Com erro',
+  pronto: 'Testada · desligada',
+  ligado: 'Ligada',
+};
 
 export const STATUS_LABELS: Record<PaymentAccountStatus, string> = {
   conectado: 'Conectado',
@@ -36,11 +66,33 @@ export const STATUS_LABELS: Record<PaymentAccountStatus, string> = {
 };
 
 export type PaymentAccountPatch = Partial<Pick<PaymentAccount,
-  'infinitepay_handle' | 'pix_key' | 'receiver_name' | 'document' | 'bank' | 'active' | 'api_client_id'>> & {
-  /** só escrita: vai cifrado para o servidor e nunca volta */
-  api_secret?: string;
-  clear_api_secret?: boolean;
-};
+  'infinitepay_handle' | 'pix_key' | 'receiver_name' | 'document' | 'bank' | 'active'>>;
+
+/** Campos da Efí; client_id, client_secret e cert_base64 são só escrita (vão cifrados e nunca voltam). */
+export interface EfiPatch {
+  efi_env?: 'producao' | 'homologacao';
+  efi_pix_key?: string;
+  efi_active?: boolean;
+  client_id?: string;
+  client_secret?: string;
+  cert_base64?: string;
+  cert_name?: string;
+  clear?: boolean;
+}
+
+export interface EfiMovement {
+  e2e_id: string;
+  city: PaymentCity;
+  env: string;
+  txid: string | null;
+  amount: string | number;
+  received_at: string | null;
+  payer_name: string | null;
+  info_pagador: string | null;
+  status: 'conciliado' | 'conferir' | 'conferido';
+  refunded: boolean;
+  client: string | null;
+}
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await vpsAuthedFetch(path, init);
@@ -53,6 +105,31 @@ export const fetchPaymentAccounts = () => call<{ accounts: PaymentAccount[]; web
 
 export const savePaymentAccount = (city: PaymentCity, patch: PaymentAccountPatch) =>
   call<{ account: PaymentAccount }>(`/payment-accounts/${city}`, { method: 'PUT', body: JSON.stringify(patch) });
+
+export const saveEfiAccount = (city: PaymentCity, patch: EfiPatch) =>
+  call<{ account: PaymentAccount }>(`/payment-accounts/${city}/efi`, { method: 'PUT', body: JSON.stringify(patch) });
+
+export const testEfiAccount = (city: PaymentCity) =>
+  call<{ ok: boolean; error?: string; saldo?: string | null; account: PaymentAccount }>(`/payment-accounts/${city}/efi/test`, { method: 'POST', body: '{}' });
+
+export const registerEfiWebhook = (city: PaymentCity) =>
+  call<{ ok: boolean; error?: string | null; account: PaymentAccount }>(`/payment-accounts/${city}/efi/webhook`, { method: 'POST', body: '{}' });
+
+export const fetchEfiMovements = (month: string) =>
+  call<{ month: string; movements: EfiMovement[]; saldo: Partial<Record<PaymentCity, number | null>> }>(`/efi/movements?month=${month}`);
+
+export const markEfiConferido = (e2e: string) =>
+  call<{ success: boolean }>(`/efi/movements/${encodeURIComponent(e2e)}/conferido`, { method: 'POST', body: '{}' });
+
+/** Lê o .p12 escolhido na tela como base64 (vai cifrado para o servidor). */
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ''));
+    reader.onerror = () => reject(new Error('Não deu para ler o arquivo'));
+    reader.readAsDataURL(file);
+  });
+}
 
 export const testPaymentAccount = (city: PaymentCity) =>
   call<{ ok: boolean; url?: string; error?: string; account: PaymentAccount }>(`/payment-accounts/${city}/test`, { method: 'POST', body: '{}' });

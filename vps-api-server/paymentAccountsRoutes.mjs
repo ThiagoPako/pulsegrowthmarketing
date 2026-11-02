@@ -7,12 +7,12 @@
 // Migração: na primeira vez, cada cidade nasce com o que já estava na linha dela em payment_config.
 //
 //   GET  /api/payment-accounts                 → { accounts: [...], webhook_url }
-//   PUT  /api/payment-accounts/:city           { infinitepay_handle, pix_key, receiver_name, document, bank, active,
-//                                                api_client_id, api_secret (só escrita), clear_api_secret }
+//   PUT  /api/payment-accounts/:city           { infinitepay_handle, pix_key, receiver_name, document, bank, active }
+// A conta Efí da cidade (credenciais, certificado, teste, webhook) fica em efiPixRoutes.mjs.
 //   POST /api/payment-accounts/:city/test      → { ok, url?, error? } (link de teste de R$ 1,00)
 
 import {
-  CITIES, CITY_LABELS, normalizeAccountInput, publicAccount, overlayConfig, encryptSecret, last4,
+  CITIES, CITY_LABELS, normalizeAccountInput, publicAccount, overlayConfig, efiOn,
 } from './lib/paymentAccounts.mjs';
 import { normalizeHandle, createCheckoutLink } from './lib/infinitePay.mjs';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
@@ -44,9 +44,6 @@ export function registerPaymentAccountsRoutes(app, {
             document TEXT,
             bank TEXT,
             active BOOLEAN NOT NULL DEFAULT true,
-            api_client_id TEXT,
-            api_secret_enc TEXT,
-            api_secret_last4 TEXT,
             last_test_at TIMESTAMPTZ,
             last_test_ok BOOLEAN,
             last_test_error TEXT,
@@ -100,7 +97,9 @@ export function registerPaymentAccountsRoutes(app, {
   /** Copia os dados da conta para a linha da cidade em payment_config (leitores antigos veem o mesmo valor). */
   async function mirror(city, acc) {
     const row = await ownConfigRow(city);
-    if (!row?.id) return;
+    if (!row?.id || !acc) return;
+    // Efí ligada: a chave Pix que vale é a da conta Efí
+    if (efiOn(acc)) acc = { ...acc, pix_key: acc.efi_pix_key };
     await pool.query(
       `UPDATE payment_config SET pix_key = $2, receiver_name = $3, document = $4, bank = $5, infinitepay_handle = $6 WHERE id = $1`,
       // conta desativada: sem Pix e sem tag também para a cobrança antiga
@@ -128,14 +127,6 @@ export function registerPaymentAccountsRoutes(app, {
       const city = cityParam(req);
       const patch = normalizeAccountInput(req.body || {});
       const before = await accountFor(city);
-      // segredo da API: só escrita, cifrado; a tela recebe só os 4 últimos caracteres
-      if (typeof req.body?.api_secret === 'string' && req.body.api_secret.trim()) {
-        patch.api_secret_enc = encryptSecret(req.body.api_secret.trim());
-        patch.api_secret_last4 = last4(req.body.api_secret.trim());
-      } else if (req.body?.clear_api_secret) {
-        patch.api_secret_enc = null;
-        patch.api_secret_last4 = null;
-      }
       // mudou a tag: o teste anterior não vale mais
       if (patch.infinitepay_handle !== undefined && patch.infinitepay_handle !== (before?.infinitepay_handle || null)) {
         patch.last_test_ok = null;
@@ -185,5 +176,5 @@ export function registerPaymentAccountsRoutes(app, {
     } catch (error) { sendError(res, error); }
   });
 
-  return { overlay, accountFor, ensureSchema };
+  return { overlay, accountFor, ensureSchema, mirror };
 }

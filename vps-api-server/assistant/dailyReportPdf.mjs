@@ -288,7 +288,9 @@ async function collectFinance(pool, cities, q) {
   // sem a coluna city no caixa não dá para separar por cidade: com cidade pedida, não mostra movimento (não vaza)
   const cityCash = cities?.length ? (col ? `AND ${cityExpr('m.city')} = ANY($1::text[])` : 'AND false') : '';
   const params = col && cities?.length ? [cities] : [];
-  const [movs, cobrancas, saldo] = await Promise.all([
+  // Pix recebidos na Efí hoje (cidade com a Efí ligada; efiPixRoutes.mjs): conciliados com a mensalidade ou "conferir"
+  const efiCity = cities?.length ? `AND ${cityExpr('e.city')} = ANY($1::text[])` : '';
+  const [movs, cobrancas, saldo, efiPix] = await Promise.all([
     q(`SELECT m.id, m.type, m.amount, m.description, m.date, m.created_at, m.is_reserve,
               substring(m.description from 'ID: ([0-9a-f-]{36})') AS ref_id
          FROM cash_reserve_movements m
@@ -299,18 +301,23 @@ async function collectFinance(pool, cities, q) {
         WHERE ${TODAY_OF('b.sent_at')} ${cities?.length ? `AND ${cityExpr('c.city')} = ANY($1::text[])` : ''} ORDER BY b.sent_at`),
     q(`SELECT COALESCE(SUM(CASE WHEN m.type = 'entrada' THEN m.amount ELSE -m.amount END) FILTER (WHERE NOT m.is_reserve), 0) AS conta
          FROM cash_reserve_movements m WHERE true ${cityCash}`, params),
+    q(`SELECT e.e2e_id, e.amount, e.status, e.payer_name, e.refunded, c.company_name AS cliente
+         FROM efi_pix_received e LEFT JOIN revenues r ON r.id = e.revenue_id LEFT JOIN clients c ON c.id = r.client_id
+        WHERE ${TODAY_OF('e.received_at')} ${efiCity} ORDER BY e.received_at`, cities?.length ? [cities] : []),
   ]);
   const ids = movs.map((m) => m.ref_id).filter(Boolean);
-  const [logs, links, revenues, expenses] = ids.length ? await Promise.all([
+  const [logs, links, revenues, expenses, efiPaid] = ids.length ? await Promise.all([
     q(`SELECT DISTINCT ON (l.entity_id) l.entity_id, coalesce(nullif(p.display_name, ''), p.name) AS nome
          FROM financial_activity_log l LEFT JOIN profiles p ON p.id = l.user_id
         WHERE l.entity_id = ANY($1::uuid[]) ORDER BY l.entity_id, l.created_at DESC`, [ids]),
     q(`SELECT revenue_id FROM payment_links WHERE revenue_id = ANY($1::uuid[]) AND (status = 'pago' OR paid_at IS NOT NULL)`, [ids]),
     q(`SELECT r.id, c.company_name AS cliente, r.description FROM revenues r LEFT JOIN clients c ON c.id = r.client_id WHERE r.id = ANY($1::uuid[])`, [ids]),
     q(`SELECT e.id, e.description, ec.name AS categoria FROM expenses e LEFT JOIN expense_categories ec ON ec.id = e.category_id WHERE e.id = ANY($1::uuid[])`, [ids]),
-  ]) : [[], [], [], []];
+    q(`SELECT revenue_id FROM efi_charges WHERE revenue_id = ANY($1::uuid[]) AND status = 'CONCLUIDA'`, [ids]),
+  ]) : [[], [], [], [], []];
   const who = new Map(logs.map((l) => [l.entity_id, l.nome]));
   const viaInfinite = new Set(links.map((l) => l.revenue_id));
+  const viaEfi = new Set(efiPaid.map((l) => l.revenue_id));
   const rev = new Map(revenues.map((r) => [r.id, r]));
   const exp = new Map(expenses.map((e) => [e.id, e]));
   const movimentos = movs.filter((m) => !m.is_reserve).map((m) => {
@@ -321,16 +328,22 @@ async function collectFinance(pool, cities, q) {
     const descricao = r ? (r.cliente || r.description || 'Receita avulsa')
       : e ? `${e.description || 'Despesa'}${e.categoria ? ` · ${e.categoria}` : ''}`
         : String(m.description || '').replace(/^\[(Receita|Despesa)\]\s*/, '').replace(/\s*-\s*ID: [0-9a-f-]{36}$/, '') || '—';
-    const forma = isRev ? (viaInfinite.has(m.ref_id) ? 'InfinitePay' : 'Baixa manual')
+    const forma = isRev ? (viaEfi.has(m.ref_id) ? 'Pix Efí' : viaInfinite.has(m.ref_id) ? 'InfinitePay' : 'Baixa manual')
       : isExp ? 'Despesa paga' : m.type === 'entrada' ? 'Entrada manual' : 'Saída manual';
-    const quem = isRev && viaInfinite.has(m.ref_id) ? 'InfinitePay (automático)' : (m.ref_id && who.get(m.ref_id)) || '—';
+    const quem = isRev && viaEfi.has(m.ref_id) ? 'Efí (automático)'
+      : isRev && viaInfinite.has(m.ref_id) ? 'InfinitePay (automático)' : (m.ref_id && who.get(m.ref_id)) || '—';
     return { tipo: m.type === 'entrada' ? 'entrada' : 'saida', descricao: pdfText(descricao, 60), forma, valor: roundMoney(m.amount), quem: clip(quem, 30) };
   });
   const entradas = roundMoney(movimentos.filter((m) => m.tipo === 'entrada').reduce((s, m) => s + m.valor, 0));
   const saidas = roundMoney(movimentos.filter((m) => m.tipo === 'saida').reduce((s, m) => s + m.valor, 0));
   return {
     movimentos,
-    mensalidades: movimentos.filter((m) => m.forma === 'InfinitePay' || m.forma === 'Baixa manual').length,
+    mensalidades: movimentos.filter((m) => m.forma === 'Pix Efí' || m.forma === 'InfinitePay' || m.forma === 'Baixa manual').length,
+    pixEfi: efiPix.map((p) => ({
+      valor: roundMoney(p.amount),
+      quem: pdfText(p.cliente || p.payer_name || 'Pagador não informado', 50),
+      status: p.refunded ? 'devolvido' : p.status,
+    })),
     cobrancas: cobrancas.map((b) => ({ cliente: pdfText(b.cliente, 50) || '—', tipo: b.message_type, status: b.status })),
     entradas,
     saidas,
@@ -395,7 +408,7 @@ export function dailyPdfSpec(d, { date = new Date(), financeiro = true } = {}) {
         movimentos: fin.movimentos.map((m) => ({
           tipo: m.tipo,
           descricao: m.descricao,
-          detalhe: [m.forma, m.quem && m.quem !== '—' && m.quem !== 'InfinitePay (automático)' ? `por ${m.quem}` : m.quem === 'InfinitePay (automático)' ? 'automático' : null].filter(Boolean).join(' · '),
+          detalhe: [m.forma, m.quem && m.quem !== '—' && !/\(automático\)$/.test(m.quem) ? `por ${m.quem}` : /\(automático\)$/.test(m.quem || '') ? 'automático' : null].filter(Boolean).join(' · '),
           valor: `${m.tipo === 'entrada' ? '+' : '−'} ${fmtMoney(m.valor)}`,
         })),
         totals: [
@@ -406,6 +419,17 @@ export function dailyPdfSpec(d, { date = new Date(), financeiro = true } = {}) {
         total: { label: 'Saldo do dia', value: `${fin.saldoDia < 0 ? '− ' : ''}${fmtMoney(Math.abs(fin.saldoDia))}` },
       }
       : { title: 'Financeiro do dia', text: `Nenhuma movimentação no caixa hoje.${fin.saldoConta !== null ? ` Saldo da conta: ${fmtMoney(fin.saldoConta)}.` : ''}` });
+    if (fin.pixEfi?.length) {
+      const conferir = fin.pixEfi.filter((p) => p.status === 'conferir').length;
+      sections.push({
+        title: 'Pix recebidos na Efí',
+        type: 'bullets',
+        bullets: [
+          ...fin.pixEfi.map((p) => `${fmtMoney(p.valor)} · ${p.quem}${p.status === 'conferir' ? ' · conferir (sem cobrança)' : p.status === 'devolvido' ? ' · devolvido' : ''}`),
+          ...(conferir ? [`${conferir} Pix sem cobrança da Pulse: confira em Financeiro → Pagamentos`] : []),
+        ],
+      });
+    }
     if (fin.cobrancas.length) {
       sections.push({
         title: 'Cobranças enviadas',

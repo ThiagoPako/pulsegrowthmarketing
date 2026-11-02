@@ -112,9 +112,10 @@ describe('Efí · conta da cidade', () => {
     efi_client_id_last4: '9f3c', efi_client_secret_last4: '7d21', efi_cert_name: 'cert.p12', efi_last_test_ok: true,
   };
 
-  it('ligada e testada: a chave Pix que vale é a da Efí e o Pix sai pela Efí; desligada, como antes', () => {
-    expect(overlayConfig({ id: 1 }, efiAcc, 'uruacu')).toMatchObject({ pix_key: 'efi@pulse.com', pix_provider: 'efi', infinitepay_handle: 'agenciapulse' });
-    expect(overlayConfig({ id: 1 }, { ...efiAcc, efi_active: false }, 'uruacu')).toMatchObject({ pix_key: 'antiga@pix', pix_provider: 'estatico' });
+  // só a Efí (02/11/2026): uma chave só, a da conta Efí; desligada, o Pix sai estático pela mesma chave
+  it('ligada e testada: o Pix sai pela Efí; desligada, Pix estático com a mesma chave da Efí', () => {
+    expect(overlayConfig({ id: 1 }, efiAcc, 'uruacu')).toMatchObject({ pix_key: 'efi@pulse.com', pix_provider: 'efi', infinitepay_handle: null });
+    expect(overlayConfig({ id: 1 }, { ...efiAcc, efi_active: false }, 'uruacu')).toMatchObject({ pix_key: 'efi@pulse.com', pix_provider: 'estatico' });
     expect(overlayConfig({ id: 1 }, { ...efiAcc, efi_cert_enc: null }, 'uruacu')).toMatchObject({ pix_provider: 'estatico' });
     expect(efiStatus(efiAcc)).toBe('ligado');
     expect(efiStatus({ ...efiAcc, efi_active: false })).toBe('pronto');

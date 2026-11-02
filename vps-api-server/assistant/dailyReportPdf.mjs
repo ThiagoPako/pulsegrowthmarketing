@@ -306,7 +306,7 @@ async function collectFinance(pool, cities, q) {
         WHERE ${TODAY_OF('e.received_at')} ${efiCity} ORDER BY e.received_at`, cities?.length ? [cities] : []),
   ]);
   const ids = movs.map((m) => m.ref_id).filter(Boolean);
-  const [logs, links, revenues, expenses, efiPaid] = ids.length ? await Promise.all([
+  const [logs, links, revenues, expenses, efiPaid, efiCard] = ids.length ? await Promise.all([
     q(`SELECT DISTINCT ON (l.entity_id) l.entity_id, coalesce(nullif(p.display_name, ''), p.name) AS nome
          FROM financial_activity_log l LEFT JOIN profiles p ON p.id = l.user_id
         WHERE l.entity_id = ANY($1::uuid[]) ORDER BY l.entity_id, l.created_at DESC`, [ids]),
@@ -314,10 +314,13 @@ async function collectFinance(pool, cities, q) {
     q(`SELECT r.id, c.company_name AS cliente, r.description FROM revenues r LEFT JOIN clients c ON c.id = r.client_id WHERE r.id = ANY($1::uuid[])`, [ids]),
     q(`SELECT e.id, e.description, ec.name AS categoria FROM expenses e LEFT JOIN expense_categories ec ON ec.id = e.category_id WHERE e.id = ANY($1::uuid[])`, [ids]),
     q(`SELECT revenue_id FROM efi_charges WHERE revenue_id = ANY($1::uuid[]) AND status = 'CONCLUIDA'`, [ids]),
-  ]) : [[], [], [], [], []];
+    // cartão pela Efí (efiCardRoutes); a tabela só existe depois do primeiro uso
+    q(`SELECT revenue_id FROM efi_card_links WHERE revenue_id = ANY($1::uuid[]) AND paid_at IS NOT NULL`, [ids]).catch(() => []),
+  ]) : [[], [], [], [], [], []];
   const who = new Map(logs.map((l) => [l.entity_id, l.nome]));
   const viaInfinite = new Set(links.map((l) => l.revenue_id));
   const viaEfi = new Set(efiPaid.map((l) => l.revenue_id));
+  const viaCard = new Set(efiCard.map((l) => l.revenue_id));
   const rev = new Map(revenues.map((r) => [r.id, r]));
   const exp = new Map(expenses.map((e) => [e.id, e]));
   const movimentos = movs.filter((m) => !m.is_reserve).map((m) => {
@@ -328,9 +331,9 @@ async function collectFinance(pool, cities, q) {
     const descricao = r ? (r.cliente || r.description || 'Receita avulsa')
       : e ? `${e.description || 'Despesa'}${e.categoria ? ` · ${e.categoria}` : ''}`
         : String(m.description || '').replace(/^\[(Receita|Despesa)\]\s*/, '').replace(/\s*-\s*ID: [0-9a-f-]{36}$/, '') || '—';
-    const forma = isRev ? (viaEfi.has(m.ref_id) ? 'Pix Efí' : viaInfinite.has(m.ref_id) ? 'InfinitePay' : 'Baixa manual')
+    const forma = isRev ? (viaEfi.has(m.ref_id) ? 'Pix Efí' : viaCard.has(m.ref_id) ? 'Cartão Efí' : viaInfinite.has(m.ref_id) ? 'InfinitePay' : 'Baixa manual')
       : isExp ? 'Despesa paga' : m.type === 'entrada' ? 'Entrada manual' : 'Saída manual';
-    const quem = isRev && viaEfi.has(m.ref_id) ? 'Efí (automático)'
+    const quem = isRev && (viaEfi.has(m.ref_id) || viaCard.has(m.ref_id)) ? 'Efí (automático)'
       : isRev && viaInfinite.has(m.ref_id) ? 'InfinitePay (automático)' : (m.ref_id && who.get(m.ref_id)) || '—';
     return { tipo: m.type === 'entrada' ? 'entrada' : 'saida', descricao: pdfText(descricao, 60), forma, valor: roundMoney(m.amount), quem: clip(quem, 30) };
   });
@@ -338,7 +341,7 @@ async function collectFinance(pool, cities, q) {
   const saidas = roundMoney(movimentos.filter((m) => m.tipo === 'saida').reduce((s, m) => s + m.valor, 0));
   return {
     movimentos,
-    mensalidades: movimentos.filter((m) => m.forma === 'Pix Efí' || m.forma === 'InfinitePay' || m.forma === 'Baixa manual').length,
+    mensalidades: movimentos.filter((m) => m.forma === 'Pix Efí' || m.forma === 'Cartão Efí' || m.forma === 'InfinitePay' || m.forma === 'Baixa manual').length,
     pixEfi: efiPix.map((p) => ({
       valor: roundMoney(p.amount),
       quem: pdfText(p.cliente || p.payer_name || 'Pagador não informado', 50),

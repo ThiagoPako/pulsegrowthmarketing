@@ -8,6 +8,10 @@
 // Secret e certificado .p12, só no servidor e cifrados com AES-256-GCM; a tela vê só os 4 últimos caracteres e o nome do
 // arquivo). Com a Efí ligada, o Pix da cobrança é dinâmico (lib/efi.mjs) e a chave Pix da conta é a da Efí; a
 // InfinitePay fica só para o cartão. Enquanto a Efí de uma cidade não está ligada, ela segue como antes.
+// Só a Efí (02/11/2026, "em pagamentos ainda tem coisas da Infinity, deixe tudo preparado apenas para a Efí"): a
+// InfiniteTag sai (overlayConfig não a repassa, então nenhum link da InfinitePay é criado); o cartão vai pelo link da
+// Efí (efiCardRoutes.mjs) e a chave Pix é uma só, a da conta Efí: com a Efí ligada, Pix dinâmico com baixa automática;
+// desligada, Pix pela chave e o comprovante na página de pagamento (pixReceiptRoutes.mjs).
 
 import crypto from 'node:crypto';
 import { normalizeHandle } from './infinitePay.mjs';
@@ -32,7 +36,7 @@ export function normalizeAccountInput(body = {}) {
 
 /** conectado / com_erro / testar (salvo, sem teste) / desativado / nao_configurado */
 export function accountStatus(acc) {
-  if (!acc || (!acc.infinitepay_handle && !acc.pix_key)) return 'nao_configurado';
+  if (!acc || !efiKey(acc)) return 'nao_configurado';
   if (acc.active === false) return 'desativado';
   if (acc.last_test_ok === false) return 'com_erro';
   if (acc.last_test_ok === true) return 'conectado';
@@ -73,15 +77,24 @@ export function normalizeEfiInput(body = {}) {
   return out;
 }
 
+/** A chave Pix da conta Efí (a da Efí; quem salvou antes só na chave geral da cidade usa essa). */
+export const efiKey = (acc) => acc?.efi_pix_key || acc?.pix_key || null;
+
 /** Tem tudo para ligar: Client ID, Secret, certificado e chave Pix. */
-export const efiComplete = (acc) => !!(acc?.efi_client_id_enc && acc?.efi_client_secret_enc && acc?.efi_cert_enc && acc?.efi_pix_key);
+export const efiComplete = (acc) => !!(acc?.efi_client_id_enc && acc?.efi_client_secret_enc && acc?.efi_cert_enc && efiKey(acc));
+
+/** Cartão pela Efí: Client ID/Secret salvos e o teste da API Cobranças passou. */
+export const efiCardReady = (acc) => !!(acc?.efi_client_id_enc && acc?.efi_client_secret_enc && acc?.efi_card_test_ok === true);
+
+/** O cartão da Efí está valendo nesta cidade (conta ativa, cartão ligado e testado). */
+export const efiCardOn = (acc) => !!(acc && acc.active !== false && acc.efi_card_active && efiCardReady(acc));
 
 /** A Efí está valendo nesta cidade (conta ativa, Efí ligada e completa). */
 export const efiOn = (acc) => !!(acc && acc.active !== false && acc.efi_active && efiComplete(acc));
 
 /** nao_configurado / incompleto / testar / com_erro / pronto (testado, desligado) / ligado */
 export function efiStatus(acc) {
-  if (!acc || !(acc.efi_client_id_enc || acc.efi_client_secret_enc || acc.efi_cert_enc || acc.efi_pix_key)) return 'nao_configurado';
+  if (!acc || !(acc.efi_client_id_enc || acc.efi_client_secret_enc || acc.efi_cert_enc)) return 'nao_configurado';
   if (!efiComplete(acc)) return 'incompleto';
   if (acc.efi_last_test_ok === false) return 'com_erro';
   if (acc.efi_last_test_ok !== true) return 'testar';
@@ -94,7 +107,7 @@ export function publicEfi(a = {}) {
   return {
     active: !!a.efi_active,
     env: a.efi_env || 'producao',
-    pix_key: a.efi_pix_key || '',
+    pix_key: efiKey(a) || '',
     has_client_id: !!a.efi_client_id_enc,
     client_id_last4: a.efi_client_id_last4 || '',
     has_client_secret: !!a.efi_client_secret_enc,
@@ -108,6 +121,10 @@ export function publicEfi(a = {}) {
     scopes_missing: a.efi_scopes ? EFI_SCOPES_REQUIRED.filter((s) => !granted.includes(s)) : [],
     webhook_at: a.efi_webhook_at || null,
     webhook_error: a.efi_webhook_error || null,
+    card_active: !!a.efi_card_active,
+    card_test_at: a.efi_card_test_at || null,
+    card_test_ok: a.efi_card_test_ok ?? null,
+    card_test_error: a.efi_card_test_error || null,
     status: efiStatus(a.city ? a : null),
   };
 }
@@ -122,14 +139,15 @@ export function overlayConfig(configRow, acc, city) {
   return {
     ...(configRow || {}),
     city,
-    infinitepay_handle: on ? acc.infinitepay_handle || null : null,
-    pix_key: on ? acc.pix_key || null : null,
+    // só a Efí: nenhum link da InfinitePay (o cartão vem do efiCardRoutes)
+    infinitepay_handle: null,
+    pix_key: on ? efiKey(acc) : null,
     receiver_name: acc.receiver_name || null,
     document: acc.document || null,
     bank: acc.bank || null,
     payment_account_active: on,
     // Efí ligada: o Pix sai dinâmico pela Efí, com a chave Pix da conta Efí
-    ...(on && efiOn(acc) ? { pix_key: acc.efi_pix_key, pix_provider: 'efi' } : { pix_provider: 'estatico' }),
+    ...(on && efiOn(acc) ? { pix_key: efiKey(acc), pix_provider: 'efi' } : { pix_provider: 'estatico' }),
   };
 }
 

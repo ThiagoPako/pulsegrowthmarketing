@@ -49,7 +49,7 @@ export default function FinancialBilling() {
         <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')}><ArrowLeft size={18} /></Button>
         <div className="flex-1">
           <h1 className="text-2xl font-display font-bold flex items-center gap-2"><BellRing size={22} /> Cobranças</h1>
-          <p className="text-sm text-muted-foreground">A Ísis manda relatório, agradecimento, cobrança e lembrete pelo Assistente PULSE. Pix primeiro; o cartão pelo link da InfinitePay.</p>
+          <p className="text-sm text-muted-foreground">A Ísis manda relatório, agradecimento, cobrança e lembrete pelo Assistente PULSE. Pix primeiro; o cartão pelo link da Efí.</p>
         </div>
       </div>
 
@@ -229,7 +229,7 @@ function BillingSettings() {
       <Card>
         <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Contas que recebem</CardTitle>
-          <Button size="sm" variant="outline" onClick={() => navigate('/financeiro/pagamentos')}>Pagamentos · InfinitePay</Button>
+          <Button size="sm" variant="outline" onClick={() => navigate('/financeiro/pagamentos')}>Pagamentos · Efí</Button>
         </CardHeader>
         <CardContent className="space-y-1.5">
           {(['uruacu', 'minacu'] as const).map((city) => {
@@ -238,12 +238,12 @@ function BillingSettings() {
               <p key={city} className="text-xs">
                 <b>{city === 'uruacu' ? 'Uruaçu' : 'Minaçu'}:</b>{' '}
                 {acc?.own && acc.pix_key
-                  ? <span className="text-muted-foreground">Pix {acc.pix_key}{acc.receiver ? ` · ${acc.receiver}` : ''}{acc.infinitepay_handle ? ` · InfiniteTag ${acc.infinitepay_handle}` : ' · sem InfiniteTag (só Pix)'}</span>
+                  ? <span className="text-muted-foreground">Pix {acc.pix_key}{acc.receiver ? ` · ${acc.receiver}` : ''}</span>
                   : <span className="text-destructive">sem conta configurada: as cobranças desta cidade ficam em "Conferir dados".</span>}
               </p>
             );
           })}
-          <p className="text-[11px] text-muted-foreground">InfiniteTag, chave Pix e recebedor de cada cidade ficam só em Financeiro → Pagamentos · InfinitePay. Aqui ficam o modo e os textos.</p>
+          <p className="text-[11px] text-muted-foreground">Chave Pix, recebedor e a conta Efí (Pix e cartão) de cada cidade ficam só em Financeiro → Pagamentos · Efí. Aqui ficam o modo e os textos.</p>
         </CardContent>
       </Card>
 

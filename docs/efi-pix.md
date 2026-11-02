@@ -7,7 +7,7 @@ gestão de Pix e endpoints exclusivos).
 ## O que o Thiago cria na conta Efí (uma vez por cidade que tiver conta própria)
 
 1. **Aplicação.** No menu da esquerda, clique em **API** (lá embaixo) e depois em **Criar aplicação**. Ligue a **API Pix**
-   e marque os escopos, em Produção e em Homologação:
+   e a **API Cobranças** (cartão; marque tudo dela) e marque os escopos da API Pix, em Produção e em Homologação:
    - obrigatórios: `cob.write`, `cob.read`, `pix.read`, `webhook.write`, `webhook.read`, `payloadlocation.read`;
    - opcional: `gn.balance.read`, que mostra o saldo na tela.
 
@@ -41,9 +41,13 @@ ativas e não são confirmadas). Depois troque para Produção, com as credencia
     no caixa e manda o obrigado com recibo.
 - **Conciliação:** Pix que chega sem `txid` da Pulse fica como **conferir**. Ele aparece em Financeiro → Pagamentos e no
   resumo do dia da cidade, e é marcado à mão com "Marcar conferido".
-- **Cartão:** continua pelo link da InfinitePay.
-- **Migração:** a cidade sem a Efí ligada continua exatamente como antes (Pix estático + InfinitePay). A Efí é ligada
-  cidade por cidade.
+- **Cartão:** pelo link de pagamento da Efí (API Cobranças), só no cartão e em até 12x. O valor já leva a taxa do cartão
+  repassada (`card_fee_percent`), e a página e o PDF mostram o aviso discreto. A baixa sai pela notificação da Efí
+  (`/api/webhooks/efi-cobranca/:city?hmac=…`, sem mTLS) ou pela varredura de 30 em 30 min (status `paid`/`settled`).
+  Código em `lib/efiCobrancas.mjs` e `efiCardRoutes.mjs`.
+- **Só a Efí (02/11/2026):** a InfiniteTag, o teste e os links da InfinitePay saíram da tela, e nenhuma cobrança nova cria
+  link da InfinitePay. A chave Pix é uma só, a da conta Efí. Com "Pix com baixa automática" ligado, o Pix é dinâmico.
+  Desligado, o Pix sai pela chave, sem taxa, com o comprovante na página de pagamento (`docs/pix-chave-comprovante.md`).
 
 ## Webhook com mTLS (servidor)
 
@@ -90,5 +94,4 @@ na Efí.
 
 - **Extrato completo da conta** (tarifas, transferências): a API Extratos da Efí entrega arquivos CNAB 240, só em
   Produção. Fica para depois; hoje entram os Pix recebidos e o saldo.
-- **Cartão pela Efí** (link de pagamento da API Cobranças): precisa ligar a "API de Emissões" e passar pela análise de
-  limite de cartão da Efí (até 5 dias úteis). Fica para depois; o cartão segue na InfinitePay.
+- **Pix Automático** (recorrência): os escopos já podem ser marcados na aplicação, mas a programação ainda não foi feita.

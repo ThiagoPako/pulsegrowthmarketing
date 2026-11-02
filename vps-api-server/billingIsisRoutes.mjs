@@ -95,6 +95,7 @@ export function registerBillingIsisRoutes(app, {
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             UNIQUE (contract_id, month)
           );
+          ALTER TABLE billing_pay_pages ADD COLUMN IF NOT EXISTS card_amount NUMERIC;
         `);
       })().catch((error) => { schemaPromise = null; throw error; });
     }
@@ -306,16 +307,18 @@ export function registerBillingIsisRoutes(app, {
     await ensureSchema();
     const { rows: [row] } = await pool.query(
       `INSERT INTO billing_pay_pages (token, contract_id, client_id, month, revenue_id, client_name, plan_name, amount, due_date,
-                                      pix_payload, pix_key, receiver_name, card_link, city)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                                      pix_payload, pix_key, receiver_name, card_link, city, card_amount)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        ON CONFLICT (contract_id, month) DO UPDATE SET
          revenue_id = EXCLUDED.revenue_id, client_name = EXCLUDED.client_name, plan_name = EXCLUDED.plan_name,
          amount = EXCLUDED.amount, due_date = EXCLUDED.due_date, pix_payload = EXCLUDED.pix_payload, pix_key = EXCLUDED.pix_key,
-         receiver_name = EXCLUDED.receiver_name, card_link = coalesce(EXCLUDED.card_link, billing_pay_pages.card_link),
+         -- o link do cartão é sempre o da cobrança atual (o da InfinitePay antigo não fica)
+         receiver_name = EXCLUDED.receiver_name, card_link = EXCLUDED.card_link, card_amount = EXCLUDED.card_amount,
          city = EXCLUDED.city, updated_at = now()
        RETURNING token`,
       [payToken(crypto.randomBytes), contract.id, contract.client_id, month, data.revenueId || null, data.clientName, data.planName,
-        data.amount, data.dueDate || null, data.pix, data.pixKey, data.receiver, data.cardLink || null, data.city || null]
+        data.amount, data.dueDate || null, data.pix, data.pixKey, data.receiver, data.cardLink || null, data.city || null,
+        data.cardAmount ?? null]
     );
     return `${appBase}/pagar/${row.token}`;
   }
@@ -531,16 +534,18 @@ export function registerBillingIsisRoutes(app, {
     }
     const pix = efiPix?.pixCopiaECola
       || pixPayload({ key: config?.pix_key, name: config?.receiver_name, city: contract.city || contract.client_city, amount, txid: staticTxid(contract.id, month) });
-    // o link é no valor da mensalidade: a taxa do cartão a InfinitePay repassa na hora do pagamento (usuário, 01/11/2026)
-    const link = await paymentLink({ contract, revenue, amount, month }).catch((error) => {
-      logger.error('[cobranca-isis] link de pagamento:', error.message);
+    // cartão pela Efí (02/11/2026): o link já vem no valor com a taxa do cartão repassada (a Pulse recebe a mensalidade inteira)
+    const card = await paymentLink({ contract, revenue, amount, month, dueDate }).catch((error) => {
+      logger.error('[cobranca-isis] link do cartão:', error.message);
       return null;
     });
+    const link = typeof card === 'string' ? card : card?.url || null;
+    const cardTotal = link ? (typeof card === 'object' && card?.cardAmount ? card.cardAmount : amount) : null;
     const plano = contract.plan_name || 'plano mensal';
     const history = await previousRevenues(contract, month);
     const payUrl = await payPage(contract, month, {
       revenueId: revenue?.id, clientName: String(contract.company_name || '').trim(), planName: plano, amount, dueDate,
-      pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, city: normalizeCityValue(contract.client_city || contract.city),
+      pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: cardTotal, city: normalizeCityValue(contract.client_city || contract.city),
     }).catch((error) => {
       logger.error('[cobranca-isis] página de pagamento:', error.message);
       return null;
@@ -551,7 +556,7 @@ export function registerBillingIsisRoutes(app, {
       pdf: cobrancaDoc({
         month, today: date, dueDate, amount, status: step === 'lembrete' ? 'vencido' : 'aberto',
         client: clientOf(contract), plan: planOf(contract), issuer: issuerOf(contract, config), history,
-        payment: { pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(amount) : null, cardNotice: CARD_NOTICE, payUrl, amount: brl(amount) },
+        payment: { pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(cardTotal) : null, cardNotice: CARD_NOTICE, payUrl, amount: brl(amount) },
       }),
       payUrl,
       // o código Pix sozinho, numa mensagem logo depois, para o cliente tocar, segurar e copiar (nada além do código)
@@ -837,7 +842,9 @@ export function registerBillingIsisRoutes(app, {
         due_date: p.due_date ? String(p.due_date instanceof Date ? p.due_date.toISOString() : p.due_date).slice(0, 10) : null,
         paid, paid_at: paid ? rev.paid_at : null,
         pix_payload: paid ? null : p.pix_payload, pix_key: p.pix_key, receiver: p.receiver_name,
-        card_link: paid ? null : p.card_link, city: p.city,
+        // link antigo da InfinitePay (antes da troca para a Efí) não aparece mais
+        card_link: paid || /infinitepay/i.test(String(p.card_link || '')) ? null : p.card_link,
+        card_amount: p.card_amount != null ? Number(p.card_amount) : null, city: p.city,
         // comprovante já enviado (Pix pela chave): a página mostra "recebido" em vez de pedir de novo
         // Pix dinâmico (Efí) se identifica sozinho; o estático (pela chave) pede o comprovante
         pix_auto: /br\.gov\.bcb\.pix25/i.test(String(p.pix_payload || '')),

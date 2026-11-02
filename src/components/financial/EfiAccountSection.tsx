@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CheckCircle2, Landmark, Loader2, PlugZap, Upload, Webhook, XCircle } from 'lucide-react';
+import { CheckCircle2, CreditCard, Landmark, Loader2, PlugZap, Upload, Webhook, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,8 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import {
-  EFI_STATUS_LABELS, fetchEfiMovements, fileToBase64, markEfiConferido, registerEfiWebhook, saveEfiAccount, testEfiAccount,
-  type EfiMovement, type EfiStatus, type PaymentAccount,
+  EFI_STATUS_LABELS, fetchEfiCardLinks, fetchEfiMovements, fileToBase64, markEfiConferido, recheckEfiCardLink, registerEfiWebhook,
+  saveEfiAccount, setEfiCard, testEfiAccount, testEfiCard, type EfiMovement, type EfiStatus, type PaymentAccount,
 } from '@/lib/paymentAccounts';
 
 const EFI_STYLE: Record<EfiStatus, string> = {
@@ -37,7 +37,7 @@ export function EfiAccountSection({ account, demo }: { account: PaymentAccount; 
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [cert, setCert] = useState<File | null>(null);
-  const [busy, setBusy] = useState<'' | 'save' | 'test' | 'webhook' | 'toggle'>('');
+  const [busy, setBusy] = useState<'' | 'save' | 'test' | 'webhook' | 'toggle' | 'card-test' | 'card'>('');
   useEffect(() => { setEnv(efi.env); setPixKey(efi.pix_key); }, [efi.env, efi.pix_key]);
 
   const dirty = env !== efi.env || pixKey !== efi.pix_key || !!clientId || !!clientSecret || !!cert;
@@ -83,7 +83,18 @@ export function EfiAccountSection({ account, demo }: { account: PaymentAccount; 
 
   const toggle = (on: boolean) => run('toggle', async () => {
     await saveEfiAccount(account.city, { efi_active: on });
-    toast.success(on ? `${account.label}: cobranças com Pix da Efí a partir de agora` : `${account.label}: Efí desligada (volta o Pix de antes)`);
+    toast.success(on ? `${account.label}: Pix da Efí com baixa automática a partir de agora` : `${account.label}: Pix pela chave, com o comprovante na página de pagamento`);
+  });
+
+  const cardTest = () => run('card-test', async () => {
+    const r = await testEfiCard(account.city);
+    if (r.ok) toast.success(`${account.label}: cartão da Efí conectado`);
+    else toast.error(`${account.label}: ${r.error}`);
+  });
+
+  const cardToggle = (on: boolean) => run('card', async () => {
+    await setEfiCard(account.city, on);
+    toast.success(on ? `${account.label}: cartão pelo link da Efí a partir de agora` : `${account.label}: cobranças sem cartão`);
   });
 
   const canTurnOn = efi.status === 'pronto' || efi.status === 'ligado';
@@ -91,19 +102,31 @@ export function EfiAccountSection({ account, demo }: { account: PaymentAccount; 
   return (
     <div className="rounded-md border px-3 py-3 space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium flex items-center gap-1.5"><Landmark size={14} /> Efí Bank · Pix</p>
+        <p className="text-sm font-medium flex items-center gap-1.5"><Landmark size={14} /> Efí Bank</p>
         <Badge variant="outline" className={EFI_STYLE[efi.status]}>{EFI_STATUS_LABELS[efi.status]}</Badge>
       </div>
 
       <div className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
         <div>
-          <p className="text-sm font-medium">Cobrar com a Efí</p>
+          <p className="text-sm font-medium">Pix com baixa automática</p>
           <p className="text-[11px] text-muted-foreground">
-            {canTurnOn ? 'Ligada, a mensagem, o PDF e a página de pagamento levam o Pix da Efí (com o valor) e o pagamento dá baixa sozinho.'
-              : 'Liga depois de salvar tudo e passar no teste. Até lá, esta cidade segue como hoje.'}
+            {canTurnOn ? 'Ligado: o Pix da Efí já leva o valor e o pagamento dá baixa sozinho (a Efí cobra a taxa do Pix). Desligado: Pix pela chave, sem taxa, e o cliente manda o comprovante na página de pagamento.'
+              : 'Liga depois de salvar tudo e passar no teste. Até lá, o Pix sai pela chave e o cliente manda o comprovante.'}
           </p>
         </div>
-        <Switch checked={efi.active} disabled={!canTurnOn || busy !== '' || dirty} onCheckedChange={toggle} aria-label={`Cobrar com a Efí em ${account.label}`} />
+        <Switch checked={efi.active} disabled={!canTurnOn || busy !== '' || dirty} onCheckedChange={toggle} aria-label={`Pix com baixa automática em ${account.label}`} />
+      </div>
+
+      <div className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
+        <div>
+          <p className="text-sm font-medium flex items-center gap-1.5"><CreditCard size={14} /> Cartão pela Efí</p>
+          <p className="text-[11px] text-muted-foreground">
+            {efi.card_test_ok
+              ? 'Ligado: a cobrança leva o link de pagamento da Efí (até 12x), com a taxa do cartão repassada e o aviso discreto. Pagou, dá baixa sozinho.'
+              : 'Salve o Client ID e o Client Secret, ligue a "API Cobranças" na aplicação da Efí e toque em "Testar cartão".'}
+          </p>
+        </div>
+        <Switch checked={efi.card_active} disabled={!efi.card_test_ok || busy !== '' || dirty} onCheckedChange={cardToggle} aria-label={`Cartão pela Efí em ${account.label}`} />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -145,6 +168,9 @@ export function EfiAccountSection({ account, demo }: { account: PaymentAccount; 
         <Button size="sm" variant="outline" onClick={test} disabled={dirty || busy !== '' || efi.status === 'nao_configurado' || efi.status === 'incompleto'}>
           {busy === 'test' ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap size={14} className="mr-1" />} Testar conexão
         </Button>
+        <Button size="sm" variant="outline" onClick={cardTest} disabled={dirty || busy !== '' || !efi.has_client_id || !efi.has_client_secret}>
+          {busy === 'card-test' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard size={14} className="mr-1" />} Testar cartão
+        </Button>
         <Button size="sm" variant="outline" onClick={webhook} disabled={dirty || busy !== '' || !canTurnOn}>
           {busy === 'webhook' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Webhook size={14} className="mr-1" />} Cadastrar webhook
         </Button>
@@ -158,11 +184,17 @@ export function EfiAccountSection({ account, demo }: { account: PaymentAccount; 
             Último teste em {dataHora(efi.last_test_at)}{efi.last_test_ok ? ': token da Efí e consulta de cobranças funcionaram.' : `: ${efi.last_test_error}`}
           </p>
         )}
+        {efi.card_test_at && (
+          <p className="flex items-center gap-1">
+            {efi.card_test_ok ? <CheckCircle2 size={12} className="text-emerald-600" /> : <XCircle size={12} className="text-red-600" />}
+            Cartão testado em {dataHora(efi.card_test_at)}{efi.card_test_ok ? ': a API Cobranças da Efí respondeu.' : `: ${efi.card_test_error}`}
+          </p>
+        )}
         {efi.scopes_missing.length > 0 && <p className="text-red-600">Faltam escopos na aplicação da Efí: {efi.scopes_missing.join(', ')}</p>}
         {efi.webhook_at && <p>Webhook cadastrado em {dataHora(efi.webhook_at)}.</p>}
         {efi.webhook_error && <p className="text-amber-700">Webhook: {efi.webhook_error}</p>}
         <p>
-          Sem webhook, a Pulse confere os Pix recebidos na Efí de 10 em 10 minutos. O cartão continua pelo link da InfinitePay. Client ID, Client Secret e
+          Sem webhook, a Pulse confere os Pix recebidos na Efí de 10 em 10 minutos e os links do cartão de 30 em 30. Client ID, Client Secret e
           certificado vão cifrados para o servidor e nunca voltam para a tela.
         </p>
       </div>
@@ -210,6 +242,43 @@ export function EfiMovementsPanel({ preview }: { preview?: EfiMovement[] }) {
                   toast.error((error as Error).message);
                 }
               }}>Marcar conferido</Button>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Links do cartão da Efí no mês (cobranças das duas cidades), com o botão de conferir o pagamento. */
+export function EfiCardLinksPanel() {
+  const queryClient = useQueryClient();
+  const month = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).slice(0, 7);
+  const query = useQuery({ queryKey: ['efi-card-links', month], queryFn: () => fetchEfiCardLinks(month) });
+  const [busy, setBusy] = useState('');
+  if (!query.data?.links.length) return null;
+  return (
+    <Card>
+      <CardHeader className="pb-2"><CardTitle className="text-base">Cartão pela Efí · {month.slice(5)}/{month.slice(0, 4)}</CardTitle></CardHeader>
+      <CardContent className="space-y-2">
+        {query.data.links.map((l) => (
+          <div key={l.charge_id} className="flex flex-wrap items-center gap-2 text-xs">
+            <Badge variant={l.paid_at ? 'default' : 'outline'}>{l.paid_at ? 'pago' : l.status === 'link' ? 'aberto' : l.status}</Badge>
+            <span>{l.client || 'cliente'} · {brl(Number(l.amount))} (no cartão {brl(Number(l.card_amount))}) · {l.city === 'uruacu' ? 'Uruaçu' : 'Minaçu'}</span>
+            <a className="text-primary underline truncate max-w-[200px]" href={l.url} target="_blank" rel="noreferrer">{l.url}</a>
+            {!l.paid_at && (
+              <Button size="sm" variant="ghost" className="h-6 px-2" disabled={busy === l.charge_id} onClick={async () => {
+                setBusy(l.charge_id);
+                try {
+                  const r = await recheckEfiCardLink(l.charge_id);
+                  toast.success(r.paid ? 'Pago: receita baixada' : `Ainda não pago (${r.status || 'aberto'})`);
+                  await queryClient.invalidateQueries({ queryKey: ['efi-card-links'] });
+                } catch (error) {
+                  toast.error((error as Error).message);
+                } finally {
+                  setBusy('');
+                }
+              }}>Conferir</Button>
             )}
           </div>
         ))}

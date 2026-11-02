@@ -17,12 +17,13 @@ import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import {
   BILLING_STEPS, MODES, DEFAULT_TEMPLATES, monthName, previousMonth, nextMonth, stepDates, attendanceTip,
-  brl, pixPayload, CARD_NOTICE, ensurePayLink, payToken, valorPorExtenso, effectiveTemplate, recordingsText, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
+  brl, pixPayload, CARD_NOTICE, ensurePayLink, payToken, valorPorExtenso, effectiveTemplate, recordingsText, pixOnlyMessage, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
 } from './lib/billingIsis.mjs';
 import { renderPdf } from './lib/billingPdf.mjs';
 import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, monthName as nomeMes } from './lib/billingPdfDocs.mjs';
 import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
+import { monthDates } from './lib/monthDates.mjs';
 import { enqueueWhatsApp } from './whatsapp/shared.mjs';
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -124,7 +125,7 @@ export function registerBillingIsisRoutes(app, {
 
   async function activeContracts() {
     const { rows } = await pool.query(
-      `SELECT fc.*, c.company_name, c.whatsapp, c.city AS client_city, c.responsible_person, p.name AS plan_name,
+      `SELECT fc.*, c.company_name, c.whatsapp, c.city AS client_city, c.responsible_person, c.niche, p.name AS plan_name,
               p.reels_qty, p.creatives_qty, p.stories_qty, p.arts_qty, p.recording_sessions
          FROM financial_contracts fc
          JOIN clients c ON c.id = fc.client_id
@@ -353,6 +354,8 @@ export function registerBillingIsisRoutes(app, {
       const pdfRelatorio = relatorioDoc({
         ref, prev: previousMonth(`${ref}-01`), next: month, client: clientOf(contract), plan: planOf(contract), issuer: issuerOf(contract, config),
         numbers: n, network: report.network, suggestions: report.draft.suggestions,
+        // datas do mês que começa que combinam com o nicho do cliente (só no PDF)
+        dates: monthDates(month, contract.niche),
       });
       return {
         config,
@@ -422,8 +425,8 @@ export function registerBillingIsisRoutes(app, {
         payment: { pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(amount) : null, cardNotice: CARD_NOTICE, payUrl, amount: brl(amount) },
       }),
       payUrl,
-      // o código Pix sozinho, numa mensagem logo depois, para o cliente tocar, segurar e copiar
-      pixMessage: pix,
+      // o código Pix sozinho, numa mensagem logo depois, para o cliente tocar, segurar e copiar (nada além do código)
+      pixMessage: pixOnlyMessage(pix),
       body: applyTemplate(payUrl ? ensurePayLink(templateOf(config, step)) : templateOf(config, step), {
         ...base, link_pagamento: payUrl, plano, valor: brl(amount), mes_ref: monthName(`${month}-01`),
         pix_copia_cola: pix, chave_pix: config?.pix_key, nome_recebedor: config?.receiver_name,

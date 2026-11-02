@@ -162,7 +162,8 @@ const NET_ROWS = [
 
 /**
  * Relatório do mês: mostra o serviço entregue (o que foi feito, grande e primeiro; o que passou do plano em destaque).
- * d = { ref (mês do relatório), prev, next (mês atual), today, client, plan, numbers, network, suggestions, link? }
+ * d = { ref (mês do relatório), prev, next (mês atual), today, client, plan, numbers, network, suggestions, dates?, link? }
+ * dates = datas do mês que combinam com o nicho (monthDates), com a ideia de cada uma.
  */
 export function relatorioDoc(d) {
   const n = d.numbers;
@@ -190,6 +191,17 @@ export function relatorioDoc(d) {
     sections: [
       ...(acima ? [{ type: 'callout', tone: 'verde', heading: 'Acima do plano contratado', text: acima }] : []),
       ...(items.length ? [{ title: 'Entregas do mês', type: 'tiles', rows: deliveryTiles(items) }] : []),
+      // sugestões do mês: as datas que combinam com o nicho (lib/monthDates.mjs) e as ideias aprovadas no relatório
+      ...((d.dates || []).length ? [{
+        title: `Sugestões para ${monthName(d.next)}`,
+        type: 'table',
+        columns: [{ label: 'Data', width: 64 }, { label: 'Data comemorativa', width: 170 }, { label: 'O que podemos fazer' }],
+        rows: d.dates.map((x) => [{ text: x.day, bold: true }, x.label, x.idea.charAt(0).toUpperCase() + x.idea.slice(1)]),
+      }] : []),
+      ...(suggestions.length ? [{
+        ...((d.dates || []).length ? {} : { title: `Sugestões para ${monthName(d.next)}` }),
+        type: 'callout', heading: 'Mais ideias para o mês', text: suggestions.map((s) => `• ${s}`).join('\n'),
+      }] : []),
       ...(n.deliveries.videos.by_type.length ? [{
         title: 'Vídeos entregues',
         type: 'table',
@@ -225,7 +237,6 @@ export function relatorioDoc(d) {
         columns: [{ label: 'Data', width: 64 }, { label: 'Post' }, { label: 'Alcance', width: 80, align: 'right' }, { label: 'Interações', width: 90, align: 'right' }],
         rows: net.top_posts.map((p) => [dataBr(p.date).slice(0, 5) || '—', p.caption || '(sem legenda)', num(p.reach), num(p.interactions)]),
       }] : []),
-      ...(suggestions.length ? [{ title: `Ideias para ${monthName(d.next)}`, type: 'callout', heading: 'O que propomos para o próximo mês', text: suggestions.map((s) => `• ${s}`).join('\n') }] : []),
       ...(d.link ? [{ title: 'Relatório completo', text: d.link }] : []),
     ],
     closing: { text: 'Obrigada pela parceria. Bora para mais um mês!', ...SIGNATURE },
@@ -284,7 +295,6 @@ export function agradecimentoDoc(d) {
     sections: [
       ...(acima ? [{ type: 'callout', tone: 'verde', heading: 'Acima do plano contratado', text: acima }] : []),
       ...(items.length ? [{ title: `O que entregamos em ${monthName(d.ref)}`, type: 'tiles', rows: deliveryTiles(items) }] : []),
-      ...(d.tip ? [{ title: 'Uma dica para o próximo mês', type: 'callout', text: d.tip }] : []),
     ],
     closing: {
       text: `Lembrete: a mensalidade de ${monthName(iso(d.dueDate).slice(0, 7))} vence em ${dataBr(d.dueDate)}${d.amount ? ` (${brl(d.amount)})` : ''}; no dia, você recebe a cobrança com o Pix e o link do cartão. Obrigada por caminhar com a gente!`,

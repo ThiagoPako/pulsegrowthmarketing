@@ -89,11 +89,12 @@ describe('cobranças da Ísis · textos', () => {
   });
 
   it('dica de assiduidade pelo que aconteceu', () => {
-    expect(attendanceTip({ done: 4, scheduled: 4, cancelled: 0, avg: 5 })).toMatch(/Agenda em dia/);
-    expect(attendanceTip({ done: 4, scheduled: 4, cancelled: 0, avg: 2 })).toMatch(/3 ou 4 temas/);
-    // remarcação ou mês sem agenda: sem dica (nada que soe como cobrança de gravação)
-    expect(attendanceTip({ done: 2, scheduled: 3, cancelled: 1, avg: 5 })).toBe('');
-    expect(attendanceTip({ done: 0, scheduled: 0, cancelled: 0, avg: null })).toBe('');
+    expect(attendanceTip({ done: 4, scheduled: 4, cancelled: 0 })).toBe('Seguimos juntos no próximo mês!');
+    // remarcação ou falta: convite para marcar as datas
+    expect(attendanceTip({ done: 2, scheduled: 3, cancelled: 1 })).toBe('Que tal já deixarmos as próximas datas marcadas?');
+    expect(attendanceTip({ done: 2, scheduled: 3, cancelled: 0 })).toBe('Que tal já deixarmos as próximas datas marcadas?');
+    // mês sem agenda nenhuma: sem fecho (e sem a linha das gravações)
+    expect(attendanceTip({ done: 0, scheduled: 0, cancelled: 0 })).toBe('');
     expect(recordingsText(1)).toBe('1 gravação');
     expect(recordingsText(3)).toBe('3 gravações');
     expect(recordingsText(0)).toBe('');
@@ -182,11 +183,15 @@ describe('cobranças da Ísis · respiro e modelos antigos', () => {
     expect(cheio).not.toMatch(/\n{3,}/);
   });
 
-  it('dia 1: só a abertura (o PDF fala do relatório); D−5: só o que foi feito', () => {
-    expect(applyTemplate(DEFAULT_TEMPLATES.relatorio_mensal, { nome_cliente: 'Posto X', mes_anterior: 'outubro' }))
-      .toBe('Bom dia, Posto X! ☀️\n\nSegue o resumo do que entregamos em outubro para você 🧡');
-    const pre = applyTemplate(DEFAULT_TEMPLATES.pre_vencimento, { nome_cliente: 'X', mes_ref: 'outubro', gravacoes: '2 gravações', dica_assiduidade: '', dia_vencimento: '10' });
-    expect(pre).toBe('Oi, X! Obrigada por mais um mês de parceria 🧡\n\nEm outubro, fizemos 2 gravações juntos.\n\nSua mensalidade vence dia 10.');
+  it('dia 1: o PDF traz o resumo e as sugestões; D−5: sem "x de y", com o fecho certo', () => {
+    expect(applyTemplate(DEFAULT_TEMPLATES.relatorio_mensal, { nome_cliente: 'Posto X', mes_anterior: 'outubro', mes_atual: 'novembro' }))
+      .toBe('Bom dia, Posto X! ☀️\n\nNo PDF em anexo está o resumo do que entregamos em outubro e as nossas sugestões para novembro 🧡');
+    const pre = (a: { done: number; scheduled: number; cancelled: number }) => applyTemplate(DEFAULT_TEMPLATES.pre_vencimento, {
+      nome_cliente: 'X', mes_ref: 'outubro', gravacoes: recordingsText(a.done), dica_assiduidade: attendanceTip(a), dia_vencimento: '10',
+    });
+    expect(pre({ done: 3, scheduled: 3, cancelled: 0 })).toBe('Oi, X! Obrigada por mais um mês de parceria 🧡\n\nEm outubro fizemos 3 gravações juntos. Seguimos juntos no próximo mês!\n\nSua mensalidade vence dia 10.');
+    expect(pre({ done: 1, scheduled: 2, cancelled: 1 })).toContain('Em outubro fizemos 1 gravação juntos. Que tal já deixarmos as próximas datas marcadas?');
+    expect(pre({ done: 2, scheduled: 3, cancelled: 1 })).not.toMatch(/2 de 3/);
     // sem gravação no mês: a linha some
     expect(applyTemplate(DEFAULT_TEMPLATES.pre_vencimento, { nome_cliente: 'X', mes_ref: 'outubro', gravacoes: '', dia_vencimento: '10' })).not.toContain('fizemos');
   });

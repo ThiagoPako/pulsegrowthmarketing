@@ -21,18 +21,19 @@ export const MODES = ['desligado', 'previa', 'ativo'];
 export const DEFAULT_TEMPLATES = {
   // mais curtas e com respiro, sem se apresentar (usuário, 01/11/2026: "as mensagens de texto estão muito grandes ...
   // a mensagem tá muito junta, não precisa se identificar"): linha em branco entre os blocos
-  // o PDF anexado fala do relatório (usuário, 01/11/2026: "a mensagem do relatório não precisa falar o relatório")
+  // o PDF anexado traz o resumo e as sugestões do mês (usuário, 01/11/2026: "a mensagem precisa falar que o PDF
+  // contém o resumo do mês e sugestões para esse mês"); as datas do nicho ficam só no PDF
   relatorio_mensal: [
     'Bom dia, {nome_cliente}! ☀️',
     '',
-    'Segue o resumo do que entregamos em {mes_anterior} para você 🧡',
+    'No PDF em anexo está o resumo do que entregamos em {mes_anterior} e as nossas sugestões para {mes_atual} 🧡',
   ].join('\n'),
-  // só o que foi feito; a dica entra quando ajuda e em tom positivo (nada que soe como cobrança de gravação)
+  // sem "x de y": só o que foi feito e o fecho ({dica_assiduidade}: marcar as datas se houve remarcação; senão,
+  // "Seguimos juntos no próximo mês!")
   pre_vencimento: [
     'Oi, {nome_cliente}! Obrigada por mais um mês de parceria 🧡',
     '',
-    'Em {mes_ref}, fizemos {gravacoes} juntos.',
-    '{dica_assiduidade}',
+    'Em {mes_ref} fizemos {gravacoes} juntos. {dica_assiduidade}',
     '',
     'Sua mensalidade vence dia {dia_vencimento}.',
   ].join('\n'),
@@ -143,12 +144,22 @@ export function stepDates(dueDate) {
 }
 
 /** Frase de "como melhorar" pelo que aconteceu nas agendas (texto do plano aprovado). */
-// dica do D−5 só quando ajuda o cliente e em tom positivo (usuário, 01/11/2026): nada que soe como cobrança de
-// gravação; mês com gravação remarcada ou sem agenda fica sem dica
-export function attendanceTip({ done = 0, scheduled = 0, cancelled = 0, avg = null } = {}) {
-  if (!(scheduled > 0 && done >= scheduled && !cancelled)) return '';
-  if (avg !== null && avg < 3) return 'Agenda em dia, parabéns! Para render ainda mais vídeos por gravação, vale separar 3 ou 4 temas antes; a gente ajuda com os roteiros.';
-  return 'Agenda em dia, parabéns! Assim o conteúdo não para.';
+// fecho do D−5 (usuário, 01/11/2026): convite para marcar as datas só quando houve remarcação ou falta; senão,
+// "Seguimos juntos no próximo mês!"; mês sem agenda nenhuma fica sem fecho
+export function attendanceTip({ done = 0, scheduled = 0, cancelled = 0 } = {}) {
+  if (!scheduled && !done && !cancelled) return '';
+  if (cancelled > 0 || done < scheduled) return 'Que tal já deixarmos as próximas datas marcadas?';
+  return 'Seguimos juntos no próximo mês!';
+}
+
+/**
+ * Mensagem do código Pix (vai logo depois da cobrança): só o copia e cola, nada mais (usuário, 01/11/2026: "mensagem
+ * para copiar o Pix não pode conter nada além da chave"): sem rodapé, emoji, texto ou espaço no fim.
+ */
+export function pixOnlyMessage(pix) {
+  // só as pontas: o nome do recebedor tem espaço dentro do código (tirar quebra o CRC)
+  const code = String(pix || '').trim();
+  return code || null;
 }
 
 /** "2 gravações" / "1 gravação"; vazio sem gravação (a linha sai). */

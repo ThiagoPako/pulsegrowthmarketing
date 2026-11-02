@@ -20,7 +20,7 @@ import {
   brl, pixPayload, CARD_NOTICE, ensurePayLink, payToken, valorPorExtenso, effectiveTemplate, recordingsText, pixOnlyMessage, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
 } from './lib/billingIsis.mjs';
 import { renderPdf } from './lib/billingPdf.mjs';
-import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, monthName as nomeMes } from './lib/billingPdfDocs.mjs';
+import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, deliveryShortfalls, monthName as nomeMes } from './lib/billingPdfDocs.mjs';
 import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
 import { staticTxid } from './lib/pixReceipt.mjs';
 import { OFFER_LINE } from './lib/pixAutomatico.mjs';
@@ -486,6 +486,7 @@ export function registerBillingIsisRoutes(app, {
       if (!report) return { skip: 'sem relatório do mês' };
       if (report.draft.status !== 'aprovado') return { skip: 'aguardando_relatorio', config };
       const n = report.numbers;
+      const shortfalls = deliveryShortfalls(n, planOf(contract));
       const net = report.network?.connected && report.network.current
         ? [
           report.network.current.reach !== null ? `${Number(report.network.current.reach).toLocaleString('pt-BR')} contas alcançadas` : '',
@@ -504,6 +505,7 @@ export function registerBillingIsisRoutes(app, {
       });
       return {
         config,
+        shortfalls,
         pdf: pdfRelatorio,
         body: applyTemplate(templateOf(config, step), {
           ...base,
@@ -533,11 +535,13 @@ export function registerBillingIsisRoutes(app, {
     if (step === 'pre_vencimento') {
       const ref = previousMonth(`${month}-01`);
       const a = await attendance(contract.client_id, ref);
+      const preNumbers = (await socialReports.reportFor(contract.client_id, ref).catch(() => null))?.numbers || null;
       return {
         config,
+        shortfalls: deliveryShortfalls(preNumbers, planOf(contract)),
         pdf: agradecimentoDoc({
           ref, client: clientOf(contract), plan: planOf(contract), attendance: a, tip: attendanceTip(a), dueDate, amount, autoDebit,
-          numbers: (await socialReports.reportFor(contract.client_id, ref).catch(() => null))?.numbers || null,
+          numbers: preNumbers,
         }),
         body: applyTemplate(templateOf(config, step), {
           ...base, mes_ref: monthName(`${ref}-01`), gravacoes: recordingsText(a.done), gravacoes_feitas: a.done, gravacoes_marcadas: a.scheduled,
@@ -649,6 +653,67 @@ export function registerBillingIsisRoutes(app, {
     );
   }
 
+  /** Um envio da Ísis (etapa de um contrato no mês). release = liberado pela equipe mesmo com entregas abaixo do plano. */
+  async function deliverStep(contract, step, month, today, mode, { autoDebit = false, autoFailed = false, release = false } = {}) {
+    const out = await compose(contract, step, today, month, { autoDebit, autoFailed });
+    if (out.skip === 'pago') return null;
+    if (out.skip === 'conferir') {
+      await record(contract, step, month, 'conferir', `Não bate com o Financeiro:\n${out.problems.map((p) => `• ${p}`).join('\n')}`);
+      const warned = mode === 'ativo' ? await warnTeam(contract, step, month, out.problems).catch(() => false) : false;
+      return { client: contract.company_name, step, status: 'conferir', problems: out.problems, warned };
+    }
+    if (out.skip) {
+      // relatório ainda não aprovado: fica marcado (a agenda mostra) e não tenta de novo no mês
+      await record(contract, step, month, out.skip === 'aguardando_relatorio' ? 'aguardando_relatorio' : 'pulado', null);
+      return null;
+    }
+    // entregas abaixo do plano (relatório do dia 1 e PDF de dedicação): segura e avisa a equipe antes do cliente
+    if (out.shortfalls?.length && !release) {
+      const lines = out.shortfalls.map((f) => `• ${f.label}: ${f.done} de ${f.goal}`);
+      await record(contract, step, month, 'segurado', `Entregas abaixo do plano:\n${lines.join('\n')}`, out.revenue?.id);
+      const cidade = normalizeCityValue(contract.client_city || contract.city) || 'minacu';
+      if (mode === 'ativo') {
+        await alertTeam(pool, cidade, [
+          `⚠️ ${step === 'relatorio_mensal' ? 'Relatório do mês' : 'PDF de dedicação'} segurado · ${String(contract.company_name || '').trim()}`,
+          'As entregas ficaram abaixo do plano e o PDF ainda NÃO foi para o cliente:', ...lines,
+          `Para enviar mesmo assim, peça à Marcely: "liberar ${step === 'relatorio_mensal' ? 'relatório' : 'dedicação'} ${String(contract.company_name || '').trim()}".`,
+        ].join('\n'), { logger }).catch(() => 0);
+      }
+      return { client: contract.company_name, step, status: 'segurado', shortfalls: out.shortfalls };
+    }
+    // o PDF sai antes do envio e fica guardado (a agenda e a prévia mostram o mesmo arquivo)
+    const pdf = out.pdf ? await savePdf(contract, step, month, out.pdf) : null;
+    // nada sai sem o PDF pronto e conferido
+    if (out.pdf && !pdf?.ok) {
+      await record(contract, step, month, 'conferir', 'O PDF não ficou pronto: nada foi enviado.');
+      if (mode === 'ativo') await warnTeam(contract, step, month, ['o PDF não ficou pronto']).catch(() => false);
+      return { client: contract.company_name, step, status: 'conferir', problems: ['PDF'] };
+    }
+    // o relatório do dia 1 vai ao responsável; D−5, cobrança e lembrete vão a quem o cadastro manda (o
+    // financeiro da empresa, quando tem). Número próprio faltando: não envia e avisa (nunca vai ao lugar errado)
+    const target = billingTarget(contract, step === 'relatorio_mensal' ? 'relatorio' : 'cobranca');
+    if (!target.to) {
+      await record(contract, step, month, 'conferir', `Não enviado: ${target.problem}.`, out.revenue?.id, pdf?.url);
+      if (mode === 'ativo') await warnTeam(contract, step, month, [target.problem]).catch(() => false);
+      return { client: contract.company_name, step, status: 'conferir', problems: [target.problem] };
+    }
+    if (mode === 'previa') {
+      await record(contract, step, month, 'previa', out.body, out.revenue?.id, pdf?.url);
+    } else {
+      await enqueueWhatsApp(pool, {
+        to: target.to, body: out.body, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id,
+        ...(pdf ? { mediaUrl: pdf.url, mediaName: pdf.name } : {}),
+      });
+      if (out.pixMessage) {
+        await enqueueWhatsApp(pool, {
+          to: target.to, body: out.pixMessage, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id,
+        });
+      }
+      await record(contract, step, month, 'enviada', out.body, out.revenue?.id, pdf?.url, target.to);
+    }
+    return { client: contract.company_name, step, status: mode === 'previa' ? 'previa' : 'enviada' };
+  }
+
   /** Roda no agendador das 9h (junto da cobrança antiga). Só mexe nos contratos de cidade em prévia ou ativo. */
   async function run({ today = todayBr() } = {}) {
     await ensureSchema();
@@ -680,52 +745,8 @@ export function registerBillingIsisRoutes(app, {
       for (const { step, month, autoDebit, autoFailed } of due) {
         try {
           if (await alreadyHandled(contract, step, month)) continue;
-          const out = await compose(contract, step, today, month, { autoDebit, autoFailed });
-          if (out.skip === 'pago') continue;
-          if (out.skip === 'conferir') {
-            await record(contract, step, month, 'conferir', `Não bate com o Financeiro:\n${out.problems.map((p) => `• ${p}`).join('\n')}`);
-            const warned = mode === 'ativo' ? await warnTeam(contract, step, month, out.problems).catch(() => false) : false;
-            results.push({ client: contract.company_name, step, status: 'conferir', problems: out.problems, warned });
-            continue;
-          }
-          if (out.skip) {
-            // relatório ainda não aprovado: fica marcado (a agenda mostra) e não tenta de novo no mês
-            await record(contract, step, month, out.skip === 'aguardando_relatorio' ? 'aguardando_relatorio' : 'pulado', null);
-            continue;
-          }
-          // o PDF sai antes do envio e fica guardado (a agenda e a prévia mostram o mesmo arquivo)
-          const pdf = out.pdf ? await savePdf(contract, step, month, out.pdf) : null;
-          // nada sai sem o PDF pronto e conferido
-          if (out.pdf && !pdf?.ok) {
-            await record(contract, step, month, 'conferir', 'O PDF não ficou pronto: nada foi enviado.');
-            if (mode === 'ativo') await warnTeam(contract, step, month, ['o PDF não ficou pronto']).catch(() => false);
-            results.push({ client: contract.company_name, step, status: 'conferir', problems: ['PDF'] });
-            continue;
-          }
-          // o relatório do dia 1 vai ao responsável; D−5, cobrança e lembrete vão a quem o cadastro manda (o
-          // financeiro da empresa, quando tem). Número próprio faltando: não envia e avisa (nunca vai ao lugar errado)
-          const target = billingTarget(contract, step === 'relatorio_mensal' ? 'relatorio' : 'cobranca');
-          if (!target.to) {
-            await record(contract, step, month, 'conferir', `Não enviado: ${target.problem}.`, out.revenue?.id, pdf?.url);
-            if (mode === 'ativo') await warnTeam(contract, step, month, [target.problem]).catch(() => false);
-            results.push({ client: contract.company_name, step, status: 'conferir', problems: [target.problem] });
-            continue;
-          }
-          if (mode === 'previa') {
-            await record(contract, step, month, 'previa', out.body, out.revenue?.id, pdf?.url);
-          } else {
-            await enqueueWhatsApp(pool, {
-              to: target.to, body: out.body, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id,
-              ...(pdf ? { mediaUrl: pdf.url, mediaName: pdf.name } : {}),
-            });
-            if (out.pixMessage) {
-              await enqueueWhatsApp(pool, {
-                to: target.to, body: out.pixMessage, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id,
-              });
-            }
-            await record(contract, step, month, 'enviada', out.body, out.revenue?.id, pdf?.url, target.to);
-          }
-          results.push({ client: contract.company_name, step, status: mode === 'previa' ? 'previa' : 'enviada' });
+          const r = await deliverStep(contract, step, month, today, mode, { autoDebit, autoFailed });
+          if (r) results.push(r);
         } catch (error) {
           logger.error('[cobranca-isis]', contract.company_name, step, error.message);
           results.push({ client: contract.company_name, step, status: 'erro', error: error.message });
@@ -891,6 +912,35 @@ export function registerBillingIsisRoutes(app, {
         step, date, skip: out.skip || null, problems: out.problems || null, body: out.body || null, contact: out.contact || null,
         pix_message: out.pixMessage || null, pay_url: out.payUrl || null,
       });
+    } catch (error) { sendError(res, error); }
+  });
+
+  // ── liberar o PDF segurado por entregas abaixo do plano (a equipe pediu à Marcely) ──
+  //   POST /api/agent/billing/release { client, step: relatorio_mensal|pre_vencimento, month? }   (chefe)
+  app.post('/api/agent/billing/release', async (req, res) => {
+    try {
+      if (!verifyAgent) throw httpError(501, 'Indisponível');
+      const agent = await verifyAgent(req);
+      if (agent.role !== 'chefe') throw httpError(403, 'Só a chefe libera');
+      await ensureSchema();
+      const step = ['relatorio_mensal', 'pre_vencimento'].includes(req.body?.step) ? req.body.step : 'relatorio_mensal';
+      const key = String(req.body?.client || '').trim().toLowerCase();
+      const found = (await activeContracts()).filter((c) => String(c.company_name || '').toLowerCase().includes(key));
+      if (!key || !found.length) throw httpError(404, `Nenhum contrato ativo com "${req.body?.client || ''}"`);
+      if (found.length > 1) throw httpError(409, `Mais de um contrato: ${found.map((c) => String(c.company_name).trim()).join(', ')}`);
+      const contract = found[0];
+      const today = todayBr();
+      const { rows: [held] } = await pool.query(
+        `SELECT reference_month FROM billing_messages WHERE client_id = $1 AND message_type = $2 AND status = 'segurado'
+            AND ($3::text IS NULL OR reference_month = $3) ORDER BY created_at DESC LIMIT 1`,
+        [contract.client_id, step, /^\d{4}-\d{2}$/.test(String(req.body?.month || '')) ? req.body.month : null]
+      );
+      if (!held) throw httpError(404, 'Não há PDF segurado para liberar');
+      await pool.query(`DELETE FROM billing_messages WHERE client_id = $1 AND message_type = $2 AND reference_month = $3 AND status = 'segurado'`,
+        [contract.client_id, step, held.reference_month]);
+      const config = await paymentConfigFor(contract.city || contract.client_city);
+      const r = await deliverStep(contract, step, held.reference_month, today, modeOf(config), { release: true });
+      res.json({ ok: true, client: contract.company_name, step, month: held.reference_month, result: r });
     } catch (error) { sendError(res, error); }
   });
 

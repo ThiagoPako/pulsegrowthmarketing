@@ -60,7 +60,7 @@ describe('PDFs da Ísis: conteúdo', () => {
     const d = agradecimentoDoc({ ref: '2026-10', client, plan, numbers, attendance: { done: 2, scheduled: 3, cancelled: 1, avg: 4.5 }, tip: '', dueDate: '2026-11-10', amount: 1500 });
     expect(d.cards[0]).toMatchObject({ label: 'Gravações feitas', value: 2 });
     expect(JSON.stringify(d)).toMatch(/Gravações canceladas/);
-    expect(JSON.stringify(d)).not.toMatch(/2 de 3|Aproveitamento|bdicab/i);
+    expect(JSON.stringify(d)).not.toMatch(/2 de 3|Aproveitamento|\bdica\b/i);
     expect(d.closing.text).toContain('10/11/2026');
   });
 

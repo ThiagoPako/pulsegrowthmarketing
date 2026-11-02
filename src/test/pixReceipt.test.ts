@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  parseE2E, parseAiReceipt, checkReceipt, sameReceiver, sameDocument, sameKey, staticTxid, parseOfx, matchStatement,
+  parseE2E, parseAiReceipt, checkReceipt, sameReceiver, sameDocument, sameKey, staticTxid, parseOfx, matchStatement, payerMatches, pickByAmount,
 } from '../../vps-api-server/lib/pixReceipt.mjs';
 import { registerPixReceiptRoutes } from '../../vps-api-server/pixReceiptRoutes.mjs';
 
@@ -70,6 +70,16 @@ const OFX = `OFXHEADER:100
 <STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261102<TRNAMT>-35.00<FITID>abc<MEMO>TARIFA
 <STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20261102<TRNAMT>800,00<FITID>x2<MEMO>PIX RECEBIDO JOAO
 </BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`;
+
+describe('Pix pela chave · quem pagou', () => {
+  it('nome de quem pagou bate com a empresa ou o responsável (palavra de 3+ letras, sem "ltda"/"de")', () => {
+    expect(payerMatches('MARIA S SOUZA', ['Clínica Sorriso', 'Maria Souza'])).toBe(true);
+    expect(payerMatches('SORRISO ODONTO LTDA', ['Clínica Sorriso'])).toBe(true);
+    expect(payerMatches('JOAO DE LIMA', ['Clínica Sorriso', 'Maria Souza'])).toBe(false);
+    expect(payerMatches('', ['Maria'])).toBe(false);
+    expect(pickByAmount([{ client_name: 'Clínica Sorriso' }, { client_name: 'Clínica Bela' }], 'CLINICA')).toBeNull();
+  });
+});
 
 describe('Pix pela chave · extrato .ofx', () => {
   it('lê só os créditos, com data e valor (vírgula ou ponto)', () => {

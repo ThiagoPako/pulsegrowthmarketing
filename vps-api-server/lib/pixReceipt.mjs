@@ -119,6 +119,29 @@ export function checkReceipt(read, expected, { now = new Date(), usedBy = null }
   return { verdict, checks, e2e: e2e?.id || null, paidAt: e2e?.at || null };
 }
 
+/**
+ * Quem pagou combina com o cliente (Pix sem o código da mensalidade): uma palavra significativa (3+ letras, fora de
+ * "ltda", "de", "da"…) do nome da empresa ou do responsável aparece no nome de quem pagou.
+ */
+export function payerMatches(payer, names) {
+  const words = (s) => norm(s).split(' ').filter((w) => w.length >= 3 && !STOP.has(w));
+  const got = new Set(words(payer));
+  if (!got.size) return false;
+  return names.some((n) => words(n).some((w) => got.has(w)));
+}
+
+/**
+ * Pix sem código: casa pelo valor E pelo nome (usuário, 02/11/2026: "cliente não precisa mandar o comprovante; quero
+ * de forma automática, mas sem taxas" e "não pode errar cobrança"). Entre as mensalidades em aberto da cidade com o
+ * mesmo valor, só a única cujo cliente (empresa ou responsável) tem o nome de quem pagou. Valor igual sem o nome, ou
+ * dois clientes possíveis: nenhuma (fica "conferir" e a equipe recebe o aviso da entrada).
+ * pages: [{ ..., client_name, responsible_person }]
+ */
+export function pickByAmount(pages, payer) {
+  const named = pages.filter((p) => payerMatches(payer, [p.client_name, p.responsible_person].filter(Boolean)));
+  return named.length === 1 ? { page: named[0], by: 'valor+nome' } : null;
+}
+
 /** txid do Pix pela chave: "PULSE" + aaaamm + 8 do contrato (aparece no app do banco e ajuda a achar quem pagou). */
 export function staticTxid(contractId, month) {
   return `PULSE${String(month || '').replace(/\D/g, '').slice(0, 6)}${String(contractId || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 8)}`.toUpperCase().slice(0, 25);

@@ -30,10 +30,11 @@ import {
   CITIES, CITY_LABELS, normalizeEfiInput, efiOn, efiComplete, efiReadable, efiKey, publicAccount, encryptSecret, decryptSecret, last4,
 } from './lib/paymentAccounts.mjs';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
-import { staticTxid } from './lib/pixReceipt.mjs';
+import { pickByAmount, staticTxid } from './lib/pixReceipt.mjs';
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
-const SWEEP_MS = 10 * 60 * 1000;
+// 5 min (02/11/2026: sem comprovante, o pagamento é conferido sozinho; consultar a conta não tem custo)
+const SWEEP_MS = 5 * 60 * 1000;
 
 export function registerEfiPixRoutes(app, {
   pool, verifyAdmin, accountFor, ensureAccountsSchema, markRevenuePaid, publicApiUrl, mirrorAccount = async () => {},
@@ -398,6 +399,22 @@ export function registerEfiPixRoutes(app, {
       ).catch(() => ({ rows: [] }));
       page = r || null;
       by = 'comprovante';
+    }
+    // sem código e sem comprovante: pelo valor e pelo nome de quem pagou (os dois têm de bater)
+    if (!page) {
+      const at = p.horario ? new Date(p.horario) : now();
+      const { rows } = await pool.query(
+        `SELECT b.*, c.responsible_person FROM billing_pay_pages b
+           JOIN revenues r ON r.id = b.revenue_id
+           LEFT JOIN clients c ON c.id = b.client_id
+          WHERE coalesce(b.city, $1) = $1 AND r.status NOT IN ('recebida', 'pago')
+            AND abs(b.amount - $2::numeric) < 0.01
+            AND b.created_at <= $3::timestamptz + interval '2 days' AND b.created_at > $3::timestamptz - interval '60 days'`,
+        [city, Number(p.valor), at.toISOString()]
+      ).catch(() => ({ rows: [] }));
+      const pick = pickByAmount(rows, payerName(p));
+      page = pick?.page || null;
+      by = pick?.by || null;
     }
     // o valor que caiu tem de ser o da mensalidade
     if (!page || !page.revenue_id || Math.abs(Number(p.valor) - Number(page.amount)) >= 0.01) return null;

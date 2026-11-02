@@ -291,8 +291,8 @@ export function relatorioDoc(d) {
         text: `${recs.length === 1 ? 'A data acima já está reservada' : `As ${recs.length} datas acima já estão reservadas`} para você. Confirme no seu portal para a equipe chegar com tudo pronto.`,
       }] : []),
       ...(suggestions.length ? [{ title: `Mais ideias para ${monthName(d.next)}`, type: 'callout', heading: 'O que propomos para o próximo mês', text: suggestions.map((s) => `• ${s}`).join('\n') }] : []),
-      ...((d.team?.people || []).length ? [{ title: 'Quem cuidou do seu projeto', type: 'team', people: d.team.people }] : []),
-      ...((d.team?.agents || []).length ? [{ title: 'Agentes de IA da Pulse no seu projeto', type: 'team', people: d.team.agents.map((a) => ({ ...a, agent: true })) }] : []),
+      // a equipe completa, sem separar os agentes de IA (usuário, 02/11/2026: "o cliente já sabe… não precisa colocar no PDF")
+      ...((d.team?.people || []).length ? [{ title: 'A equipe completa dedicada ao seu projeto', type: 'team', people: d.team.people }] : []),
     ],
     closing: {
       text: `Obrigada pela parceria e pela confiança, ${nome}. Seguimos juntos em ${monthName(d.next)}!`,
@@ -379,7 +379,7 @@ export function agradecimentoDoc(d) {
       ...(a.done ? [{ label: 'Gravações feitas', value: a.done, highlight: true }] : []),
       ...(a.avg !== null && a.avg !== undefined ? [{ label: 'Vídeos por gravação', value: num(a.avg) }] : []),
       ...(d.numbers ? [{ label: 'Vídeos entregues', value: d.numbers.deliveries.videos.total, highlight: !a.done }] : []),
-      { label: 'Próximo vencimento', value: dataBr(d.dueDate), note: d.amount ? brl(d.amount) : '' },
+      // nada de cobrança antes do dia do pagamento (usuário, 02/11/2026): sem vencimento nem valor neste PDF
     ],
     sections: [
       ...(acima ? [{ type: 'callout', heading: 'Acima do plano contratado', text: acima }] : []),
@@ -391,10 +391,8 @@ export function agradecimentoDoc(d) {
       }] : []),
     ],
     closing: {
-      // Pix Automático (02/11/2026): sem cobrança, só o aviso de que o débito é automático no vencimento
-      text: d.autoDebit
-        ? `A mensalidade de ${monthName(iso(d.dueDate).slice(0, 7))}${d.amount ? ` (${brl(d.amount)})` : ''} é debitada pelo Pix Automático em ${dataBr(d.dueDate)}: não precisa fazer nada. Obrigada por caminhar com a gente!`
-        : `Lembrete: a mensalidade de ${monthName(iso(d.dueDate).slice(0, 7))} vence em ${dataBr(d.dueDate)}${d.amount ? ` (${brl(d.amount)})` : ''}; no dia, você recebe a cobrança com o Pix e o link do cartão. Obrigada por caminhar com a gente!`,
+      // "nenhum PDF enviado antes do dia do pagamento deve conter algum tipo de cobrança" (usuário, 02/11/2026)
+      text: `Obrigada por caminhar com a gente em ${monthName(d.ref)}. Seguimos juntos!`,
       ...SIGNATURE,
     },
   };

@@ -124,6 +124,21 @@ export function aboveSummary(items) {
  * Cobrança (dia D e lembrete). d = { month, today, dueDate, amount, status, client: { name, responsible, city, plan },
  * plan, issuer: { name, document, city, contact }, payment: {...}, history: revenues anteriores }
  */
+/**
+ * O portal logo no início de todo PDF ao cliente (usuário, 02/11/2026): botões, sem QR Code, e o portal é da equipe
+ * dele também. d.portalUrl / d.signupUrl vêm de portalLinks() nas rotas.
+ */
+export function portalSection(d, heading = 'Seu portal do cliente') {
+  return d.portalUrl ? [{
+    type: 'portal',
+    url: d.portalUrl,
+    signupUrl: d.signupUrl || null,
+    heading,
+    text: 'Ele não é só seu: chame a sua equipe para entrar também.',
+    points: ['Aprove e baixe os vídeos e as artes', 'Sua equipe baixa, reposta e posta mais', 'Confirme as próximas gravações'],
+  }] : [];
+}
+
 export function cobrancaDoc(d) {
   const contents = planContents(d.plan);
   const history = (d.history || []).slice(0, 6);
@@ -153,6 +168,7 @@ export function cobrancaDoc(d) {
     },
     payment: d.payment,
     sections: [
+      ...portalSection(d),
       ...(history.length ? [{
         title: open.length ? `Situação da conta · em aberto antes deste mês: ${brl(openTotal)}` : 'Situação da conta',
         type: 'table',
@@ -241,12 +257,7 @@ export function relatorioDoc(d) {
     sections: [
       // o portal logo na 1ª página (usuário, 01/11/2026: "o cliente já tem que ver 'confira todos os seus resultados
       // no portal' e depois vem o relatório completo")
-      ...(d.portalUrl ? [{
-        type: 'portal',
-        url: d.portalUrl,
-        heading: 'Confira todos os seus resultados no portal',
-        text: 'Os vídeos e os conteúdos do mês, o que está esperando a sua aprovação e as próximas gravações para confirmar.',
-      }] : []),
+      ...portalSection(d, 'Confira todos os seus resultados no portal'),
       ...(stats.length ? [{ type: 'stats', items: stats }] : []),
       ...(acima ? [{ type: 'callout', heading: 'Acima do plano contratado', text: acima }] : []),
       ...(storiesPlan ? [{
@@ -344,6 +355,7 @@ export function reciboDoc(d) {
       rows: [[{ text: `Mensalidade · ${d.client.plan || 'plano mensal'}`, sub: planContents(d.plan), bold: true }, comp(d.month), brl(d.amount)]],
       total: { label: 'Total pago', value: brl(d.amount) },
     },
+    sections: portalSection(d),
     closing: { text: 'Obrigada pela parceria. Seguimos juntos!', ...SIGNATURE },
   };
 }
@@ -398,6 +410,7 @@ export function agradecimentoDoc(d) {
       // nada de cobrança antes do dia do pagamento (usuário, 02/11/2026): sem vencimento nem valor neste PDF
     ],
     sections: [
+      ...portalSection(d, 'Veja tudo o que fizemos no seu portal'),
       ...(acima ? [{ type: 'callout', heading: 'Acima do plano contratado', text: acima }] : []),
       ...(items.length ? [{ title: `O que entregamos em ${monthName(d.ref)}`, type: 'tiles', rows: deliveryTiles(items) }] : []),
       ...(dedicationRows(d).length ? [{
@@ -405,6 +418,7 @@ export function agradecimentoDoc(d) {
         columns: [{ label: 'O que fizemos' }, { label: 'Tempo / quantidade', width: 150, align: 'right' }],
         rows: dedicationRows(d),
       }] : []),
+      ...((d.team?.people || []).length ? [{ title: 'A equipe completa dedicada ao seu projeto', type: 'team', people: d.team.people }] : []),
     ],
     closing: {
       // "nenhum PDF enviado antes do dia do pagamento deve conter algum tipo de cobrança" (usuário, 02/11/2026)

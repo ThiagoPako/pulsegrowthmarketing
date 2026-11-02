@@ -20,7 +20,10 @@ const C = {
   laranjaClaro: '#FFF1EB',
   texto: '#161616',
   cinza: '#5F5F67',
-  cinzaClaro: '#F4F4F6',
+  // quadros brancos sobre a página quase branca (usuário, 02/11/2026: "cinza bem clarinho, quase branco")
+  cinzaClaro: '#FFFFFF',
+  pagina: '#F6F6F8',
+  vazio: '#EEEEF1',
   linha: '#E3E3E8',
   verde: '#1F9D55',
   verdeClaro: '#E8F6EE',
@@ -42,7 +45,7 @@ const H = PAGE.height; // 544 pt
 const M = 6 * MM; // 17 pt
 const CW = W - 2 * M;
 const TOP = 20;
-const BOTTOM = H - 50;
+const BOTTOM = H - 46; // o rodapé acompanha o fim do conteúdo (página cortada), por isso cabe mais
 const BTN = 34; // altura de dedo (~12 mm)
 // tamanhos: texto corrido 11; rótulos e notas 9 (o mínimo); títulos maiores
 const T = { min: 9, body: 11, strong: 12, h3: 14, h2: 18, big: 26 };
@@ -62,7 +65,18 @@ function fonts(doc) {
 }
 
 function ensure(doc, need) {
-  if (doc.y + need > BOTTOM) { doc.addPage(); doc.y = TOP; }
+  if (doc.y + need > BOTTOM) { markUsed(doc); doc.addPage(); doc.y = TOP; }
+}
+
+/** Onde o conteúdo da página atual termina (o rodapé sobe até ali e a página é cortada logo abaixo). */
+function markUsed(doc) {
+  const i = doc.bufferedPageRange().start + doc.bufferedPageRange().count - 1;
+  doc._usedBottom = doc._usedBottom || {};
+  doc._usedBottom[i] = Math.max(doc._usedBottom[i] || 0, doc.y);
+}
+
+function paintPage(doc) {
+  doc.save().rect(0, 0, W, H).fill(C.pagina).restore();
 }
 
 const LOGO = path.join(ASSETS, 'pulse-logo.png');
@@ -333,7 +347,11 @@ function tiles(doc, items) {
       const x = M + j * (w + gap);
       doc.roundedRect(x, y, w, h, 10).fill(it.highlight ? C.laranjaClaro : C.cinzaClaro);
       doc.font('bold').fontSize(T.big).fillColor(it.highlight ? C.laranja : C.texto).text(String(it.value), x + 10, y + 8, { width: w - 20, height: 32 });
-      doc.font('semibold').fontSize(T.body).fillColor(C.texto).text(it.label, x + 10, y + 40, { width: w - 20, height: 14, ellipsis: true });
+      // nome inteiro ("Coberturas de evento"): diminui a letra até caber, sem cortar com reticências
+      let ls = T.body;
+      doc.font('semibold');
+      while (ls > T.min && doc.fontSize(ls).widthOfString(it.label) > w - 20) ls -= 0.5;
+      doc.fontSize(ls).fillColor(C.texto).text(it.label, x + 10, y + 40, { width: w - 20, height: 14, ellipsis: true });
       if (it.badge) badge(doc, x + 10, y + 60, it.badge, w - 20, it.highlight);
     });
     doc.y = y + h + gap;
@@ -350,8 +368,9 @@ function badge(doc, x, y, text, maxW, strong = true) {
 }
 
 /** Botão com altura de dedo, clicável. */
-function button(doc, x, y, w, label, url, { dark = false } = {}) {
-  doc.roundedRect(x, y, w, BTN, BTN / 2).fill(dark ? C.fundo : C.laranja);
+function button(doc, x, y, w, label, url, { dark = false, outline = false } = {}) {
+  if (outline) doc.roundedRect(x + 0.6, y + 0.6, w - 1.2, BTN - 1.2, BTN / 2).lineWidth(1.2).stroke('#FFFFFF');
+  else doc.roundedRect(x, y, w, BTN, BTN / 2).fill(dark ? C.fundo : C.laranja);
   doc.font('bold').fontSize(T.strong).fillColor('#FFFFFF').text(label, x, y + 10.5, { width: w, align: 'center', link: url, underline: false });
   if (url) doc.link(x, y, w, BTN, url);
 }
@@ -608,7 +627,7 @@ function calendar(doc, { month, marks = [] }) {
     const x = M + (idx % 7) * cw;
     const yy = top + Math.floor(idx / 7) * ch;
     const list = byDay[day] || [];
-    doc.roundedRect(x + 1.5, yy + 1.5, cw - 3, ch - 3, 4).fill(list.length ? '#FFFFFF' : C.cinzaClaro);
+    doc.roundedRect(x + 1.5, yy + 1.5, cw - 3, ch - 3, 4).fill(list.length ? '#FFFFFF' : C.vazio);
     if (list.length) doc.roundedRect(x + 1.5, yy + 1.5, cw - 3, ch - 3, 4).lineWidth(0.8).strokeColor(C.linha).stroke();
     doc.font('bold').fontSize(T.body).fillColor(list.length ? C.texto : '#9A9AA3').text(String(day), x + 4, yy + 4, { width: cw - 8 });
     const mk = list[0];
@@ -655,27 +674,44 @@ function gallery(doc, items) {
 }
 
 /** Portal do cliente: chamada, QR no centro e o botão grande clicável. */
-async function portal(doc, { url, title, text }) {
+/**
+ * Portal do cliente (usuário, 02/11/2026): logo no início do PDF, sem QR Code (o cliente já está no celular), com o
+ * botão grande "Visite seu portal" e, embaixo, "Não tem conta? Crie a sua aqui". O texto lembra que o portal é da
+ * equipe dele também: baixar os conteúdos, repostar e postar mais.
+ */
+async function portal(doc, { url, signupUrl, title, text, points = [] }) {
+  const pad = 14;
+  const iw = CW - pad * 2;
+  const head = title || 'Seu portal do cliente';
   doc.font('bold').fontSize(T.h3);
-  const th = doc.heightOfString(title || 'Seu portal', { width: CW - 28 });
+  const th = doc.heightOfString(head, { width: iw });
   doc.font('regular').fontSize(T.body);
-  const xh = text ? doc.heightOfString(text, { width: CW - 28, lineGap: 1.5 }) + 8 : 0;
-  const qrW = 88;
-  const h = 16 + th + 6 + xh + qrW + 14 + BTN + 32;
+  const xh = text ? doc.heightOfString(text, { width: iw, lineGap: 1.5 }) + 6 : 0;
+  const ph = points.map((p) => doc.heightOfString(p, { width: iw - 16 }));
+  const pointsH = points.length ? 8 + ph.reduce((acc, v) => acc + v + 4, 0) - 4 : 0;
+  const h = pad + th + xh + pointsH + 12 + BTN + (signupUrl ? 7 + BTN : 0) + pad;
   ensure(doc, h + 8);
   const y = doc.y;
   doc.roundedRect(M, y, CW, h, 14).fill(C.fundo);
-  doc.font('bold').fontSize(T.h3).fillColor('#FFFFFF').text(title || 'Seu portal', M + 14, y + 16, { width: CW - 28 });
-  if (text) doc.font('regular').fontSize(T.body).fillColor('#D8D8DE').text(text, M + 14, doc.y + 6, { width: CW - 28, lineGap: 1.5 });
-  let yy = doc.y + 10;
-  try {
-    const qr = await QRCode.toBuffer(url, { margin: 1, width: 300, color: { dark: '#0E0E10', light: '#FFFFFF' } });
-    doc.roundedRect(M + (CW - qrW) / 2 - 4, yy - 4, qrW + 8, qrW + 8, 8).fill('#FFFFFF');
-    doc.image(qr, M + (CW - qrW) / 2, yy, { width: qrW });
-  } catch { /* sem QR */ }
-  yy += qrW + 14;
-  button(doc, M + 14, yy, CW - 28, 'Abrir meu portal', url);
-  doc.font('regular').fontSize(T.min).fillColor('#A9A9B2').text(url, M + 14, yy + BTN + 6, { width: CW - 28, height: 12, ellipsis: true, link: url, align: 'center' });
+  let yy = y + pad;
+  doc.font('bold').fontSize(T.h3).fillColor('#FFFFFF').text(head, M + pad, yy, { width: iw });
+  yy += th;
+  if (text) {
+    doc.font('regular').fontSize(T.body).fillColor('#D8D8DE').text(text, M + pad, yy + 6, { width: iw, lineGap: 1.5 });
+    yy += xh;
+  }
+  if (points.length) {
+    yy += 8;
+    points.forEach((p, i) => {
+      doc.circle(M + pad + 4, yy + 6.5, 3).fill(C.laranja);
+      doc.font('regular').fontSize(T.body).fillColor('#FFFFFF').text(p, M + pad + 16, yy, { width: iw - 16 });
+      yy += ph[i] + 4;
+    });
+    yy -= 4;
+  }
+  yy += 12;
+  button(doc, M + pad, yy, iw, 'Visite seu portal', url);
+  if (signupUrl) button(doc, M + pad, yy + BTN + 7, iw, 'Não tem conta? Crie a sua aqui', signupUrl, { outline: true });
   doc.y = y + h + 12;
 }
 
@@ -699,21 +735,25 @@ function team(doc, people) {
 }
 
 function footer(doc, { note }) {
+  markUsed(doc);
   const range = doc.bufferedPageRange();
   for (let i = range.start; i < range.start + range.count; i++) {
     doc.switchToPage(i);
-    const y = H - 40;
+    // a página vai até o fim do conteúdo + o rodapé; abaixo disso, corta (MediaBox), sem buraco no celular
+    const ph = Math.min(H, Math.max(100, (doc._usedBottom?.[i] ?? BOTTOM) + 50));
+    const y = ph - 40;
     doc.moveTo(M, y).lineTo(W - M, y).lineWidth(0.8).strokeColor(C.linha).stroke();
     doc.font('regular').fontSize(T.min).fillColor(C.cinza)
       .text(note || 'Agência Pulse · @agenciapulse', M, y + 6, { width: CW - 40, height: 24, ellipsis: true });
     doc.font('semibold').fontSize(T.min).fillColor(C.texto).text(`${i - range.start + 1}/${range.count}`, W - M - 36, y + 6, { width: 36, align: 'right' });
-    doc.rect(0, H - 4, W, 4).fill(C.laranja);
+    doc.rect(0, ph - 4, W, 4).fill(C.laranja);
+    if (ph < H) doc.page.dictionary.data.MediaBox = [0, H - ph, W, H];
   }
 }
 
 async function block(doc, s) {
   // o título não fica sozinho no pé da página: reserva o começo do bloco junto
-  const need = { table: 90, compare: 90, progress: 70, bars: 70, callout: 80, tiles: 100, calendar: 320, gallery: 220, portal: 260, team: 110, stats: 120, cards: 90, igposts: 240 }[s.type] || 50;
+  const need = { table: 90, compare: 90, progress: 70, bars: 70, callout: 80, tiles: 100, calendar: 320, gallery: 220, portal: 60, team: 110, stats: 120, cards: 90, igposts: 240 }[s.type] || 50;
   if (s.title) section(doc, s.title, need);
   switch (s.type) {
     case 'table': table(doc, s.columns, s.rows, { totals: s.totals, total: s.total, plain: s.plain }); break;
@@ -727,7 +767,7 @@ async function block(doc, s) {
     case 'stats': stats(doc, s.items); break;
     case 'cards': cards(doc, s.items); break;
     case 'igposts': igPosts(doc, s); break;
-    case 'portal': await portal(doc, { url: s.url, title: s.heading, text: s.text }); break;
+    case 'portal': await portal(doc, { url: s.url, signupUrl: s.signupUrl, title: s.heading, text: s.text, points: s.points }); break;
     case 'team': team(doc, s.people); break;
     default:
       if (s.text) paragraph(doc, s.text);
@@ -754,17 +794,23 @@ export async function renderPdf(d) {
   doc.on('data', (c) => chunks.push(c));
   const done = new Promise((resolve, reject) => { doc.on('end', resolve); doc.on('error', reject); });
   fonts(doc);
+  paintPage(doc);
+  doc.on('pageAdded', () => paintPage(doc));
   if (d.summary) summaryHeader(doc, d.summary);
   else header(doc, { kicker: { cobranca: 'Cobrança', relatorio: 'Relatório do mês', agradecimento: 'Agenda e parceria', recibo: 'Recibo' }[d.kind] || 'Pulse', number: d.number, issued: d.issued });
   title(doc, d.title, d.status, d.subtitle);
   if (d.intro) intro(doc, d.intro);
+  // o portal logo de início (usuário, 02/11/2026); na cobrança, logo depois de "Como pagar"
+  const portals = (d.sections || []).filter((s) => s.type === 'portal');
+  const rest = (d.sections || []).filter((s) => s.type !== 'portal');
+  if (!d.payment) for (const s of portals) await block(doc, s);
   // no celular, o que importa primeiro: valor e vencimento, como pagar; emitente e cliente vão para o fim
   if (d.meta?.length) meta(doc, d.meta);
   if (d.cards?.length) cards(doc, d.cards);
-  if (d.payment) { section(doc, 'Como pagar', 160); await payment(doc, d.payment); }
+  if (d.payment) { section(doc, 'Como pagar', 160); await payment(doc, d.payment); for (const s of portals) await block(doc, s); }
   if (d.table) { section(doc, d.table.title || 'Itens', 90); table(doc, d.table.columns, d.table.rows, { totals: d.table.totals, total: d.table.total, plain: d.table.plain }); }
   if (d.parties?.length) parties(doc, d.parties);
-  for (const s of d.sections || []) await block(doc, s);
+  for (const s of rest) await block(doc, s);
   if (d.closing) closing(doc, d.closing);
   footer(doc, { note: d.footerNote });
   doc.end();

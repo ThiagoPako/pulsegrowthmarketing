@@ -37,7 +37,7 @@ const SWEEP_MS = 10 * 60 * 1000;
 
 export function registerEfiPixRoutes(app, {
   pool, verifyAdmin, accountFor, ensureAccountsSchema, markRevenuePaid, publicApiUrl, mirrorAccount = async () => {},
-  makeClient = createEfiClient, logger = console, sweepEvery = SWEEP_MS, now = () => new Date(),
+  makeClient = createEfiClient, logger = console, sweepEvery = SWEEP_MS, now = () => new Date(), alert = async () => 0,
 }) {
   let schemaPromise = null;
   function ensureSchema() {
@@ -62,6 +62,8 @@ export function registerEfiPixRoutes(app, {
           ALTER TABLE payment_accounts ADD COLUMN IF NOT EXISTS efi_webhook_secret TEXT;
           ALTER TABLE payment_accounts ADD COLUMN IF NOT EXISTS efi_webhook_at TIMESTAMPTZ;
           ALTER TABLE payment_accounts ADD COLUMN IF NOT EXISTS efi_webhook_error TEXT;
+          ALTER TABLE payment_accounts ADD COLUMN IF NOT EXISTS efi_agencia TEXT;
+          ALTER TABLE payment_accounts ADD COLUMN IF NOT EXISTS efi_conta TEXT;
           -- a "credencial da API" da InfinitePay (client_id/secret) não existe: o Checkout dela não tem; sai
           ALTER TABLE payment_accounts DROP COLUMN IF EXISTS api_client_id;
           ALTER TABLE payment_accounts DROP COLUMN IF EXISTS api_secret_enc;
@@ -104,6 +106,20 @@ export function registerEfiPixRoutes(app, {
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
           );
           CREATE INDEX IF NOT EXISTS idx_efi_pix_received_at ON efi_pix_received(city, received_at);
+          -- avisos de movimentação à equipe (usuário, 02/11/2026): entradas sem mensalidade e Pix enviados
+          ALTER TABLE efi_pix_received ADD COLUMN IF NOT EXISTS alerted_at TIMESTAMPTZ;
+          CREATE TABLE IF NOT EXISTS efi_pix_sent (
+            e2e_id TEXT PRIMARY KEY,
+            city TEXT NOT NULL,
+            env TEXT NOT NULL,
+            amount NUMERIC NOT NULL,
+            sent_at TIMESTAMPTZ,
+            favorecido TEXT,
+            status TEXT,
+            raw JSONB,
+            alerted_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          );
         `);
       })().catch((error) => { schemaPromise = null; throw error; });
     }
@@ -441,6 +457,45 @@ export function registerEfiPixRoutes(app, {
     return { checked: true, paid: !!r.paid };
   }
 
+  // ── avisos de movimentação da conta (usuário, 02/11/2026: Minaçu → Thiago e Victor; Uruaçu → só o Thiago) ─────────
+  // Entrada que não virou mensalidade em 15 min (a mensalidade tem o aviso de pagamento) e todo Pix enviado. Só o que
+  // aconteceu nas últimas 3 h vira mensagem; o mais antigo é marcado sem aviso (nada de rajada na primeira varredura).
+  async function movements(acc, inicio, fim) {
+    const city = acc.city;
+    let enviados = 0;
+    const sent = await clientFor(acc).listPixEnviados(inicio.toISOString(), fim.toISOString()).catch(() => []);
+    for (const p of sent) {
+      const id = String(p.endToEndId || p.idEnvio || '');
+      if (!id) continue;
+      const fav = p.favorecido?.nome || p.favorecido?.chave || p.favorecido?.contaBanco?.nome || null;
+      await pool.query(
+        `INSERT INTO efi_pix_sent (e2e_id, city, env, amount, sent_at, favorecido, status, raw) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT (e2e_id) DO UPDATE SET status = EXCLUDED.status, raw = EXCLUDED.raw`,
+        [id, city, acc.efi_env, Number(p.valor || 0), p.horario?.solicitacao || p.horario?.liquidacao || p.horario || null, fav ? String(fav).slice(0, 120) : null,
+          p.status || null, JSON.stringify(p)]
+      );
+      enviados += 1;
+    }
+    const quiet = (table, col) => pool.query(`UPDATE ${table} SET alerted_at = now() WHERE city = $1 AND alerted_at IS NULL AND ${col} < now() - interval '3 hours'`, [city]);
+    await quiet('efi_pix_received', 'received_at');
+    await quiet('efi_pix_sent', 'sent_at');
+    const { rows: ins } = await pool.query(
+      `UPDATE efi_pix_received SET alerted_at = now() WHERE city = $1 AND alerted_at IS NULL AND status = 'conferir' AND NOT refunded
+          AND received_at < now() - interval '15 minutes' RETURNING amount, payer_name, info_pagador, received_at`, [city]
+    );
+    const { rows: outs } = await pool.query(
+      `UPDATE efi_pix_sent SET alerted_at = now() WHERE city = $1 AND alerted_at IS NULL RETURNING amount, favorecido, sent_at`, [city]
+    );
+    const hora = (t) => (t ? new Date(t).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }) : '');
+    const brl = (n) => Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const lines = [
+      ...ins.map((m) => `⬆️ Entrada Pix ${brl(m.amount)}${m.payer_name ? ` de ${m.payer_name}` : ''}${m.info_pagador ? ` (“${String(m.info_pagador).slice(0, 60)}”)` : ''} · ${hora(m.received_at)}`),
+      ...outs.map((m) => `⬇️ Saída Pix ${brl(m.amount)}${m.favorecido ? ` para ${m.favorecido}` : ''} · ${hora(m.sent_at)}`),
+    ];
+    if (lines.length) await alert(pool, city, [`🏦 Movimentação da conta · ${city === 'uruacu' ? 'Uruaçu' : 'Minaçu'}`, ...lines].join('\n'), { logger });
+    return { enviados, avisos: lines.length };
+  }
+
   // webhook: a Efí manda POST <url>/pix (ou <url> com "ignorar="); responde 200 na hora, confere depois
   const webhook = async (req, res) => {
     const city = normalizeCityValue(req.params.city);
@@ -492,7 +547,10 @@ export function registerEfiPixRoutes(app, {
                AND created_at > now() - interval '45 days' ORDER BY updated_at LIMIT 20`, [city]
           );
           for (const c of open) await confirmCharge(c).then((r) => { if (r.paid) paid += 1; }).catch(() => {});
-          out[city] = { pix: list.length, pagos: paid };
+          out[city] = { pix: list.length, pagos: paid, ...(await movements(acc, inicio, fim).catch((error) => {
+            logger.error(`[efi] movimentações ${city}:`, error.message);
+            return {};
+          })) };
         } catch (error) {
           logger.error(`[efi] varredura ${city}:`, error.message);
           out[city] = { error: error.message };
@@ -550,5 +608,11 @@ export function registerEfiPixRoutes(app, {
     } catch (error) { sendError(res, error); }
   });
 
-  return { pixCharge, confirmCharge, recordPix, sweep, ensureSchema, checkReceiptOnBank, checkPagePaid };
+  /** Cliente da API Pix da conta testada da cidade (Pix Automático usa o mesmo par e o mesmo certificado). */
+  async function pixClient(city) {
+    const acc = await readableAccount(city).catch(() => null);
+    return acc ? { acc, client: clientFor(acc) } : null;
+  }
+
+  return { pixCharge, confirmCharge, recordPix, sweep, ensureSchema, checkReceiptOnBank, checkPagePaid, pixClient };
 }

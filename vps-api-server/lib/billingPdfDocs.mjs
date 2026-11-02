@@ -146,6 +146,7 @@ export function cobrancaDoc(d) {
         bullets: [
           d.payment?.payUrl ? 'No botão "Pagar agora" (ou no link da mensagem), você copia o Pix com um toque ou paga no cartão.' : '',
           d.payment?.cardLink ? 'No cartão, pelo link da Efí, a confirmação do pagamento é automática.' : '',
+          d.payment?.pixAuto ? 'Pix Automático: ative na página de pagamento e a mensalidade é debitada só no vencimento. Cancela quando quiser.' : '',
           'O QR Code e o Pix copia e cola já levam o valor desta mensalidade.',
           'Se o pagamento já foi feito, desconsidere esta cobrança.',
         ].filter(Boolean),
@@ -353,7 +354,10 @@ export function agradecimentoDoc(d) {
       ...(items.length ? [{ title: `O que entregamos em ${monthName(d.ref)}`, type: 'tiles', rows: deliveryTiles(items) }] : []),
     ],
     closing: {
-      text: `Lembrete: a mensalidade de ${monthName(iso(d.dueDate).slice(0, 7))} vence em ${dataBr(d.dueDate)}${d.amount ? ` (${brl(d.amount)})` : ''}; no dia, você recebe a cobrança com o Pix e o link do cartão. Obrigada por caminhar com a gente!`,
+      // Pix Automático (02/11/2026): sem cobrança, só o aviso de que o débito é automático no vencimento
+      text: d.autoDebit
+        ? `A mensalidade de ${monthName(iso(d.dueDate).slice(0, 7))}${d.amount ? ` (${brl(d.amount)})` : ''} é debitada pelo Pix Automático em ${dataBr(d.dueDate)}: não precisa fazer nada. Obrigada por caminhar com a gente!`
+        : `Lembrete: a mensalidade de ${monthName(iso(d.dueDate).slice(0, 7))} vence em ${dataBr(d.dueDate)}${d.amount ? ` (${brl(d.amount)})` : ''}; no dia, você recebe a cobrança com o Pix e o link do cartão. Obrigada por caminhar com a gente!`,
       ...SIGNATURE,
     },
   };

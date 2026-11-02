@@ -16,13 +16,14 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import {
-  BILLING_STEPS, MODES, DEFAULT_TEMPLATES, monthName, previousMonth, nextMonth, stepDates, attendanceTip,
+  BILLING_STEPS, MODES, DEFAULT_TEMPLATES, monthName, previousMonth, nextMonth, stepDates, attendanceTip, addDays,
   brl, pixPayload, CARD_NOTICE, ensurePayLink, payToken, valorPorExtenso, effectiveTemplate, recordingsText, pixOnlyMessage, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
 } from './lib/billingIsis.mjs';
 import { renderPdf } from './lib/billingPdf.mjs';
 import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, monthName as nomeMes } from './lib/billingPdfDocs.mjs';
 import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
 import { staticTxid } from './lib/pixReceipt.mjs';
+import { OFFER_LINE } from './lib/pixAutomatico.mjs';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
 import { monthCalendar } from './lib/monthDates.mjs';
 import { videoFrame } from './lib/videoFrame.mjs';
@@ -48,7 +49,8 @@ const dataBr = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().joi
 const DOC_NAMES = { relatorio_mensal: 'Relatorio', pre_vencimento: 'Agenda', cobranca: 'Cobranca', lembrete: 'Cobranca', obrigado: 'Recibo' };
 
 export function registerBillingIsisRoutes(app, {
-  pool, verifyAdmin, paymentConfigFor, socialReports, paymentLink = async () => null, pixCharge = async () => null, lastReceipt = async () => null, uploadRoot, publicUploadsUrl,
+  pool, verifyAdmin, paymentConfigFor, socialReports, paymentLink = async () => null, pixCharge = async () => null, lastReceipt = async () => null,
+  autoDebitFor = async () => ({ status: null }), pixAutoAvailable = async () => false, uploadRoot, publicUploadsUrl,
   publicAppUrl = process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech', logger = console,
 }) {
   const appBase = String(publicAppUrl).replace(/\/+$/, '');
@@ -415,8 +417,8 @@ export function registerBillingIsisRoutes(app, {
   }
 
   /** Texto de uma etapa com o rodapé (contato da cidade do cliente) e o PDF a montar; { skip } quando não deve sair. */
-  async function compose(contract, step, date, month = date.slice(0, 7)) {
-    const out = await composeBody(contract, step, date, month);
+  async function compose(contract, step, date, month = date.slice(0, 7), opts = {}) {
+    const out = await composeBody(contract, step, date, month, opts);
     if (!out.body) return out;
     const contact = contactForCity(contract.client_city || contract.city, out.config, await assistantNumbers());
     const note = footerText(out.config?.msg_isis_rodape, contact);
@@ -451,7 +453,8 @@ export function registerBillingIsisRoutes(app, {
     };
   }
 
-  async function composeBody(contract, step, date, month) {
+  // Pix Automático (02/11/2026): quem aderiu não recebe cobrança; o D−5 avisa que o débito é automático no vencimento
+  async function composeBody(contract, step, date, month, { autoDebit = false, autoFailed = false } = {}) {
     const config = await paymentConfigFor(contract.city || contract.client_city);
     const base = { nome_cliente: String(contract.company_name || '').trim() };
 
@@ -510,14 +513,14 @@ export function registerBillingIsisRoutes(app, {
       return {
         config,
         pdf: agradecimentoDoc({
-          ref, client: clientOf(contract), plan: planOf(contract), attendance: a, tip: attendanceTip(a), dueDate, amount,
+          ref, client: clientOf(contract), plan: planOf(contract), attendance: a, tip: attendanceTip(a), dueDate, amount, autoDebit,
           numbers: (await socialReports.reportFor(contract.client_id, ref).catch(() => null))?.numbers || null,
         }),
         body: applyTemplate(templateOf(config, step), {
           ...base, mes_ref: monthName(`${ref}-01`), gravacoes: recordingsText(a.done), gravacoes_feitas: a.done, gravacoes_marcadas: a.scheduled,
           media_videos: a.avg === null ? '' : a.avg.toLocaleString('pt-BR'),
           dica_assiduidade: attendanceTip(a), dia_vencimento: String(Number(dueDate.slice(8, 10))),
-        }),
+        }) + (autoDebit ? '\n\nEla é debitada pelo Pix Automático no dia do vencimento, não precisa fazer nada 🧡' : ''),
       };
     }
 
@@ -550,22 +553,30 @@ export function registerBillingIsisRoutes(app, {
       logger.error('[cobranca-isis] página de pagamento:', error.message);
       return null;
     });
+    // convite do Pix Automático em toda cobrança de quem ainda não aderiu (a página tem o botão)
+    const offer = !!payUrl && !autoDebit && (await autoDebitFor(contract.id).catch(() => ({})))?.status !== 'ativo'
+      && await pixAutoAvailable(normalizeCityValue(contract.client_city || contract.city) || 'minacu').catch(() => false);
     return {
       config,
       revenue,
       pdf: cobrancaDoc({
         month, today: date, dueDate, amount, status: step === 'lembrete' ? 'vencido' : 'aberto',
         client: clientOf(contract), plan: planOf(contract), issuer: issuerOf(contract, config), history,
-        payment: { pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(cardTotal) : null, cardNotice: CARD_NOTICE, payUrl, amount: brl(amount) },
+        payment: { pixAuto: offer, pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(cardTotal) : null, cardNotice: CARD_NOTICE, payUrl, amount: brl(amount) },
       }),
       payUrl,
       // o código Pix sozinho, numa mensagem logo depois, para o cliente tocar, segurar e copiar (nada além do código)
       pixMessage: pixOnlyMessage(pix),
-      body: applyTemplate(payUrl ? ensurePayLink(templateOf(config, step)) : templateOf(config, step), {
+      // o Pix Automático não debitou (sem saldo): a cobrança de sempre, dizendo o que aconteceu
+      body: autoFailed && payUrl ? [
+        `Olá, ${base.nome_cliente}! 😊`, '',
+        `Não conseguimos debitar a mensalidade de ${monthName(`${month}-01`)} (*${brl(amount)}*) pelo Pix Automático.`, '',
+        '👉 Pague aqui (Pix ou cartão):', payUrl, '', 'O código Pix vai na próxima mensagem.',
+      ].join('\n') : applyTemplate(payUrl ? ensurePayLink(templateOf(config, step)) : templateOf(config, step), {
         ...base, link_pagamento: payUrl, plano, valor: brl(amount), mes_ref: monthName(`${month}-01`),
         pix_copia_cola: pix, chave_pix: config?.pix_key, nome_recebedor: config?.receiver_name,
         link_infinitepay: link, aviso_cartao: link ? CARD_NOTICE : '',
-      }),
+      }) + (offer ? `\n\n${OFFER_LINE}` : ''),
     };
   }
 
@@ -610,14 +621,26 @@ export function registerBillingIsisRoutes(app, {
       // o D−5 de um vencimento dia 3 cai no mês anterior e o D+3 de um dia 30 no seguinte: olha os 3 meses
       const thisMonth = today.slice(0, 7);
       const due = [];
+      // Pix Automático ativo (usuário, 02/11/2026): no vencimento não sai cobrança (o débito é automático); se no dia
+      // seguinte a mensalidade não estiver paga (não debitou), aí sim sai a cobrança de sempre, e o D+3 segue igual
+      const auto = await autoDebitFor(contract.id).catch(() => ({ status: null }));
+      const autoFrom = auto.status === 'ativo' ? String(auto.dataInicial || '').slice(0, 7) : null;
+      const yesterday = addDays(today, -1);
       for (const month of [previousMonth(`${thisMonth}-01`), thisMonth, nextMonth(thisMonth)]) {
         const dates = stepDates((await monthRevenue(contract, month)).dueDate);
-        for (const step of BILLING_STEPS) if (dates[step] === today) due.push({ step, month });
+        const isAuto = !!autoFrom && month >= autoFrom;
+        for (const step of BILLING_STEPS) {
+          if (isAuto && step === 'cobranca') {
+            if (dates.cobranca === yesterday) due.push({ step, month, autoDebit: false, autoFailed: true });
+            continue;
+          }
+          if (dates[step] === today) due.push({ step, month, autoDebit: isAuto && step === 'pre_vencimento', autoFailed: false });
+        }
       }
-      for (const { step, month } of due) {
+      for (const { step, month, autoDebit, autoFailed } of due) {
         try {
           if (await alreadyHandled(contract, step, month)) continue;
-          const out = await compose(contract, step, today, month);
+          const out = await compose(contract, step, today, month, { autoDebit, autoFailed });
           if (out.skip === 'pago') continue;
           if (out.skip === 'conferir') {
             await record(contract, step, month, 'conferir', `Não bate com o Financeiro:\n${out.problems.map((p) => `• ${p}`).join('\n')}`);
@@ -847,8 +870,13 @@ export function registerBillingIsisRoutes(app, {
         card_amount: p.card_amount != null ? Number(p.card_amount) : null, city: p.city,
         // comprovante já enviado (Pix pela chave): a página mostra "recebido" em vez de pedir de novo
         // Pix dinâmico (Efí) se identifica sozinho; o estático (pela chave) pede o comprovante
-        pix_auto: /br\.gov\.bcb\.pix25/i.test(String(p.pix_payload || '')),
+        pix_dynamic: /br\.gov\.bcb\.pix25/i.test(String(p.pix_payload || '')),
         receipt_sent: paid ? false : !!(await lastReceipt(token).catch(() => null)),
+        // Pix Automático: disponível na cidade e a situação da adesão do contrato
+        pix_auto: {
+          available: !!(await pixAutoAvailable(p.city || 'minacu').catch(() => false)),
+          ...(await autoDebitFor(p.contract_id).catch(() => ({ status: null }))),
+        },
       });
     } catch (error) { sendError(res, error); }
   });
@@ -872,5 +900,5 @@ export function registerBillingIsisRoutes(app, {
     } catch (error) { sendError(res, error); }
   });
 
-  return { run, modeOf, ensureSchema, thankRevenue, sweepThanks };
+  return { run, modeOf, ensureSchema, thankRevenue, sweepThanks, monthInfo: monthRevenue, activeContracts };
 }

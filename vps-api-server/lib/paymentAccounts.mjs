@@ -74,6 +74,9 @@ export function normalizeEfiInput(body = {}) {
   }
   if (body.efi_pix_key !== undefined) out.efi_pix_key = clip(body.efi_pix_key, 120) || null;
   if (body.efi_active !== undefined) out.efi_active = !!body.efi_active;
+  // agência e conta da Efí: vão na cobrança do Pix Automático (recebedor)
+  if (body.efi_agencia !== undefined) out.efi_agencia = clip(String(body.efi_agencia).replace(/[^\d-]/g, ''), 12) || null;
+  if (body.efi_conta !== undefined) out.efi_conta = clip(String(body.efi_conta).replace(/[^\d-]/g, ''), 20) || null;
   return out;
 }
 
@@ -127,6 +130,8 @@ export function publicEfi(a = {}) {
     scopes_missing: a.efi_scopes ? EFI_SCOPES_REQUIRED.filter((s) => !granted.includes(s)) : [],
     webhook_at: a.efi_webhook_at || null,
     webhook_error: a.efi_webhook_error || null,
+    agencia: a.efi_agencia || '',
+    conta: a.efi_conta || '',
     card_active: !!a.efi_card_active,
     card_test_at: a.efi_card_test_at || null,
     card_test_ok: a.efi_card_test_ok ?? null,

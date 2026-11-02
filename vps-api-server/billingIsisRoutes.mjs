@@ -709,15 +709,7 @@ export function registerBillingIsisRoutes(app, {
       const contactUpdates = [];
       if (mode) { params.push(mode); sets.push(`isis_mode = $${params.length}`); }
       if (fee !== null) { params.push(fee); sets.push(`card_fee_percent = $${params.length}`); }
-      // InfiniteTag de cada cidade (pública, não é senha; cada cidade recebe na sua conta): na linha da cidade
-      for (const city of ['uruacu', 'minacu']) {
-        const tag = req.body?.infinitepay_handles?.[city];
-        if (typeof tag !== 'string') continue;
-        const cfg = await paymentConfigFor(city);
-        if (!cfg?.id || cityOf(cfg) !== city) continue;
-        contactUpdates.push(pool.query(`UPDATE payment_config SET infinitepay_handle = $2 WHERE id = $1`,
-          [cfg.id, tag.trim().replace(/^\$/, '').replace(/\s+/g, '').slice(0, 60) || null]));
-      }
+      // InfiniteTag, Pix e recebedor: só em Financeiro → Pagamentos · InfinitePay (paymentAccountsRoutes.mjs)
       // rodapé: igual ao padrão = guarda vazio (null); texto vazio = sem rodapé
       if (typeof req.body?.footer === 'string') {
         const f = req.body.footer.trim();

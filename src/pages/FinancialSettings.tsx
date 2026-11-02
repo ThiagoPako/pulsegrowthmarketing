@@ -151,7 +151,9 @@ export default function FinancialSettings() {
   }, [previewClientId, previewTab, form, clients, contracts, deliveryReportText]);
 
   const handleSave = async () => {
-    const ok = await updatePaymentConfig(form);
+    // a chave Pix e o recebedor vêm de Pagamentos · InfinitePay: aqui salva só os textos
+    const { pix_key: _pix, receiver_name: _rec, bank: _bank, document: _doc, ...textos } = form;
+    const ok = await updatePaymentConfig(textos);
     if (ok) toast.success('Configurações atualizadas');
     else toast.error('Não foi possível salvar as configurações');
   };
@@ -191,16 +193,15 @@ export default function FinancialSettings() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-sm">Dados para Cobrança (PIX)</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>Chave PIX</Label><Input value={form.pix_key} onChange={e => setForm({ ...form, pix_key: e.target.value })} placeholder="CPF, CNPJ, e-mail ou telefone" /></div>
-            <div><Label>Nome do Recebedor</Label><Input value={form.receiver_name} onChange={e => setForm({ ...form, receiver_name: e.target.value })} /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>Banco</Label><Input value={form.bank} onChange={e => setForm({ ...form, bank: e.target.value })} /></div>
-            <div><Label>CPF ou CNPJ</Label><Input value={form.document} onChange={e => setForm({ ...form, document: e.target.value })} /></div>
-          </div>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-sm">Dados para Cobrança (PIX)</CardTitle>
+          <Button variant="outline" size="sm" onClick={() => navigate('/financeiro/pagamentos')}>Editar em Pagamentos</Button>
+        </CardHeader>
+        <CardContent className="space-y-1 text-sm">
+          {/* um lugar só (usuário, 01/11/2026): chave Pix, recebedor, banco e documento de cada cidade ficam em Pagamentos · InfinitePay */}
+          <p><span className="text-muted-foreground">Chave PIX:</span> {form.pix_key || '—'}</p>
+          <p><span className="text-muted-foreground">Recebedor:</span> {form.receiver_name || '—'}{form.bank ? ` · ${form.bank}` : ''}{form.document ? ` · ${form.document}` : ''}</p>
+          <p className="text-xs text-muted-foreground">A chave Pix, o recebedor e a InfiniteTag de cada cidade (Uruaçu e Minaçu) se editam em Financeiro → Pagamentos · InfinitePay.</p>
         </CardContent>
       </Card>
 

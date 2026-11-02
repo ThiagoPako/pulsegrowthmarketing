@@ -1,8 +1,8 @@
 import { vpsAuthedFetch } from '@/lib/vpsDb';
 
 /**
- * Financeiro → Pagamentos · InfinitePay (vps-api-server/paymentAccountsRoutes.mjs): a conta de cada cidade, única
- * fonte da InfiniteTag, da chave Pix e do recebedor (link do cartão, Pix copia e cola, PDF, /pagar e mensagens).
+ * Financeiro → Pagamentos · Efí Bank (vps-api-server/paymentAccountsRoutes.mjs, efiPixRoutes.mjs, efiCardRoutes.mjs): a
+ * conta de cada cidade, única fonte da chave Pix, do recebedor e da conta Efí (Pix, cartão, PDF, /pagar e mensagens).
  */
 export type PaymentCity = 'uruacu' | 'minacu';
 export type PaymentAccountStatus = 'conectado' | 'com_erro' | 'testar' | 'desativado' | 'nao_configurado';
@@ -46,6 +46,11 @@ export interface EfiAccount {
   webhook_at: string | null;
   webhook_error: string | null;
   status: EfiStatus;
+  /** cartão pelo link da Efí (API Cobranças) */
+  card_active: boolean;
+  card_test_at: string | null;
+  card_test_ok: boolean | null;
+  card_test_error: string | null;
 }
 
 export const EFI_STATUS_LABELS: Record<EfiStatus, string> = {
@@ -130,6 +135,32 @@ export function fileToBase64(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+export const testEfiCard = (city: PaymentCity) =>
+  call<{ ok: boolean; error?: string; account: PaymentAccount }>(`/payment-accounts/${city}/efi/card-test`, { method: 'POST', body: '{}' });
+
+export const setEfiCard = (city: PaymentCity, active: boolean) =>
+  call<{ success: boolean; account: PaymentAccount }>(`/payment-accounts/${city}/efi/card`, { method: 'PUT', body: JSON.stringify({ active }) });
+
+export interface EfiCardLink {
+  charge_id: string;
+  city: PaymentCity;
+  env: string;
+  month: string;
+  amount: string | number;
+  card_amount: string | number;
+  url: string;
+  status: string;
+  paid_value: string | number | null;
+  paid_at: string | null;
+  created_at: string;
+  client: string | null;
+}
+
+export const fetchEfiCardLinks = (month: string) => call<{ month: string; links: EfiCardLink[] }>(`/efi/card-links?month=${month}`);
+
+export const recheckEfiCardLink = (chargeId: string) =>
+  call<{ paid: boolean; marked?: boolean; status?: string }>(`/efi/card-links/${encodeURIComponent(chargeId)}/check`, { method: 'POST', body: '{}' });
 
 export const testPaymentAccount = (city: PaymentCity) =>
   call<{ ok: boolean; url?: string; error?: string; account: PaymentAccount }>(`/payment-accounts/${city}/test`, { method: 'POST', body: '{}' });

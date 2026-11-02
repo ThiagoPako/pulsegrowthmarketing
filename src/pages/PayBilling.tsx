@@ -24,6 +24,7 @@ export interface PayPageData {
   pix_key: string | null;
   receiver: string | null;
   card_link: string | null;
+  card_amount?: number | null;
   receipt_sent?: boolean;
   pix_auto?: boolean;
 }
@@ -168,9 +169,11 @@ export default function PayBilling({ preview }: { preview?: PayPageData }) {
                   rel="noopener noreferrer"
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#0E0E10] px-4 py-4 text-base font-bold text-white active:scale-[0.98]"
                 >
-                  <CreditCard className="h-5 w-5" /> Pagar agora (Pix ou cartão)
+                  <CreditCard className="h-5 w-5" /> Pagar no cartão
                 </a>
-                <p className="mt-2 text-center text-xs text-[#6B6B73]">Abre o pagamento seguro da InfinitePay. No cartão, em até 12x.</p>
+                <p className="mt-2 text-center text-xs text-[#6B6B73]">
+                  Abre o pagamento seguro da Efí. Em até 12x{data.card_amount ? ` · no cartão, ${brl(data.card_amount)}` : ''}.
+                </p>
                 <p className="mt-3 text-center text-[11px] leading-snug text-[#8C8C96]">
                   No cartão de crédito há a taxa da transação, cobrada pela facilitadora de pagamentos. A Pulse não cobra nenhum valor a mais.
                 </p>

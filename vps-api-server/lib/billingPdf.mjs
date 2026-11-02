@@ -360,7 +360,7 @@ function button(doc, x, y, w, label, url, { dark = false } = {}) {
 function payNow(doc, pay, url) {
   const lead = pay.payUrl
     ? `Na página de pagamento você copia o Pix com um toque${pay.cardLink ? ' ou paga no cartão em até 12x' : ''}.`
-    : 'Pelo link da InfinitePay, em até 12x.';
+    : 'Pelo link de pagamento da Efí, em até 12x.';
   doc.font('regular').fontSize(T.body);
   const leadH = doc.heightOfString(lead, { width: CW - 28 });
   doc.font('regular').fontSize(T.min);

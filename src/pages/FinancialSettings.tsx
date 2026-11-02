@@ -151,7 +151,7 @@ export default function FinancialSettings() {
   }, [previewClientId, previewTab, form, clients, contracts, deliveryReportText]);
 
   const handleSave = async () => {
-    // a chave Pix e o recebedor vêm de Pagamentos · InfinitePay: aqui salva só os textos
+    // a chave Pix e o recebedor vêm de Pagamentos · Efí: aqui salva só os textos
     const { pix_key: _pix, receiver_name: _rec, bank: _bank, document: _doc, ...textos } = form;
     const ok = await updatePaymentConfig(textos);
     if (ok) toast.success('Configurações atualizadas');
@@ -198,10 +198,10 @@ export default function FinancialSettings() {
           <Button variant="outline" size="sm" onClick={() => navigate('/financeiro/pagamentos')}>Editar em Pagamentos</Button>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
-          {/* um lugar só (usuário, 01/11/2026): chave Pix, recebedor, banco e documento de cada cidade ficam em Pagamentos · InfinitePay */}
+          {/* um lugar só (usuário, 01/11/2026): chave Pix, recebedor, banco e documento de cada cidade ficam em Pagamentos · Efí */}
           <p><span className="text-muted-foreground">Chave PIX:</span> {form.pix_key || '—'}</p>
           <p><span className="text-muted-foreground">Recebedor:</span> {form.receiver_name || '—'}{form.bank ? ` · ${form.bank}` : ''}{form.document ? ` · ${form.document}` : ''}</p>
-          <p className="text-xs text-muted-foreground">A chave Pix, o recebedor e a InfiniteTag de cada cidade (Uruaçu e Minaçu) se editam em Financeiro → Pagamentos · InfinitePay.</p>
+          <p className="text-xs text-muted-foreground">A chave Pix, o recebedor e a conta Efí de cada cidade (Uruaçu e Minaçu) se editam em Financeiro → Pagamentos · Efí.</p>
         </CardContent>
       </Card>
 

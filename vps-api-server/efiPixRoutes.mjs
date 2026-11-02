@@ -7,7 +7,7 @@
 //     antes de dar baixa (a mesma baixa da InfinitePay: receita recebida, entrada no caixa e o obrigado com recibo);
 //   - a cada 10 min a varredura busca os Pix recebidos das últimas 48 h (GET /v2/pix): pega o pagamento mesmo sem o
 //     webhook (o webhook exige mTLS no nginx) e guarda as movimentações; Pix sem cobrança nossa fica "conferir".
-// Cidade sem a Efí ligada continua como antes (Pix estático + InfinitePay). O cartão segue na InfinitePay.
+// Cidade sem a Efí ligada: Pix pela chave + comprovante (pixReceiptRoutes). O cartão vai pela Efí (efiCardRoutes).
 //
 //   PUT  /api/payment-accounts/:city/efi          { efi_env, efi_pix_key, efi_active, client_id, client_secret,
 //                                                   cert_base64, cert_name, clear }                    (admin)
@@ -22,7 +22,7 @@ import {
   webhookUrlFor, EFI_SCOPES_REQUIRED, EFI_WEBHOOK_IP,
 } from './lib/efi.mjs';
 import {
-  CITIES, CITY_LABELS, normalizeEfiInput, efiOn, efiComplete, publicAccount, encryptSecret, decryptSecret, last4,
+  CITIES, CITY_LABELS, normalizeEfiInput, efiOn, efiComplete, efiKey, publicAccount, encryptSecret, decryptSecret, last4,
 } from './lib/paymentAccounts.mjs';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
 
@@ -249,7 +249,7 @@ export function registerEfiPixRoutes(app, {
       let ok = true;
       let error = null;
       try {
-        await clientFor(acc).putWebhook(acc.efi_pix_key, url);
+        await clientFor(acc).putWebhook(efiKey(acc), url);
       } catch (e) {
         ok = false;
         error = /TLS m[uú]tuo/i.test(e.message)
@@ -281,7 +281,7 @@ export function registerEfiPixRoutes(app, {
     if (open && open.status === 'CONCLUIDA') return { provider: 'efi', txid, pixCopiaECola: open.pix_copia_e_cola, paid: true };
     const name = String(contract.company_name || '').trim();
     const body = cobBody({
-      chave: acc.efi_pix_key, amount, dueDate, now: now(),
+      chave: efiKey(acc), amount, dueDate, now: now(),
       solicitacao: `Mensalidade Agência Pulse ${month.split('-').reverse().join('/')}`,
       info: [{ nome: 'Cliente', valor: name || 'Cliente Pulse' }, ...(dueDate ? [{ nome: 'Vencimento', valor: dueDate.split('-').reverse().join('/') }] : [])],
     });

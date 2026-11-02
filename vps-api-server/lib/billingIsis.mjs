@@ -2,7 +2,7 @@
 // Calendário por cliente (D = vencimento da mensalidade do mês):
 //   dia 1  → relatório do mês que fechou + sugestões (só com o relatório aprovado pela equipe)
 //   D − 5  → agradecimento + assiduidade das agendas e como melhorar
-//   D      → cobrança: Pix primeiro (copia e cola), link da InfinitePay para o cartão com a taxa repassada
+//   D      → cobrança: Pix primeiro (copia e cola), link da Efí para o cartão com a taxa repassada (era a InfinitePay até 02/11/2026)
 //   D + 3  → lembrete gentil
 // Regras puras: o que sai hoje, as variáveis e o texto. Linha com variável vazia (ex.: sem link) sai inteira.
 

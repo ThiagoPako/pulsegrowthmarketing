@@ -32,10 +32,11 @@ describe('Pagamentos · InfinitePay: conta de cada cidade', () => {
     expect(publicAccount(null, 'minacu')).toMatchObject({ city: 'minacu', status: 'nao_configurado', active: true });
   });
 
-  it('a conta manda: vai por cima da Config; desativada, sem Pix nem tag; sem conta, a Config como está', () => {
+  // só a Efí (02/11/2026): a InfiniteTag não passa mais para a cobrança
+  it('a conta manda: vai por cima da Config; desativada, sem Pix; sem conta, a Config como está', () => {
     const antiga = { id: 1, city: 'minacu', pix_key: 'antiga', infinitepay_handle: 'velha', msg_isis_cobranca: 'texto', isis_mode: 'ativo' };
     const o = overlayConfig(antiga, conta, 'uruacu');
-    expect(o).toMatchObject({ id: 1, city: 'uruacu', pix_key: conta.pix_key, infinitepay_handle: 'agenciapulse', receiver_name: 'Agência Pulse', msg_isis_cobranca: 'texto', isis_mode: 'ativo' });
+    expect(o).toMatchObject({ id: 1, city: 'uruacu', pix_key: conta.pix_key, infinitepay_handle: null, receiver_name: 'Agência Pulse', msg_isis_cobranca: 'texto', isis_mode: 'ativo' });
     expect(overlayConfig(antiga, { ...conta, active: false }, 'uruacu')).toMatchObject({ pix_key: null, infinitepay_handle: null, payment_account_active: false });
     expect(overlayConfig(antiga, null, 'uruacu')).toBe(antiga);
   });

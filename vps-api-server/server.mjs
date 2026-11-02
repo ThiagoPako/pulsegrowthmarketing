@@ -32,6 +32,7 @@ import { registerBillingIsisRoutes } from './billingIsisRoutes.mjs';
 import { registerPaymentAccountsRoutes } from './paymentAccountsRoutes.mjs';
 import { registerInfinitePayRoutes } from './infinitePayRoutes.mjs';
 import { registerEfiPixRoutes } from './efiPixRoutes.mjs';
+import { registerEfiCardRoutes } from './efiCardRoutes.mjs';
 import { registerPixReceiptRoutes } from './pixReceiptRoutes.mjs';
 import { registerCampaignIsisRoutes } from './campaignIsisRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
@@ -20483,6 +20484,18 @@ const efiPix = registerEfiPixRoutes(app, {
   publicApiUrl: process.env.EFI_WEBHOOK_BASE_URL || process.env.PUBLIC_APP_URL,
 });
 
+// ─── Efí Bank: cartão pelo link de pagamento da API Cobranças, com a taxa repassada e baixa pela notificação ──
+const efiCard = registerEfiCardRoutes(app, {
+  pool,
+  verifyAdmin,
+  accountFor: paymentAccountsModule.accountFor,
+  ensureAccountsSchema: paymentAccountsModule.ensureSchema,
+  paymentConfigFor: paymentConfigForCity,
+  markRevenuePaid: infinitePay.markRevenuePaid,
+  // a notificação da API Cobranças não pede mTLS: vai no domínio principal
+  publicApiUrl: process.env.PUBLIC_APP_URL,
+});
+
 // ─── Pix pela chave: comprovante na página /pagar, lido pela IA, e baixa pelo extrato (.ofx) ou pela gestão ──
 const pixReceipts = registerPixReceiptRoutes(app, {
   pool,
@@ -20513,7 +20526,8 @@ const billingIsis = registerBillingIsisRoutes(app, {
   verifyAdmin,
   paymentConfigFor: paymentConfigForCity,
   socialReports,
-  paymentLink: infinitePay.paymentLink,
+  // cartão pelo link da Efí (02/11/2026: só a Efí; a InfinitePay não cria mais links)
+  paymentLink: efiCard.paymentLink,
   pixCharge: efiPix.pixCharge,
   lastReceipt: pixReceipts.lastReceipt,
   uploadRoot: UPLOAD_ROOT,

@@ -276,14 +276,18 @@ export function registerEfiPixRoutes(app, {
       if (!efiComplete(acc) || acc.efi_last_test_ok !== true) throw httpError(400, 'Teste a conexão com a Efí antes de cadastrar o webhook');
       const secret = acc.efi_webhook_secret || newWebhookSecret();
       const url = webhookUrlFor(publicApiUrl, city, secret);
+      // o segredo é gravado ANTES: a Efí chama a URL para validar durante o cadastro, e a rota só aceita com o hmac salvo
+      // (antes era gravado depois e a validação voltava 401)
+      await pool.query(`UPDATE payment_accounts SET efi_webhook_secret = $2 WHERE city = $1`, [city, secret]);
       let ok = true;
       let error = null;
       try {
-        await clientFor(acc).putWebhook(efiKey(acc), url);
+        // EFI_WEBHOOK_MTLS=1 quando o nginx tiver o mTLS (docs/efi-pix.md); sem ele, pula a checagem da Efí
+        await clientFor(acc).putWebhook(efiKey(acc), url, { skipMtls: process.env.EFI_WEBHOOK_MTLS !== '1' });
       } catch (e) {
         ok = false;
         error = /TLS m[uú]tuo/i.test(e.message)
-          ? 'A Efí exige TLS mútuo (mTLS) na URL do webhook: falta configurar o nginx do servidor (ver o PR). Enquanto isso, a varredura de 10 em 10 min confere os pagamentos'
+          ? 'A Efí exige TLS mútuo (mTLS) na URL do webhook: falta configurar o nginx do servidor (ver o PR). Enquanto isso, a varredura de 5 em 5 min confere os pagamentos'
           : e.message.slice(0, 300);
       }
       await pool.query(
@@ -536,9 +540,13 @@ export function registerEfiPixRoutes(app, {
     if (ip && !ip.endsWith(EFI_WEBHOOK_IP)) logger.log?.(`[efi] webhook de ${ip} (a Efí usa ${EFI_WEBHOOK_IP}); a baixa só sai depois da consulta na Efí`);
     if (!efiOn(acc)) return;
     for (const p of readEfiWebhook(req.body)) {
-      // o corpo não vale como prova: recordPix confere na Efí pelo txid antes da baixa
-      await recordPix(city, acc.efi_env, { endToEndId: p.e2e, txid: p.txid, valor: p.valor, horario: p.horario, infoPagador: p.info })
-        .catch((error) => logger.error('[efi] webhook:', p.e2e, error.message));
+      // o corpo não vale como prova (sem mTLS, ainda mais): o Pix é lido de novo na Efí pelo ID antes de qualquer baixa
+      const real = await clientFor(acc).getPix(p.e2e).catch(() => null);
+      if (!real?.endToEndId) {
+        logger.log?.(`[efi] webhook com Pix que não está na conta: ${p.e2e}`);
+        continue;
+      }
+      await recordPix(city, acc.efi_env, real).catch((error) => logger.error('[efi] webhook:', p.e2e, error.message));
     }
   };
   app.post('/api/webhooks/efi/:city', webhook);

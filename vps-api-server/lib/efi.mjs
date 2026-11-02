@@ -182,15 +182,15 @@ export function createEfiClient({ clientId, clientSecret, env = 'producao', p12 
     return { token, scopes };
   }
 
-  async function call(method, path, body, retried = false) {
+  async function call(method, path, body, retried = false, extraHeaders = {}) {
     await auth();
     const r = await send({
       method,
       url: `${base}${path}`,
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...extraHeaders },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
-    if (r.status === 401 && !retried) { token = null; return call(method, path, body, true); }
+    if (r.status === 401 && !retried) { token = null; return call(method, path, body, true, extraHeaders); }
     const data = parse(r.text);
     if (r.status >= 400) throw new EfiError(r.status, data);
     return data;
@@ -227,7 +227,10 @@ export function createEfiClient({ clientId, clientSecret, env = 'producao', p12 
     postCobr: (body) => call('POST', '/v2/cobr', body),
     getCobr: (txid) => call('GET', `/v2/cobr/${enc(txid)}`),
     saldo: () => call('GET', '/v2/gn/saldo/'),
-    putWebhook: (chave, webhookUrl) => call('PUT', `/v2/webhook/${enc(chave)}`, { webhookUrl }),
+    // sem mTLS no servidor (02/11/2026): a Efí aceita "x-skip-mtls-checking: true" quando quem recebe confere por conta
+    // própria (o hmac da URL, o IP da Efí e a consulta na Efí antes de qualquer baixa)
+    putWebhook: (chave, webhookUrl, { skipMtls = false } = {}) => call('PUT', `/v2/webhook/${enc(chave)}`, { webhookUrl }, false,
+      skipMtls ? { 'x-skip-mtls-checking': 'true' } : {}),
     getWebhook: (chave) => call('GET', `/v2/webhook/${enc(chave)}`),
   };
 }

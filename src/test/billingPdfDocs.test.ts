@@ -56,12 +56,13 @@ describe('PDFs da Ísis: conteúdo', () => {
   });
 
   // D−2 (usuário, 02/11/2026): mostra a dedicação da equipe, inclusive as gravações canceladas e os tempos
-  it('agradecimento: dedicação da equipe, gravações canceladas e o lembrete do vencimento', () => {
+  // antes do dia do pagamento, nada de cobrança no PDF (02/11/2026): sem vencimento, valor ou Pix
+  it('agradecimento: dedicação da equipe, gravações canceladas e nada de cobrança', () => {
     const d = agradecimentoDoc({ ref: '2026-10', client, plan, numbers, attendance: { done: 2, scheduled: 3, cancelled: 1, avg: 4.5 }, tip: '', dueDate: '2026-11-10', amount: 1500 });
     expect(d.cards[0]).toMatchObject({ label: 'Gravações feitas', value: 2 });
     expect(JSON.stringify(d)).toMatch(/Gravações canceladas/);
     expect(JSON.stringify(d)).not.toMatch(/2 de 3|Aproveitamento|\bdica\b/i);
-    expect(d.closing.text).toContain('10/11/2026');
+    expect(JSON.stringify(d)).not.toMatch(/vencimento|10\/11\/2026|R\$|Pix|cobran/i);
   });
 
   it('recibo: valor por extenso, pago e quitação', () => {
@@ -128,7 +129,11 @@ describe('relatório premium', () => {
     // o portal abre o relatório, antes dos números, e aparece uma vez só
     expect(d.sections[0]).toMatchObject({ type: 'portal', url: 'https://agenciapulse.tech/portal/x', heading: 'Confira todos os seus resultados no portal' });
     expect(d.sections.filter((s: { type?: string }) => s.type === 'portal')).toHaveLength(1);
-    expect(d.sections.filter((s: { type?: string }) => s.type === 'team')).toHaveLength(2);
+    // equipe completa, sem a seção dos agentes de IA (02/11/2026)
+    const team = d.sections.filter((s: { type?: string }) => s.type === 'team');
+    expect(team).toHaveLength(1);
+    expect(team[0].title).toBe('A equipe completa dedicada ao seu projeto');
+    expect(JSON.stringify(d)).not.toMatch(/Agentes de IA/);
   });
 
   it('sem gravação agendada: só as datas, sem pedido de confirmar', () => {

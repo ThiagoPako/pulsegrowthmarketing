@@ -6,6 +6,8 @@
 //   D + 3  → lembrete gentil
 // Regras puras: o que sai hoje, as variáveis e o texto. Linha com variável vazia (ex.: sem link) sai inteira.
 
+import { LEGACY_TEMPLATES, LEGACY_FOOTERS } from './billingIsisLegacy.mjs';
+
 export const BILLING_STEPS = ['relatorio_mensal', 'pre_vencimento', 'cobranca', 'lembrete'];
 export const STEP_LABELS = {
   relatorio_mensal: 'Dia 1 · relatório',
@@ -17,58 +19,75 @@ export const MODES = ['desligado', 'previa', 'ativo'];
 
 // textos aprovados pelo usuário (agentes/estudos/isis-plano-relatorio-campanhas-cobrancas.md); editáveis na tela
 export const DEFAULT_TEMPLATES = {
+  // mais curtas e com respiro, sem se apresentar (usuário, 01/11/2026: "as mensagens de texto estão muito grandes ...
+  // a mensagem tá muito junta, não precisa se identificar"): linha em branco entre os blocos
+  // o PDF anexado traz o resumo e as sugestões do mês (usuário, 01/11/2026: "a mensagem precisa falar que o PDF
+  // contém o resumo do mês e sugestões para esse mês"); as datas do nicho ficam só no PDF
   relatorio_mensal: [
-    'Bom dia, {nome_cliente}! ☀️ Aqui é a Ísis, da Pulse.',
-    'Fechamos {mes_anterior} e quero te mostrar o que fizemos juntos:',
-    '🎬 {qtd_videos} vídeos · 🎨 {qtd_artes} artes · 📲 {qtd_posts} posts · 🎥 {qtd_gravacoes} gravações',
-    '⏱️ {horas_dedicadas} h dedicadas ao seu perfil',
-    '📈 {resumo_rede}',
-    'Para {mes_atual}, nossas sugestões:',
-    '{sugestoes}',
-    'O relatório completo está aqui: {link_relatorio}',
-    'Qualquer ideia, é só me chamar! 🧡',
+    'Bom dia, {nome_cliente}! ☀️',
+    '',
+    'No PDF em anexo está o resumo do que entregamos em {mes_anterior} e as nossas sugestões para {mes_atual} 🧡',
   ].join('\n'),
+  // sem "x de y": só o que foi feito e o fecho ({dica_assiduidade}: marcar as datas se houve remarcação; senão,
+  // "Seguimos juntos no próximo mês!")
   pre_vencimento: [
-    'Oi, {nome_cliente}! Passando para agradecer a parceria de mais um mês 🧡',
-    'Nas agendas de {mes_ref}: {gravacoes_feitas} de {gravacoes_marcadas} gravações realizadas, com média de {media_videos} vídeos por gravação.',
-    '{dica_assiduidade}',
-    'Sua mensalidade vence dia {dia_vencimento}; no dia te mando o Pix e o link, tudo certinho.',
+    'Oi, {nome_cliente}! Obrigada por mais um mês de parceria 🧡',
+    '',
+    'Em {mes_ref} fizemos {gravacoes} juntos. {dica_assiduidade}',
+    '',
+    'Sua mensalidade vence dia {dia_vencimento}.',
   ].join('\n'),
-  // pedido do usuário (01/11/2026): "uma forma do cliente copiar o pagamento ou clicar para pagar": a mensagem leva a
-  // página de pagamento ({link_pagamento}, com o botão de copiar o Pix e o de pagar) e o código Pix vai sozinho na
-  // mensagem seguinte, para tocar, segurar e copiar
+  // a página de pagamento ({link_pagamento}) tem o botão de copiar o Pix, o de pagar, a chave e o aviso do cartão;
+  // o código Pix vai sozinho na mensagem seguinte
   cobranca: [
-    'Olá, {nome_cliente}! Tudo bem? 😊',
-    'Hoje é o vencimento da sua mensalidade Pulse ({plano}): *{valor}*.',
-    '👉 *Pague por aqui (Pix ou cartão):* {link_pagamento}',
-    '💠 Prefere o Pix direto? O código vai na próxima mensagem: toque, segure e copie; no app do seu banco, vá em Pix → Pix Copia e Cola.',
-    'Chave: {chave_pix} · {nome_recebedor}',
-    '_{aviso_cartao}_',
-    'Se já pagou, pode desconsiderar. Obrigada pela confiança! 🧡',
+    'Olá, {nome_cliente}! 😊',
+    '',
+    'Hoje vence sua mensalidade Pulse: *{valor}*.',
+    '',
+    '👉 Pague aqui (Pix ou cartão):',
+    '{link_pagamento}',
+    '',
+    'O código Pix vai na próxima mensagem.',
+    '',
+    'Se já pagou, desconsidere. Obrigada! 🧡',
   ].join('\n'),
   // obrigado depois do pagamento confirmado (usuário, 01/11/2026: "uma mensagem profissional e bonita de agradecimento")
   obrigado: [
-    'Olá, {nome_cliente}! Tudo bem?',
-    'Recebemos o pagamento da sua mensalidade de {mes_ref} ({plano}), no valor de *{valor}*, em {data_pagamento}. ✅',
-    'Muito obrigada pela confiança e pela parceria com a Pulse. É um prazer fazer parte da história de vocês e seguir construindo resultados juntos.',
+    'Olá, {nome_cliente}! ✅',
+    '',
+    'Recebemos o pagamento de {mes_ref}: *{valor}*, em {data_pagamento}.',
+    '',
+    'Obrigada pela confiança e pela parceria com a Pulse 🧡',
+    '',
     '{recibo}',
-    'Conte sempre com a gente! 🧡',
   ].join('\n'),
   lembrete: [
-    'Oi, {nome_cliente}! Não localizamos ainda o pagamento da mensalidade de {mes_ref} ({valor}).',
-    'Se já pagou, desconsidere e me desculpe 🙏. Se precisar, é só pagar por aqui (Pix ou cartão): {link_pagamento}',
-    'O código Pix vai na próxima mensagem, para copiar.',
+    'Oi, {nome_cliente}! Ainda não localizamos o pagamento de {mes_ref} ({valor}).',
+    '',
+    'Se já pagou, desconsidere 🙏',
+    'Se precisar, pague aqui:',
+    '{link_pagamento}',
   ].join('\n'),
 };
+
+// texto padrão antigo salvo no banco = não editado: vale o padrão atual (lib/billingIsisLegacy.mjs)
+const norm = (t) => String(t ?? '').replace(/\r\n/g, '\n').trim();
+/** O modelo que vale: o salvo, a não ser que esteja vazio ou seja um padrão antigo sem edição. */
+export function effectiveTemplate(step, saved) {
+  const t = norm(saved);
+  if (!t || (LEGACY_TEMPLATES[step] || []).some((old) => norm(old) === t)) return DEFAULT_TEMPLATES[step];
+  return t;
+}
 
 // rodapé de toda mensagem ao cliente (pedido do usuário, 01/11/2026: "avisa que é um número de mensagem automática e
 // deixa o número do Thiago para entrar em contato"); o contato é o da cidade do cliente (lib/contactByCity.mjs:
 // Uruaçu → Thiago, Minaçu → Victor). Editável na tela, vazio = sem rodapé
-export const DEFAULT_FOOTER = '—\n_Esta é uma mensagem automática. Para dúvidas, fale com o {contato_nome}: {contato_telefone}._';
+export const DEFAULT_FOOTER = '—\n_Mensagem automática. Dúvidas: {contato_nome} · {contato_telefone}_';
 
 /** O rodapé com o contato preenchido; null quando vazio ou sem telefone (não manda "fale com o Victor:" sem número). */
 export function footerText(footer, contact = {}) {
-  const f = footer === null || footer === undefined ? DEFAULT_FOOTER : String(footer).trim();
+  // rodapé padrão antigo salvo = não editado: vale o atual
+  const f = footer === null || footer === undefined || LEGACY_FOOTERS.some((old) => norm(old) === norm(footer)) ? DEFAULT_FOOTER : String(footer).trim();
   if (!f) return null;
   const out = applyTemplate(f, { contato_nome: contact.name, contato_telefone: contact.phone });
   return /[A-Za-zÀ-ú]/.test(out) ? out : null;
@@ -125,16 +144,28 @@ export function stepDates(dueDate) {
 }
 
 /** Frase de "como melhorar" pelo que aconteceu nas agendas (texto do plano aprovado). */
-export function attendanceTip({ done = 0, scheduled = 0, cancelled = 0, avg = null } = {}) {
-  if (scheduled > 0 && done >= scheduled && !cancelled) {
-    if (avg !== null && avg < 3) return 'Agenda em dia, parabéns! Para render mais vídeos por gravação, vale separar 3 ou 4 temas antes; a Victoria pode mandar os roteiros.';
-    return 'Agenda em dia, parabéns! Assim o conteúdo não para.';
-  }
-  if (cancelled > 0 || done < scheduled) {
-    const faltas = Math.max(cancelled, scheduled - done);
-    return `Tivemos ${faltas} ${faltas === 1 ? 'gravação remarcada' : 'gravações remarcadas'}. Quanto mais gravações, mais conteúdo no ar: que tal já deixarmos as próximas datas marcadas?`;
-  }
-  return 'Que tal já deixarmos as próximas gravações marcadas? Assim o conteúdo não para.';
+// fecho do D−5 (usuário, 01/11/2026): convite para marcar as datas só quando houve remarcação ou falta; senão,
+// "Seguimos juntos no próximo mês!"; mês sem agenda nenhuma fica sem fecho
+export function attendanceTip({ done = 0, scheduled = 0, cancelled = 0 } = {}) {
+  if (!scheduled && !done && !cancelled) return '';
+  if (cancelled > 0 || done < scheduled) return 'Que tal já deixarmos as próximas datas marcadas?';
+  return 'Seguimos juntos no próximo mês!';
+}
+
+/**
+ * Mensagem do código Pix (vai logo depois da cobrança): só o copia e cola, nada mais (usuário, 01/11/2026: "mensagem
+ * para copiar o Pix não pode conter nada além da chave"): sem rodapé, emoji, texto ou espaço no fim.
+ */
+export function pixOnlyMessage(pix) {
+  // só as pontas: o nome do recebedor tem espaço dentro do código (tirar quebra o CRC)
+  const code = String(pix || '').trim();
+  return code || null;
+}
+
+/** "2 gravações" / "1 gravação"; vazio sem gravação (a linha sai). */
+export function recordingsText(done) {
+  const n = Number(done) || 0;
+  return n ? `${n} ${n === 1 ? 'gravação' : 'gravações'}` : '';
 }
 
 // aviso discreto do cartão (usuário, 01/11/2026): a taxa é da facilitadora, a Pulse não cobra nada a mais
@@ -224,7 +255,7 @@ export function valorPorExtenso(valor) {
 /** Modelo de cobrança salvo antes da página de pagamento: ganha a linha do link no fim (o cliente sempre recebe). */
 export function ensurePayLink(template) {
   const t = String(template || '');
-  return t.includes('{link_pagamento}') ? t : `${t}\n👉 Pague por aqui (Pix ou cartão): {link_pagamento}`;
+  return t.includes('{link_pagamento}') ? t : `${t.trim()}\n\n👉 Pague aqui (Pix ou cartão):\n{link_pagamento}`;
 }
 
 /** Token da página de pagamento: 22 caracteres URL-safe (128 bits). */
@@ -245,8 +276,11 @@ export function applyTemplate(template, vars) {
       });
       return empty ? null : out;
     })
+    // chamada que termina em ":" cujo conteúdo logo embaixo saiu (sem sugestões, sem link) sai junto
+    .map((line, i, all) => (line !== null && /:\s*$/.test(line) && all[i + 1] === null ? null : line))
     .filter((line) => line !== null)
     .join('\n')
+    .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }

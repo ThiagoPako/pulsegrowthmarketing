@@ -17,12 +17,14 @@ import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import {
   BILLING_STEPS, MODES, DEFAULT_TEMPLATES, monthName, previousMonth, nextMonth, stepDates, attendanceTip,
-  brl, pixPayload, CARD_NOTICE, ensurePayLink, payToken, valorPorExtenso, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
+  brl, pixPayload, CARD_NOTICE, ensurePayLink, payToken, valorPorExtenso, effectiveTemplate, recordingsText, pixOnlyMessage, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
 } from './lib/billingIsis.mjs';
 import { renderPdf } from './lib/billingPdf.mjs';
 import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, monthName as nomeMes } from './lib/billingPdfDocs.mjs';
 import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
+import { monthCalendar } from './lib/monthDates.mjs';
+import { videoFrame } from './lib/videoFrame.mjs';
 import { enqueueWhatsApp } from './whatsapp/shared.mjs';
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -105,7 +107,7 @@ export function registerBillingIsisRoutes(app, {
     res.status(status).json({ error: error?.message || 'Erro' });
   }
 
-  const templateOf = (config, step) => (config?.[TEMPLATE_COLUMNS[step]] || '').trim() || DEFAULT_TEMPLATES[step];
+  const templateOf = (config, step) => effectiveTemplate(step, config?.[TEMPLATE_COLUMNS[step]]);
   const modeOf = (config) => (MODES.includes(config?.isis_mode) ? config.isis_mode : 'desligado');
 
   // dados do cliente, do plano e do emitente para os PDFs (lib/billingPdfDocs.mjs)
@@ -124,7 +126,7 @@ export function registerBillingIsisRoutes(app, {
 
   async function activeContracts() {
     const { rows } = await pool.query(
-      `SELECT fc.*, c.company_name, c.whatsapp, c.city AS client_city, c.responsible_person, p.name AS plan_name,
+      `SELECT fc.*, c.company_name, c.whatsapp, c.city AS client_city, c.responsible_person, c.niche, p.name AS plan_name,
               p.reels_qty, p.creatives_qty, p.stories_qty, p.arts_qty, p.recording_sessions
          FROM financial_contracts fc
          JOIN clients c ON c.id = fc.client_id
@@ -184,6 +186,118 @@ export function registerBillingIsisRoutes(app, {
   async function assistantNumbers() {
     const { rows } = await pool.query(`SELECT name, phone, active FROM assistant_numbers`).catch(() => ({ rows: [] }));
     return rows;
+  }
+
+  // ── extras do relatório premium (capa, calendário, portal, equipe) ──
+  const PROFILE_ROLES = { videomaker: 'Videomaker', editor: 'Edição de vídeo', designer: 'Design', social_media: 'Social media', admin: 'Direção', gestor: 'Gestão' };
+  const AGENT_ROLES_PT = { chefe: 'Coordenação', editor: 'Edição de vídeo', revisor: 'Revisão de vídeo', colorista: 'Cor', som: 'Som', social_media: 'Social media', designer: 'Design', revisor_arte: 'Revisão de artes', roteirista: 'Roteiros' };
+  // agentes que trabalham em todo projeto (os editores entram quando mexeram nos cards do cliente no mês)
+  const ALWAYS_AGENTS = ['chefe', 'revisor', 'colorista', 'som', 'social_media'];
+
+  /** Imagem PNG/JPEG para o PDF (upload local lido do disco; de fora, com tempo e tamanho limitados); senão null. */
+  async function loadImage(url) {
+    const raw = String(url || '').trim();
+    if (!raw) return null;
+    const okImage = (b) => b && b.length > 64 && b.length < 4_000_000
+      && (b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) || (b[0] === 0xff && b[1] === 0xd8));
+    try {
+      const abs = new URL(raw, appBase);
+      const i = abs.pathname.indexOf('/uploads/');
+      if (i >= 0 && (abs.origin === new URL(appBase).origin || abs.href.startsWith(uploadsBase))) {
+        const file = path.resolve(uploadRoot, decodeURIComponent(abs.pathname.slice(i + '/uploads/'.length)));
+        if (file.startsWith(path.resolve(uploadRoot))) {
+          const b = await fs.readFile(file).catch(() => null);
+          return okImage(b) ? b : null;
+        }
+      }
+      const res = await fetch(abs.href, { signal: AbortSignal.timeout(4000) });
+      if (!res.ok) return null;
+      const b = Buffer.from(await res.arrayBuffer());
+      return okImage(b) ? b : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** O vídeo para o ffmpeg: upload local vira caminho no disco; link http(s) vai direto; o resto (Drive) não serve. */
+  function videoInput(link) {
+    const raw = String(link || '').trim();
+    if (!raw) return null;
+    try {
+      const abs = new URL(raw, appBase);
+      const i = abs.pathname.indexOf('/uploads/');
+      if (i >= 0) {
+        const file = path.resolve(uploadRoot, decodeURIComponent(abs.pathname.slice(i + '/uploads/'.length)));
+        if (file.startsWith(path.resolve(uploadRoot))) return file;
+      }
+      return /^https?:$/.test(abs.protocol) && !/drive\.google|docs\.google/.test(abs.hostname) ? abs.href : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function reportExtras(contract, ref, next, config) {
+    const q = (sql, params) => pool.query(sql, params).then((r) => r.rows).catch(() => []);
+    const [client] = await q(`SELECT logo_url FROM clients WHERE id = $1`, [contract.client_id]);
+    const recordings = await q(
+      `SELECT date, start_time FROM recordings WHERE client_id = $1 AND to_char(date, 'YYYY-MM') = $2
+          AND coalesce(status, '') NOT IN ('cancelada', 'cancelado') ORDER BY date, start_time`, [contract.client_id, next]
+    );
+    // destaques: a capa do card ou, sem capa, um quadro do próprio vídeo editado
+    const covers = await q(
+      `SELECT title, cover_url, edited_video_link, content_type FROM content_tasks
+        WHERE client_id = $1 AND to_char(coalesce(approved_at, updated_at), 'YYYY-MM') = $2
+          AND (nullif(btrim(cover_url), '') IS NOT NULL OR nullif(btrim(edited_video_link), '') IS NOT NULL)
+        ORDER BY (content_type = 'story') ASC, approved_at DESC NULLS LAST LIMIT 6`, [contract.client_id, ref]
+    );
+    // stories postados no mês (social_media_deliveries)
+    const [stories] = await q(
+      `SELECT count(*)::int AS n FROM social_media_deliveries
+        WHERE client_id = $1 AND content_type ILIKE 'stor%' AND status IN ('postado', 'entregue', 'concluido')
+          AND to_char(coalesce(posted_at, delivered_at), 'YYYY-MM') = $2`, [contract.client_id, ref]
+    );
+    // quem trabalhou nos cards e nas gravações do cliente no mês
+    const ids = new Set();
+    for (const r of await q(`SELECT assigned_to, edited_by, agent_review_by, agent_step_by FROM content_tasks WHERE client_id = $1 AND to_char(updated_at, 'YYYY-MM') = $2`, [contract.client_id, ref])) {
+      for (const v of Object.values(r)) if (v) ids.add(v);
+    }
+    for (const r of await q(`SELECT assigned_to, collaborator_id FROM design_tasks WHERE client_id = $1 AND to_char(updated_at, 'YYYY-MM') = $2`, [contract.client_id, ref])) {
+      for (const v of Object.values(r)) if (v) ids.add(v);
+    }
+    for (const r of await q(`SELECT videomaker_id FROM recordings WHERE client_id = $1 AND to_char(date, 'YYYY-MM') = $2`, [contract.client_id, ref])) {
+      if (r.videomaker_id) ids.add(r.videomaker_id);
+    }
+    const rows = await q(
+      `SELECT DISTINCT ON (p.id) p.id, coalesce(nullif(btrim(p.display_name), ''), p.name) AS name, p.avatar_url, p.role::text AS role, k.role AS agent_role
+         FROM profiles p LEFT JOIN agent_keys k ON k.user_id = p.id AND k.revoked_at IS NULL
+        WHERE p.id = ANY($1::uuid[]) OR k.role = ANY($2::text[])
+        ORDER BY p.id, k.created_at DESC NULLS LAST`, [[...ids], ALWAYS_AGENTS]
+    );
+    const firstName = (name) => String(name || '').trim().split(/\s+/)[0];
+    const people = [];
+    const agents = [];
+    for (const r of rows.slice(0, 24)) {
+      const photo = await loadImage(r.avatar_url);
+      if (r.agent_role) agents.push({ name: firstName(r.name), role: AGENT_ROLES_PT[r.agent_role] || 'Agente', photo });
+      else people.push({ name: firstName(r.name), role: PROFILE_ROLES[r.role] || 'Equipe Pulse', photo });
+    }
+    const highlights = [];
+    for (const c of covers) {
+      if (highlights.length >= 3) break;
+      const image = (await loadImage(c.cover_url)) || (await videoFrame(videoInput(c.edited_video_link)));
+      // sem quadro bom, o vídeo não entra nos destaques (nada de imagem ilustrativa)
+      if (image) highlights.push({ image, title: String(c.title || '').trim() || 'Vídeo' });
+    }
+    const contact = contactForCity(contract.client_city || contract.city, config, await assistantNumbers());
+    return {
+      clientLogo: await loadImage(client?.logo_url),
+      recordings: recordings.map((r) => ({ date: dateKey(r.date), time: r.start_time })),
+      highlights,
+      storiesPosted: stories ? stories.n : null,
+      team: { people: people.slice(0, 8), agents: agents.slice(0, 8) },
+      portalUrl: `${appBase}/portal/${contract.client_id}`,
+      contact: contact?.phone ? `${contact.name} · ${contact.phone}` : null,
+    };
   }
 
   /** Página de pagamento da cobrança (uma por contrato e mês; o token não muda entre a cobrança e o lembrete). */
@@ -253,7 +367,7 @@ export function registerBillingIsisRoutes(app, {
       const body = withFooter(applyTemplate(templateOf(config, 'obrigado'), {
         nome_cliente: String(contract.company_name || '').trim(), plano: contract.plan_name || 'plano mensal', valor: brl(amount),
         mes_ref: nomeMes(month), data_pagamento: dataBr(paidAt),
-        recibo: pdf?.ok ? 'O recibo segue em anexo, para o seu controle.' : '',
+        recibo: pdf?.ok ? 'Recibo em anexo.' : '',
       }), config?.msg_isis_rodape, contact);
       if (!contract.whatsapp) {
         await record(contract, 'obrigado', month, 'sem_whatsapp', body, revenueId, pdf?.ok ? pdf.url : null);
@@ -353,6 +467,11 @@ export function registerBillingIsisRoutes(app, {
       const pdfRelatorio = relatorioDoc({
         ref, prev: previousMonth(`${ref}-01`), next: month, client: clientOf(contract), plan: planOf(contract), issuer: issuerOf(contract, config),
         numbers: n, network: report.network, suggestions: report.draft.suggestions,
+        // calendário editorial do mês que começa: feriados (arte de aviso) e datas do nicho do cliente
+        calendar: monthCalendar(month, contract.niche),
+        // resumo, gravações agendadas, stories, destaques, portal e equipe
+        ...(await reportExtras(contract, ref, month, config)),
+        instagram: /^@/.test(String(report.network?.account || '')) ? report.network.account : null,
       });
       return {
         config,
@@ -391,7 +510,7 @@ export function registerBillingIsisRoutes(app, {
           numbers: (await socialReports.reportFor(contract.client_id, ref).catch(() => null))?.numbers || null,
         }),
         body: applyTemplate(templateOf(config, step), {
-          ...base, mes_ref: monthName(`${ref}-01`), gravacoes_feitas: a.done, gravacoes_marcadas: a.scheduled,
+          ...base, mes_ref: monthName(`${ref}-01`), gravacoes: recordingsText(a.done), gravacoes_feitas: a.done, gravacoes_marcadas: a.scheduled,
           media_videos: a.avg === null ? '' : a.avg.toLocaleString('pt-BR'),
           dica_assiduidade: attendanceTip(a), dia_vencimento: String(Number(dueDate.slice(8, 10))),
         }),
@@ -422,8 +541,8 @@ export function registerBillingIsisRoutes(app, {
         payment: { pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(amount) : null, cardNotice: CARD_NOTICE, payUrl, amount: brl(amount) },
       }),
       payUrl,
-      // o código Pix sozinho, numa mensagem logo depois, para o cliente tocar, segurar e copiar
-      pixMessage: pix,
+      // o código Pix sozinho, numa mensagem logo depois, para o cliente tocar, segurar e copiar (nada além do código)
+      pixMessage: pixOnlyMessage(pix),
       body: applyTemplate(payUrl ? ensurePayLink(templateOf(config, step)) : templateOf(config, step), {
         ...base, link_pagamento: payUrl, plano, valor: brl(amount), mes_ref: monthName(`${month}-01`),
         pix_copia_cola: pix, chave_pix: config?.pix_key, nome_recebedor: config?.receiver_name,
@@ -541,7 +660,8 @@ export function registerBillingIsisRoutes(app, {
         accounts: await accountsByCity(),
         templates: Object.fromEntries(TEMPLATE_STEPS.map((s) => [s, templateOf(config, s)])),
         defaults: DEFAULT_TEMPLATES,
-        footer: config?.msg_isis_rodape ?? DEFAULT_FOOTER,
+        footer: footerText(config?.msg_isis_rodape, { name: '{contato_nome}', phone: '{contato_telefone}' }) === footerText(null, { name: '{contato_nome}', phone: '{contato_telefone}' })
+          ? DEFAULT_FOOTER : (config?.msg_isis_rodape ?? DEFAULT_FOOTER),
         default_footer: DEFAULT_FOOTER,
         // contato do rodapé por cidade (Uruaçu → Thiago, Minaçu → Victor; telefone do Assistente PULSE se vazio)
         contacts: await contactsByCity(),
@@ -730,7 +850,7 @@ export function registerBillingIsisRoutes(app, {
       const today = todayBr();
       const body = withFooter(applyTemplate(templateOf(config, 'obrigado'), {
         nome_cliente: String(contract.company_name || '').trim(), plano: contract.plan_name || 'plano mensal', valor: brl(amount),
-        mes_ref: nomeMes(today.slice(0, 7)), data_pagamento: dataBr(today), recibo: 'O recibo segue em anexo, para o seu controle.',
+        mes_ref: nomeMes(today.slice(0, 7)), data_pagamento: dataBr(today), recibo: 'Recibo em anexo.',
       }), config?.msg_isis_rodape, contact);
       res.json({ client: contract.company_name, body });
     } catch (error) { sendError(res, error); }

@@ -6,7 +6,7 @@
 // números são os do sistema, e o texto não custa nada): histórico dos cards de vídeo (task_history) e de design
 // (design_task_history), versões entregues (edit_versions), gravações (recordings), cards novos e a fila agora.
 // Marcado em pulse_job_runs (job "resumo_diario"): reinício do servidor não manda duas vezes.
-// Desde 01/11/2026 (pedido do usuário) vai em PDF (dailyReportPdf.mjs + lib/billingPdf.mjs): a mensagem é só "Resumo do
+// Desde 01/11/2026 (pedido do usuário) vai em PDF para o celular (dailyReportPdf.mjs + lib/dailyPdf.mjs): a mensagem é só "Resumo do
 // dia dd/mm 📊" com o PDF anexado. A seção financeira só entra para quem tem "consultar_financeiro". Se o PDF falhar,
 // manda o texto de antes (formatDay), para o resumo não faltar.
 import crypto from 'node:crypto';
@@ -14,7 +14,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getSettings, logEvent, remember, sendToNumber, brazilToday, cityLabel, clip } from './common.mjs';
 import { collectDayPdf, dailyPdfSpec } from './dailyReportPdf.mjs';
-import { renderPdf } from '../lib/billingPdf.mjs';
+import { renderDailyPdf } from '../lib/dailyPdf.mjs';
 
 const JOB = 'resumo_diario';
 const TZ = 'America/Sao_Paulo';
@@ -162,7 +162,7 @@ export function formatDay(d, cities, date = new Date()) {
  */
 export async function buildDailyPdf(pool, cities, { financeiro, uploadRoot, publicUploadsUrl, date = new Date() }) {
   const data = await collectDayPdf(pool, cities, { financeiro, publicUploadsUrl });
-  const buffer = await renderPdf(dailyPdfSpec(data, { date, financeiro }));
+  const buffer = await renderDailyPdf(dailyPdfSpec(data, { date, financeiro }));
   if (buffer.subarray(0, 5).toString() !== '%PDF-') throw new Error('PDF do resumo saiu inválido');
   const day = brazilToday(date);
   const base = path.resolve(uploadRoot || 'uploads', 'resumos');

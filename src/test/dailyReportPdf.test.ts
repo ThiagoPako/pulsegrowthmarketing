@@ -2,10 +2,14 @@
 // aparece para quem tem permissão; a ordem é números → pessoas → entregas por cliente → financeiro → pendências.
 import { describe, expect, it } from 'vitest';
 import { dailyPdfSpec } from '../../vps-api-server/assistant/dailyReportPdf.mjs';
-// ícones que o gerador desenha (lib/billingPdf.mjs, ICONS; o pdfkit só existe no node_modules do vps-api-server)
+// ícones que o gerador desenha (lib/dailyPdf.mjs, ICONS; o pdfkit só existe no node_modules do vps-api-server)
 const ICONS = ['edicao', 'arte', 'post', 'gravacao', 'aprovacao', 'atendimento', 'cards', 'entrada', 'saida', 'alteracao', 'alerta', 'caixa'];
 
-type Section = { title?: string; type?: string; items?: { icon: string; label: string; value: unknown }[]; people?: { items: { icon: string }[] }[]; rows?: unknown[] };
+type Section = {
+  title?: string; type?: string; items?: { icon: string; label: string; value: unknown }[]; people?: { items: { icon: string }[] }[];
+  clients?: { cliente: string; rows: { icon: string; label: string; count: number }[] }[];
+  movimentos?: { tipo: string; descricao: string; detalhe: string; valor: string }[];
+};
 
 const data = {
   cidades: ['minacu', 'uruacu'],
@@ -40,7 +44,15 @@ describe('resumo do dia em PDF', () => {
     expect(sections.map((s) => s.title).filter(Boolean)).toEqual([
       'Quem fez o quê', 'Entregas do dia por cliente', 'Financeiro do dia', 'Cobranças enviadas', 'Pendências para amanhã',
     ]);
-    expect(sections.find((s) => s.title === 'Financeiro do dia')!.rows).toHaveLength(2);
+    // celular: financeiro em lista (descrição / forma · quem lançou, valor) e clientes em blocos, sem tabela larga
+    expect(sections.find((s) => s.title === 'Financeiro do dia')!.movimentos).toEqual([
+      { tipo: 'entrada', descricao: 'AlvesCred', detalhe: 'InfinitePay · automático', valor: '+ R$ 1.200,00' },
+      { tipo: 'saida', descricao: 'Gasolina', detalhe: 'Despesa paga · por Naay', valor: '− R$ 180,00' },
+    ]);
+    expect(sections.find((s) => s.type === 'clients')!.clients).toEqual([
+      { cliente: 'Rede A3P', rows: [{ icon: 'edicao', label: 'Vídeos entregues', count: 1, first: 'Energia honesta' }] },
+    ]);
+    expect(sections.some((s) => s.type === 'table')).toBe(false);
     expect(spec.footerNote).toMatch(/não encaminhe a clientes/);
   });
 
@@ -53,7 +65,10 @@ describe('resumo do dia em PDF', () => {
 
   it('todo ícone usado existe no gerador', () => {
     const sections = dailyPdfSpec(data, { date, financeiro: true }).sections as Section[];
-    const used = [...sections[0].items!.map((k) => k.icon), ...sections[1].people!.flatMap((p) => p.items.map((i) => i.icon))];
+    const used = [
+      ...sections[0].items!.map((k) => k.icon), ...sections[1].people!.flatMap((p) => p.items.map((i) => i.icon)),
+      ...sections.flatMap((s) => (s.clients || []).flatMap((c) => c.rows.map((r) => r.icon))),
+    ];
     for (const icon of used) expect(ICONS).toContain(icon);
   });
 

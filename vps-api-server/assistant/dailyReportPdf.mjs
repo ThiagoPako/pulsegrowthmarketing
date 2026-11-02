@@ -4,7 +4,7 @@
 // financeiras").
 //
 // collectDayPdf(pool, cities, { financeiro }) busca tudo no banco (sem o Claude) e dailyPdfSpec monta o documento do
-// gerador da Ísis (lib/billingPdf.mjs, mesmo modelo grafite/laranja/DM Sans):
+// lib/dailyPdf.mjs, em página de celular (108 × 192 mm, uma coluna; mesma identidade dos PDFs da Ísis):
 //   1. números do dia em quadros com ícone (vídeos, artes, posts, gravações, cards movidos, e entradas/saídas do caixa)
 //   2. por pessoa (equipe e agentes, só quem teve atividade): foto redonda, nome, função e o que fez, com ícone por tipo
 //   3. entregas do dia por cliente: entregue, aprovado, postado e o que entrou em alteração
@@ -333,7 +333,7 @@ async function collectFinance(pool, cities, q) {
 const COLUMN_LABEL = { edicao: 'Edição', alteracao: 'Alteração' };
 const COBRANCA_LABEL = { cobranca: 'Cobrança', lembrete: 'Lembrete', relatorio: 'Relatório do mês', agradecimento: 'Agradecimento', recibo: 'Recibo' };
 
-/** Documento do lib/billingPdf.mjs para o resumo. financeiro = mostrar a seção (null nos dados = sem permissão). */
+/** Documento do lib/dailyPdf.mjs (página de celular) para o resumo. financeiro = mostrar a seção (null = sem permissão). */
 export function dailyPdfSpec(d, { date = new Date(), financeiro = true } = {}) {
   const dia = new Intl.DateTimeFormat('pt-BR', { timeZone: TZ, day: '2-digit', month: '2-digit' }).format(date);
   const semana = new Intl.DateTimeFormat('pt-BR', { timeZone: TZ, weekday: 'long' }).format(date);
@@ -348,8 +348,8 @@ export function dailyPdfSpec(d, { date = new Date(), financeiro = true } = {}) {
     { icon: 'cards', label: 'Cards movidos', value: n.cardsMovidos },
     { icon: 'aprovacao', label: 'Aprovados', value: n.aprovados },
     ...(fin ? [
-      { icon: 'entrada', label: 'Entradas do caixa', value: fmtMoney(fin.entradas), small: true, note: plural(fin.movimentos.filter((m) => m.tipo === 'entrada').length, 'movimento', 'movimentos') },
-      { icon: 'saida', label: 'Saídas do caixa', value: fmtMoney(fin.saidas), small: true, note: plural(fin.movimentos.filter((m) => m.tipo === 'saida').length, 'movimento', 'movimentos') },
+      { icon: 'entrada', label: 'Entradas do caixa', value: fmtMoney(fin.entradas), note: plural(fin.movimentos.filter((m) => m.tipo === 'entrada').length, 'movimento', 'movimentos') },
+      { icon: 'saida', label: 'Saídas do caixa', value: fmtMoney(fin.saidas), note: plural(fin.movimentos.filter((m) => m.tipo === 'saida').length, 'movimento', 'movimentos') },
     ] : [{ icon: 'alteracao', label: 'Em alteração', value: n.alteracoes }]),
   ];
   const sections = [{ type: 'kpis', items: kpis }];
@@ -359,17 +359,19 @@ export function dailyPdfSpec(d, { date = new Date(), financeiro = true } = {}) {
     : { title: 'Quem fez o quê', text: 'Ninguém registrou atividade no sistema hoje.' });
 
   if (d.porCliente.length) {
-    // número grande e o primeiro título embaixo ("+2" quando há mais), para a tabela caber no celular
-    const cell = (list) => (list.length ? { text: String(list.length), bold: true, sub: `${clip(list.filter(Boolean)[0] || '', 34)}${list.length > 1 ? ` +${list.length - 1}` : ''}` } : { text: '—', color: '#B5B5BD' });
+    // um bloco por cliente, uma linha por tipo (só os que aconteceram): número e o primeiro título ("+2" quando há mais)
+    const row = (icon, label, list) => (list.length
+      ? [{ icon, label, count: list.length, first: `${clip(list.filter(Boolean)[0] || '', 40)}${list.length > 1 ? ` +${list.length - 1}` : ''}` }] : []);
     sections.push({
       title: 'Entregas do dia por cliente',
-      type: 'table',
-      columns: [{ label: 'Cliente', width: 123 }, { label: 'Entregues' }, { label: 'Aprovados' }, { label: 'Postados' }, { label: 'Alteração' }],
-      rows: d.porCliente.slice(0, 25).map((c) => [
-        { text: c.cliente, bold: true },
-        cell([...c.entregues, ...c.artes.map((t) => `arte: ${t}`)]),
-        cell(c.aprovados), cell(c.postados), cell(c.alteracao),
-      ]),
+      type: 'clients',
+      clients: d.porCliente.slice(0, 25).map((c) => ({
+        cliente: c.cliente,
+        rows: [
+          ...row('edicao', 'Vídeos entregues', c.entregues), ...row('arte', 'Artes entregues', c.artes),
+          ...row('aprovacao', 'Aprovados', c.aprovados), ...row('post', 'Postados', c.postados), ...row('alteracao', 'Em alteração', c.alteracao),
+        ],
+      })),
     });
   } else {
     sections.push({ title: 'Entregas do dia por cliente', text: 'Nenhuma entrega, aprovação ou post registrado hoje.' });
@@ -379,13 +381,14 @@ export function dailyPdfSpec(d, { date = new Date(), financeiro = true } = {}) {
     sections.push(fin.movimentos.length
       ? {
         title: 'Financeiro do dia',
-        type: 'table',
-        columns: [{ label: 'Cliente / descrição' }, { label: 'Forma', width: 100 }, { label: 'Quem lançou', width: 104 }, { label: 'Valor', width: 92, align: 'right' }],
-        rows: fin.movimentos.map((m) => [
-          { text: m.descricao, bold: true, sub: m.tipo === 'entrada' ? 'Entrada' : 'Saída' },
-          m.forma, m.quem,
-          { text: `${m.tipo === 'entrada' ? '+' : '−'} ${fmtMoney(m.valor)}`, bold: true, color: m.tipo === 'entrada' ? '#1F9D55' : '#D64545' },
-        ]),
+        type: 'finance',
+        // em lista, 2 linhas cada: descrição / forma · quem lançou, com o valor à direita
+        movimentos: fin.movimentos.map((m) => ({
+          tipo: m.tipo,
+          descricao: m.descricao,
+          detalhe: [m.forma, m.quem && m.quem !== '—' && m.quem !== 'InfinitePay (automático)' ? `por ${m.quem}` : m.quem === 'InfinitePay (automático)' ? 'automático' : null].filter(Boolean).join(' · '),
+          valor: `${m.tipo === 'entrada' ? '+' : '−'} ${fmtMoney(m.valor)}`,
+        })),
         totals: [
           { label: 'Entradas', value: fmtMoney(fin.entradas) },
           { label: 'Saídas', value: `− ${fmtMoney(fin.saidas)}` },
@@ -397,6 +400,7 @@ export function dailyPdfSpec(d, { date = new Date(), financeiro = true } = {}) {
     if (fin.cobrancas.length) {
       sections.push({
         title: 'Cobranças enviadas',
+        type: 'bullets',
         bullets: fin.cobrancas.map((b) => `${b.cliente} · ${COBRANCA_LABEL[b.tipo] || b.tipo}${b.status && b.status !== 'enviada' ? ` (${b.status})` : ''}`),
       });
     }
@@ -411,8 +415,8 @@ export function dailyPdfSpec(d, { date = new Date(), financeiro = true } = {}) {
   ];
   sections.push({
     title: 'Pendências para amanhã',
-    need: 50 + Math.max(1, pend.length) * 22, // a lista curta não quebra entre páginas
-    ...(pend.length ? { bullets: pend } : { text: 'Nada atrasado nem parado.' }),
+    need: 50 + Math.max(1, pend.length) * 30, // a lista curta não quebra entre páginas
+    ...(pend.length ? { type: 'bullets', bullets: pend } : { text: 'Nada atrasado nem parado.' }),
     note: `Fila agora: Edição ${p.fila.edicao} · Alteração ${p.fila.alteracao} · Análise ${p.fila.analise} · Revisão ${p.fila.revisao}`,
   });
 
@@ -422,7 +426,6 @@ export function dailyPdfSpec(d, { date = new Date(), financeiro = true } = {}) {
     subtitle: `${semana.charAt(0).toUpperCase()}${semana.slice(1)} · ${lugar}`,
     issued: new Intl.DateTimeFormat('pt-BR', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date),
     sections,
-    footerNote: fin ? 'Documento interno da Pulse, com dados financeiros: não encaminhe a clientes.' : 'Documento interno da Pulse.',
-    footerContact: 'Gerado pelo Assistente PULSE com os dados do sistema',
+    footerNote: fin ? 'Interno, com financeiro: não encaminhe a clientes' : 'Agência Pulse · documento interno',
   };
 }

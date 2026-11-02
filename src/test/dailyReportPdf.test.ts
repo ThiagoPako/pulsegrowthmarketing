@@ -12,7 +12,7 @@ type Section = {
 };
 
 const data = {
-  cidades: ['minacu', 'uruacu'],
+  cidades: ['minacu'],
   numeros: { videos: 3, artes: 2, posts: 1, gravacoes: 2, cardsMovidos: 9, aprovados: 1, alteracoes: 1 },
   pessoas: [
     { name: 'Naay', role: 'Social media', agent: false, items: [{ icon: 'post', text: '1 post publicado — Clínica Sorriso' }] },
@@ -36,8 +36,8 @@ describe('resumo do dia em PDF', () => {
     const spec = dailyPdfSpec(data, { date, financeiro: true });
     const sections = spec.sections as Section[];
     expect(spec.kind).toBe('resumo');
-    expect(spec.title).toBe('Resumo do dia · 01/11');
-    expect(spec.subtitle).toMatch(/^Domingo · Minaçu e Uruaçu/);
+    expect(spec.title).toBe('Resumo do dia · Minaçu'); // um PDF por cidade (Uruaçu e Minaçu separados)
+    expect(spec.subtitle).toBe('Domingo, 01/11');
     expect(sections[0].items!.map((k) => k.label)).toEqual([
       'Vídeos entregues', 'Artes', 'Posts publicados', 'Gravações feitas', 'Cards movidos', 'Aprovados', 'Entradas do caixa', 'Saídas do caixa',
     ]);

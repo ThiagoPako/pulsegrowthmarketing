@@ -26,7 +26,8 @@ export interface PayPageData {
   card_link: string | null;
   card_amount?: number | null;
   receipt_sent?: boolean;
-  pix_auto?: boolean;
+  pix_auto?: { available: boolean; status: 'ativo' | 'aguardando' | null; dataInicial?: string | null; copiaECola?: string | null };
+  pix_dynamic?: boolean;
 }
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -159,7 +160,9 @@ export default function PayBilling({ preview }: { preview?: PayPageData }) {
               </section>
             )}
 
-            {!data.paid && data.pix_payload && !data.pix_auto && <ReceiptUpload token={token || ''} sent={!!data.receipt_sent} demo={!!preview} />}
+            {data.pix_auto?.available && <PixAutoSection token={token || ''} info={data.pix_auto} demo={!!preview} />}
+
+            {!data.paid && data.pix_payload && !data.pix_dynamic && <ReceiptUpload token={token || ''} sent={!!data.receipt_sent} demo={!!preview} />}
 
             {!data.paid && data.card_link && (
               <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm">
@@ -267,6 +270,116 @@ function ReceiptUpload({ token, sent, demo }: { token: string; sent: boolean; de
         </p>
       )}
       <p className="mt-2 text-center text-[11px] text-[#8C8C96]">Foto da tela (print) ou PDF do comprovante.</p>
+    </section>
+  );
+}
+
+/**
+ * Pix Automático (02/11/2026): o cliente informa o titular da conta, recebe o código e autoriza no app do banco. O débito
+ * é só no vencimento, a partir do mês seguinte; cancela quando quiser pelo próprio banco.
+ */
+function PixAutoSection({ token, info, demo }: {
+  token: string; demo: boolean;
+  info: { status: 'ativo' | 'aguardando' | null; dataInicial?: string | null; copiaECola?: string | null };
+}) {
+  const [open, setOpen] = useState(false);
+  const [doc, setDoc] = useState('');
+  const [nome, setNome] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [code, setCode] = useState(info.copiaECola || '');
+  const [inicio, setInicio] = useState(info.dataInicial || '');
+  const [copied, setCopied] = useState(false);
+
+  if (info.status === 'ativo') {
+    return (
+      <section className="mt-4 rounded-2xl bg-[#E8F6EE] p-4 text-sm text-[#1F6B3E]">
+        <p className="font-bold">Pix Automático ativo ✓</p>
+        <p className="mt-1">A mensalidade é debitada só no dia do vencimento. Para cancelar, é pelo app do seu banco, quando quiser.</p>
+      </section>
+    );
+  }
+
+  const activate = async () => {
+    if (demo) return;
+    setBusy(true);
+    setError('');
+    try {
+      const r = await fetch(`${VPS_API_BASE}/public/cobranca/${encodeURIComponent(token)}/pix-automatico`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documento: doc, nome }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || 'Não deu para ativar agora. Tente de novo.');
+      setCode(body.copiaECola || '');
+      setInicio(body.dataInicial || '');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    const ok = await copyText(code);
+    setCopied(ok);
+    if (ok) window.setTimeout(() => setCopied(false), 4000);
+  };
+
+  return (
+    <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm">
+      <div className="flex items-center gap-2">
+        <p className="text-[15px] font-bold">Pix Automático</p>
+        <span className="rounded-full bg-[#EEF4FF] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#2B5BD7]">novo</span>
+      </div>
+      <p className="mt-1 text-sm text-[#6B6B73]">
+        Não precisa pagar na mão todo mês: a mensalidade é debitada só no dia do vencimento. Você cancela quando quiser, pelo app do seu banco.
+      </p>
+
+      {code ? (
+        <>
+          <button type="button" onClick={copy}
+            className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-4 text-base font-bold text-white active:scale-[0.98] ${copied ? 'bg-[#1F9D55]' : 'bg-[#2B5BD7]'}`}>
+            {copied ? <><Check className="h-5 w-5" /> Código copiado!</> : <><Copy className="h-5 w-5" /> Copiar código de autorização</>}
+          </button>
+          <ol className="mt-4 space-y-2 text-sm">
+            {['Abra o app do seu banco e entre em Pix.', 'Escolha "Pix Copia e Cola" e cole o código.', 'Confira e autorize o Pix Automático.'].map((t, i) => (
+              <li key={t} className="flex gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#0E0E10] text-xs font-bold text-white">{i + 1}</span>
+                <span className="pt-0.5">{t}</span>
+              </li>
+            ))}
+          </ol>
+          {inicio && (
+            <p className="mt-3 text-xs text-[#6B6B73]">
+              O primeiro débito é em {dataBr(inicio)}. A mensalidade deste mês continua pelo Pix acima.
+            </p>
+          )}
+        </>
+      ) : open ? (
+        <div className="mt-4 space-y-3">
+          <label className="block text-sm">
+            <span className="font-semibold">CPF ou CNPJ do titular da conta</span>
+            <input value={doc} onChange={(e) => setDoc(e.target.value)} inputMode="numeric" autoComplete="off"
+              className="mt-1 w-full rounded-xl border border-[#D9D9DE] px-3 py-3 text-base" placeholder="só os números" />
+          </label>
+          <label className="block text-sm">
+            <span className="font-semibold">Nome do titular</span>
+            <input value={nome} onChange={(e) => setNome(e.target.value)} autoComplete="name"
+              className="mt-1 w-full rounded-xl border border-[#D9D9DE] px-3 py-3 text-base" placeholder="como está no banco" />
+          </label>
+          <button type="button" onClick={activate} disabled={busy}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#2B5BD7] px-4 py-4 text-base font-bold text-white active:scale-[0.98] disabled:opacity-60">
+            {busy ? <><Loader2 className="h-5 w-5 animate-spin" /> Gerando…</> : 'Gerar código de autorização'}
+          </button>
+          {error && <p className="text-center text-sm text-[#B4232C]" aria-live="polite">{error}</p>}
+          <p className="text-center text-[11px] text-[#8C8C96]">O CPF ou CNPJ vai só para o banco autorizar o débito.</p>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setOpen(true)}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#2B5BD7] px-4 py-3.5 text-base font-bold text-[#2B5BD7] active:scale-[0.98]">
+          Ativar Pix Automático
+        </button>
+      )}
     </section>
   );
 }

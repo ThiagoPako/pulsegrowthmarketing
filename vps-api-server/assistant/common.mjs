@@ -15,6 +15,8 @@ export const PERMISSIONS = {
   alertas_grupos: 'Receber os avisos de demanda detectada nos grupos',
   alertas_satisfacao: 'Receber os avisos de cliente insatisfeito (temperatura do cliente)',
   lembretes_stories: 'Receber os lembretes de story para postar com link (Agendamentos)',
+  // usuário, 02/11/2026: Minaçu avisa Thiago e Victor; Uruaçu só o Thiago (a cidade vem de assistant_numbers.cities)
+  avisos_pagamentos: 'Receber no WhatsApp os pagamentos de clientes, adesões ao Pix Automático e as movimentações da conta Efí das suas cidades',
   resumo_diario: 'Receber às 18h o resumo do dia em PDF (quem fez o quê, entregas, pendências; o financeiro só para quem também consulta o financeiro)',
   aviso_revisao: 'Receber aviso na hora em que um vídeo entra em Revisão',
   aviso_aprovacao: 'Receber aviso quando uma arte vai para aprovação (Em Análise) e quando um vídeo urgente entra em Revisão',

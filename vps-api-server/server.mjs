@@ -32,6 +32,8 @@ import { registerBillingIsisRoutes } from './billingIsisRoutes.mjs';
 import { registerPaymentAccountsRoutes } from './paymentAccountsRoutes.mjs';
 import { registerInfinitePayRoutes } from './infinitePayRoutes.mjs';
 import { registerEfiPixRoutes } from './efiPixRoutes.mjs';
+import { registerPixAutomaticoRoutes } from './pixAutomaticoRoutes.mjs';
+import { alertTeam, alertRevenuePaid } from './lib/teamAlerts.mjs';
 import { registerEfiCardRoutes } from './efiCardRoutes.mjs';
 import { registerPixReceiptRoutes } from './pixReceiptRoutes.mjs';
 import { registerCampaignIsisRoutes } from './campaignIsisRoutes.mjs';
@@ -20469,8 +20471,12 @@ const infinitePay = registerInfinitePayRoutes(app, {
   paymentConfigFor: paymentConfigForCity,
   publicApiUrl: process.env.PUBLIC_APP_URL,
   tableHasCityColumn,
-  // pagamento confirmado → obrigado da Ísis (billingIsis é criado logo abaixo; a chamada só acontece depois)
-  onRevenuePaid: (revenueId) => billingIsis.thankRevenue(revenueId),
+  // pagamento confirmado → obrigado da Ísis (billingIsis é criado logo abaixo; a chamada só acontece depois) e o aviso
+  // à equipe da cidade (02/11/2026: Minaçu → Thiago e Victor; Uruaçu → só o Thiago)
+  onRevenuePaid: async (revenueId) => {
+    await alertRevenuePaid(pool, revenueId).catch((error) => console.error('[avisos] pagamento:', error.message));
+    return billingIsis.thankRevenue(revenueId);
+  },
 });
 // ─── Efí Bank: Pix dinâmico da mensalidade, webhook + varredura e movimentações (cidade com a Efí ligada) ──
 const efiPix = registerEfiPixRoutes(app, {
@@ -20482,6 +20488,19 @@ const efiPix = registerEfiPixRoutes(app, {
   markRevenuePaid: infinitePay.markRevenuePaid,
   // webhook da Efí: endereço com mTLS no nginx (docs/efi-pix.md); sem ele, o domínio principal
   publicApiUrl: process.env.EFI_WEBHOOK_BASE_URL || process.env.PUBLIC_APP_URL,
+  // movimentações da conta (entradas sem mensalidade e Pix enviados) para a equipe da cidade
+  alert: alertTeam,
+});
+
+// ─── Pix Automático: adesão na página /pagar, cobrança de cada mês e baixa do débito (jornada 2 da Efí) ──
+const pixAuto = registerPixAutomaticoRoutes(app, {
+  pool,
+  verifyAdmin,
+  pixClient: (city) => efiPix.pixClient(city),
+  // billingIsis é criado logo abaixo; a chamada só acontece depois
+  monthInfo: (contract, month) => billingIsis.monthInfo(contract, month),
+  markRevenuePaid: infinitePay.markRevenuePaid,
+  alert: alertTeam,
 });
 
 // ─── Efí Bank: cartão pelo link de pagamento da API Cobranças, com a taxa repassada e baixa pela notificação ──
@@ -20533,6 +20552,8 @@ const billingIsis = registerBillingIsisRoutes(app, {
   paymentLink: efiCard.paymentLink,
   pixCharge: efiPix.pixCharge,
   lastReceipt: pixReceipts.lastReceipt,
+  autoDebitFor: (contractId) => pixAuto.autoDebitFor(contractId),
+  pixAutoAvailable: async (city) => !!(await efiPix.pixClient(city)),
   uploadRoot: UPLOAD_ROOT,
   publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
 });

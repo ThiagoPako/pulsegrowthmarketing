@@ -34,13 +34,15 @@ export function EfiAccountSection({ account, demo }: { account: PaymentAccount; 
   const efi = account.efi;
   const [env, setEnv] = useState(efi.env);
   const [pixKey, setPixKey] = useState(efi.pix_key);
+  const [agencia, setAgencia] = useState(efi.agencia);
+  const [conta, setConta] = useState(efi.conta);
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [cert, setCert] = useState<File | null>(null);
   const [busy, setBusy] = useState<'' | 'save' | 'test' | 'webhook' | 'toggle' | 'card-test' | 'card'>('');
-  useEffect(() => { setEnv(efi.env); setPixKey(efi.pix_key); }, [efi.env, efi.pix_key]);
+  useEffect(() => { setEnv(efi.env); setPixKey(efi.pix_key); setAgencia(efi.agencia); setConta(efi.conta); }, [efi.env, efi.pix_key, efi.agencia, efi.conta]);
 
-  const dirty = env !== efi.env || pixKey !== efi.pix_key || !!clientId || !!clientSecret || !!cert;
+  const dirty = env !== efi.env || pixKey !== efi.pix_key || agencia !== efi.agencia || conta !== efi.conta || !!clientId || !!clientSecret || !!cert;
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['payment-accounts'] });
 
   const run = async (kind: typeof busy, fn: () => Promise<void>) => {
@@ -58,7 +60,7 @@ export function EfiAccountSection({ account, demo }: { account: PaymentAccount; 
 
   const save = () => run('save', async () => {
     await saveEfiAccount(account.city, {
-      efi_env: env, efi_pix_key: pixKey,
+      efi_env: env, efi_pix_key: pixKey, efi_agencia: agencia, efi_conta: conta,
       ...(clientId.trim() ? { client_id: clientId.trim() } : {}),
       ...(clientSecret.trim() ? { client_secret: clientSecret.trim() } : {}),
       ...(cert ? { cert_base64: await fileToBase64(cert), cert_name: cert.name } : {}),
@@ -151,6 +153,14 @@ export function EfiAccountSection({ account, demo }: { account: PaymentAccount; 
           <Label htmlFor={`efi-sec-${account.city}`}>Client Secret</Label>
           <Input id={`efi-sec-${account.city}`} type="password" autoComplete="new-password" value={clientSecret}
             placeholder={efi.has_client_secret ? `guardado · termina em ${efi.client_secret_last4}` : 'Client_Secret_… (fica cifrado)'} onChange={(e) => setClientSecret(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`efi-ag-${account.city}`}>Agência (Pix Automático)</Label>
+          <Input id={`efi-ag-${account.city}`} inputMode="numeric" value={agencia} placeholder="ex.: 0001" onChange={(e) => setAgencia(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`efi-ct-${account.city}`}>Conta (Pix Automático)</Label>
+          <Input id={`efi-ct-${account.city}`} inputMode="numeric" value={conta} placeholder="número da conta Efí, com o dígito" onChange={(e) => setConta(e.target.value)} />
         </div>
         <div className="min-w-0 space-y-1.5 sm:col-span-2">
           <Label htmlFor={`efi-cert-${account.city}`}>Certificado (.p12)</Label>

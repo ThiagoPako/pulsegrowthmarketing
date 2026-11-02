@@ -15,6 +15,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { EfiAccountSection, EfiCardLinksPanel, EfiMovementsPanel } from '@/components/financial/EfiAccountSection';
 import { PixReceiptsPanel } from '@/components/financial/PixReceiptsPanel';
+import { PixAutoPanel } from '@/components/financial/PixAutoPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -65,6 +66,7 @@ export default function FinancialPayments({ preview }: { preview?: { accounts: P
           <div className="grid gap-4 lg:grid-cols-2">
             {data.accounts.map((acc) => <AccountCard key={acc.city} account={acc} demo={!!preview} />)}
           </div>
+          {!preview && <PixAutoPanel />}
           <PixReceiptsPanel preview={preview ? [] : undefined} />
           <EfiMovementsPanel preview={preview ? preview.movements || [] : undefined} />
           {!preview && <EfiCardLinksPanel />}

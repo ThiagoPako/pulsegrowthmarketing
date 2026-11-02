@@ -218,6 +218,14 @@ export function createEfiClient({ clientId, clientSecret, env = 'producao', p12 
     },
     /** Um Pix recebido pelo ID da transação (E2E); 404 = não caiu nesta conta. */
     getPix: (e2e) => call('GET', `/v2/pix/${enc(e2e)}`),
+    /** Pix enviados pela conta no período (escopo gn.pix.send.read). */
+    listPixEnviados: (inicio, fim) => call('GET', `/v2/gn/pix/enviados?inicio=${enc(inicio)}&fim=${enc(fim)}`).then((d) => (Array.isArray(d?.pix) ? d.pix : [])),
+    // Pix Automático (jornada 2): location, recorrência, QR de autorização e a cobrança de cada mês
+    postLocrec: () => call('POST', '/v2/locrec', {}),
+    postRec: (body) => call('POST', '/v2/rec', body),
+    getRec: (idRec) => call('GET', `/v2/rec/${enc(idRec)}`),
+    postCobr: (body) => call('POST', '/v2/cobr', body),
+    getCobr: (txid) => call('GET', `/v2/cobr/${enc(txid)}`),
     saldo: () => call('GET', '/v2/gn/saldo/'),
     putWebhook: (chave, webhookUrl) => call('PUT', `/v2/webhook/${enc(chave)}`, { webhookUrl }),
     getWebhook: (chave) => call('GET', `/v2/webhook/${enc(chave)}`),

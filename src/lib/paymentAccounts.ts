@@ -47,6 +47,9 @@ export interface EfiAccount {
   webhook_error: string | null;
   status: EfiStatus;
   /** cartão pelo link da Efí (API Cobranças) */
+  /** agência e conta da Efí (vão na cobrança do Pix Automático) */
+  agencia: string;
+  conta: string;
   card_active: boolean;
   card_test_at: string | null;
   card_test_ok: boolean | null;
@@ -78,6 +81,8 @@ export interface EfiPatch {
   efi_env?: 'producao' | 'homologacao';
   efi_pix_key?: string;
   efi_active?: boolean;
+  efi_agencia?: string;
+  efi_conta?: string;
   client_id?: string;
   client_secret?: string;
   cert_base64?: string;
@@ -164,3 +169,21 @@ export const recheckEfiCardLink = (chargeId: string) =>
 
 export const testPaymentAccount = (city: PaymentCity) =>
   call<{ ok: boolean; url?: string; error?: string; account: PaymentAccount }>(`/payment-accounts/${city}/test`, { method: 'POST', body: '{}' });
+
+export interface PixAutoAdesao {
+  id_rec: string;
+  city: PaymentCity;
+  status: 'aguardando' | 'ativo' | 'cancelado' | 'recusado' | 'expirado';
+  efi_status: string | null;
+  devedor_nome: string | null;
+  devedor_doc_mask: string | null;
+  valor: string | number;
+  data_inicial: string | null;
+  approved_at: string | null;
+  ended_at: string | null;
+  created_at: string;
+  client: string | null;
+  cobrancas: { month: string; status: string; due_date: string }[] | null;
+}
+
+export const fetchPixAuto = () => call<{ adesoes: PixAutoAdesao[] }>('/pix-automatico');

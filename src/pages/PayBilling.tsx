@@ -377,7 +377,7 @@ function PixAutoSection({ token, info, demo }: {
         <span className="rounded-full bg-[#EEF4FF] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#2B5BD7]">novo</span>
       </div>
       <p className="mt-1 text-sm text-[#6B6B73]">
-        Não precisa pagar na mão todo mês: a mensalidade é debitada só no dia do vencimento. Cancela quando quiser, pelo app do seu banco.
+        Ative o Pix Automático: a mensalidade é debitada só no dia do vencimento. Cancela quando quiser, pelo app do seu banco.
       </p>
 
       {code ? (

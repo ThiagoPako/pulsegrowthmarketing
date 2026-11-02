@@ -393,7 +393,7 @@ export function registerBillingIsisRoutes(app, {
       const body = withFooter(applyTemplate(templateOf(config, 'obrigado'), {
         nome_cliente: String(contract.company_name || '').trim(), plano: contract.plan_name || 'plano mensal', valor: brl(amount),
         mes_ref: nomeMes(month), data_pagamento: dataBr(paidAt),
-        recibo: pdf?.ok ? 'Recibo em anexo.' : '',
+        recibo: pdf?.ok ? 'Segue o recibo em PDF.' : '',
       }), config?.msg_isis_rodape, contact);
       // recibo: para quem o cadastro diz (o responsável ou o número próprio de recibos)
       const target = billingTarget(contract, 'recibo');
@@ -547,7 +547,7 @@ export function registerBillingIsisRoutes(app, {
           ...base, mes_ref: monthName(`${ref}-01`), gravacoes: recordingsText(a.done), gravacoes_feitas: a.done, gravacoes_marcadas: a.scheduled,
           media_videos: a.avg === null ? '' : a.avg.toLocaleString('pt-BR'),
           dica_assiduidade: attendanceTip(a), dia_vencimento: String(Number(dueDate.slice(8, 10))),
-        }) + (autoDebit ? '\n\nEla é debitada pelo Pix Automático no dia do vencimento, não precisa fazer nada 🧡' : ''),
+        }),
       };
     }
 
@@ -613,8 +613,8 @@ export function registerBillingIsisRoutes(app, {
       // o Pix Automático não debitou (sem saldo): a cobrança de sempre, dizendo o que aconteceu
       body: autoFailed && payUrl ? [
         `Olá, ${base.nome_cliente}! 😊`, '',
-        `Não conseguimos debitar a mensalidade de ${monthName(`${month}-01`)} (*${brl(amount)}*) pelo Pix Automático.`, '',
-        '👉 Pague aqui (Pix ou cartão):', payUrl, '', 'O código Pix vai na próxima mensagem.',
+        `Segue o PDF da mensalidade de ${monthName(`${month}-01`)}: o Pix Automático não conseguiu debitar.`, '',
+        `👉 Pague aqui: ${payUrl}`, '', 'O código Pix vai na próxima mensagem.',
         ...(cardHint ? ['', CARD_LINE] : []),
       ].join('\n') : applyTemplate(payUrl ? ensurePayLink(templateOf(config, step)) : templateOf(config, step), {
         ...base, link_pagamento: payUrl, plano, valor: brl(amount), mes_ref: monthName(`${month}-01`),

@@ -75,7 +75,9 @@ describe('cobranças da Ísis · textos', () => {
       nome_cliente: 'Posto Naraely', plano: 'Plano Pulse', valor: 'R$ 1.500,00', pix_copia_cola: '000201…', chave_pix: 'pix@pulse.com.br',
       nome_recebedor: 'Agência Pulse', link_pagamento: 'https://agenciapulse.tech/pagar/abc', aviso_cartao: '',
     });
-    expect(body).toBe('Olá, Posto Naraely! 😊\n\nHoje vence sua mensalidade Pulse: *R$ 1.500,00*.\n\n👉 Pague aqui (Pix ou cartão):\nhttps://agenciapulse.tech/pagar/abc\n\nO código Pix vai na próxima mensagem.\n\nSe já pagou, desconsidere. Obrigada! 🧡');
+    // curta (02/11/2026): "segue o PDF e sobre o que ele é referente"; o valor e o resto estão no PDF
+    expect(applyTemplate(DEFAULT_TEMPLATES.cobranca, { nome_cliente: 'Posto Naraely', mes_ref: 'novembro', link_pagamento: 'https://agenciapulse.tech/pagar/abc' }))
+      .toBe('Olá, Posto Naraely! 😊\n\nSegue o PDF da mensalidade de novembro.\n\n👉 Pague aqui: https://agenciapulse.tech/pagar/abc\n\nO código Pix vai na próxima mensagem.');
     expect(body).not.toContain('000201');
     expect(body).not.toContain('{');
     expect(body.toLowerCase()).not.toContain('taxa');
@@ -186,15 +188,13 @@ describe('cobranças da Ísis · respiro e modelos antigos', () => {
 
   it('dia 1: o PDF traz o resumo e as sugestões; D−5: sem "x de y", com o fecho certo', () => {
     expect(applyTemplate(DEFAULT_TEMPLATES.relatorio_mensal, { nome_cliente: 'Posto X', mes_anterior: 'outubro', mes_atual: 'novembro' }))
-      .toBe('Bom dia, Posto X! ☀️\n\nNo PDF em anexo está o resumo do que entregamos em outubro e as nossas sugestões para novembro 🧡');
+      .toBe('Bom dia, Posto X! ☀️\n\nSegue o PDF com o resumo de outubro e as sugestões para novembro 🧡');
     const pre = (a: { done: number; scheduled: number; cancelled: number }) => applyTemplate(DEFAULT_TEMPLATES.pre_vencimento, {
       nome_cliente: 'X', mes_ref: 'outubro', gravacoes: recordingsText(a.done), dica_assiduidade: attendanceTip(a), dia_vencimento: '10',
     });
-    expect(pre({ done: 3, scheduled: 3, cancelled: 0 })).toBe('Oi, X! Obrigada por mais um mês de parceria 🧡\n\nEm outubro fizemos 3 gravações juntos. Seguimos juntos no próximo mês!\n\nSua mensalidade vence dia 10.');
-    expect(pre({ done: 1, scheduled: 2, cancelled: 1 })).toContain('Em outubro fizemos 1 gravação juntos. Que tal já deixarmos as próximas datas marcadas?');
-    expect(pre({ done: 2, scheduled: 3, cancelled: 1 })).not.toMatch(/2 de 3/);
-    // sem gravação no mês: a linha some
-    expect(applyTemplate(DEFAULT_TEMPLATES.pre_vencimento, { nome_cliente: 'X', mes_ref: 'outubro', gravacoes: '', dia_vencimento: '10' })).not.toContain('fizemos');
+    // D−2 (02/11/2026): só o que o PDF é, sem vencimento (nada de cobrança antes do dia do pagamento)
+    expect(pre({ done: 3, scheduled: 3, cancelled: 0 })).toBe('Oi, X! 🧡\n\nSegue o PDF com a dedicação da equipe em outubro. Obrigada pela parceria!');
+    expect(pre({ done: 2, scheduled: 3, cancelled: 1 })).not.toMatch(/2 de 3|vence/);
   });
 
   it('modelo salvo igual a um padrão antigo vira o padrão novo; editado de verdade fica', () => {

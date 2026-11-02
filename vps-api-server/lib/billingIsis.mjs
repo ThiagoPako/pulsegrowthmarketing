@@ -19,55 +19,15 @@ export const MODES = ['desligado', 'previa', 'ativo'];
 
 // textos aprovados pelo usuário (agentes/estudos/isis-plano-relatorio-campanhas-cobrancas.md); editáveis na tela
 export const DEFAULT_TEMPLATES = {
-  // mais curtas e com respiro, sem se apresentar (usuário, 01/11/2026: "as mensagens de texto estão muito grandes ...
-  // a mensagem tá muito junta, não precisa se identificar"): linha em branco entre os blocos
-  // o PDF anexado traz o resumo e as sugestões do mês (usuário, 01/11/2026: "a mensagem precisa falar que o PDF
-  // contém o resumo do mês e sugestões para esse mês"); as datas do nicho ficam só no PDF
-  relatorio_mensal: [
-    'Bom dia, {nome_cliente}! ☀️',
-    '',
-    'No PDF em anexo está o resumo do que entregamos em {mes_anterior} e as nossas sugestões para {mes_atual} 🧡',
-  ].join('\n'),
-  // sem "x de y": só o que foi feito e o fecho ({dica_assiduidade}: marcar as datas se houve remarcação; senão,
-  // "Seguimos juntos no próximo mês!")
-  pre_vencimento: [
-    'Oi, {nome_cliente}! Obrigada por mais um mês de parceria 🧡',
-    '',
-    'Em {mes_ref} fizemos {gravacoes} juntos. {dica_assiduidade}',
-    '',
-    'Sua mensalidade vence dia {dia_vencimento}.',
-  ].join('\n'),
-  // a página de pagamento ({link_pagamento}) tem o botão de copiar o Pix, o de pagar, a chave e o aviso do cartão;
-  // o código Pix vai sozinho na mensagem seguinte
-  cobranca: [
-    'Olá, {nome_cliente}! 😊',
-    '',
-    'Hoje vence sua mensalidade Pulse: *{valor}*.',
-    '',
-    '👉 Pague aqui (Pix ou cartão):',
-    '{link_pagamento}',
-    '',
-    'O código Pix vai na próxima mensagem.',
-    '',
-    'Se já pagou, desconsidere. Obrigada! 🧡',
-  ].join('\n'),
-  // obrigado depois do pagamento confirmado (usuário, 01/11/2026: "uma mensagem profissional e bonita de agradecimento")
-  obrigado: [
-    'Olá, {nome_cliente}! ✅',
-    '',
-    'Recebemos o pagamento de {mes_ref}: *{valor}*, em {data_pagamento}.',
-    '',
-    'Obrigada pela confiança e pela parceria com a Pulse 🧡',
-    '',
-    '{recibo}',
-  ].join('\n'),
-  lembrete: [
-    'Oi, {nome_cliente}! Ainda não localizamos o pagamento de {mes_ref} ({valor}).',
-    '',
-    'Se já pagou, desconsidere 🙏',
-    'Se precisar, pague aqui:',
-    '{link_pagamento}',
-  ].join('\n'),
+  // só o que o PDF é (usuário, 02/11/2026: "nos PDF não precisa na mensagem falar o que já tem no PDF, pode resumir
+  // mais: segue o PDF e sobre o que ele é referente"); antes do dia do pagamento, nada de cobrança
+  relatorio_mensal: 'Bom dia, {nome_cliente}! ☀️\n\nSegue o PDF com o resumo de {mes_anterior} e as sugestões para {mes_atual} 🧡',
+  pre_vencimento: 'Oi, {nome_cliente}! 🧡\n\nSegue o PDF com a dedicação da equipe em {mes_ref}. Obrigada pela parceria!',
+  // a página de pagamento ({link_pagamento}) tem o Pix e o resto; o código Pix vai sozinho na mensagem seguinte
+  cobranca: 'Olá, {nome_cliente}! 😊\n\nSegue o PDF da mensalidade de {mes_ref}.\n\n👉 Pague aqui: {link_pagamento}\n\nO código Pix vai na próxima mensagem.',
+  // {recibo} = "Segue o recibo em PDF." quando o PDF ficou pronto; sem ele, a linha some
+  obrigado: 'Olá, {nome_cliente}! ✅\n\nRecebemos o pagamento de {mes_ref}. Obrigada pela parceria 🧡\n\n{recibo}',
+  lembrete: 'Oi, {nome_cliente}! Segue o PDF da mensalidade de {mes_ref}, que ainda está em aberto. Se já pagou, desconsidere 🙏\n\n👉 {link_pagamento}',
 };
 
 // texto padrão antigo salvo no banco = não editado: vale o padrão atual (lib/billingIsisLegacy.mjs)

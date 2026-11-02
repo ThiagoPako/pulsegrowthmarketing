@@ -50,6 +50,23 @@ nenhum valor a mais."
 Os comprovantes ficam fora da pasta pública de uploads (`PRIVATE_FILES_ROOT`, padrão `../pulse-privado` ao lado de
 `/var/www/uploads`). Só o admin abre o arquivo. Cada cobrança aceita até 6 envios por dia.
 
+## Conferência na API da Efí (02/11/2026)
+
+Pedido do usuário: "autenticar esses pagamentos pelo nosso sistema, via conferência na API, na hora que o cliente
+pagar, confirmar que o pagamento dele bate com o que caiu na conta, assim não pagamos taxa".
+
+Com a conta Efí da cidade **testada**, o sistema confere sozinho, mesmo com "Pix com baixa automática" desligado.
+Nesse modo não se gera cobrança na Efí: o sistema só consulta os Pix que caíram na conta (`GET /v2/pix`, `GET /v2/pix/:e2e`).
+- **A cada 10 min:** lê os Pix das últimas 48 h. O Pix com o txid `PULSE…` do copia e cola casa com a mensalidade e dá
+  baixa se o valor bate.
+- **Comprovante enviado:** o Pix é procurado na conta pelo ID da transação. Se caiu e o valor bate, a baixa sai na hora
+  e o cliente vê "Pagamento confirmado".
+- **Botão "Já paguei" da página:** lê os Pix das últimas 3 h. Se nada casou pelo txid, aceita pelo valor só quando há
+  exatamente um Pix solto com o valor da mensalidade. Com dois ou mais, pede o comprovante.
+
+A cobrança da Efí não é usada nesse modo. O Pix recebido pela chave pode ter a tarifa da conta: confira a tabela de
+tarifas da Efí.
+
 ## Para ficar automático de vez
 
 Se o banco da chave tiver API Pix com webhook (Inter, Sicoob, Itaú e outros), dá para ligar como foi feito com a Efí e

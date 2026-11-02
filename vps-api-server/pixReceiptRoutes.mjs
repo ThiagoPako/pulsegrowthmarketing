@@ -28,7 +28,9 @@ const MIMES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', '
 const MAX_PER_DAY = 6;
 
 export function registerPixReceiptRoutes(app, {
-  pool, verifyAdmin, paymentConfigFor, markRevenuePaid, readReceipt, privateRoot, logger = console, now = () => new Date(),
+  pool, verifyAdmin, paymentConfigFor, markRevenuePaid, readReceipt, privateRoot, checkOnBank = async () => ({ checked: false }),
+  checkPagePaid = async () => ({ checked: false }),
+  logger = console, now = () => new Date(),
 }) {
   const dir = path.resolve(privateRoot, 'comprovantes');
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1 } }).single('arquivo');
@@ -156,6 +158,14 @@ export function registerPixReceiptRoutes(app, {
           result.verdict === 'recusado' ? null : result.e2e, result.paidAt, result.verdict === 'recusado' ? 'recusado' : 'aguardando']
       );
 
+      // conta Efí da cidade testada: o Pix do comprovante é procurado na conta na hora (baixa se caiu e bate o valor)
+      const bank = result.verdict !== 'recusado' && result.e2e
+        ? await checkOnBank({ city: page.city, e2e: result.e2e }).catch((error) => { logger.error('[comprovante] API:', error.message); return null; })
+        : null;
+      if (bank?.paid) {
+        return res.json({ status: 'pago', message: 'Pagamento confirmado! O recibo chega pelo WhatsApp. Obrigada!' });
+      }
+
       // para o cliente, sem detalhe da conferência
       const valorErrado = result.checks.some((c) => c.id === 'valor' && !c.ok) && read?.valor;
       res.json({
@@ -266,6 +276,29 @@ export function registerPixReceiptRoutes(app, {
     );
     return r || null;
   }
+
+  // "Já paguei" (sem comprovante): procura o Pix na conta da cidade agora
+  const lastCheck = new Map();
+  app.post('/api/public/cobranca/:token/conferir', async (req, res) => {
+    try {
+      const token = String(req.params.token || '');
+      if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) throw httpError(404, 'Cobrança não encontrada');
+      const last = lastCheck.get(token) || 0;
+      if (Date.now() - last < 20000) throw httpError(429, 'Aguarde alguns segundos e toque de novo.');
+      lastCheck.set(token, Date.now());
+      const { rows: [page] } = await pool.query(`SELECT * FROM billing_pay_pages WHERE token = $1`, [token]);
+      if (!page) throw httpError(404, 'Cobrança não encontrada');
+      if (await revenuePaid(page.revenue_id)) return res.json({ paid: true, message: 'Pagamento confirmado! Obrigada!' });
+      const r = await checkPagePaid(page).catch((error) => { logger.error('[conferir] API:', error.message); return null; });
+      if (r?.paid) return res.json({ paid: true, message: 'Pagamento confirmado! O recibo chega pelo WhatsApp. Obrigada!' });
+      res.json({
+        paid: false,
+        message: r?.checked
+          ? 'Ainda não encontramos o seu Pix. Se acabou de pagar, aguarde um minuto e toque de novo, ou envie o comprovante abaixo.'
+          : 'Envie o comprovante abaixo para confirmarmos o pagamento.',
+      });
+    } catch (error) { sendError(res, error); }
+  });
 
   return { ensureSchema, lastReceipt };
 }

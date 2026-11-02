@@ -110,8 +110,8 @@ export function EfiAccountSection({ account, demo }: { account: PaymentAccount; 
         <div>
           <p className="text-sm font-medium">Pix com baixa automática</p>
           <p className="text-[11px] text-muted-foreground">
-            {canTurnOn ? 'Ligado: o Pix da Efí já leva o valor e o pagamento dá baixa sozinho (a Efí cobra a taxa do Pix). Desligado: Pix pela chave, sem taxa, e o cliente manda o comprovante na página de pagamento.'
-              : 'Liga depois de salvar tudo e passar no teste. Até lá, o Pix sai pela chave e o cliente manda o comprovante.'}
+            {canTurnOn ? 'Ligado: o Pix da Efí já leva o valor e o pagamento dá baixa sozinho (a Efí cobra a taxa do Pix). Desligado: Pix pela chave, sem gerar cobrança na Efí; o sistema confere na conta o Pix que caiu e dá baixa quando o valor bate (ou o cliente manda o comprovante).'
+              : 'Liga depois de salvar tudo e passar no teste. Até lá, o Pix sai pela chave; com a conta testada, o sistema já confere na API o Pix que caiu.'}
           </p>
         </div>
         <Switch checked={efi.active} disabled={!canTurnOn || busy !== '' || dirty} onCheckedChange={toggle} aria-label={`Pix com baixa automática em ${account.label}`} />

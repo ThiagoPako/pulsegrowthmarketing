@@ -7,6 +7,11 @@
 //     antes de dar baixa (a mesma baixa da InfinitePay: receita recebida, entrada no caixa e o obrigado com recibo);
 //   - a cada 10 min a varredura busca os Pix recebidos das últimas 48 h (GET /v2/pix): pega o pagamento mesmo sem o
 //     webhook (o webhook exige mTLS no nginx) e guarda as movimentações; Pix sem cobrança nossa fica "conferir".
+// Pix pela chave conferido na API (usuário, 02/11/2026: "autenticar esses pagamentos pelo nosso sistema via conferência
+// na API, na hora que o cliente pagar, confirmar que o pagamento dele bate com o que caiu na conta, assim não pagamos
+// taxa"): com a conta Efí testada, mesmo com o Pix dinâmico desligado, a varredura lê os Pix que caíram na conta e casa
+// o Pix pela chave com a mensalidade pelo txid PULSE… do copia e cola, pelo ID do comprovante ou, no "Já paguei" da
+// página, pelo valor (um Pix só, das últimas 3 h). Valor tem de bater; aí dá a mesma baixa da cobrança.
 // Cidade sem a Efí ligada: Pix pela chave + comprovante (pixReceiptRoutes). O cartão vai pela Efí (efiCardRoutes).
 //
 //   PUT  /api/payment-accounts/:city/efi          { efi_env, efi_pix_key, efi_active, client_id, client_secret,
@@ -22,9 +27,10 @@ import {
   webhookUrlFor, EFI_SCOPES_REQUIRED, EFI_WEBHOOK_IP,
 } from './lib/efi.mjs';
 import {
-  CITIES, CITY_LABELS, normalizeEfiInput, efiOn, efiComplete, efiKey, publicAccount, encryptSecret, decryptSecret, last4,
+  CITIES, CITY_LABELS, normalizeEfiInput, efiOn, efiComplete, efiReadable, efiKey, publicAccount, encryptSecret, decryptSecret, last4,
 } from './lib/paymentAccounts.mjs';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
+import { staticTxid } from './lib/pixReceipt.mjs';
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 const SWEEP_MS = 10 * 60 * 1000;
@@ -138,6 +144,13 @@ export function registerEfiPixRoutes(app, {
     await ensureSchema();
     const acc = await accountFor(normalizeCityValue(city) || 'minacu');
     return efiOn(acc) ? acc : null;
+  }
+
+  /** Conta que dá para consultar (testada), com ou sem o Pix dinâmico ligado. */
+  async function readableAccount(city) {
+    await ensureSchema();
+    const acc = await accountFor(normalizeCityValue(city) || 'minacu');
+    return efiReadable(acc) ? acc : null;
   }
 
   // ── tela: salvar, testar, webhook ───────────────────────────────────────────────────────────────────────────
@@ -343,7 +356,89 @@ export function registerEfiPixRoutes(app, {
         charge ? 'conciliado' : 'conferir', charge?.revenue_id || null, refunded, JSON.stringify(p)]
     );
     if (charge && charge.status !== 'CONCLUIDA') return confirmCharge(charge);
-    return { paid: false, conferir: !charge };
+    if (charge) return { paid: false };
+    // Pix pela chave: casa com a mensalidade pelo txid do copia e cola ou pelo ID do comprovante
+    const { rows: [pending] } = await pool.query(`SELECT status FROM efi_pix_received WHERE e2e_id = $1`, [e2e]);
+    if (pending?.status !== 'conferir') return { paid: false };
+    const page = await staticPageFor(city, p, e2e);
+    if (page) return settleStatic(page, e2e, page.by);
+    return { paid: false, conferir: true };
+  }
+
+  /** Mensalidade do Pix pela chave: txid PULSE+aaaamm+contrato, ou um comprovante aguardando com o mesmo ID. */
+  async function staticPageFor(city, p, e2e) {
+    const txid = String(p.txid || '').toUpperCase();
+    let page = null;
+    let by = null;
+    if (/^PULSE\d{6}[A-Z0-9]{1,8}$/.test(txid)) {
+      const month = `${txid.slice(5, 9)}-${txid.slice(9, 11)}`;
+      const { rows } = await pool.query(`SELECT * FROM billing_pay_pages WHERE month = $1 AND coalesce(city, $2) = $2`, [month, city]);
+      page = rows.find((r) => staticTxid(r.contract_id, r.month) === txid) || null;
+      by = 'txid';
+    }
+    if (!page) {
+      const { rows: [r] } = await pool.query(
+        `SELECT b.* FROM pix_receipts p JOIN billing_pay_pages b ON b.token = p.token WHERE upper(p.e2e_id) = upper($1) AND p.status = 'aguardando' LIMIT 1`, [e2e]
+      ).catch(() => ({ rows: [] }));
+      page = r || null;
+      by = 'comprovante';
+    }
+    // o valor que caiu tem de ser o da mensalidade
+    if (!page || !page.revenue_id || Math.abs(Number(p.valor) - Number(page.amount)) >= 0.01) return null;
+    return { ...page, by };
+  }
+
+  /** Pix pela chave confirmado na conta: liga o Pix à receita, fecha o comprovante e dá baixa. */
+  async function settleStatic(page, e2e, by) {
+    const { rowCount } = await pool.query(
+      `UPDATE efi_pix_received SET status = 'conciliado', revenue_id = $2, updated_at = now() WHERE e2e_id = $1 AND status = 'conferir'`,
+      [e2e, page.revenue_id]
+    );
+    if (!rowCount) return { paid: false };
+    await pool.query(
+      `UPDATE pix_receipts SET status = 'confirmado', confirmed_by = $2, confirmed_at = now() WHERE token = $1 AND status = 'aguardando'`,
+      [page.token, `API Efí (${by})`]
+    ).catch(() => {});
+    const marked = await markRevenuePaid(page.revenue_id);
+    logger.log?.(`[efi] Pix pela chave conferido (${by}): ${e2e}${marked ? ' (receita baixada)' : ''}`);
+    return { paid: true, marked };
+  }
+
+  /** Comprovante enviado: procura o Pix pelo ID na conta da cidade; caiu e bate o valor = baixa na hora. */
+  async function checkReceiptOnBank({ city, e2e }) {
+    const acc = await readableAccount(city).catch(() => null);
+    if (!acc || !e2e) return { checked: false };
+    const pix = await clientFor(acc).getPix(e2e).catch((error) => (error?.status === 404 ? null : Promise.reject(error)));
+    if (!pix?.endToEndId) return { checked: true, found: false };
+    const r = await recordPix(acc.city, acc.efi_env, pix);
+    return { checked: true, found: true, paid: !!r?.paid };
+  }
+
+  /**
+   * "Já paguei" na página: lê os Pix das últimas 3 h da cidade (casa pelo txid ou pelo comprovante) e, se nada casou,
+   * aceita pelo valor só quando há exatamente um Pix solto com o valor da mensalidade nesse período.
+   */
+  async function checkPagePaid(page) {
+    const acc = await readableAccount(page.city).catch(() => null);
+    if (!acc || !page.revenue_id) return { checked: false };
+    const fim = now();
+    const inicio = new Date(fim.getTime() - 3 * 3600000);
+    const list = await clientFor(acc).listPix(inicio.toISOString(), fim.toISOString());
+    for (const p of list) {
+      const r = await recordPix(acc.city, acc.efi_env, p).catch(() => null);
+      if (r?.paid) {
+        const { rows: [rev] } = await pool.query(`SELECT status FROM revenues WHERE id = $1`, [page.revenue_id]);
+        if (['recebida', 'pago'].includes(rev?.status)) return { checked: true, paid: true };
+      }
+    }
+    const loose = list.filter((p) => Math.abs(Number(p.valor) - Number(page.amount)) < 0.01
+      && !(Array.isArray(p.devolucoes) && p.devolucoes.length));
+    const { rows: free } = loose.length
+      ? await pool.query(`SELECT e2e_id FROM efi_pix_received WHERE e2e_id = ANY($1::text[]) AND status = 'conferir'`, [loose.map((p) => p.endToEndId)])
+      : { rows: [] };
+    if (free.length !== 1) return { checked: true, paid: false, ambiguous: free.length > 1 };
+    const r = await settleStatic(page, free[0].e2e_id, 'valor');
+    return { checked: true, paid: !!r.paid };
   }
 
   // webhook: a Efí manda POST <url>/pix (ou <url> com "ignorar="); responde 200 na hora, confere depois
@@ -379,7 +474,8 @@ export function registerEfiPixRoutes(app, {
     try {
       await ensureSchema();
       for (const city of CITIES) {
-        const acc = await activeAccount(city).catch(() => null);
+        // toda conta testada: com o Pix dinâmico (cob) ou só pela chave (conferido aqui, sem cobrança)
+        const acc = await readableAccount(city).catch(() => null);
         if (!acc) continue;
         try {
           const fim = now();
@@ -429,7 +525,7 @@ export function registerEfiPixRoutes(app, {
       );
       const saldo = {};
       for (const city of CITIES) {
-        const acc = await activeAccount(city).catch(() => null);
+        const acc = await readableAccount(city).catch(() => null);
         if (acc) saldo[city] = await clientFor(acc).saldo().then((s) => Number(s?.saldo ?? NaN)).catch(() => null);
       }
       res.json({ month, movements: rows, saldo });
@@ -454,5 +550,5 @@ export function registerEfiPixRoutes(app, {
     } catch (error) { sendError(res, error); }
   });
 
-  return { pixCharge, confirmCharge, recordPix, sweep, ensureSchema };
+  return { pixCharge, confirmCharge, recordPix, sweep, ensureSchema, checkReceiptOnBank, checkPagePaid };
 }

@@ -89,6 +89,12 @@ export const efiCardReady = (acc) => !!(acc?.efi_client_id_enc && acc?.efi_clien
 /** O cartão da Efí está valendo nesta cidade (conta ativa, cartão ligado e testado). */
 export const efiCardOn = (acc) => !!(acc && acc.active !== false && acc.efi_card_active && efiCardReady(acc));
 
+/**
+ * Dá para consultar a conta Efí (conta ativa, completa e testada), mesmo com o Pix dinâmico desligado: é assim que o
+ * Pix pela chave é conferido na API sem gerar cobrança (usuário, 02/11/2026).
+ */
+export const efiReadable = (acc) => !!(acc && acc.active !== false && efiComplete(acc) && acc.efi_last_test_ok === true);
+
 /** A Efí está valendo nesta cidade (conta ativa, Efí ligada e completa). */
 export const efiOn = (acc) => !!(acc && acc.active !== false && acc.efi_active && efiComplete(acc));
 

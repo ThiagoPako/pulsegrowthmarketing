@@ -53,7 +53,7 @@ const DOC_NAMES = { relatorio_mensal: 'Relatorio', pre_vencimento: 'Agenda', cob
 
 export function registerBillingIsisRoutes(app, {
   pool, verifyAdmin, paymentConfigFor, socialReports, paymentLink = async () => null, pixCharge = async () => null, lastReceipt = async () => null,
-  autoDebitFor = async () => ({ status: null }), pixAutoAvailable = async () => false, uploadRoot, publicUploadsUrl,
+  autoDebitFor = async () => ({ status: null }), pixAutoAvailable = async () => false, verifyAgent = null, uploadRoot, publicUploadsUrl,
   publicAppUrl = process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech', logger = console,
 }) {
   const appBase = String(publicAppUrl).replace(/\/+$/, '');
@@ -109,6 +109,10 @@ export function registerBillingIsisRoutes(app, {
             UNIQUE (contract_id, month)
           );
           ALTER TABLE billing_pay_pages ADD COLUMN IF NOT EXISTS card_amount NUMERIC;
+          -- cobrança de teste (02/11/2026): página e Pix próprios, sem receita; pago = test_paid_at
+          ALTER TABLE billing_pay_pages ADD COLUMN IF NOT EXISTS is_test BOOLEAN NOT NULL DEFAULT false;
+          ALTER TABLE billing_pay_pages ADD COLUMN IF NOT EXISTS test_txid TEXT;
+          ALTER TABLE billing_pay_pages ADD COLUMN IF NOT EXISTS test_paid_at TIMESTAMPTZ;
         `);
       })().catch((error) => { schemaPromise = null; throw error; });
     }
@@ -469,7 +473,7 @@ export function registerBillingIsisRoutes(app, {
   }
 
   // Pix Automático (02/11/2026): quem aderiu não recebe cobrança; o D−5 avisa que o débito é automático no vencimento
-  async function composeBody(contract, step, date, month, { autoDebit = false, autoFailed = false } = {}) {
+  async function composeBody(contract, step, date, month, { autoDebit = false, autoFailed = false, ignoreChecks = false } = {}) {
     const config = await paymentConfigFor(contract.city || contract.client_city);
     const base = { nome_cliente: String(contract.company_name || '').trim() };
 
@@ -519,7 +523,8 @@ export function registerBillingIsisRoutes(app, {
         problems.push(`${clientCity === 'uruacu' ? 'Uruaçu' : 'Minaçu'} está sem conta cadastrada em Financeiro → Config (o Pix sairia na conta da outra cidade)`);
       }
       if (!config?.pix_key) problems.push('a cidade do cliente está sem chave Pix em Financeiro → Config');
-      if (problems.length) return { skip: 'conferir', problems, config };
+      // teste para a equipe (ignoreChecks): monta mesmo assim e mostra os problemas no cabeçalho
+      if (problems.length && !ignoreChecks) return { skip: 'conferir', problems, config };
     }
 
     if (step === 'pre_vencimento') {
@@ -875,6 +880,97 @@ export function registerBillingIsisRoutes(app, {
     } catch (error) { sendError(res, error); }
   });
 
+  // ── cobrança de teste para a equipe (02/11/2026: "envie no meu WhatsApp e do Victor para conferir as cobranças") ──
+  // A chefe (agente) monta a cobrança real de um cliente (mensagem, PDF, página com Pix e cartão e o código Pix) e manda
+  // só aos números da equipe com "avisos_pagamentos" na cidade do cliente, marcada como TESTE. Nada vai ao cliente e
+  // nada fica gravado como cobrança; os problemas com o Financeiro vão no cabeçalho.
+  //   POST /api/agent/billing/test { client, step? (cobranca|lembrete|pre_vencimento|relatorio_mensal) }   (chefe)
+  app.post('/api/agent/billing/test', async (req, res) => {
+    try {
+      if (!verifyAgent) throw httpError(501, 'Indisponível');
+      const agent = await verifyAgent(req);
+      if (agent.role !== 'chefe') throw httpError(403, 'Só a chefe manda cobrança de teste');
+      await ensureSchema();
+      const step = BILLING_STEPS.includes(req.body?.step) ? req.body.step : 'cobranca';
+      const key = String(req.body?.client || '').trim().toLowerCase();
+      if (!key) throw httpError(400, 'Falta o cliente');
+      const found = (await activeContracts()).filter((c) => String(c.company_name || '').toLowerCase().includes(key));
+      if (!found.length) throw httpError(404, `Nenhum contrato ativo com "${req.body.client}"`);
+      if (found.length > 1) throw httpError(409, `Mais de um contrato: ${found.map((c) => String(c.company_name).trim()).join(', ')}`);
+      const contract = found[0];
+      const today = todayBr();
+      const month = today.slice(0, 7);
+      const out = await compose(contract, step, today, month, { ignoreChecks: true });
+      if (!out.body) throw httpError(409, `Não saiu mensagem para ${step}: ${out.skip || 'sem texto'}${out.problems ? ` (${out.problems.join('; ')})` : ''}`);
+      const pdf = out.pdf ? await savePdf(contract, `teste-${step}`, month, out.pdf).catch(() => null) : null;
+      const city = normalizeCityValue(contract.client_city || contract.city) || 'minacu';
+      const { rows: numbers } = await pool.query(`SELECT * FROM assistant_numbers WHERE active AND 'avisos_pagamentos' = ANY(permissions)`);
+      const to = numbers.filter((n) => !(n.cities || []).length || (n.cities || []).includes(city));
+      if (!to.length) throw httpError(409, 'Ninguém da equipe com avisos de pagamento nesta cidade');
+      const header = [
+        `🧪 *TESTE · não pague* · é assim que ${String(contract.company_name || '').trim()} recebe (${step})`,
+        ...(out.problems?.length ? ['⚠️ No envio de verdade, esta cobrança iria para "conferir":', ...out.problems.map((p) => `• ${p}`)] : []),
+        '———',
+      ].join('\n');
+      for (const n of to) {
+        await enqueueWhatsApp(pool, {
+          to: n.phone, body: `${header}\n${out.body}`, purpose: 'assistente', triggerType: 'cobranca_teste', history: false,
+          ...(pdf?.ok ? { mediaUrl: pdf.url, mediaName: pdf.name } : {}),
+        });
+        if (out.pixMessage) await enqueueWhatsApp(pool, { to: n.phone, body: out.pixMessage, purpose: 'assistente', triggerType: 'cobranca_teste', history: false });
+      }
+      res.json({ ok: true, client: contract.company_name, step, sent_to: to.map((n) => n.name), problems: out.problems || [], pay_url: out.payUrl || null, pdf: pdf?.ok ? pdf.url : null });
+    } catch (error) { sendError(res, error); }
+  });
+
+  // ── cobrança de teste de verdade, com valor pequeno (02/11/2026: "envie cobrança de 1 real para testar") ──
+  // Página /pagar e Pix copia e cola próprios (txid PULSETESTE…), na chave da cidade, sem receita nem cliente: quem
+  // paga é a equipe. Caiu na conta, a conferência (webhook, varredura ou a página) reconhece e avisa a equipe.
+  //   POST /api/agent/billing/test-payment { city?, amount? (0,01 a 10) }   (chefe)
+  app.post('/api/agent/billing/test-payment', async (req, res) => {
+    try {
+      if (!verifyAgent) throw httpError(501, 'Indisponível');
+      const agent = await verifyAgent(req);
+      if (agent.role !== 'chefe') throw httpError(403, 'Só a chefe manda cobrança de teste');
+      await ensureSchema();
+      const city = normalizeCityValue(req.body?.city) || 'minacu';
+      const amount = Math.round(Number(req.body?.amount ?? 1) * 100) / 100;
+      if (!(amount >= 0.01 && amount <= 10)) throw httpError(400, 'Teste de R$ 0,01 a R$ 10,00');
+      const config = await paymentConfigFor(city);
+      if (!config?.pix_key) throw httpError(409, 'A cidade está sem chave Pix');
+      const contract = (await activeContracts()).find((c) => (normalizeCityValue(c.client_city || c.city) || 'minacu') === city);
+      if (!contract) throw httpError(409, 'Sem contrato ativo na cidade para ancorar a página de teste');
+      const txid = `PULSETESTE${crypto.randomBytes(5).toString('hex').toUpperCase()}`;
+      const pix = pixPayload({ key: config.pix_key, name: config.receiver_name, city, amount, txid });
+      const token = payToken(crypto.randomBytes);
+      await pool.query(
+        `INSERT INTO billing_pay_pages (token, contract_id, client_id, month, revenue_id, client_name, plan_name, amount, due_date,
+                                        pix_payload, pix_key, receiver_name, card_link, city, is_test, test_txid)
+         VALUES ($1, $2, NULL, $3, NULL, 'TESTE · Agência Pulse', 'Cobrança de teste', $4, $5, $6, $7, $8, NULL, $9, true, $10)`,
+        [token, contract.id, `teste-${Date.now()}`, amount, todayBr(), pix, config.pix_key, config.receiver_name, city, txid]
+      );
+      const payUrl = `${appBase}/pagar/${token}`;
+      const { rows: numbers } = await pool.query(`SELECT * FROM assistant_numbers WHERE active AND 'avisos_pagamentos' = ANY(permissions)`);
+      const to = numbers.filter((n) => !(n.cities || []).length || (n.cities || []).includes(city));
+      if (!to.length) throw httpError(409, 'Ninguém da equipe com avisos de pagamento nesta cidade');
+      const body = [
+        `🧪 *Cobrança de TESTE · ${brl(amount)}* (${city === 'uruacu' ? 'Uruaçu' : 'Minaçu'})`,
+        '',
+        'Pague este Pix para testar o sistema. Ao cair na conta Efí, o pagamento é identificado e vocês recebem o "✅ TESTE recebido".',
+        '',
+        '👉 Página de pagamento:',
+        payUrl,
+        '',
+        'O código Pix vai na próxima mensagem.',
+      ].join('\n');
+      for (const n of to) {
+        await enqueueWhatsApp(pool, { to: n.phone, body, purpose: 'assistente', triggerType: 'cobranca_teste', history: false });
+        await enqueueWhatsApp(pool, { to: n.phone, body: pixOnlyMessage(pix), purpose: 'assistente', triggerType: 'cobranca_teste', history: false });
+      }
+      res.json({ ok: true, amount, city, pay_url: payUrl, txid, sent_to: to.map((n) => n.name) });
+    } catch (error) { sendError(res, error); }
+  });
+
   // ── página pública de pagamento (/pagar/<token>), sem login: valor, vencimento, Pix copia e cola e o checkout ──
   app.get('/api/public/cobranca/:token', async (req, res) => {
     try {
@@ -887,12 +983,12 @@ export function registerBillingIsisRoutes(app, {
       const { rows: [rev] } = p.revenue_id
         ? await pool.query(`SELECT status, paid_at FROM revenues WHERE id = $1`, [p.revenue_id]).catch(() => ({ rows: [] }))
         : { rows: [] };
-      const paid = ['recebida', 'pago'].includes(rev?.status);
+      const paid = p.is_test ? !!p.test_paid_at : ['recebida', 'pago'].includes(rev?.status);
       res.set('Cache-Control', 'no-store');
       res.json({
         client: p.client_name, plan: p.plan_name, month: p.month, amount: Number(p.amount),
         due_date: p.due_date ? String(p.due_date instanceof Date ? p.due_date.toISOString() : p.due_date).slice(0, 10) : null,
-        paid, paid_at: paid ? rev.paid_at : null,
+        paid, paid_at: paid ? (p.is_test ? p.test_paid_at : rev.paid_at) : null,
         pix_payload: paid ? null : p.pix_payload, pix_key: p.pix_key, receiver: p.receiver_name,
         // link antigo da InfinitePay (antes da troca para a Efí) não aparece mais
         card_link: paid || /infinitepay/i.test(String(p.card_link || '')) ? null : p.card_link,
@@ -902,7 +998,8 @@ export function registerBillingIsisRoutes(app, {
         pix_dynamic: /br\.gov\.bcb\.pix25/i.test(String(p.pix_payload || '')),
         receipt_sent: paid ? false : !!(await lastReceipt(token).catch(() => null)),
         // Pix Automático: disponível na cidade e a situação da adesão do contrato
-        pix_auto: {
+        // a página de teste não oferece Pix Automático (o contrato dela é só a âncora) e confere só pela conta
+        pix_auto: p.is_test ? { available: true, status: null, test: true } : {
           available: !!(await pixAutoAvailable(p.city || 'minacu').catch(() => false)),
           ...(await autoDebitFor(p.contract_id).catch(() => ({ status: null }))),
         },

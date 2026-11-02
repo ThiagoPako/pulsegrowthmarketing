@@ -20556,6 +20556,7 @@ const billingIsis = registerBillingIsisRoutes(app, {
   pixCharge: efiPix.pixCharge,
   lastReceipt: pixReceipts.lastReceipt,
   autoDebitFor: (contractId) => pixAuto.autoDebitFor(contractId),
+  verifyAgent: (req) => agentApi.verifyAgent(req),
   pixAutoAvailable: async (city) => !!(await efiPix.pixClient(city)),
   uploadRoot: UPLOAD_ROOT,
   publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,

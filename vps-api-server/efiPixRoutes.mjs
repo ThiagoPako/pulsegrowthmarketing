@@ -385,6 +385,7 @@ export function registerEfiPixRoutes(app, {
     const { rows: [pending] } = await pool.query(`SELECT status FROM efi_pix_received WHERE e2e_id = $1`, [e2e]);
     if (pending?.status !== 'conferir') return { paid: false };
     const page = await staticPageFor(city, p, e2e);
+    if (page?.is_test) return settleTest(page, e2e, p);
     if (page) return settleStatic(page, e2e, page.by);
     return { paid: false, conferir: true };
   }
@@ -394,6 +395,11 @@ export function registerEfiPixRoutes(app, {
     const txid = String(p.txid || '').toUpperCase();
     let page = null;
     let by = null;
+    // cobrança de teste (02/11/2026, "envie cobrança de 1 real para testar"): txid PULSETESTE…, sem receita ligada
+    if (/^PULSETESTE[A-Z0-9]{4,15}$/.test(txid)) {
+      const { rows: [t] } = await pool.query(`SELECT * FROM billing_pay_pages WHERE is_test AND test_txid = $1`, [txid]).catch(() => ({ rows: [] }));
+      return t && Math.abs(Number(p.valor) - Number(t.amount)) < 0.01 ? { ...t, by: 'teste' } : null;
+    }
     if (/^PULSE\d{6}[A-Z0-9]{1,8}$/.test(txid)) {
       const month = `${txid.slice(5, 9)}-${txid.slice(9, 11)}`;
       const { rows } = await pool.query(`SELECT * FROM billing_pay_pages WHERE month = $1 AND coalesce(city, $2) = $2`, [month, city]);
@@ -426,6 +432,23 @@ export function registerEfiPixRoutes(app, {
     // o valor que caiu tem de ser o da mensalidade
     if (!page || !page.revenue_id || Math.abs(Number(p.valor) - Number(page.amount)) >= 0.01) return null;
     return { ...page, by };
+  }
+
+  /** Teste pago: marca a página e avisa a equipe da cidade (nenhuma receita é tocada). */
+  async function settleTest(page, e2e, p) {
+    const { rowCount } = await pool.query(
+      `UPDATE efi_pix_received SET status = 'conferido', updated_at = now() WHERE e2e_id = $1 AND status = 'conferir'`, [e2e]
+    );
+    if (!rowCount) return { paid: false };
+    await pool.query(`UPDATE billing_pay_pages SET test_paid_at = now(), updated_at = now() WHERE token = $1`, [page.token]).catch(() => {});
+    const brl = (n) => Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const quem = payerName(p);
+    await alert(pool, page.city || 'minacu', [
+      '✅ *TESTE de cobrança recebido*',
+      `Pix de ${brl(p.valor)}${quem ? ` de ${quem}` : ''}, identificado na conta Efí pelo código da cobrança.`,
+      'No cliente de verdade, aqui saem a baixa da mensalidade e o recibo no WhatsApp de recibos.',
+    ].join('\n'), { logger });
+    return { paid: true, test: true };
   }
 
   /** Pix pela chave confirmado na conta: liga o Pix à receita, fecha o comprovante e dá baixa. */
@@ -462,7 +485,7 @@ export function registerEfiPixRoutes(app, {
   // Pix e fica perguntando; aí só vale o Pix que caiu depois disso (no máximo os últimos 30 min)
   async function checkPagePaid(page, { since = null } = {}) {
     const acc = await readableAccount(page.city).catch(() => null);
-    if (!acc || !page.revenue_id) return { checked: false };
+    if (!acc || (!page.revenue_id && !page.is_test)) return { checked: false };
     const fim = now();
     const sinceMs = since ? Date.parse(since) : NaN;
     const floor = Number.isFinite(sinceMs)
@@ -473,10 +496,16 @@ export function registerEfiPixRoutes(app, {
     for (const p of list) {
       const r = await recordPix(acc.city, acc.efi_env, p).catch(() => null);
       if (r?.paid) {
+        if (page.is_test) {
+          if (r.test) return { checked: true, paid: true };
+          continue;
+        }
         const { rows: [rev] } = await pool.query(`SELECT status FROM revenues WHERE id = $1`, [page.revenue_id]);
         if (['recebida', 'pago'].includes(rev?.status)) return { checked: true, paid: true };
       }
     }
+    // a página de teste só vale pelo código do Pix de teste (sem casar pelo valor)
+    if (page.is_test) return { checked: true, paid: !!page.test_paid_at };
     const loose = list.filter((p) => Math.abs(Number(p.valor) - Number(page.amount)) < 0.01
       && !(Array.isArray(p.devolucoes) && p.devolucoes.length)
       && (!p.horario || Date.parse(p.horario) >= floor));

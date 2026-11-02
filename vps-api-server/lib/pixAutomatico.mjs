@@ -142,4 +142,5 @@ export function cobrWindow(today, dueDate) {
 }
 
 /** Linha do convite nas cobranças (curta; a página explica o resto). */
-export const OFFER_LINE = '💡 Quer parar de pagar na mão todo mês? Ative o Pix Automático na página de pagamento: o débito é só no dia do vencimento e você cancela quando quiser.';
+// sem "pagar na mão" (usuário, 02/11/2026: "coloque ative Pix Automático")
+export const OFFER_LINE = '💡 Ative o Pix Automático na página de pagamento: o débito é só no dia do vencimento e você cancela quando quiser.';

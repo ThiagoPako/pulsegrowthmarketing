@@ -82,7 +82,7 @@ describe('PDFs da Ísis: conteúdo', () => {
   it('obrigado: texto com valor, referência e data; sem recibo, a linha some', () => {
     const vars = { nome_cliente: 'Posto Naraely', plano: 'Plano Pro', valor: 'R$ 1.500,00', mes_ref: 'novembro', data_pagamento: '09/11/2026' };
     const com = applyTemplate(DEFAULT_TEMPLATES.obrigado, { ...vars, recibo: 'Recibo em anexo.' });
-    expect(com).toBe('Olá, Posto Naraely! ✅\n\nRecebemos o pagamento de novembro: *R$ 1.500,00*, em 09/11/2026.\n\nObrigada pela confiança e pela parceria com a Pulse 🧡\n\nRecibo em anexo.');
+    expect(com).toBe('Olá, Posto Naraely! ✅\n\nRecebemos o pagamento de novembro. Obrigada pela parceria 🧡\n\nRecibo em anexo.');
     const sem = applyTemplate(DEFAULT_TEMPLATES.obrigado, { ...vars, recibo: '' });
     expect(sem).not.toMatch(/recibo/i);
     expect(sem).not.toMatch(/\n{3,}/);

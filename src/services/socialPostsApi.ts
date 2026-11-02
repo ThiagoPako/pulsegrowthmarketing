@@ -16,7 +16,8 @@ export interface PostMediaItem {
 
 export interface ConnectedSocialAccount {
   id: string;
-  platform: 'instagram' | 'facebook';
+  /** tiktok, linkedin e youtube só pela Upload-Post (02/11/2026) */
+  platform: 'instagram' | 'facebook' | 'tiktok' | 'linkedin' | 'youtube';
   account_name: string;
   /** @usuário do perfil (ex: ag.pulse) */
   username?: string | null;
@@ -27,8 +28,8 @@ export interface ConnectedSocialAccount {
   token_expiration: string | null;
   status: string;
   has_token: boolean;
-  /** 'instagram' = login direto no perfil; 'facebook' = via Página */
-  api_base?: 'instagram' | 'facebook';
+  /** 'instagram' = login direto no perfil; 'facebook' = via Página; 'upload_post' = conectada pela Upload-Post */
+  api_base?: 'instagram' | 'facebook' | 'upload_post';
   expiring_soon?: boolean;
 }
 

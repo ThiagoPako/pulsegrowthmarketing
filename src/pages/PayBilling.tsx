@@ -26,7 +26,7 @@ export interface PayPageData {
   card_link: string | null;
   card_amount?: number | null;
   receipt_sent?: boolean;
-  pix_auto?: { available: boolean; status: 'ativo' | 'aguardando' | null; dataInicial?: string | null; copiaECola?: string | null };
+  pix_auto?: { available: boolean; test?: boolean; status: 'ativo' | 'aguardando' | null; dataInicial?: string | null; copiaECola?: string | null };
   pix_dynamic?: boolean;
 }
 
@@ -191,7 +191,7 @@ export default function PayBilling({ preview }: { preview?: PayPageData }) {
               </section>
             )}
 
-            {data.pix_auto?.available && <PixAutoSection token={token || ''} info={data.pix_auto} demo={!!preview} />}
+            {data.pix_auto?.available && !data.pix_auto?.test && <PixAutoSection token={token || ''} info={data.pix_auto} demo={!!preview} />}
 
             {/* conta Efí conferida na API (sem taxa): o pagamento é confirmado sozinho, sem comprovante */}
             {!data.paid && data.pix_payload && (data.pix_dynamic || data.pix_auto?.available) && (

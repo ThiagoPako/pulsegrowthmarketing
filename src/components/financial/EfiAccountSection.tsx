@@ -108,15 +108,19 @@ export function EfiAccountSection({ account, demo }: { account: PaymentAccount; 
         <Badge variant="outline" className={EFI_STYLE[efi.status]}>{EFI_STATUS_LABELS[efi.status]}</Badge>
       </div>
 
-      <div className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
-        <div>
-          <p className="text-sm font-medium">Pix com baixa automática</p>
-          <p className="text-[11px] text-muted-foreground">
-            {canTurnOn ? 'Ligado: o Pix da Efí já leva o valor e o pagamento dá baixa sozinho (a Efí cobra a taxa do Pix). Desligado: Pix pela chave, sem gerar cobrança na Efí; o sistema confere na conta o Pix que caiu e dá baixa quando o valor bate (ou o cliente manda o comprovante).'
-              : 'Liga depois de salvar tudo e passar no teste. Até lá, o Pix sai pela chave; com a conta testada, o sistema já confere na API o Pix que caiu.'}
-          </p>
-        </div>
-        <Switch checked={efi.active} disabled={!canTurnOn || busy !== '' || dirty} onCheckedChange={toggle} aria-label={`Pix com baixa automática em ${account.label}`} />
+      {/* só o Pix pela chave (usuário, 02/11/2026: "não é para usar o Pix com taxa"): sem o botão do Pix com cobrança da Efí */}
+      <div className="rounded-md bg-muted/40 px-3 py-2">
+        <p className="text-sm font-medium">Pix pela chave, sem taxa</p>
+        <p className="text-[11px] text-muted-foreground">
+          {canTurnOn || efi.status === 'pronto'
+            ? 'A cobrança leva o Pix copia e cola da chave da Efí. O sistema confere na conta o Pix que caiu (na hora, pelo webhook, e de 5 em 5 min) e dá baixa quando ele bate com a mensalidade; o recibo vai na hora.'
+            : 'Salve tudo e teste a conexão: com a conta testada, o sistema confere sozinho na conta o Pix que caiu.'}
+        </p>
+        {efi.active && (
+          <button type="button" className="mt-2 text-[11px] font-medium text-destructive underline" disabled={busy !== ''} onClick={() => toggle(false)}>
+            O Pix com cobrança da Efí (com taxa) ainda está ligado: desligar
+          </button>
+        )}
       </div>
 
       <div className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">

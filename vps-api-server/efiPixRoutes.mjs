@@ -206,6 +206,9 @@ export function registerEfiPixRoutes(app, {
       }
       // credencial nova: o teste anterior não vale mais e a Efí desliga até passar no teste de novo
       if (credentialsChanged) Object.assign(patch, { efi_last_test_at: null, efi_last_test_ok: null, efi_last_test_error: null, efi_active: false });
+      // Pix com cobrança da Efí (com taxa) não se liga mais (usuário, 02/11/2026: "não é para usar o Pix com taxa, apenas a
+      // forma que eu falei"): o Pix sai pela chave e é conferido na conta, sem cobrança da Efí
+      if (patch.efi_active) throw httpError(400, 'O Pix com cobrança da Efí (com taxa) está desativado: o Pix sai pela chave e é conferido na conta');
       if (patch.efi_active) {
         const merged = { ...(before || {}), ...patch };
         if (!efiComplete(merged)) throw httpError(400, 'Para ligar a Efí: Client ID, Client Secret, certificado e chave Pix');

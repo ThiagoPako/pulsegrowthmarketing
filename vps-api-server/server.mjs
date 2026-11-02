@@ -31,6 +31,7 @@ import { registerHolidayArtsRoutes } from './holidayArtsRoutes.mjs';
 import { registerBillingIsisRoutes } from './billingIsisRoutes.mjs';
 import { registerPaymentAccountsRoutes } from './paymentAccountsRoutes.mjs';
 import { registerInfinitePayRoutes } from './infinitePayRoutes.mjs';
+import { registerEfiPixRoutes } from './efiPixRoutes.mjs';
 import { registerCampaignIsisRoutes } from './campaignIsisRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerAgentDriveRoutes } from './agentDriveRoutes.mjs';
@@ -20469,6 +20470,17 @@ const infinitePay = registerInfinitePayRoutes(app, {
   // pagamento confirmado → obrigado da Ísis (billingIsis é criado logo abaixo; a chamada só acontece depois)
   onRevenuePaid: (revenueId) => billingIsis.thankRevenue(revenueId),
 });
+// ─── Efí Bank: Pix dinâmico da mensalidade, webhook + varredura e movimentações (cidade com a Efí ligada) ──
+const efiPix = registerEfiPixRoutes(app, {
+  pool,
+  verifyAdmin,
+  accountFor: paymentAccountsModule.accountFor,
+  ensureAccountsSchema: paymentAccountsModule.ensureSchema,
+  mirrorAccount: paymentAccountsModule.mirror,
+  markRevenuePaid: infinitePay.markRevenuePaid,
+  // webhook da Efí: endereço com mTLS no nginx (docs/efi-pix.md); sem ele, o domínio principal
+  publicApiUrl: process.env.EFI_WEBHOOK_BASE_URL || process.env.PUBLIC_APP_URL,
+});
 
 // ─── Cobranças da Ísis pelo Assistente PULSE (Financeiro → Cobranças; desligado = a cobrança antiga segue igual) ──
 const billingIsis = registerBillingIsisRoutes(app, {
@@ -20477,6 +20489,7 @@ const billingIsis = registerBillingIsisRoutes(app, {
   paymentConfigFor: paymentConfigForCity,
   socialReports,
   paymentLink: infinitePay.paymentLink,
+  pixCharge: efiPix.pixCharge,
   uploadRoot: UPLOAD_ROOT,
   publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
 });

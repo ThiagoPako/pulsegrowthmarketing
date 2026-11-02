@@ -5,7 +5,7 @@ import {
 
 const conta = {
   city: 'uruacu', infinitepay_handle: 'agenciapulse', pix_key: 'financeiro@agenciapulse.com.br', receiver_name: 'Agência Pulse',
-  document: '00.000.000/0001-00', bank: 'InfinitePay', active: true, api_client_id: 'cid', api_secret_enc: 'v1:x:y:z', api_secret_last4: 'a1b2',
+  document: '00.000.000/0001-00', bank: 'InfinitePay', active: true,
   last_test_ok: true, last_test_at: '2026-11-01T20:00:00Z', updated_at: '2026-11-01T19:00:00Z',
 };
 
@@ -27,9 +27,9 @@ describe('Pagamentos · InfinitePay: conta de cada cidade', () => {
 
   it('a tela nunca recebe o segredo, só se existe e os 4 últimos caracteres', () => {
     const p = publicAccount(conta, 'uruacu');
-    expect(JSON.stringify(p)).not.toContain('v1:x:y:z');
-    expect(p).toMatchObject({ has_api_secret: true, api_secret_last4: 'a1b2', label: 'Uruaçu', status: 'conectado' });
-    expect(publicAccount(null, 'minacu')).toMatchObject({ city: 'minacu', status: 'nao_configurado', has_api_secret: false, active: true });
+    expect(p).not.toHaveProperty('api_secret_enc');
+    expect(p).toMatchObject({ label: 'Uruaçu', status: 'conectado' });
+    expect(publicAccount(null, 'minacu')).toMatchObject({ city: 'minacu', status: 'nao_configurado', active: true });
   });
 
   it('a conta manda: vai por cima da Config; desativada, sem Pix nem tag; sem conta, a Config como está', () => {

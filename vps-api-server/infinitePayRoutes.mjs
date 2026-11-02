@@ -200,5 +200,5 @@ export function registerInfinitePayRoutes(app, {
     } catch (error) { sendError(res, error); }
   });
 
-  return { paymentLink, ensureSchema };
+  return { paymentLink, ensureSchema, markRevenuePaid };
 }

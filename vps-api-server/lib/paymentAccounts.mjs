@@ -4,11 +4,14 @@
 // InfiniteTag, a chave Pix, o recebedor, ativo sim/não e o resultado do último teste de conexão. É a única fonte dos
 // dados de pagamento: paymentConfigForCity (server.mjs) põe estes campos por cima da configuração antiga, então o
 // link da InfinitePay, o Pix copia e cola, o PDF, a página /pagar e as mensagens leem daqui.
-// Credencial de API (client_id/secret, para extrato, se a InfinitePay liberar): só no servidor, cifrada (AES-256-GCM),
-// e a tela mostra só os 4 últimos caracteres.
+// Efí Bank (02/11/2026, "Vou trocar de banco, usar o Efí"): cada cidade pode ligar a sua conta Efí (Client ID, Client
+// Secret e certificado .p12, só no servidor e cifrados com AES-256-GCM; a tela vê só os 4 últimos caracteres e o nome do
+// arquivo). Com a Efí ligada, o Pix da cobrança é dinâmico (lib/efi.mjs) e a chave Pix da conta é a da Efí; a
+// InfinitePay fica só para o cartão. Enquanto a Efí de uma cidade não está ligada, ela segue como antes.
 
 import crypto from 'node:crypto';
 import { normalizeHandle } from './infinitePay.mjs';
+import { EFI_ENVS, EFI_SCOPES_REQUIRED } from './efi.mjs';
 
 export const CITIES = ['uruacu', 'minacu'];
 export const CITY_LABELS = { uruacu: 'Uruaçu', minacu: 'Minaçu' };
@@ -24,7 +27,6 @@ export function normalizeAccountInput(body = {}) {
   if (body.document !== undefined) out.document = clip(body.document, 30) || null;
   if (body.bank !== undefined) out.bank = clip(body.bank, 60) || null;
   if (body.active !== undefined) out.active = !!body.active;
-  if (body.api_client_id !== undefined) out.api_client_id = clip(body.api_client_id, 200) || null;
   return out;
 }
 
@@ -49,15 +51,64 @@ export function publicAccount(acc, city) {
     document: a.document || '',
     bank: a.bank || '',
     active: a.active !== false,
-    api_client_id: a.api_client_id || '',
-    has_api_secret: !!a.api_secret_enc,
-    api_secret_last4: a.api_secret_last4 || '',
+    efi: publicEfi(a),
     last_test_at: a.last_test_at || null,
     last_test_ok: a.last_test_ok ?? null,
     last_test_error: a.last_test_error || null,
     updated_at: a.updated_at || null,
     updated_by: a.updated_by || null,
     status: accountStatus(acc),
+  };
+}
+
+/** Campos da Efí que vieram da tela (só os que vieram; segredos e certificado vão à parte, cifrados). */
+export function normalizeEfiInput(body = {}) {
+  const out = {};
+  if (body.efi_env !== undefined) {
+    if (!EFI_ENVS.includes(body.efi_env)) throw Object.assign(new Error('Ambiente da Efí: producao ou homologacao'), { status: 400 });
+    out.efi_env = body.efi_env;
+  }
+  if (body.efi_pix_key !== undefined) out.efi_pix_key = clip(body.efi_pix_key, 120) || null;
+  if (body.efi_active !== undefined) out.efi_active = !!body.efi_active;
+  return out;
+}
+
+/** Tem tudo para ligar: Client ID, Secret, certificado e chave Pix. */
+export const efiComplete = (acc) => !!(acc?.efi_client_id_enc && acc?.efi_client_secret_enc && acc?.efi_cert_enc && acc?.efi_pix_key);
+
+/** A Efí está valendo nesta cidade (conta ativa, Efí ligada e completa). */
+export const efiOn = (acc) => !!(acc && acc.active !== false && acc.efi_active && efiComplete(acc));
+
+/** nao_configurado / incompleto / testar / com_erro / pronto (testado, desligado) / ligado */
+export function efiStatus(acc) {
+  if (!acc || !(acc.efi_client_id_enc || acc.efi_client_secret_enc || acc.efi_cert_enc || acc.efi_pix_key)) return 'nao_configurado';
+  if (!efiComplete(acc)) return 'incompleto';
+  if (acc.efi_last_test_ok === false) return 'com_erro';
+  if (acc.efi_last_test_ok !== true) return 'testar';
+  return efiOn(acc) ? 'ligado' : 'pronto';
+}
+
+/** O que a tela vê da Efí: nada dos segredos nem do certificado, só se existem e os 4 últimos caracteres. */
+export function publicEfi(a = {}) {
+  const granted = String(a.efi_scopes || '').split(/\s+/).filter(Boolean);
+  return {
+    active: !!a.efi_active,
+    env: a.efi_env || 'producao',
+    pix_key: a.efi_pix_key || '',
+    has_client_id: !!a.efi_client_id_enc,
+    client_id_last4: a.efi_client_id_last4 || '',
+    has_client_secret: !!a.efi_client_secret_enc,
+    client_secret_last4: a.efi_client_secret_last4 || '',
+    has_cert: !!a.efi_cert_enc,
+    cert_name: a.efi_cert_name || '',
+    cert_uploaded_at: a.efi_cert_uploaded_at || null,
+    last_test_at: a.efi_last_test_at || null,
+    last_test_ok: a.efi_last_test_ok ?? null,
+    last_test_error: a.efi_last_test_error || null,
+    scopes_missing: a.efi_scopes ? EFI_SCOPES_REQUIRED.filter((s) => !granted.includes(s)) : [],
+    webhook_at: a.efi_webhook_at || null,
+    webhook_error: a.efi_webhook_error || null,
+    status: efiStatus(a.city ? a : null),
   };
 }
 
@@ -77,6 +128,8 @@ export function overlayConfig(configRow, acc, city) {
     document: acc.document || null,
     bank: acc.bank || null,
     payment_account_active: on,
+    // Efí ligada: o Pix sai dinâmico pela Efí, com a chave Pix da conta Efí
+    ...(on && efiOn(acc) ? { pix_key: acc.efi_pix_key, pix_provider: 'efi' } : { pix_provider: 'estatico' }),
   };
 }
 

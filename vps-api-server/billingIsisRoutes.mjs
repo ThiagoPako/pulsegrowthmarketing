@@ -58,6 +58,11 @@ export function registerBillingIsisRoutes(app, {
   publicAppUrl = process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech', logger = console,
 }) {
   const appBase = String(publicAppUrl).replace(/\/+$/, '');
+  // portal e cadastro no portal, nos botões do começo de todo PDF ao cliente (usuário, 02/11/2026)
+  const portalLinks = (contract) => ({
+    portalUrl: `${appBase}/portal/${contract.client_id}`,
+    signupUrl: `${appBase}/portal-registro/${contract.client_id}`,
+  });
   const uploadsBase = String(publicUploadsUrl || 'https://agenciapulse.tech/uploads').replace(/\/+$/, '');
   let schemaPromise = null;
   function ensureSchema() {
@@ -258,6 +263,41 @@ export function registerBillingIsisRoutes(app, {
     }
   }
 
+  /**
+   * A equipe completa do cliente no mês, com foto (usuário, 02/11/2026: "todo mundo que tiver cadastrado no sistema
+   * como equipe que executou alguma função para esse cliente deve aparecer no projeto dele com a foto"): quem trabalhou
+   * nos cards de vídeo e de arte, nas gravações e nas postagens, o videomaker do cliente e a coordenação. Uma lista só,
+   * cada um com a sua função, sem separar os agentes (usuário, 02/11/2026).
+   */
+  async function teamFor(contract, ref) {
+    const q = (sql, params) => pool.query(sql, params).then((r) => r.rows).catch(() => []);
+    const ids = new Set();
+    const add = (rows) => { for (const r of rows) for (const v of Object.values(r)) if (v) ids.add(v); };
+    add(await q(`SELECT assigned_to, edited_by, agent_review_by, agent_step_by FROM content_tasks WHERE client_id = $1 AND to_char(updated_at, 'YYYY-MM') = $2`, [contract.client_id, ref]));
+    add(await q(`SELECT assigned_to, collaborator_id FROM design_tasks WHERE client_id = $1 AND to_char(updated_at, 'YYYY-MM') = $2`, [contract.client_id, ref]));
+    add(await q(`SELECT videomaker_id FROM recordings WHERE client_id = $1 AND to_char(date, 'YYYY-MM') = $2`, [contract.client_id, ref]));
+    add(await q(`SELECT created_by FROM social_media_deliveries WHERE client_id = $1 AND to_char(coalesce(posted_at, delivered_at, created_at), 'YYYY-MM') = $2`, [contract.client_id, ref]));
+    add(await q(`SELECT videomaker_id FROM clients WHERE id = $1`, [contract.client_id]));
+    const rows = await q(
+      `SELECT DISTINCT ON (p.id) p.id, coalesce(nullif(btrim(p.display_name), ''), p.name) AS name, p.avatar_url, p.role::text AS role, k.role AS agent_role
+         FROM profiles p LEFT JOIN agent_keys k ON k.user_id = p.id AND k.revoked_at IS NULL
+        WHERE p.id = ANY($1::uuid[]) OR k.role = ANY($2::text[])
+        ORDER BY p.id, k.created_at DESC NULLS LAST`, [[...ids], ALWAYS_AGENTS]
+    );
+    const firstName = (name) => String(name || '').trim().split(/\s+/)[0];
+    // quem tem foto primeiro; pessoas da casa antes dos agentes; no máximo 5 fileiras de 3
+    const sorted = rows.sort((x, y) => (!!y.avatar_url - !!x.avatar_url) || (!!x.agent_role - !!y.agent_role)).slice(0, 15);
+    const people = [];
+    for (const r of sorted) {
+      people.push({
+        name: firstName(r.name),
+        role: (r.agent_role ? AGENT_ROLES_PT[r.agent_role] : PROFILE_ROLES[r.role]) || 'Equipe Pulse',
+        photo: await loadImage(r.avatar_url),
+      });
+    }
+    return { people };
+  }
+
   async function reportExtras(contract, ref, next, config) {
     const q = (sql, params) => pool.query(sql, params).then((r) => r.rows).catch(() => []);
     const [client] = await q(`SELECT logo_url FROM clients WHERE id = $1`, [contract.client_id]);
@@ -278,31 +318,6 @@ export function registerBillingIsisRoutes(app, {
         WHERE client_id = $1 AND content_type ILIKE 'stor%' AND status IN ('postado', 'entregue', 'concluido')
           AND to_char(coalesce(posted_at, delivered_at), 'YYYY-MM') = $2`, [contract.client_id, ref]
     );
-    // quem trabalhou nos cards e nas gravações do cliente no mês
-    const ids = new Set();
-    for (const r of await q(`SELECT assigned_to, edited_by, agent_review_by, agent_step_by FROM content_tasks WHERE client_id = $1 AND to_char(updated_at, 'YYYY-MM') = $2`, [contract.client_id, ref])) {
-      for (const v of Object.values(r)) if (v) ids.add(v);
-    }
-    for (const r of await q(`SELECT assigned_to, collaborator_id FROM design_tasks WHERE client_id = $1 AND to_char(updated_at, 'YYYY-MM') = $2`, [contract.client_id, ref])) {
-      for (const v of Object.values(r)) if (v) ids.add(v);
-    }
-    for (const r of await q(`SELECT videomaker_id FROM recordings WHERE client_id = $1 AND to_char(date, 'YYYY-MM') = $2`, [contract.client_id, ref])) {
-      if (r.videomaker_id) ids.add(r.videomaker_id);
-    }
-    const rows = await q(
-      `SELECT DISTINCT ON (p.id) p.id, coalesce(nullif(btrim(p.display_name), ''), p.name) AS name, p.avatar_url, p.role::text AS role, k.role AS agent_role
-         FROM profiles p LEFT JOIN agent_keys k ON k.user_id = p.id AND k.revoked_at IS NULL
-        WHERE p.id = ANY($1::uuid[]) OR k.role = ANY($2::text[])
-        ORDER BY p.id, k.created_at DESC NULLS LAST`, [[...ids], ALWAYS_AGENTS]
-    );
-    const firstName = (name) => String(name || '').trim().split(/\s+/)[0];
-    const people = [];
-    const agents = [];
-    for (const r of rows.slice(0, 24)) {
-      const photo = await loadImage(r.avatar_url);
-      if (r.agent_role) agents.push({ name: firstName(r.name), role: AGENT_ROLES_PT[r.agent_role] || 'Agente', photo });
-      else people.push({ name: firstName(r.name), role: PROFILE_ROLES[r.role] || 'Equipe Pulse', photo });
-    }
     const highlights = [];
     for (const c of covers) {
       if (highlights.length >= 3) break;
@@ -316,8 +331,8 @@ export function registerBillingIsisRoutes(app, {
       recordings: recordings.map((r) => ({ date: dateKey(r.date), time: r.start_time })),
       highlights,
       storiesPosted: stories ? stories.n : null,
-      team: { people: people.slice(0, 8), agents: agents.slice(0, 8) },
-      portalUrl: `${appBase}/portal/${contract.client_id}`,
+      team: await teamFor(contract, ref),
+      ...portalLinks(contract),
       contact: contact?.phone ? `${contact.name} · ${contact.phone}` : null,
     };
   }
@@ -378,7 +393,7 @@ export function registerBillingIsisRoutes(app, {
       const spec = {
         ...reciboDoc({
           month, paidAt, amount, amountWords: valorPorExtenso(amount), method: pl?.capture_method || null,
-          client: clientOf(contract), plan: planOf(contract), issuer: issuerOf(contract, config),
+          client: clientOf(contract), plan: planOf(contract), issuer: issuerOf(contract, config), ...portalLinks(contract),
         }),
         number: `REC-${month.replace('-', '')}-${String(contract.id).slice(0, 4).toUpperCase()}`,
         issued: dataBr(todayBr()),
@@ -541,7 +556,7 @@ export function registerBillingIsisRoutes(app, {
         shortfalls: deliveryShortfalls(preNumbers, planOf(contract)),
         pdf: agradecimentoDoc({
           ref, client: clientOf(contract), plan: planOf(contract), attendance: a, tip: attendanceTip(a), dueDate, amount, autoDebit,
-          numbers: preNumbers,
+          numbers: preNumbers, ...portalLinks(contract), team: await teamFor(contract, ref),
         }),
         body: applyTemplate(templateOf(config, step), {
           ...base, mes_ref: monthName(`${ref}-01`), gravacoes: recordingsText(a.done), gravacoes_feitas: a.done, gravacoes_marcadas: a.scheduled,
@@ -604,7 +619,7 @@ export function registerBillingIsisRoutes(app, {
       revenue,
       pdf: cobrancaDoc({
         month, today: date, dueDate, amount, status: step === 'lembrete' ? 'vencido' : 'aberto',
-        client: clientOf(contract), plan: planOf(contract), issuer: issuerOf(contract, config), history,
+        client: clientOf(contract), plan: planOf(contract), issuer: issuerOf(contract, config), history, ...portalLinks(contract),
         payment: { pixAuto: offer, cardHint, pixPayload: pix, pixKey: config?.pix_key, receiver: config?.receiver_name, cardLink: link, cardAmount: link ? brl(cardTotal) : null, cardNotice: CARD_NOTICE, payUrl, amount: brl(amount) },
       }),
       payUrl,

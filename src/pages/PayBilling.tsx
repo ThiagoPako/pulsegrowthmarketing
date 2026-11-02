@@ -61,6 +61,33 @@ export default function PayBilling({ preview }: { preview?: PayPageData }) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [qr, setQr] = useState('');
+  // depois de copiar o Pix, a página pergunta ao sistema se o Pix caiu (02/11/2026: "na hora que ele paga já recebe o
+  // comprovante de recebido"); por até 15 min, de 25 em 25 s
+  const [watchSince, setWatchSince] = useState<string | null>(null);
+  const [watchMsg, setWatchMsg] = useState('');
+
+  useEffect(() => {
+    if (!watchSince || !token || preview || data?.paid) return;
+    let stop = false;
+    const started = Date.parse(watchSince);
+    const tick = async () => {
+      if (stop || Date.now() - started > 15 * 60000) return;
+      try {
+        const r = await fetch(`${VPS_API_BASE}/public/cobranca/${encodeURIComponent(token)}/conferir`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ desde: watchSince }),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (body.paid) {
+          setWatchMsg('Pagamento confirmado! O recibo chega pelo WhatsApp.');
+          stop = true;
+          window.setTimeout(() => window.location.reload(), 2500);
+        }
+      } catch { /* tenta de novo no próximo ciclo */ }
+    };
+    const first = window.setTimeout(tick, 20000);
+    const timer = window.setInterval(tick, 25000);
+    return () => { stop = true; window.clearTimeout(first); window.clearInterval(timer); };
+  }, [watchSince, token, preview, data?.paid]);
 
   useEffect(() => {
     document.title = 'Pagamento · Agência Pulse';
@@ -84,6 +111,10 @@ export default function PayBilling({ preview }: { preview?: PayPageData }) {
     const ok = await copyText(data.pix_payload);
     setCopied(ok);
     if (ok) window.setTimeout(() => setCopied(false), 4000);
+    if (ok && (data.pix_dynamic || data.pix_auto?.available) && !watchSince) {
+      setWatchSince(new Date().toISOString());
+      setWatchMsg('Assim que o seu Pix cair, a confirmação aparece aqui e o recibo vai para o WhatsApp.');
+    }
   };
 
   return (
@@ -164,8 +195,8 @@ export default function PayBilling({ preview }: { preview?: PayPageData }) {
 
             {/* conta Efí conferida na API (sem taxa): o pagamento é confirmado sozinho, sem comprovante */}
             {!data.paid && data.pix_payload && (data.pix_dynamic || data.pix_auto?.available) && (
-              <p className="mt-4 rounded-2xl bg-white p-4 text-center text-sm text-[#6B6B73] shadow-sm">
-                Pagou pelo Pix? A confirmação é automática em poucos minutos e o recibo chega pelo WhatsApp.
+              <p aria-live="polite" className="mt-4 rounded-2xl bg-white p-4 text-center text-sm text-[#6B6B73] shadow-sm">
+                {watchMsg || 'Pagou pelo Pix? A confirmação é automática em poucos minutos e o recibo chega pelo WhatsApp.'}
               </p>
             )}
             {!data.paid && data.pix_payload && !data.pix_dynamic && !data.pix_auto?.available && <ReceiptUpload token={token || ''} sent={!!data.receipt_sent} demo={!!preview} />}

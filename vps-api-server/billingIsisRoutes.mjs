@@ -24,6 +24,7 @@ import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, monthName as no
 import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
 import { staticTxid } from './lib/pixReceipt.mjs';
 import { OFFER_LINE } from './lib/pixAutomatico.mjs';
+import { billingTarget } from './lib/billingContacts.mjs';
 
 const CARD_LINE = '💳 Se preferir, dá para pagar no cartão de crédito, em até 12x, pelo mesmo link.';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
@@ -79,6 +80,14 @@ export function registerBillingIsisRoutes(app, {
           ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS body TEXT;
           ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS reference_month TEXT;
           ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS contract_id UUID;
+          ALTER TABLE billing_messages ADD COLUMN IF NOT EXISTS sent_to TEXT;
+          -- para quem vão a cobrança e o recibo (02/11/2026): o mesmo do responsável (padrão) ou o financeiro da empresa
+          ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_same_as_owner BOOLEAN NOT NULL DEFAULT true;
+          ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_contact_name TEXT;
+          ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_whatsapp TEXT;
+          ALTER TABLE clients ADD COLUMN IF NOT EXISTS receipt_same_as_owner BOOLEAN NOT NULL DEFAULT true;
+          ALTER TABLE clients ADD COLUMN IF NOT EXISTS receipt_contact_name TEXT;
+          ALTER TABLE clients ADD COLUMN IF NOT EXISTS receipt_whatsapp TEXT;
           -- página pública de pagamento de cada cobrança (/pagar/<token>): uma por contrato e mês
           CREATE TABLE IF NOT EXISTS billing_pay_pages (
             token TEXT PRIMARY KEY,
@@ -133,6 +142,8 @@ export function registerBillingIsisRoutes(app, {
   async function activeContracts() {
     const { rows } = await pool.query(
       `SELECT fc.*, c.company_name, c.whatsapp, c.city AS client_city, c.responsible_person, c.niche, p.name AS plan_name,
+              c.billing_same_as_owner, c.billing_contact_name, c.billing_whatsapp,
+              c.receipt_same_as_owner, c.receipt_contact_name, c.receipt_whatsapp,
               p.reels_qty, p.creatives_qty, p.stories_qty, p.arts_qty, p.recording_sessions
          FROM financial_contracts fc
          JOIN clients c ON c.id = fc.client_id
@@ -377,19 +388,21 @@ export function registerBillingIsisRoutes(app, {
         mes_ref: nomeMes(month), data_pagamento: dataBr(paidAt),
         recibo: pdf?.ok ? 'Recibo em anexo.' : '',
       }), config?.msg_isis_rodape, contact);
-      if (!contract.whatsapp) {
-        await record(contract, 'obrigado', month, 'sem_whatsapp', body, revenueId, pdf?.ok ? pdf.url : null);
-        return { status: 'sem_whatsapp' };
+      // recibo: para quem o cadastro diz (o responsável ou o número próprio de recibos)
+      const target = billingTarget(contract, 'recibo');
+      if (!target.to) {
+        await record(contract, 'obrigado', month, 'sem_whatsapp', `${body}\n\n(não enviado: ${target.problem})`, revenueId, pdf?.ok ? pdf.url : null);
+        return { status: 'sem_whatsapp', problem: target.problem };
       }
       if (mode === 'previa') {
         await record(contract, 'obrigado', month, 'previa', body, revenueId, pdf?.ok ? pdf.url : null);
         return { status: 'previa', body };
       }
       await enqueueWhatsApp(pool, {
-        to: contract.whatsapp, body, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id,
+        to: target.to, body, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id,
         ...(pdf?.ok ? { mediaUrl: pdf.url, mediaName: pdf.name } : {}),
       });
-      await record(contract, 'obrigado', month, 'enviada', body, revenueId, pdf?.ok ? pdf.url : null);
+      await record(contract, 'obrigado', month, 'enviada', body, revenueId, pdf?.ok ? pdf.url : null, target.to);
       return { status: 'enviada', body };
     } finally {
       thanking.delete(revenueId);
@@ -609,11 +622,11 @@ export function registerBillingIsisRoutes(app, {
     return rows.length > 0;
   }
 
-  async function record(contract, step, month, status, body, revenueId = null, pdfUrl = null) {
+  async function record(contract, step, month, status, body, revenueId = null, pdfUrl = null, sentTo = null) {
     await pool.query(
-      `INSERT INTO billing_messages (client_id, revenue_id, message_type, status, body, reference_month, contract_id, pdf_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [contract.client_id, revenueId, step, status, body || null, month, contract.id, pdfUrl]
+      `INSERT INTO billing_messages (client_id, revenue_id, message_type, status, body, reference_month, contract_id, pdf_url, sent_to)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [contract.client_id, revenueId, step, status, body || null, month, contract.id, pdfUrl, sentTo]
     );
   }
 
@@ -670,20 +683,28 @@ export function registerBillingIsisRoutes(app, {
             results.push({ client: contract.company_name, step, status: 'conferir', problems: ['PDF'] });
             continue;
           }
-          if (!contract.whatsapp) { await record(contract, step, month, 'sem_whatsapp', out.body, out.revenue?.id, pdf?.url); continue; }
+          // o relatório do dia 1 vai ao responsável; D−5, cobrança e lembrete vão a quem o cadastro manda (o
+          // financeiro da empresa, quando tem). Número próprio faltando: não envia e avisa (nunca vai ao lugar errado)
+          const target = billingTarget(contract, step === 'relatorio_mensal' ? 'relatorio' : 'cobranca');
+          if (!target.to) {
+            await record(contract, step, month, 'conferir', `Não enviado: ${target.problem}.`, out.revenue?.id, pdf?.url);
+            if (mode === 'ativo') await warnTeam(contract, step, month, [target.problem]).catch(() => false);
+            results.push({ client: contract.company_name, step, status: 'conferir', problems: [target.problem] });
+            continue;
+          }
           if (mode === 'previa') {
             await record(contract, step, month, 'previa', out.body, out.revenue?.id, pdf?.url);
           } else {
             await enqueueWhatsApp(pool, {
-              to: contract.whatsapp, body: out.body, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id,
+              to: target.to, body: out.body, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id,
               ...(pdf ? { mediaUrl: pdf.url, mediaName: pdf.name } : {}),
             });
             if (out.pixMessage) {
               await enqueueWhatsApp(pool, {
-                to: contract.whatsapp, body: out.pixMessage, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id,
+                to: target.to, body: out.pixMessage, purpose: 'assistente', triggerType: 'cobranca', clientId: contract.client_id,
               });
             }
-            await record(contract, step, month, 'enviada', out.body, out.revenue?.id, pdf?.url);
+            await record(contract, step, month, 'enviada', out.body, out.revenue?.id, pdf?.url, target.to);
           }
           results.push({ client: contract.company_name, step, status: mode === 'previa' ? 'previa' : 'enviada' });
         } catch (error) {

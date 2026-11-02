@@ -451,11 +451,17 @@ export function registerEfiPixRoutes(app, {
    * "Já paguei" na página: lê os Pix das últimas 3 h da cidade (casa pelo txid ou pelo comprovante) e, se nada casou,
    * aceita pelo valor só quando há exatamente um Pix solto com o valor da mensalidade nesse período.
    */
-  async function checkPagePaid(page) {
+  // "since" (02/11/2026, "quando o cliente pagar, buscar na mesma hora"): a página manda a hora em que o cliente copiou o
+  // Pix e fica perguntando; aí só vale o Pix que caiu depois disso (no máximo os últimos 30 min)
+  async function checkPagePaid(page, { since = null } = {}) {
     const acc = await readableAccount(page.city).catch(() => null);
     if (!acc || !page.revenue_id) return { checked: false };
     const fim = now();
-    const inicio = new Date(fim.getTime() - 3 * 3600000);
+    const sinceMs = since ? Date.parse(since) : NaN;
+    const floor = Number.isFinite(sinceMs)
+      ? Math.max(sinceMs - 2 * 60000, fim.getTime() - 30 * 60000)
+      : fim.getTime() - 3 * 3600000;
+    const inicio = new Date(floor);
     const list = await clientFor(acc).listPix(inicio.toISOString(), fim.toISOString());
     for (const p of list) {
       const r = await recordPix(acc.city, acc.efi_env, p).catch(() => null);
@@ -465,7 +471,8 @@ export function registerEfiPixRoutes(app, {
       }
     }
     const loose = list.filter((p) => Math.abs(Number(p.valor) - Number(page.amount)) < 0.01
-      && !(Array.isArray(p.devolucoes) && p.devolucoes.length));
+      && !(Array.isArray(p.devolucoes) && p.devolucoes.length)
+      && (!p.horario || Date.parse(p.horario) >= floor));
     const { rows: free } = loose.length
       ? await pool.query(`SELECT e2e_id FROM efi_pix_received WHERE e2e_id = ANY($1::text[]) AND status = 'conferir'`, [loose.map((p) => p.endToEndId)])
       : { rows: [] };

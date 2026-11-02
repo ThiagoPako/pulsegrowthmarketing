@@ -102,6 +102,13 @@ export interface Client {
   extraClientAppears: boolean;
   whatsapp: string; // 55+DDD+number format
   whatsappGroup?: string; // group ID for sending to groups instead of individual
+  // para quem vão a cobrança e o recibo (02/11/2026): o mesmo do responsável (padrão) ou um número próprio
+  billingSameAsOwner?: boolean;
+  billingContactName?: string;
+  billingWhatsapp?: string;
+  receiptSameAsOwner?: boolean;
+  receiptContactName?: string;
+  receiptWhatsapp?: string;
   weeklyReels: number;
   weeklyCreatives: number;
   weeklyGoal: number;

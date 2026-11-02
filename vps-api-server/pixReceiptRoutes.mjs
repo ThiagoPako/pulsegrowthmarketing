@@ -289,7 +289,8 @@ export function registerPixReceiptRoutes(app, {
       const { rows: [page] } = await pool.query(`SELECT * FROM billing_pay_pages WHERE token = $1`, [token]);
       if (!page) throw httpError(404, 'Cobrança não encontrada');
       if (await revenuePaid(page.revenue_id)) return res.json({ paid: true, message: 'Pagamento confirmado! Obrigada!' });
-      const r = await checkPagePaid(page).catch((error) => { logger.error('[conferir] API:', error.message); return null; });
+      const desde = typeof req.body?.desde === 'string' && !Number.isNaN(Date.parse(req.body.desde)) ? req.body.desde : null;
+      const r = await checkPagePaid(page, { since: desde }).catch((error) => { logger.error('[conferir] API:', error.message); return null; });
       if (r?.paid) return res.json({ paid: true, message: 'Pagamento confirmado! O recibo chega pelo WhatsApp. Obrigada!' });
       res.json({
         paid: false,

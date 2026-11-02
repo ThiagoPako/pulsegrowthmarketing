@@ -919,7 +919,10 @@ export function registerBillingIsisRoutes(app, {
       const pdf = out.pdf ? await savePdf(contract, `teste-${step}`, month, out.pdf).catch(() => null) : null;
       const city = normalizeCityValue(contract.client_city || contract.city) || 'minacu';
       const { rows: numbers } = await pool.query(`SELECT * FROM assistant_numbers WHERE active AND 'avisos_pagamentos' = ANY(permissions)`);
-      const to = numbers.filter((n) => !(n.cities || []).length || (n.cities || []).includes(city));
+      // "only" (02/11/2026, "manda as mensagens de teste tudo para o Thiago"): só a pessoa pedida
+      const only = String(req.body?.only || '').trim().toLowerCase();
+      const to = numbers.filter((n) => (!(n.cities || []).length || (n.cities || []).includes(city))
+        && (!only || String(n.name || '').toLowerCase() === only));
       if (!to.length) throw httpError(409, 'Ninguém da equipe com avisos de pagamento nesta cidade');
       const header = [
         `🧪 *TESTE · não pague* · é assim que ${String(contract.company_name || '').trim()} recebe (${step})`,
@@ -965,7 +968,10 @@ export function registerBillingIsisRoutes(app, {
       );
       const payUrl = `${appBase}/pagar/${token}`;
       const { rows: numbers } = await pool.query(`SELECT * FROM assistant_numbers WHERE active AND 'avisos_pagamentos' = ANY(permissions)`);
-      const to = numbers.filter((n) => !(n.cities || []).length || (n.cities || []).includes(city));
+      // "only" (02/11/2026, "manda as mensagens de teste tudo para o Thiago"): só a pessoa pedida
+      const only = String(req.body?.only || '').trim().toLowerCase();
+      const to = numbers.filter((n) => (!(n.cities || []).length || (n.cities || []).includes(city))
+        && (!only || String(n.name || '').toLowerCase() === only));
       if (!to.length) throw httpError(409, 'Ninguém da equipe com avisos de pagamento nesta cidade');
       const body = [
         `🧪 *Cobrança de TESTE · ${brl(amount)}* (${city === 'uruacu' ? 'Uruaçu' : 'Minaçu'})`,

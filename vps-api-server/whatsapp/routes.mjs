@@ -27,6 +27,7 @@
 //     aprova respondendo APROVADO ou pede ajuste escrevendo o que mudar (mesmo efeito do portal).
 
 import { WA_PURPOSES, ensureWhatsAppSchema, enqueueWhatsApp, clientTarget, clientsForGroup } from './shared.mjs';
+import { approvalMessage, noAccessReply, saysNoPortalAccess, usesPortal } from '../lib/portalAccess.mjs';
 
 const TZ = 'America/Sao_Paulo';
 
@@ -42,7 +43,7 @@ const ASSISTANT_PURPOSE = 'assistente';
 const isAssistantOnly = (c) => Array.isArray(c?.purposes) && c.purposes.length > 0 && c.purposes.every((p) => p === ASSISTANT_PURPOSE);
 const PURPOSES_WITHOUT_ASSISTANT = Object.fromEntries(Object.entries(WA_PURPOSES).filter(([key]) => key !== ASSISTANT_PURPOSE));
 
-export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, verifyTeamManager, handleWhatsAppReply, runBillingAutomation, runConfirmationCron, hasPulsePlus }) {
+export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, verifyTeamManager, handleWhatsAppReply, runBillingAutomation, runConfirmationCron, hasPulsePlus, shareLink = null }) {
   ensureWhatsAppSchema(pool).catch((error) => console.error('[whatsapp] esquema:', error.message));
 
   const fail = (res, error) => {
@@ -300,6 +301,53 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
   const fill = (tpl, vars) => Object.entries(vars).reduce((t, [k, v]) => t.replace(new RegExp(`\\{${k}\\}`, 'g'), v ?? ''), tpl || '');
   const HELP_HINT = 'Se não conseguir abrir o link, é só avisar aqui que mandamos o vídeo no seu privado.';
 
+  /** O cliente usa o portal: tem login e entrou nos últimos 45 dias (client_portal_access_days). */
+  async function clientUsesPortal(clientId) {
+    const { rows: [u] } = await pool.query(`SELECT count(*)::int AS n FROM client_portal_users WHERE client_id = $1`, [clientId]).catch(() => ({ rows: [{ n: 0 }] }));
+    const { rows: [a] } = await pool.query(`SELECT max(ultimo_em) AS last FROM client_portal_access_days WHERE client_id = $1`, [clientId]).catch(() => ({ rows: [{}] }));
+    return usesPortal({ users: u?.n, lastAccess: a?.last || null });
+  }
+
+  // ── "Não tenho acesso ao portal" no grupo → resposta com o cadastro e os vídeos sem login (02/11/2026) ──
+  // Lê as mensagens dos grupos dos clientes dos últimos 15 min; uma resposta por cliente a cada 12 h.
+  async function replyNoPortalAccess() {
+    await pool.query(`CREATE TABLE IF NOT EXISTS portal_access_replies (
+      client_id UUID PRIMARY KEY, wa_id TEXT, replied_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+    const { rows } = await pool.query(
+      `SELECT wa_id, group_jid, text, push_name FROM wa_inbound
+        WHERE group_jid IS NOT NULL AND text IS NOT NULL AND received_at > now() - interval '15 minutes'
+        ORDER BY received_at`
+    );
+    const { rows: [config] } = await pool.query('SELECT * FROM whatsapp_config LIMIT 1');
+    if (!config?.integration_active) return;
+    for (const m of rows) {
+      if (!saysNoPortalAccess(m.text)) continue;
+      const [client] = await clientsForGroup(pool, m.group_jid);
+      if (!client) continue;
+      const { rows: [done] } = await pool.query(
+        `SELECT 1 FROM portal_access_replies WHERE client_id = $1 AND replied_at > now() - interval '12 hours'`, [client.id]
+      );
+      if (done) continue;
+      const { rows: pend } = await pool.query(
+        `SELECT id, title FROM client_portal_contents WHERE client_id = $1 AND status = 'pendente' ORDER BY created_at DESC LIMIT 5`, [client.id]
+      );
+      const pending = [];
+      for (const p of pend) {
+        const link = shareLink ? await shareLink(p.id).catch(() => null) : null;
+        if (link) pending.push({ title: String(p.title || 'Conteúdo').trim(), link });
+      }
+      const body = noAccessReply({
+        firstName: String(m.push_name || '').trim().split(/\s+/)[0] || firstName(client),
+        signupUrl: `${UPLOADS_ORIGIN}/portal-registro/${client.id}`, portalUrl: `${PORTAL_URL}/${client.id}`, pending,
+      });
+      await pool.query(
+        `INSERT INTO portal_access_replies (client_id, wa_id, replied_at) VALUES ($1, $2, now())
+         ON CONFLICT (client_id) DO UPDATE SET wa_id = EXCLUDED.wa_id, replied_at = now()`, [client.id, m.wa_id]
+      );
+      await enqueueWhatsApp(pool, { to: m.group_jid, body, clientId: client.id, triggerType: 'portal_sem_acesso', purpose: 'aprovacao' });
+    }
+  }
+
   async function notifyNewPortalContent() {
     // na primeira vez: o que já estava no portal antes deste aviso existir não gera mensagem
     const { rows: first } = await pool.query(
@@ -329,6 +377,21 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
       if (!to) continue;
       const portal = `${PORTAL_URL}/${client.id}`;
       const titles = batch.titles.map((t) => String(t || 'Conteúdo').trim());
+      // quem não usa o portal (sem login ou sem entrar há 45 dias) recebe o link sem login de cada vídeo, com o
+      // jeito do Instagram, e o link de cadastro (02/11/2026)
+      const portalUser = await clientUsesPortal(client.id);
+      if (!portalUser && shareLink) {
+        const items = [];
+        for (let i = 0; i < batch.ids.length; i += 1) {
+          const link = await shareLink(batch.ids[i]).catch(() => null);
+          if (link) items.push({ title: titles[i], link });
+        }
+        if (items.length) {
+          const body = approvalMessage({ firstName: firstName(client), items, portalUrl: portal, signupUrl: `${UPLOADS_ORIGIN}/portal-registro/${client.id}`, portalUser: false });
+          await enqueueWhatsApp(pool, { to, body, clientId: client.id, triggerType: 'auto_video_approval', purpose: 'aprovacao' });
+          continue;
+        }
+      }
       let message;
       if (titles.length === 1 && config.msg_video_approval && /\{link_(portal|video)\}/.test(config.msg_video_approval)) {
         message = fill(config.msg_video_approval, { nome_cliente: client.company_name, titulo: titles[0], link_portal: portal, link_video: portal });
@@ -782,6 +845,7 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     try {
       await ensureWhatsAppSchema(pool);
       await notifyNewPortalContent();
+      await replyNoPortalAccess().catch((error) => console.error('[whatsapp] sem acesso ao portal:', error.message));
     } catch (error) {
       console.error('[whatsapp] aviso do portal:', error.message);
     } finally {

@@ -32,6 +32,7 @@ import { registerBillingIsisRoutes } from './billingIsisRoutes.mjs';
 import { registerPaymentAccountsRoutes } from './paymentAccountsRoutes.mjs';
 import { registerInfinitePayRoutes } from './infinitePayRoutes.mjs';
 import { registerEfiPixRoutes } from './efiPixRoutes.mjs';
+import { registerPortalShareRoutes } from './portalShareRoutes.mjs';
 import { registerPixAutomaticoRoutes } from './pixAutomaticoRoutes.mjs';
 import { billingTarget } from './lib/billingContacts.mjs';
 import { alertTeam, alertRevenuePaid } from './lib/teamAlerts.mjs';
@@ -20403,7 +20404,22 @@ app.use(pulsePlus.guard);
 pulsePlus.registerRoutes(app);
 
 // ─── Agentes de edição (chaves próprias, fila, entrega) ─────
-registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, verifyTeamManager, handleWhatsAppReply, runBillingAutomation, runConfirmationCron, hasPulsePlus: pulsePlus.hasPulsePlus });
+// ─── Aprovação sem login (/aprovar/<token>): página do vídeo com o jeito do Instagram, aprovar ou pedir ajuste ──
+const portalShare = registerPortalShareRoutes(app, {
+  pool,
+  approveContent: (content) => syncPortalApprovalToKanban(content, null),
+  adjustContent: (content, note) => syncPortalAdjustmentToKanban(content, note, null),
+  publicAppUrl: process.env.PUBLIC_APP_URL,
+  // teste para a equipe: a chefe manda o link a quem pedir (avisos_pagamentos ou o nome)
+  verifyAgent: (req) => agentApi.verifyAgent(req),
+  sendToTeam: async (only, body) => {
+    const { rows } = await pool.query(`SELECT * FROM assistant_numbers WHERE active`);
+    const to = rows.filter((n) => (only ? String(n.name || '').toLowerCase() === only.toLowerCase() : (n.permissions || []).includes('avisos_pagamentos')));
+    for (const n of to) await enqueueWhatsApp(pool, { to: n.phone, body, purpose: 'assistente', triggerType: 'portal_teste', history: false });
+    return to.map((n) => n.name);
+  },
+});
+registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, verifyTeamManager, handleWhatsAppReply, runBillingAutomation, runConfirmationCron, hasPulsePlus: pulsePlus.hasPulsePlus, shareLink: portalShare.shareLink });
 
 const agentApi = registerAgentRoutes(app, {
   pool,

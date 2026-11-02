@@ -9,7 +9,7 @@ describe('Pix pela chave · conferido na API da Efí', () => {
   const CONTRACT = '3f2a9c1e-77aa-4b1c-9d00-0000aaaa1111';
   const page = { token: 'tok_0123456789abcdef', contract_id: CONTRACT, month: '2026-11', city: 'minacu', amount: '1500', revenue_id: 'rev1' };
 
-  function setup({ efiActive = false, pix = [] as Record<string, unknown>[], receipts = [] as Record<string, unknown>[] } = {}) {
+  function setup({ efiActive = false, pix = [] as Record<string, unknown>[], receipts = [] as Record<string, unknown>[], openPages = [] as Record<string, unknown>[] } = {}) {
     const acc = {
       city: 'minacu', active: true, efi_active: efiActive, efi_env: 'producao', efi_pix_key: 'contato@agenciapulse.tech', updated_at: 't1',
       efi_client_id_enc: encryptSecret('Client_Id_abc'), efi_client_secret_enc: encryptSecret('Client_Secret_xyz'),
@@ -25,6 +25,7 @@ describe('Pix pela chave · conferido na API da Efí', () => {
         }
         if (/SELECT status FROM efi_pix_received WHERE e2e_id/.test(sql)) return { rows: received.has(params[0] as string) ? [received.get(params[0] as string)] : [] };
         if (/FROM billing_pay_pages WHERE month/.test(sql)) return { rows: [page] };
+        if (/FROM billing_pay_pages b\s+JOIN revenues/.test(sql)) return { rows: openPages };
         if (/FROM pix_receipts p JOIN billing_pay_pages/.test(sql)) {
           return { rows: receipts.some((r) => String(r.e2e).toUpperCase() === String(params[0]).toUpperCase()) ? [page] : [] };
         }
@@ -100,5 +101,24 @@ describe('Pix pela chave · conferido na API da Efí', () => {
     const two = setup({ pix: [{ endToEndId: 'E00000000202611021740eeeeeeeeeee', valor: '1500.00' }, { endToEndId: 'E00000000202611021742fffffffffff', valor: '1500.00' }] });
     expect(await two.routes.checkPagePaid(page)).toMatchObject({ paid: false, ambiguous: true });
     expect(two.markRevenuePaid).not.toHaveBeenCalled();
+  });
+
+  it('Pix sem código: dá baixa sozinho só quando o valor e o nome de quem pagou batem com um cliente', async () => {
+    const pages = [
+      { ...page, client_name: 'Clínica Sorriso', responsible_person: 'Maria Souza' },
+      { ...page, token: 'tok_outro_000000000', revenue_id: 'rev2', client_name: 'Auto Peças Brasil', responsible_person: 'João Lima' },
+    ];
+    const ok = setup({ openPages: pages, pix: [{ endToEndId: 'E00000000202611021500ggggggggggg', valor: '1500.00', pagador: { nome: 'MARIA SOUZA' } }] });
+    await ok.routes.sweep();
+    expect(ok.markRevenuePaid).toHaveBeenCalledWith('rev1');
+
+    const nobody = setup({ openPages: pages, pix: [{ endToEndId: 'E00000000202611021500hhhhhhhhhhh', valor: '1500.00', pagador: { nome: 'Fulano de Tal' } }] });
+    await nobody.routes.sweep();
+    expect(nobody.markRevenuePaid).not.toHaveBeenCalled();
+
+    // um cliente só com o valor, mas o nome não bate: não dá baixa (não pode errar cobrança)
+    const single = setup({ openPages: [pages[1]], pix: [{ endToEndId: 'E00000000202611021500iiiiiiiiiii', valor: '1500.00', pagador: { nome: 'Maria Souza' } }] });
+    await single.routes.sweep();
+    expect(single.markRevenuePaid).not.toHaveBeenCalled();
   });
 });

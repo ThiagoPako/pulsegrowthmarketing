@@ -162,7 +162,13 @@ export default function PayBilling({ preview }: { preview?: PayPageData }) {
 
             {data.pix_auto?.available && <PixAutoSection token={token || ''} info={data.pix_auto} demo={!!preview} />}
 
-            {!data.paid && data.pix_payload && !data.pix_dynamic && <ReceiptUpload token={token || ''} sent={!!data.receipt_sent} demo={!!preview} />}
+            {/* conta Efí conferida na API (sem taxa): o pagamento é confirmado sozinho, sem comprovante */}
+            {!data.paid && data.pix_payload && (data.pix_dynamic || data.pix_auto?.available) && (
+              <p className="mt-4 rounded-2xl bg-white p-4 text-center text-sm text-[#6B6B73] shadow-sm">
+                Pagou pelo Pix? A confirmação é automática em poucos minutos e o recibo chega pelo WhatsApp.
+              </p>
+            )}
+            {!data.paid && data.pix_payload && !data.pix_dynamic && !data.pix_auto?.available && <ReceiptUpload token={token || ''} sent={!!data.receipt_sent} demo={!!preview} />}
 
             {!data.paid && data.card_link && (
               <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm">

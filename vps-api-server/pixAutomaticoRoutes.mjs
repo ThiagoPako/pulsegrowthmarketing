@@ -79,12 +79,12 @@ export function registerPixAutomaticoRoutes(app, {
     const status = error?.status && error.status < 500 && !error.body ? error.status
       : error?.message === 'Unauthorized' ? 401 : error?.message === 'Admin access required' ? 403 : error?.body ? 502 : 500;
     if (status >= 500) logger.error('[pix-automatico] erro:', error.message);
-    res.status(status).json({ error: error?.message || 'Erro' });
+    res.status(status).json({ error: error?.message || 'Erro', ...(error?.needDoc ? { needDoc: true } : {}) });
   }
 
   async function contractOf(id) {
     const { rows: [c] } = await pool.query(
-      `SELECT fc.*, c.company_name, c.city AS client_city FROM financial_contracts fc JOIN clients c ON c.id = fc.client_id WHERE fc.id = $1`, [id]
+      `SELECT fc.*, c.company_name, c.responsible_person, c.city AS client_city FROM financial_contracts fc JOIN clients c ON c.id = fc.client_id WHERE fc.id = $1`, [id]
     );
     return c || null;
   }
@@ -126,23 +126,33 @@ export function registerPixAutomaticoRoutes(app, {
       if (existing?.status === 'aguardando' && existing.pix_copia_e_cola) {
         return res.json({ status: 'aguardando', copiaECola: existing.pix_copia_e_cola, dataInicial: existing.data_inicial });
       }
-      const devedor = devedorDoc(req.body?.documento);
-      if (!devedor) throw httpError(400, 'Confira o CPF ou o CNPJ do titular da conta que vai pagar');
-      const nome = String(req.body?.nome || '').trim();
-      if (nome.length < 3) throw httpError(400, 'Escreva o nome do titular da conta');
+      // ativação com um toque (02/11/2026: "se a gente dificultar o cadastro, clientes não vão fazer essa opção"):
+      // primeiro sem documento; se a Efí exigir, a página pede só o CPF/CNPJ (o nome já vem do cadastro)
       const contract = await contractOf(page.contract_id);
       if (!contract) throw httpError(404, 'Contrato não encontrado');
+      const hasDoc = String(req.body?.documento || '').trim() !== '';
+      const devedor = hasDoc ? devedorDoc(req.body.documento) : null;
+      if (hasDoc && !devedor) throw httpError(400, 'Confira o CPF ou o CNPJ do titular da conta que vai pagar');
+      const nome = String(req.body?.nome || '').trim() || String(contract.responsible_person || contract.company_name || '').trim();
       const city = normalizeCityValue(contract.client_city || contract.city || page.city) || 'minacu';
       const pc = await pixClient(city);
       if (!pc) throw httpError(409, 'O Pix Automático ainda não está disponível. Pague pelo Pix desta página.');
       const { acc, client } = pc;
       const dataInicial = firstDebitDate(todayBr(now()), contract.due_day);
       const valor = Number(contract.contract_value) || Number(page.amount);
+      if (!(valor > 0)) throw httpError(409, 'A mensalidade está sem valor no Financeiro. Fale com a gente pelo WhatsApp.');
       const loc = await client.postLocrec();
       const rec = await client.postRec(recBody({
         contractId: contract.id, devedor, nome, objeto: `Mensalidade Agência Pulse · ${String(contract.company_name || '').trim()}`,
         dataInicial, valor, loc: loc?.id,
-      }));
+      })).catch((error) => {
+        // a Efí exigiu o pagador: a página pede só o CPF/CNPJ
+        if (!devedor && error?.status === 400) {
+          logger.log?.('[pix-automatico] a Efí pediu o devedor:', String(error.message).slice(0, 160));
+          throw Object.assign(new Error('Para ativar, informe o CPF ou o CNPJ do titular da conta que vai pagar.'), { status: 422, needDoc: true });
+        }
+        throw error;
+      });
       if (!rec?.idRec) throw new Error('A Efí não devolveu a recorrência');
       // o código de autorização vem na consulta da recorrência (dadosQR.pixCopiaECola); às vezes demora um instante
       let detail = null;
@@ -151,13 +161,13 @@ export function registerPixAutomaticoRoutes(app, {
         detail = await client.getRec(rec.idRec).catch(() => null);
       }
       const copia = detail?.dadosQR?.pixCopiaECola || null;
-      const digitsDoc = devedor.cpf || devedor.cnpj;
+      const digitsDoc = devedor ? devedor.cpf || devedor.cnpj : null;
       await pool.query(
         `INSERT INTO pix_auto (id_rec, contract_id, client_id, city, env, loc_id, status, efi_status, devedor_nome, devedor_doc_enc, devedor_doc_mask,
                                valor, data_inicial, pix_copia_e_cola, raw)
          VALUES ($1,$2,$3,$4,$5,$6,'aguardando',$7,$8,$9,$10,$11,$12,$13,$14)`,
         [rec.idRec, contract.id, contract.client_id, city, acc.efi_env, loc?.id != null ? String(loc.id) : null, rec.status || 'CRIADA',
-          nome.slice(0, 140), encryptSecret(digitsDoc), maskDoc(digitsDoc), valor, dataInicial, copia, JSON.stringify(detail || rec)]
+          nome.slice(0, 140), digitsDoc ? encryptSecret(digitsDoc) : null, digitsDoc ? maskDoc(digitsDoc) : null, valor, dataInicial, copia, JSON.stringify(detail || rec)]
       );
       if (!copia) throw httpError(502, 'A Efí ainda não gerou o código. Toque de novo em alguns segundos.');
       res.json({ status: 'aguardando', copiaECola: copia, dataInicial });

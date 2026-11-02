@@ -312,21 +312,26 @@ function ReceiptUpload({ token, sent, demo }: { token: string; sent: boolean; de
 }
 
 /**
- * Pix Automático (02/11/2026): o cliente informa o titular da conta, recebe o código e autoriza no app do banco. O débito
- * é só no vencimento, a partir do mês seguinte; cancela quando quiser pelo próprio banco.
+ * Pix Automático com um toque (02/11/2026: "se a gente dificultar o cadastro, clientes não vão fazer essa opção"): o
+ * botão já gera o código e o QR para autorizar no app do banco. Só se a Efí exigir, pede o CPF/CNPJ (um campo).
  */
 function PixAutoSection({ token, info, demo }: {
   token: string; demo: boolean;
   info: { status: 'ativo' | 'aguardando' | null; dataInicial?: string | null; copiaECola?: string | null };
 }) {
-  const [open, setOpen] = useState(false);
+  const [needDoc, setNeedDoc] = useState(false);
   const [doc, setDoc] = useState('');
-  const [nome, setNome] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [code, setCode] = useState(info.copiaECola || '');
   const [inicio, setInicio] = useState(info.dataInicial || '');
   const [copied, setCopied] = useState(false);
+  const [qr, setQr] = useState('');
+
+  useEffect(() => {
+    if (!code) return;
+    QRCode.toDataURL(code, { margin: 1, width: 360 }).then(setQr).catch(() => setQr(''));
+  }, [code]);
 
   if (info.status === 'ativo') {
     return (
@@ -337,29 +342,32 @@ function PixAutoSection({ token, info, demo }: {
     );
   }
 
+  const copy = async (text: string) => {
+    const ok = await copyText(text);
+    setCopied(ok);
+    if (ok) window.setTimeout(() => setCopied(false), 4000);
+  };
+
   const activate = async () => {
     if (demo) return;
     setBusy(true);
     setError('');
     try {
       const r = await fetch(`${VPS_API_BASE}/public/cobranca/${encodeURIComponent(token)}/pix-automatico`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documento: doc, nome }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(needDoc ? { documento: doc } : {}),
       });
       const body = await r.json().catch(() => ({}));
+      if (body.needDoc) { setNeedDoc(true); setError(''); return; }
       if (!r.ok) throw new Error(body.error || 'Não deu para ativar agora. Tente de novo.');
       setCode(body.copiaECola || '');
       setInicio(body.dataInicial || '');
+      // já copia: o cliente só abre o banco e cola
+      if (body.copiaECola) await copy(body.copiaECola);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
-  };
-
-  const copy = async () => {
-    const ok = await copyText(code);
-    setCopied(ok);
-    if (ok) window.setTimeout(() => setCopied(false), 4000);
   };
 
   return (
@@ -369,53 +377,40 @@ function PixAutoSection({ token, info, demo }: {
         <span className="rounded-full bg-[#EEF4FF] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#2B5BD7]">novo</span>
       </div>
       <p className="mt-1 text-sm text-[#6B6B73]">
-        Não precisa pagar na mão todo mês: a mensalidade é debitada só no dia do vencimento. Você cancela quando quiser, pelo app do seu banco.
+        Não precisa pagar na mão todo mês: a mensalidade é debitada só no dia do vencimento. Cancela quando quiser, pelo app do seu banco.
       </p>
 
       {code ? (
         <>
-          <button type="button" onClick={copy}
+          <button type="button" onClick={() => copy(code)}
             className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-4 text-base font-bold text-white active:scale-[0.98] ${copied ? 'bg-[#1F9D55]' : 'bg-[#2B5BD7]'}`}>
-            {copied ? <><Check className="h-5 w-5" /> Código copiado!</> : <><Copy className="h-5 w-5" /> Copiar código de autorização</>}
+            {copied ? <><Check className="h-5 w-5" /> Código copiado!</> : <><Copy className="h-5 w-5" /> Copiar código do Pix Automático</>}
           </button>
-          <ol className="mt-4 space-y-2 text-sm">
-            {['Abra o app do seu banco e entre em Pix.', 'Escolha "Pix Copia e Cola" e cole o código.', 'Confira e autorize o Pix Automático.'].map((t, i) => (
-              <li key={t} className="flex gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#0E0E10] text-xs font-bold text-white">{i + 1}</span>
-                <span className="pt-0.5">{t}</span>
-              </li>
-            ))}
-          </ol>
-          {inicio && (
-            <p className="mt-3 text-xs text-[#6B6B73]">
-              O primeiro débito é em {dataBr(inicio)}. A mensalidade deste mês continua pelo Pix acima.
-            </p>
+          <p className="mt-3 text-sm">Agora abra o app do seu banco, entre em <b>Pix → Pix Copia e Cola</b>, cole e autorize. Pronto.</p>
+          {qr && (
+            <details className="mt-3 rounded-xl bg-[#F6F6F8] p-3 text-xs">
+              <summary className="cursor-pointer font-semibold text-[#6B6B73]">No computador? Ver o QR Code</summary>
+              <img src={qr} alt="QR Code do Pix Automático" className="mx-auto mt-3 w-44" />
+              <p className="mt-2 text-center text-[#6B6B73]">Aponte a câmera do app do banco no celular.</p>
+            </details>
           )}
+          {inicio && <p className="mt-3 text-xs text-[#6B6B73]">Primeiro débito em {dataBr(inicio)}. A mensalidade deste mês continua pelo Pix acima.</p>}
         </>
-      ) : open ? (
+      ) : (
         <div className="mt-4 space-y-3">
-          <label className="block text-sm">
-            <span className="font-semibold">CPF ou CNPJ do titular da conta</span>
-            <input value={doc} onChange={(e) => setDoc(e.target.value)} inputMode="numeric" autoComplete="off"
-              className="mt-1 w-full rounded-xl border border-[#D9D9DE] px-3 py-3 text-base" placeholder="só os números" />
-          </label>
-          <label className="block text-sm">
-            <span className="font-semibold">Nome do titular</span>
-            <input value={nome} onChange={(e) => setNome(e.target.value)} autoComplete="name"
-              className="mt-1 w-full rounded-xl border border-[#D9D9DE] px-3 py-3 text-base" placeholder="como está no banco" />
-          </label>
-          <button type="button" onClick={activate} disabled={busy}
+          {needDoc && (
+            <label className="block text-sm">
+              <span className="font-semibold">CPF ou CNPJ de quem vai pagar</span>
+              <input value={doc} onChange={(e) => setDoc(e.target.value)} inputMode="numeric" autoComplete="off" autoFocus
+                className="mt-1 w-full rounded-xl border border-[#D9D9DE] px-3 py-3 text-base" placeholder="só os números" />
+            </label>
+          )}
+          <button type="button" onClick={activate} disabled={busy || (needDoc && doc.replace(/\D/g, '').length < 11)}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#2B5BD7] px-4 py-4 text-base font-bold text-white active:scale-[0.98] disabled:opacity-60">
-            {busy ? <><Loader2 className="h-5 w-5 animate-spin" /> Gerando…</> : 'Gerar código de autorização'}
+            {busy ? <><Loader2 className="h-5 w-5 animate-spin" /> Gerando…</> : 'Ativar Pix Automático'}
           </button>
           {error && <p className="text-center text-sm text-[#B4232C]" aria-live="polite">{error}</p>}
-          <p className="text-center text-[11px] text-[#8C8C96]">O CPF ou CNPJ vai só para o banco autorizar o débito.</p>
         </div>
-      ) : (
-        <button type="button" onClick={() => setOpen(true)}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#2B5BD7] px-4 py-3.5 text-base font-bold text-[#2B5BD7] active:scale-[0.98]">
-          Ativar Pix Automático
-        </button>
       )}
     </section>
   );

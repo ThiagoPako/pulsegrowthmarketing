@@ -78,7 +78,8 @@ export function recBody({ contractId, devedor, nome, objeto, dataInicial, valor,
     vinculo: {
       objeto: clip(objeto || 'Mensalidade Agência Pulse', 140),
       contrato: String(contractId || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 35),
-      devedor: { ...devedor, nome: clip(nome, 140) },
+      // sem documento (ativação com um toque): o banco de quem autoriza identifica o pagador
+      ...(devedor ? { devedor: { ...devedor, nome: clip(nome, 140) } } : {}),
     },
     calendario: { dataInicial, periodicidade: 'MENSAL' },
     valor: { valorRec: (Math.round(Number(valor) * 100) / 100).toFixed(2) },

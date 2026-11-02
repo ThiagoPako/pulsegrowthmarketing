@@ -3,6 +3,7 @@
 // ativo e "Testar conexão" (link de R$ 1,00, ninguém é cobrado). É a única fonte dos dados de pagamento.
 // Efí Bank (02/11/2026, "Vou trocar de banco, usar o Efí"): cada cidade liga a sua conta Efí (EfiAccountSection) e
 // passa a cobrar com Pix dinâmico, com baixa automática e as movimentações em EfiMovementsPanel.
+// Pix pela chave (02/11/2026, sem taxa): os comprovantes que os clientes mandam na página /pagar ficam em PixReceiptsPanel.
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -10,6 +11,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, CheckCircle2, Loader2, PlugZap, XCircle } from 'lucide-react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { EfiAccountSection, EfiMovementsPanel } from '@/components/financial/EfiAccountSection';
+import { PixReceiptsPanel } from '@/components/financial/PixReceiptsPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,7 +49,8 @@ export default function FinancialPayments({ preview }: { preview?: { accounts: P
           <h1 className="text-xl font-bold">Pagamentos · Efí e InfinitePay</h1>
           <p className="text-xs text-muted-foreground">
             A conta de cada cidade. Com a <strong>Efí</strong> ligada, a cidade cobra com Pix dinâmico da Efí (o código já leva o valor e o pagamento é
-            identificado sozinho); sem ela, segue o Pix pela chave e o link da InfinitePay. O cartão continua pelo link da InfinitePay.
+            identificado sozinho); sem ela, a cidade cobra pelo Pix da chave (sem taxa), o cliente manda o comprovante na página de pagamento e a
+            baixa sai pelo extrato do banco ou pela confirmação de vocês. O cartão continua pelo link da InfinitePay.
           </p>
         </div>
       </div>
@@ -64,6 +67,7 @@ export default function FinancialPayments({ preview }: { preview?: { accounts: P
             A InfiniteTag é a tag do app da InfinitePay (não é senha). Cada cliente paga na conta da cidade dele; pagou pelo link, a receita é baixada sozinha
             depois de conferida na InfinitePay. Webhook: {data.webhook_url}
           </p>
+          <PixReceiptsPanel preview={preview ? [] : undefined} />
           <EfiMovementsPanel preview={preview ? preview.movements || [] : undefined} />
           {!preview && <PaymentLinksPanel />}
         </>

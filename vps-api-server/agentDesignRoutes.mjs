@@ -23,6 +23,10 @@
 //   GET  /api/agent/design/stale?minutes=&hours=  (chefe) artes paradas
 //   POST /api/agent/design/tasks/:id/assign       (chefe) { to, reason } passa para um designer-agente
 //   POST /api/agent/design/tasks/:id/move         (chefe) { column, reason, notes }
+//   POST /api/agent/design/tasks                  (chefe, social_media) { client, title, format, priority, due, description,
+//                                                  copy, observations } cria a arte em Nova Tarefa (02/11/2026: "tudo que os
+//                                                  agentes podem fazer não precisa de humanos"); mesmo cliente e título
+//                                                  abertos nos últimos 3 dias = 409 com o card que já existe
 //
 // Rotas do sistema (login normal):
 //   GET  /api/design-agents                       agentes de design (selo e filtro "IA" no Kanban)
@@ -1082,6 +1086,52 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
         await messageAgents(agent.userId, [task.designed_by || task.assigned_to], `🔧 Ajustes na arte ${task.id.slice(0, 8)} "${task.title}": ${notes || task.observations}`);
       }
       res.json({ ok: true, from: task.kanban_column, to: column });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // ── criar arte (chefe e social media) ─────────────────────
+  const NEW_FORMATS = new Set(['feed', 'story', 'carrossel', 'capa', 'midia_fisica']);
+  const NEW_PRIORITIES = new Set(['media', 'alta', 'urgente']);
+  app.post('/api/agent/design/tasks', async (req, res) => {
+    try {
+      const agent = await designAgent(req, ['chefe', 'social_media']);
+      const b = req.body || {};
+      const title = String(b.title || '').trim().slice(0, 200);
+      const format = String(b.format || 'feed').trim().toLowerCase();
+      const priority = String(b.priority || 'media').trim().toLowerCase();
+      if (!title) throw httpError(400, 'Falta o título da arte');
+      if (!NEW_FORMATS.has(format)) throw httpError(400, `Formato: ${[...NEW_FORMATS].join(', ')}`);
+      if (!NEW_PRIORITIES.has(priority)) throw httpError(400, `Prioridade: ${[...NEW_PRIORITIES].join(', ')}`);
+      // cliente pelo id (ou o começo dele) ou pelo nome; ambíguo = erro (nada de card no cliente errado)
+      const key = String(b.client || '').trim();
+      if (!key) throw httpError(400, 'Falta o cliente (id ou nome)');
+      const { rows: found } = await pool.query(
+        /^[0-9a-f-]{8,36}$/i.test(key)
+          ? `SELECT id, company_name, city FROM clients WHERE id::text LIKE $1 || '%' LIMIT 3`
+          : `SELECT id, company_name, city FROM clients WHERE company_name ILIKE '%' || $1 || '%' AND coalesce(status, 'ativo') <> 'cancelado' LIMIT 3`,
+        [key.toLowerCase()]
+      );
+      if (!found.length) throw httpError(404, `Cliente não encontrado: ${key}`);
+      if (found.length > 1) throw httpError(409, `Mais de um cliente com "${key}": ${found.map((c) => `${c.company_name} (${String(c.id).slice(0, 8)})`).join(', ')}`);
+      const client = found[0];
+      const city = normalizeCityValue(client.city) || 'minacu';
+      const { rows: [dup] } = await pool.query(
+        `SELECT id, kanban_column FROM design_tasks WHERE client_id = $1 AND lower(title) = lower($2)
+            AND created_at > now() - interval '3 days' AND kanban_column <> 'postado' LIMIT 1`, [client.id, title]
+      );
+      if (dup) return res.status(409).json({ error: `Já existe essa arte (${String(dup.id).slice(0, 8)}, em ${dup.kanban_column})`, id: dup.id });
+      const due = b.due && !Number.isNaN(Date.parse(String(b.due).length === 10 ? `${b.due}T18:00:00-03:00` : b.due))
+        ? new Date(String(b.due).length === 10 ? `${b.due}T18:00:00-03:00` : b.due) : null;
+      const clip = (v, n) => (v == null || String(v).trim() === '' ? null : String(v).trim().slice(0, n));
+      const { rows: [task] } = await pool.query(
+        `INSERT INTO design_tasks (client_id, title, description, format_type, kanban_column, priority, city, due_date, copy_text, observations, created_by)
+         VALUES ($1, $2, $3, $4, 'nova_tarefa', $5, $6, $7, $8, $9, $10) RETURNING id, title`,
+        [client.id, title, clip(b.description, 4000), format, priority, city, due, clip(b.copy, 2000), clip(b.observations, 2000), agent.userId]
+      );
+      await addHistory(pool, task.id, agent.userId, 'Arte criada', `Criada pelo agente (${agent.role})`);
+      res.json({ ok: true, id: task.id, title: task.title, client: client.company_name, city });
     } catch (error) {
       sendError(res, error);
     }

@@ -8,13 +8,14 @@
 //
 //   GET  /api/payment-accounts                 → { accounts: [...], webhook_url }
 //   PUT  /api/payment-accounts/:city           { infinitepay_handle, pix_key, receiver_name, document, bank, active,
-//                                                api_client_id, api_secret (só escrita), clear_api_secret }
-//   POST /api/payment-accounts/:city/test      → { ok, url?, error? } (link de teste de R$ 1,00)
+//                                                api_key (inchk_…, só escrita), clear_api_key }
+//   POST /api/payment-accounts/:city/test      → { ok, url?, error?, with_api_key } (link de teste de R$ 1,00)
+// É o Checkout InfinitePay (link de pagamento hospedado), não checkout transparente.
 
 import {
-  CITIES, CITY_LABELS, normalizeAccountInput, publicAccount, overlayConfig, encryptSecret, last4,
+  CITIES, CITY_LABELS, normalizeAccountInput, publicAccount, overlayConfig, encryptSecret, last4, checkApiKeyInput, accountApiKey,
 } from './lib/paymentAccounts.mjs';
-import { normalizeHandle, createCheckoutLink } from './lib/infinitePay.mjs';
+import { normalizeHandle, createCheckoutLink, validUntilFor } from './lib/infinitePay.mjs';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -44,9 +45,8 @@ export function registerPaymentAccountsRoutes(app, {
             document TEXT,
             bank TEXT,
             active BOOLEAN NOT NULL DEFAULT true,
-            api_client_id TEXT,
-            api_secret_enc TEXT,
-            api_secret_last4 TEXT,
+            api_key_enc TEXT,
+            api_key_last4 TEXT,
             last_test_at TIMESTAMPTZ,
             last_test_ok BOOLEAN,
             last_test_error TEXT,
@@ -55,6 +55,12 @@ export function registerPaymentAccountsRoutes(app, {
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             updated_by TEXT
           );
+          -- 02/11/2026: o Checkout InfinitePay não tem client_id/secret; no lugar, a API Key (inchk_…)
+          ALTER TABLE payment_accounts ADD COLUMN IF NOT EXISTS api_key_enc TEXT;
+          ALTER TABLE payment_accounts ADD COLUMN IF NOT EXISTS api_key_last4 TEXT;
+          ALTER TABLE payment_accounts DROP COLUMN IF EXISTS api_client_id;
+          ALTER TABLE payment_accounts DROP COLUMN IF EXISTS api_secret_enc;
+          ALTER TABLE payment_accounts DROP COLUMN IF EXISTS api_secret_last4;
         `);
         // migração: cada cidade nasce com o que já estava salvo na linha dela (nada se perde)
         for (const city of CITIES) {
@@ -128,16 +134,18 @@ export function registerPaymentAccountsRoutes(app, {
       const city = cityParam(req);
       const patch = normalizeAccountInput(req.body || {});
       const before = await accountFor(city);
-      // segredo da API: só escrita, cifrado; a tela recebe só os 4 últimos caracteres
-      if (typeof req.body?.api_secret === 'string' && req.body.api_secret.trim()) {
-        patch.api_secret_enc = encryptSecret(req.body.api_secret.trim());
-        patch.api_secret_last4 = last4(req.body.api_secret.trim());
-      } else if (req.body?.clear_api_secret) {
-        patch.api_secret_enc = null;
-        patch.api_secret_last4 = null;
+      // API Key do Checkout: só escrita, cifrada; a tela recebe só os 4 últimos caracteres
+      if (typeof req.body?.api_key === 'string' && req.body.api_key.trim()) {
+        const key = checkApiKeyInput(req.body.api_key);
+        patch.api_key_enc = encryptSecret(key);
+        patch.api_key_last4 = last4(key);
+      } else if (req.body?.clear_api_key) {
+        patch.api_key_enc = null;
+        patch.api_key_last4 = null;
       }
-      // mudou a tag: o teste anterior não vale mais
-      if (patch.infinitepay_handle !== undefined && patch.infinitepay_handle !== (before?.infinitepay_handle || null)) {
+      // mudou a tag ou a key: o teste anterior não vale mais
+      if ((patch.infinitepay_handle !== undefined && patch.infinitepay_handle !== (before?.infinitepay_handle || null))
+        || patch.api_key_enc !== undefined) {
         patch.last_test_ok = null;
         patch.last_test_error = null;
         patch.last_test_at = null;
@@ -165,17 +173,28 @@ export function registerPaymentAccountsRoutes(app, {
       const handle = normalizeHandle(acc?.infinitepay_handle);
       if (!handle) throw httpError(400, `Cadastre a InfiniteTag de ${CITY_LABELS[city]} antes de testar`);
       const orderNsu = `pulse-teste-${city}-${Date.now()}`;
+      const apiKey = accountApiKey(acc);
       let result;
       try {
-        // link de R$ 1,00: só cria o link (ninguém é cobrado); prova que a tag existe e a API responde
-        const link = await createCheckoutLink({ handle, amount: 1, orderNsu, webhookUrl, description: `Teste de conexão Pulse · ${CITY_LABELS[city]}` }, fetchImpl);
+        // link de R$ 1,00: só cria o link (ninguém é cobrado); prova que a tag existe e a API responde. Com a API Key,
+        // vai com as mesmas options da cobrança e sem fallback, para mostrar se a key foi aceita.
+        const link = await createCheckoutLink({
+          handle, amount: 1, orderNsu, webhookUrl, description: `Teste de conexão Pulse · ${CITY_LABELS[city]}`,
+          apiKey, options: apiKey ? { single_payment: true, valid_until: validUntilFor(null, { graceDays: 1 }) } : null, fallback: false,
+        }, fetchImpl);
         await pool.query(
           `INSERT INTO payment_links (order_nsu, month, amount, url, slug, raw, handle, city) VALUES ($1, NULL, 1, $2, $3, $4, $5, $6)`,
           [orderNsu, link.url, link.slug, JSON.stringify(link.response), handle, city]
         ).catch(() => {});
-        result = { ok: true, url: link.url };
+        result = { ok: true, url: link.url, with_api_key: !!apiKey };
       } catch (error) {
-        result = { ok: false, error: String(error?.message || 'Erro na InfinitePay').slice(0, 300) };
+        const msg = String(error?.message || 'Erro na InfinitePay').slice(0, 300);
+        result = {
+          ok: false, with_api_key: !!apiKey,
+          error: apiKey && (error?.status === 401 || error?.status === 403)
+            ? `A InfinitePay recusou a API Key (${error.status}): confira se ela está ativa e se é da mesma conta da InfiniteTag $${handle}`
+            : msg,
+        };
       }
       await pool.query(
         `UPDATE payment_accounts SET last_test_at = now(), last_test_ok = $2, last_test_error = $3, last_test_url = $4 WHERE city = $1`,
@@ -185,5 +204,11 @@ export function registerPaymentAccountsRoutes(app, {
     } catch (error) { sendError(res, error); }
   });
 
-  return { overlay, accountFor, ensureSchema };
+  /** API Key do Checkout da cidade, decifrada (só para o servidor mandar no X-Api-Key); sem key: null. */
+  async function checkoutApiKeyFor(city) {
+    const acc = await accountFor(normalizeCityValue(city) || 'minacu').catch(() => null);
+    return accountApiKey(acc);
+  }
+
+  return { overlay, accountFor, checkoutApiKeyFor, ensureSchema };
 }

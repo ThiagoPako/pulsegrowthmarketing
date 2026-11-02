@@ -16,9 +16,8 @@ export interface PaymentAccount {
   document: string;
   bank: string;
   active: boolean;
-  api_client_id: string;
-  has_api_secret: boolean;
-  api_secret_last4: string;
+  has_api_key: boolean;
+  api_key_last4: string;
   last_test_at: string | null;
   last_test_ok: boolean | null;
   last_test_error: string | null;
@@ -36,11 +35,14 @@ export const STATUS_LABELS: Record<PaymentAccountStatus, string> = {
 };
 
 export type PaymentAccountPatch = Partial<Pick<PaymentAccount,
-  'infinitepay_handle' | 'pix_key' | 'receiver_name' | 'document' | 'bank' | 'active' | 'api_client_id'>> & {
-  /** só escrita: vai cifrado para o servidor e nunca volta */
-  api_secret?: string;
-  clear_api_secret?: boolean;
+  'infinitepay_handle' | 'pix_key' | 'receiver_name' | 'document' | 'bank' | 'active'>> & {
+  /** API Key do Checkout (inchk_…), só escrita: vai cifrada para o servidor e nunca volta */
+  api_key?: string;
+  clear_api_key?: boolean;
 };
+
+/** A API Key do Checkout InfinitePay começa com inchk_. */
+export const isCheckoutApiKey = (value: string) => /^inchk_\S{8,}$/.test(value.trim());
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await vpsAuthedFetch(path, init);
@@ -55,4 +57,4 @@ export const savePaymentAccount = (city: PaymentCity, patch: PaymentAccountPatch
   call<{ account: PaymentAccount }>(`/payment-accounts/${city}`, { method: 'PUT', body: JSON.stringify(patch) });
 
 export const testPaymentAccount = (city: PaymentCity) =>
-  call<{ ok: boolean; url?: string; error?: string; account: PaymentAccount }>(`/payment-accounts/${city}/test`, { method: 'POST', body: '{}' });
+  call<{ ok: boolean; url?: string; error?: string; with_api_key?: boolean; account: PaymentAccount }>(`/payment-accounts/${city}/test`, { method: 'POST', body: '{}' });

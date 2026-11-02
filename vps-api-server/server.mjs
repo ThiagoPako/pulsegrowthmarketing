@@ -20468,6 +20468,8 @@ const infinitePay = registerInfinitePayRoutes(app, {
   tableHasCityColumn,
   // pagamento confirmado → obrigado da Ísis (billingIsis é criado logo abaixo; a chamada só acontece depois)
   onRevenuePaid: (revenueId) => billingIsis.thankRevenue(revenueId),
+  // API Key do Checkout da cidade (Pagamentos · InfinitePay), para o link sair com validade e pagamento único
+  checkoutApiKeyFor: paymentAccountsModule.checkoutApiKeyFor,
 });
 
 // ─── Cobranças da Ísis pelo Assistente PULSE (Financeiro → Cobranças; desligado = a cobrança antiga segue igual) ──

@@ -10,13 +10,14 @@
 //   POST /api/infinitepay/test-link              (admin) { amount } cria um link de teste de R$ 1,00+ (não cobra ninguém)
 //   POST /api/infinitepay/check/:id              (admin) confere de novo um link na InfinitePay
 
-import { createCheckoutLink, checkPayment, isPaidCheck, normalizeHandle, orderNsuFor, readWebhook } from './lib/infinitePay.mjs';
+import { createCheckoutLink, checkPayment, isPaidCheck, normalizeHandle, orderNsuFor, readWebhook, validUntilFor } from './lib/infinitePay.mjs';
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 const todayBr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
 export function registerInfinitePayRoutes(app, {
   pool, verifyAdmin, paymentConfigFor, publicApiUrl, tableHasCityColumn, fetchImpl = fetch, logger = console, onRevenuePaid = null,
+  checkoutApiKeyFor = async () => null,
 }) {
   const webhookUrl = `${String(publicApiUrl || 'https://agenciapulse.tech').replace(/\/+$/, '')}/api/webhooks/infinitepay`;
 
@@ -65,7 +66,7 @@ export function registerInfinitePayRoutes(app, {
    * Link da mensalidade para a cobrança da Ísis (billingIsisRoutes paymentLink). Sem InfiniteTag cadastrada: null
    * (a cobrança sai só com o Pix). Mesmo valor e mesma mensalidade: o mesmo link.
    */
-  async function paymentLink({ contract, revenue, amount, month }) {
+  async function paymentLink({ contract, revenue, amount, month, dueDate }) {
     await ensureSchema();
     const config = await paymentConfigFor(contract.city || contract.client_city);
     const handle = normalizeHandle(config?.infinitepay_handle);
@@ -77,10 +78,14 @@ export function registerInfinitePayRoutes(app, {
     );
     if (open) return open.url;
     const name = String(contract.company_name || '').trim();
+    // com a API Key do Checkout da cidade: o link vale até o vencimento + 10 dias e fecha depois de um pagamento
+    const apiKey = await checkoutApiKeyFor(contract.client_city || contract.city).catch(() => null);
     const link = await createCheckoutLink({
       handle, amount, orderNsu, webhookUrl,
       description: `Mensalidade Pulse ${month.split('-').reverse().join('/')} · ${name}`,
+      apiKey, options: apiKey ? { single_payment: true, valid_until: validUntilFor(dueDate || revenue?.due_date || null) } : null,
     }, fetchImpl);
+    if (link.apiKeyError) logger.error('[infinitepay] link com a API Key falhou; saiu o link básico:', link.apiKeyError);
     // a conta (InfiniteTag) da cidade do cliente fica no link: o pagamento é conferido na mesma conta
     await pool.query(
       `INSERT INTO payment_links (order_nsu, revenue_id, contract_id, client_id, month, amount, url, slug, raw, handle, city)

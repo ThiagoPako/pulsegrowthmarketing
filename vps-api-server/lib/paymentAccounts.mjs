@@ -4,11 +4,12 @@
 // InfiniteTag, a chave Pix, o recebedor, ativo sim/não e o resultado do último teste de conexão. É a única fonte dos
 // dados de pagamento: paymentConfigForCity (server.mjs) põe estes campos por cima da configuração antiga, então o
 // link da InfinitePay, o Pix copia e cola, o PDF, a página /pagar e as mensagens leem daqui.
-// Credencial de API (client_id/secret, para extrato, se a InfinitePay liberar): só no servidor, cifrada (AES-256-GCM),
-// e a tela mostra só os 4 últimos caracteres.
+// API Key do Checkout InfinitePay (opcional, começa com inchk_; corrigido em 02/11/2026: o Checkout não tem client_id
+// nem secret): só no servidor, cifrada (AES-256-GCM), e a tela mostra só os 4 últimos caracteres. Com ela, o link sai
+// com validade e pagamento único (lib/infinitePay.mjs); sem ela, o link básico com a InfiniteTag.
 
 import crypto from 'node:crypto';
-import { normalizeHandle } from './infinitePay.mjs';
+import { normalizeHandle, isCheckoutApiKey } from './infinitePay.mjs';
 
 export const CITIES = ['uruacu', 'minacu'];
 export const CITY_LABELS = { uruacu: 'Uruaçu', minacu: 'Minaçu' };
@@ -24,7 +25,6 @@ export function normalizeAccountInput(body = {}) {
   if (body.document !== undefined) out.document = clip(body.document, 30) || null;
   if (body.bank !== undefined) out.bank = clip(body.bank, 60) || null;
   if (body.active !== undefined) out.active = !!body.active;
-  if (body.api_client_id !== undefined) out.api_client_id = clip(body.api_client_id, 200) || null;
   return out;
 }
 
@@ -49,9 +49,8 @@ export function publicAccount(acc, city) {
     document: a.document || '',
     bank: a.bank || '',
     active: a.active !== false,
-    api_client_id: a.api_client_id || '',
-    has_api_secret: !!a.api_secret_enc,
-    api_secret_last4: a.api_secret_last4 || '',
+    has_api_key: !!a.api_key_enc,
+    api_key_last4: a.api_key_last4 || '',
     last_test_at: a.last_test_at || null,
     last_test_ok: a.last_test_ok ?? null,
     last_test_error: a.last_test_error || null,
@@ -102,3 +101,16 @@ export function decryptSecret(enc, key = secretKey()) {
 }
 
 export const last4 = (s) => String(s || '').slice(-4);
+
+/** API Key que veio da tela: só "inchk_…"; outra coisa (client secret, senha) é recusada. */
+export function checkApiKeyInput(value) {
+  const key = String(value || '').trim();
+  if (!isCheckoutApiKey(key)) throw Object.assign(new Error('A API Key do Checkout começa com inchk_ (crie em Configurações do Checkout, no app da InfinitePay)'), { status: 400 });
+  return key;
+}
+
+/** A API Key decifrada da conta (só no servidor); conta desativada, sem key ou key ilegível: null. */
+export function accountApiKey(acc, key = secretKey()) {
+  if (!acc?.api_key_enc || acc.active === false) return null;
+  try { return decryptSecret(acc.api_key_enc, key); } catch { return null; }
+}

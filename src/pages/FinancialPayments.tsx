@@ -1,6 +1,8 @@
 // Financeiro → Pagamentos · InfinitePay (pedido do usuário, 01/11/2026: "um módulo no financeiro apenas para conexão
 // da API da Infinit, certinho para conectar cada cidade"). Uma conta por cidade: InfiniteTag, chave Pix, recebedor,
 // ativo e "Testar conexão" (link de R$ 1,00, ninguém é cobrado). É a única fonte dos dados de pagamento.
+// É o Checkout InfinitePay (link de pagamento), não checkout transparente (correção de 02/11/2026): no lugar de
+// client_id/secret, a API Key opcional do Checkout (inchk_…), que dá validade e pagamento único ao link.
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { fetchPaymentLinks, recheckPaymentLink } from '@/lib/billingIsis';
 import {
-  STATUS_LABELS, fetchPaymentAccounts, savePaymentAccount, testPaymentAccount,
+  STATUS_LABELS, fetchPaymentAccounts, savePaymentAccount, testPaymentAccount, isCheckoutApiKey,
   type PaymentAccount, type PaymentAccountStatus,
 } from '@/lib/paymentAccounts';
 
@@ -42,7 +44,10 @@ export default function FinancialPayments({ preview }: { preview?: { accounts: P
         <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')}><ArrowLeft size={18} /></Button>
         <div>
           <h1 className="text-xl font-bold">Pagamentos · InfinitePay</h1>
-          <p className="text-xs text-muted-foreground">A conta de cada cidade. Daqui saem o link do cartão, o Pix copia e cola, a chave e o recebedor do PDF, da página de pagamento e das mensagens.</p>
+          <p className="text-xs text-muted-foreground">
+            A conta de cada cidade no <strong>Checkout InfinitePay (link de pagamento)</strong>: o cliente abre o link e paga na página da InfinitePay, com Pix ou cartão.
+            Não é checkout transparente. O Pix copia e cola da mensagem e do PDF é gerado pela Pulse com a chave Pix da cidade, salva aqui.
+          </p>
         </div>
       </div>
 
@@ -68,14 +73,15 @@ export default function FinancialPayments({ preview }: { preview?: { accounts: P
 function AccountCard({ account, demo }: { account: PaymentAccount; demo: boolean }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState(account);
-  const [secret, setSecret] = useState('');
+  const [apiKey, setApiKey] = useState('');
   const [busy, setBusy] = useState<'' | 'save' | 'test'>('');
   const [lastTest, setLastTest] = useState<{ ok: boolean; url?: string; error?: string } | null>(null);
   useEffect(() => setForm(account), [account]);
 
   const set = <K extends keyof PaymentAccount>(k: K, v: PaymentAccount[K]) => setForm((f) => ({ ...f, [k]: v }));
-  const dirty = (['infinitepay_handle', 'pix_key', 'receiver_name', 'document', 'bank', 'active', 'api_client_id'] as const)
-    .some((k) => form[k] !== account[k]) || !!secret;
+  const dirty = (['infinitepay_handle', 'pix_key', 'receiver_name', 'document', 'bank', 'active'] as const)
+    .some((k) => form[k] !== account[k]) || !!apiKey;
+  const apiKeyInvalid = !!apiKey.trim() && !isCheckoutApiKey(apiKey);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['payment-accounts'] });
 
@@ -85,10 +91,10 @@ function AccountCard({ account, demo }: { account: PaymentAccount; demo: boolean
     try {
       await savePaymentAccount(account.city, {
         infinitepay_handle: form.infinitepay_handle, pix_key: form.pix_key, receiver_name: form.receiver_name,
-        document: form.document, bank: form.bank, active: form.active, api_client_id: form.api_client_id,
-        ...(secret ? { api_secret: secret } : {}),
+        document: form.document, bank: form.bank, active: form.active,
+        ...(apiKey.trim() ? { api_key: apiKey.trim() } : {}),
       });
-      setSecret('');
+      setApiKey('');
       await refresh();
       toast.success(`${account.label}: salvo`);
     } catch (error) {
@@ -114,9 +120,9 @@ function AccountCard({ account, demo }: { account: PaymentAccount; demo: boolean
     }
   };
 
-  const clearSecret = async () => {
+  const clearApiKey = async () => {
     if (demo) return;
-    await savePaymentAccount(account.city, { clear_api_secret: true }).then(refresh).catch((e) => toast.error((e as Error).message));
+    await savePaymentAccount(account.city, { clear_api_key: true }).then(refresh).catch((e) => toast.error((e as Error).message));
   };
 
   return (
@@ -143,24 +149,28 @@ function AccountCard({ account, demo }: { account: PaymentAccount; demo: boolean
         </div>
 
         <details className="rounded-md border px-3 py-2">
-          <summary className="cursor-pointer text-sm font-medium flex items-center gap-1.5"><KeyRound size={14} /> Credencial da API (extrato)</summary>
-          <div className="mt-2 grid gap-3 sm:grid-cols-2">
-            <Field label="Client ID" id={`cid-${account.city}`} value={form.api_client_id} onChange={(v) => set('api_client_id', v)} />
-            <div className="space-y-1.5">
-              <Label htmlFor={`sec-${account.city}`}>Client secret</Label>
-              <Input id={`sec-${account.city}`} type="password" autoComplete="new-password" value={secret}
-                placeholder={account.has_api_secret ? `guardado · termina em ${account.api_secret_last4}` : 'cole aqui (fica cifrado no servidor)'}
-                onChange={(e) => setSecret(e.target.value)} />
-              {account.has_api_secret && <button type="button" className="text-[11px] text-destructive underline" onClick={clearSecret}>Remover o secret guardado</button>}
-            </div>
+          <summary className="cursor-pointer text-sm font-medium flex items-center gap-1.5">
+            <KeyRound size={14} /> API Key do Checkout <span className="font-normal text-muted-foreground">(opcional)</span>
+            {account.has_api_key && <Badge variant="outline" className="ml-1 text-[10px]">guardada · {account.api_key_last4}</Badge>}
+          </summary>
+          <div className="mt-2 space-y-1.5">
+            <Label htmlFor={`key-${account.city}`}>API Key (começa com inchk_)</Label>
+            <Input id={`key-${account.city}`} type="password" autoComplete="new-password" value={apiKey}
+              placeholder={account.has_api_key ? `guardada · termina em ${account.api_key_last4}` : 'inchk_… (fica cifrada no servidor)'}
+              onChange={(e) => setApiKey(e.target.value)} />
+            {apiKeyInvalid && <p className="text-[11px] text-destructive">A API Key do Checkout começa com inchk_.</p>}
+            {account.has_api_key && <button type="button" className="text-[11px] text-destructive underline" onClick={clearApiKey}>Remover a API Key guardada</button>}
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Só se a InfinitePay liberar a API de parceiros (extrato). O secret vai cifrado para o servidor e nunca volta para a tela: aqui aparecem só os 4 últimos caracteres.
-          </p>
+          <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+            <p>Não é obrigatória: sem ela, o link de pagamento sai só com a InfiniteTag e funciona do mesmo jeito.</p>
+            <p>Com ela, o link da mensalidade vale até o vencimento + 10 dias e fecha depois de um pagamento (ninguém paga duas vezes no mesmo link).</p>
+            <p>Onde criar: app ou Conta Web da InfinitePay → Configurações do Checkout → Checkout Integrado → criar API Key. Tem de ser da mesma conta da InfiniteTag desta cidade.
+              Ela vai cifrada para o servidor e nunca volta para a tela: aqui aparecem só os 4 últimos caracteres.</p>
+          </div>
         </details>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={save} disabled={!dirty || busy !== ''}>{busy === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}</Button>
+          <Button size="sm" onClick={save} disabled={!dirty || apiKeyInvalid || busy !== ''}>{busy === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}</Button>
           <Button size="sm" variant="outline" onClick={test} disabled={!account.infinitepay_handle || dirty || busy !== ''}>
             {busy === 'test' ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap size={14} className="mr-1" />} Testar conexão
           </Button>
@@ -171,7 +181,9 @@ function AccountCard({ account, demo }: { account: PaymentAccount; demo: boolean
           {account.last_test_at && (
             <p className="flex items-center gap-1">
               {account.last_test_ok ? <CheckCircle2 size={12} className="text-emerald-600" /> : <XCircle size={12} className="text-red-600" />}
-              Último teste em {dataHora(account.last_test_at)}{account.last_test_ok ? ': a InfinitePay respondeu e criou o link de R$ 1,00.' : `: ${account.last_test_error}`}
+              Último teste em {dataHora(account.last_test_at)}{account.last_test_ok
+                ? `: a InfinitePay respondeu e criou o link de R$ 1,00${account.has_api_key ? ', com a API Key aceita' : ''}.`
+                : `: ${account.last_test_error}`}
             </p>
           )}
           {lastTest?.ok && lastTest.url && <p>Link de teste: <a className="text-primary underline" href={lastTest.url} target="_blank" rel="noreferrer">{lastTest.url}</a> (ninguém é cobrado)</p>}

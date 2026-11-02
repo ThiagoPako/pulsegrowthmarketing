@@ -519,7 +519,7 @@ export function registerBillingIsisRoutes(app, {
 
     const pix = pixPayload({ key: config?.pix_key, name: config?.receiver_name, city: contract.city || contract.client_city, amount, txid: `PULSE${month.replace('-', '')}` });
     // o link é no valor da mensalidade: a taxa do cartão a InfinitePay repassa na hora do pagamento (usuário, 01/11/2026)
-    const link = await paymentLink({ contract, revenue, amount, month }).catch((error) => {
+    const link = await paymentLink({ contract, revenue, amount, month, dueDate }).catch((error) => {
       logger.error('[cobranca-isis] link de pagamento:', error.message);
       return null;
     });

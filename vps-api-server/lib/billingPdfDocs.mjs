@@ -85,6 +85,22 @@ export function deliveredItems(numbers, plan = {}) {
   });
 }
 
+/**
+ * O que ficou abaixo do plano no mês (usuário, 02/11/2026: "se o relatório for desfavorável para a gente de entregas,
+ * deve avisar a gente no WhatsApp antes de enviar para o cliente"). [{ label, done, goal }] dos itens com meta no plano.
+ */
+export function deliveryShortfalls(numbers, plan = {}) {
+  if (!numbers) return [];
+  const byType = Object.fromEntries((numbers.deliveries.videos.by_type || []).map((t) => [t.type, t.total]));
+  return [
+    { label: 'Reels', done: byType.Reels || 0, goal: plan.reels_qty },
+    { label: 'Criativos', done: byType.Criativos || 0, goal: plan.creatives_qty },
+    { label: 'Stories', done: byType.Stories || 0, goal: plan.stories_qty },
+    { label: 'Artes', done: numbers.deliveries.arts.total, goal: plan.arts_qty },
+    { label: 'Gravações', done: numbers.deliveries.recordings.done, goal: plan.recording_sessions },
+  ].filter((r) => Number(r.goal) > 0 && Number(r.done) < Number(r.goal)).map((r) => ({ label: r.label, done: Number(r.done) || 0, goal: Number(r.goal) }));
+}
+
 /** Quadros de entrega: o que passou do plano ganha o selo verde; o que bateu o plano, "plano completo". */
 function deliveryTiles(items) {
   return items.map((r) => ({

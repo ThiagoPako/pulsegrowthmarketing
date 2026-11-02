@@ -141,3 +141,15 @@ describe('relatório premium', () => {
     expect(d.sections.some((s: { heading?: string }) => s.heading === 'Confirme suas gravações no portal')).toBe(false);
   });
 });
+
+// relatório desfavorável (usuário, 02/11/2026): o que ficou abaixo do plano segura o envio e avisa a equipe
+describe('entregas abaixo do plano', () => {
+  it('lista só os itens com meta que ficaram abaixo', async () => {
+    const { deliveryShortfalls } = await import('../../vps-api-server/lib/billingPdfDocs.mjs');
+    const numbers = { deliveries: { videos: { by_type: [{ type: 'Reels', total: 3 }] }, arts: { total: 6 }, recordings: { done: 2 } } };
+    expect(deliveryShortfalls(numbers, { reels_qty: 4, arts_qty: 6, recording_sessions: 2, stories_qty: 0 }))
+      .toEqual([{ label: 'Reels', done: 3, goal: 4 }]);
+    expect(deliveryShortfalls(numbers, { reels_qty: 3, arts_qty: 5 })).toEqual([]);
+    expect(deliveryShortfalls(null, { reels_qty: 3 })).toEqual([]);
+  });
+});

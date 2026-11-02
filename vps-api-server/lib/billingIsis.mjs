@@ -11,7 +11,7 @@ import { LEGACY_TEMPLATES, LEGACY_FOOTERS } from './billingIsisLegacy.mjs';
 export const BILLING_STEPS = ['relatorio_mensal', 'pre_vencimento', 'cobranca', 'lembrete'];
 export const STEP_LABELS = {
   relatorio_mensal: 'Dia 1 · relatório',
-  pre_vencimento: 'D−5 · agradecimento',
+  pre_vencimento: 'D−2 · dedicação da equipe',
   cobranca: 'Dia D · cobrança',
   lembrete: 'D+3 · lembrete',
 };
@@ -127,7 +127,7 @@ export function nextMonth(month) {
 export function stepsDueOn(today, dueDate) {
   const steps = [];
   if (today.slice(8, 10) === '01') steps.push('relatorio_mensal');
-  if (dueDate && addDays(dueDate, -5) === today) steps.push('pre_vencimento');
+  if (dueDate && addDays(dueDate, -2) === today) steps.push('pre_vencimento');
   if (dueDate === today) steps.push('cobranca');
   if (dueDate && addDays(dueDate, 3) === today) steps.push('lembrete');
   return steps;
@@ -137,7 +137,7 @@ export function stepsDueOn(today, dueDate) {
 export function stepDates(dueDate) {
   return {
     relatorio_mensal: `${dueDate.slice(0, 7)}-01`,
-    pre_vencimento: addDays(dueDate, -5),
+    pre_vencimento: addDays(dueDate, -2),
     cobranca: dueDate,
     lembrete: addDays(dueDate, 3),
   };

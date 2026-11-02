@@ -9,11 +9,12 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 describe('cobranças da Ísis · calendário', () => {
-  it('dia 1, D−5, D e D+3', () => {
-    expect(stepDates('2026-11-10')).toEqual({ relatorio_mensal: '2026-11-01', pre_vencimento: '2026-11-05', cobranca: '2026-11-10', lembrete: '2026-11-13' });
-    expect(stepsDueOn('2026-11-05', '2026-11-10')).toEqual(['pre_vencimento']);
-    // vencimento dia 6: o D−5 cai no dia 1, junto do relatório
-    expect(stepsDueOn('2026-11-01', '2026-11-06')).toEqual(['relatorio_mensal', 'pre_vencimento']);
+  // D−2 desde 02/11/2026 (era D−5)
+  it('dia 1, D−2, D e D+3', () => {
+    expect(stepDates('2026-11-10')).toEqual({ relatorio_mensal: '2026-11-01', pre_vencimento: '2026-11-08', cobranca: '2026-11-10', lembrete: '2026-11-13' });
+    expect(stepsDueOn('2026-11-08', '2026-11-10')).toEqual(['pre_vencimento']);
+    // vencimento dia 3: o D−2 cai no dia 1, junto do relatório
+    expect(stepsDueOn('2026-11-01', '2026-11-03')).toEqual(['relatorio_mensal', 'pre_vencimento']);
     // vencimento dia 30: o lembrete cai no mês seguinte
     expect(stepDates('2026-11-30').lembrete).toBe('2026-12-03');
     expect(nextMonth('2026-12')).toBe('2027-01');

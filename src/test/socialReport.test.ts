@@ -44,8 +44,21 @@ describe('relatório mensal · números', () => {
     expect(n.deliveries.arts.total).toBe(1);
     expect(n.deliveries.posts.total).toBe(1);
     expect(n.deliveries.recordings).toMatchObject({ scheduled: 2, done: 2, cancelled: 1, videos_recorded: 11, avg_videos_per_recording: 5.5 });
-    // gravação 2 × 90 min = 3 h; edição 2 h − 10 min ≈ 1,8 h; design 0,5 h
-    expect(n.time).toMatchObject({ recording_hours: 3, editing_hours: 1.8, design_hours: 0.5, total_hours: 5.3 });
+    // regra do usuário (02/11/2026): gravação 2 × 90 min = 3 h (sem cronômetro); edição 2 a 3 h por vídeo (2 vídeos =
+    // 4 a 6 h, média 5); arte 1 h a 1h30 (1 arte = média 1,25)
+    expect(n.time).toMatchObject({ recording_hours: 3, recording_real: false, editing_hours: 5, design_hours: 1.3, total_hours: 9.3,
+      editing_range: { min: 4, max: 6 }, design_range: { min: 1, max: 1.5 }, total_range: { min: 8, max: 10.5 } });
+  });
+
+  it('gravação pelo cronômetro do videomaker, espera à parte, e coberturas de evento do mês', () => {
+    const records = [
+      { date: '2026-10-03', videos_recorded: 5, recording_duration_seconds: 5400, wait_duration_seconds: 900 },
+      { date: '2026-10-17', videos_recorded: 6, recording_duration_seconds: 3600, wait_duration_seconds: 0 },
+    ];
+    const events = [{ title: 'Inauguração', date: '2026-10-20', status: 'concluido' }, { title: 'Feira', date: '2026-11-05', status: 'concluido' }];
+    const n = buildMonthlyNumbers({ month: '2026-10', contentTasks, designTasks, posts, recordings, deliveryRecords: records, events, recordingMinutes: 90 });
+    expect(n.time).toMatchObject({ recording_hours: 2.5, recording_real: true, wait_hours: 0.3 });
+    expect(n.deliveries.events).toMatchObject({ total: 1, titles: ['Inauguração'] });
   });
 
   it('edição esquecida aberta (mais de 8 h) não entra no tempo', () => {

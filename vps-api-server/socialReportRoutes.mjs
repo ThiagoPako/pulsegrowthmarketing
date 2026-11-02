@@ -108,16 +108,17 @@ export function registerSocialReportRoutes(app, {
       logger.error('[relatorio-mensal] consulta:', error.message);
       return [];
     });
-    const [contentTasks, designTasks, posts, recordings, deliveryRecords, minutes] = await Promise.all([
-      q(`SELECT id, title, content_type, kanban_column, approved_at, updated_at, editing_started_at, editing_paused_seconds,
+    const [contentTasks, designTasks, posts, recordings, deliveryRecords, events, minutes] = await Promise.all([
+      q(`SELECT id, title, description, content_type, kanban_column, approved_at, updated_at, editing_started_at, editing_paused_seconds,
                 reviewing_at, approval_sent_at FROM content_tasks WHERE client_id = $1`),
       q(`SELECT id, title, kanban_column, completed_at, client_approved_at, updated_at, time_spent_seconds FROM design_tasks WHERE client_id = $1`),
       q(`SELECT id, title, status, posted_at, delivered_at FROM social_media_deliveries WHERE client_id = $1`),
       q(`SELECT id, date, status FROM recordings WHERE client_id = $1`),
-      q(`SELECT id, date, videos_recorded FROM delivery_records WHERE client_id = $1`),
+      q(`SELECT id, date, videos_recorded, recording_duration_seconds, wait_duration_seconds FROM delivery_records WHERE client_id = $1`),
+      q(`SELECT id, title, date, status FROM event_recordings WHERE client_id = $1`),
       recordingMinutesFor(client.id).catch(() => 90),
     ]);
-    const numbers = buildMonthlyNumbers({ month: r.month, contentTasks, designTasks, posts, recordings, deliveryRecords, recordingMinutes: minutes });
+    const numbers = buildMonthlyNumbers({ month: r.month, contentTasks, designTasks, posts, recordings, deliveryRecords, events, recordingMinutes: minutes });
     const closed = r.until < new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
     const [ins, prevIns] = await Promise.all([
       insightsFor(client.id, r.since, r.until, closed),
@@ -246,6 +247,23 @@ export function registerSocialReportRoutes(app, {
       if (!String(req.body?.suggestions || '').trim()) throw httpError(400, 'Escreva as sugestões (uma por linha)');
       await saveDraft(client.id, month, req.body, { id: agent.userId, name: agent.name || 'Ísis' });
       res.json({ success: true, client: String(client.company_name).trim(), month, status: 'rascunho' });
+    } catch (error) { sendError(res, error); }
+  });
+
+  // a Ísis aprova (02/11/2026, "tudo que os agentes podem fazer não precisa de humanos"): o relatório do dia 1 sai sem
+  // esperar a equipe; quem aprova fica registrado como o agente
+  app.post('/api/agent/social-report/approve', async (req, res) => {
+    try {
+      const agent = await reportAgent(req);
+      const client = await findClient(req.body?.client);
+      const month = monthOf(req.body?.month);
+      if (!(await stored(client.id, month))) throw httpError(400, 'Ainda não há rascunho para aprovar: grave as sugestões antes');
+      await pool.query(
+        `UPDATE social_monthly_reports SET status = 'aprovado', approved_by = $3, approved_by_name = $4, approved_at = now(), updated_at = now()
+          WHERE client_id = $1 AND month = $2`,
+        [client.id, month, agent.userId || null, `${agent.name || 'Ísis'} (agente)`]
+      );
+      res.json({ success: true, client: String(client.company_name).trim(), month, status: 'aprovado' });
     } catch (error) { sendError(res, error); }
   });
 

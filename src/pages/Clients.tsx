@@ -699,6 +699,16 @@ export default function Clients() {
 
   const handleSave = async () => {
     if (saving || loadingEditData) return;
+    // quem recebe cobrança/recibo fora do responsável precisa de um WhatsApp válido (nada de cobrança no lugar errado)
+    for (const [same, phone, label] of [
+      [form.billingSameAsOwner, form.billingWhatsapp, 'quem recebe as cobranças'],
+      [form.receiptSameAsOwner, form.receiptWhatsapp, 'quem recebe os recibos'],
+    ] as const) {
+      if (same === false && !/^55\d{10,11}$/.test(String(phone || '').replace(/\D/g, ''))) {
+        toast.error(`Confira o WhatsApp de ${label} (55 + DDD + número)`);
+        return;
+      }
+    }
     if (!form.companyName || !form.responsiblePerson || !form.whatsapp) {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
@@ -1149,6 +1159,43 @@ export default function Clients() {
       <div className="space-y-1">
         <Label>Grupo WhatsApp (opcional)</Label>
         <WhatsAppGroupPicker value={form.whatsappGroup || ''} onChange={v => setForm({ ...form, whatsappGroup: v })} />
+      </div>
+
+      {/* financeiro do cliente (02/11/2026): quem recebe as cobranças e quem recebe os recibos */}
+      <div className="p-4 rounded-xl border space-y-4">
+        <div>
+          <p className="text-sm font-semibold">Financeiro do cliente</p>
+          <p className="text-[11px] text-muted-foreground">Para quem vão as cobranças e os recibos. Empresa com financeiro próprio: desmarque e cadastre o número dele.</p>
+        </div>
+        {([
+          ['billing', 'Quem recebe as cobranças', 'Cobranças, lembretes e o aviso de vencimento'],
+          ['receipt', 'Quem recebe os recibos', 'O obrigado com o recibo, assim que o pagamento cai'],
+        ] as const).map(([kind, title, hint]) => {
+          const same = kind === 'billing' ? form.billingSameAsOwner !== false : form.receiptSameAsOwner !== false;
+          const nameKey = kind === 'billing' ? 'billingContactName' : 'receiptContactName';
+          const phoneKey = kind === 'billing' ? 'billingWhatsapp' : 'receiptWhatsapp';
+          const sameKey = kind === 'billing' ? 'billingSameAsOwner' : 'receiptSameAsOwner';
+          return (
+            <div key={kind} className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">{title}</p>
+                  <p className="text-[10px] text-muted-foreground">{hint}</p>
+                </div>
+                <label className="flex items-center gap-2 text-xs">
+                  <Switch checked={same} onCheckedChange={v => setForm({ ...form, [sameKey]: v })} />
+                  O mesmo do responsável
+                </label>
+              </div>
+              {!same && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input value={(form[nameKey] as string) || ''} onChange={e => setForm({ ...form, [nameKey]: e.target.value })} placeholder="Nome (ex.: Ana do financeiro)" />
+                  <Input value={(form[phoneKey] as string) || ''} onChange={e => setForm({ ...form, [phoneKey]: e.target.value })} placeholder="WhatsApp 5562999999999" />
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Cliente Star toggle - moved here from Step 2 */}

@@ -33,6 +33,7 @@ import { registerPaymentAccountsRoutes } from './paymentAccountsRoutes.mjs';
 import { registerInfinitePayRoutes } from './infinitePayRoutes.mjs';
 import { registerEfiPixRoutes } from './efiPixRoutes.mjs';
 import { registerPixAutomaticoRoutes } from './pixAutomaticoRoutes.mjs';
+import { billingTarget } from './lib/billingContacts.mjs';
 import { alertTeam, alertRevenuePaid } from './lib/teamAlerts.mjs';
 import { registerEfiCardRoutes } from './efiCardRoutes.mjs';
 import { registerPixReceiptRoutes } from './pixReceiptRoutes.mjs';
@@ -10881,7 +10882,9 @@ async function runBillingAutomation() {
       const revenue = target.revenues[0] || null;
 
       const { data: clientData } = await admin.from('clients').select('*').eq('id', contract.client_id).single();
-      if (!clientData?.whatsapp) continue;
+      // quem recebe as cobranças (02/11/2026): o responsável ou o financeiro da empresa; faltando o número, não envia
+      const billingTo = billingTarget(clientData || {}, 'cobranca').to;
+      if (!billingTo) continue;
       const { data: existingMessages } = await admin.from('billing_messages').select('*').eq('client_id', contract.client_id).gte('sent_at', todayStr + 'T00:00:00').lte('sent_at', todayStr + 'T23:59:59');
       if (existingMessages?.length) continue;
 
@@ -10909,7 +10912,7 @@ async function runBillingAutomation() {
 
       if (whatsappConfig?.integration_active) {
         try {
-          await sendWhatsAppDirect(whatsappConfig, clientData.whatsapp, message, admin, contract.client_id, isReminder ? 'cobranca_lembrete' : 'cobranca', 'cobranca');
+          await sendWhatsAppDirect(whatsappConfig, billingTo, message, admin, contract.client_id, isReminder ? 'cobranca_lembrete' : 'cobranca', 'cobranca');
           await admin.from('billing_messages').insert({
             revenue_id: revenue?.id || null,
             client_id: contract.client_id,
@@ -20525,7 +20528,7 @@ const pixReceipts = registerPixReceiptRoutes(app, {
   privateRoot: process.env.PRIVATE_FILES_ROOT || path.resolve(UPLOAD_ROOT, '..', 'pulse-privado'),
   // Pix pela chave conferido na API da Efí (comprovante e "Já paguei"), sem gerar cobrança
   checkOnBank: (args) => efiPix.checkReceiptOnBank(args),
-  checkPagePaid: (page) => efiPix.checkPagePaid(page),
+  checkPagePaid: (page, opts) => efiPix.checkPagePaid(page, opts),
   readReceipt: async ({ data, mime, prompt }) => {
     const ai = await resolveAiConfig(null);
     if (ai.provider !== 'claude') throw new Error('Leitura do comprovante precisa da chave do Claude');

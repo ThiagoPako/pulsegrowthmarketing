@@ -161,27 +161,55 @@ const NET_ROWS = [
 ];
 
 /**
- * Relatório do mês: mostra o serviço entregue (o que foi feito, grande e primeiro; o que passou do plano em destaque).
- * d = { ref (mês do relatório), prev, next (mês atual), today, client, plan, numbers, network, suggestions, dates?, link? }
- * dates = datas do mês que combinam com o nicho (monthDates), com a ideia de cada uma.
+ * Relatório do mês, premium (usuário, 01/11/2026): capa com o agradecimento; o que entregamos em destaque (o que
+ * passou do plano com selo laranja; o que não foi entregue não aparece); calendário editorial do mês que começa
+ * (gravações agendadas, feriados com arte de aviso, datas do nicho) com o pedido de confirmar as gravações; o portal
+ * do cliente; a equipe do projeto (pessoas e agentes) e o fecho com o contato.
+ * d = { ref, prev, next, client, plan, numbers, network, suggestions, clientLogo?, portalUrl?, recordings?,
+ *       calendar?, highlights?, team?: { people, agents }, contact? }
  */
 export function relatorioDoc(d) {
   const n = d.numbers;
-  const rec = n.deliveries.recordings;
   const net = d.network?.connected && d.network.current ? d.network : null;
   // rede social: só o que subiu ou se manteve (o relatório mostra resultado, não queda)
   const netRows = net ? NET_ROWS.filter(([k]) => net.current[k] !== null && net.current[k] !== undefined && !(Number(net.change?.[k]) < 0))
     .map(([k, label]) => ({ label, previous: net.previous?.[k] ?? null, current: net.current[k], change: net.change?.[k] ?? null })) : [];
   const items = deliveredItems(n, d.plan);
   const acima = aboveSummary(items);
+  const extraTotal = items.reduce((a, r) => a + r.extra, 0);
   const suggestions = String(d.suggestions || '').split('\n').map((s) => s.replace(/^[•\-–*]\s*/, '').trim()).filter(Boolean);
   const period = n.period ? `${dataBr(n.period.since)} a ${dataBr(n.period.until)}` : monthLabel(d.ref);
+  const nome = first(d.client.responsible) || d.client.name;
+
+  // calendário editorial: gravações agendadas + feriados (arte de aviso) + datas do nicho
+  const hora = (t) => {
+    const [h, mi] = String(t || '').split(':');
+    return h ? `${Number(h)}h${mi && mi !== '00' ? mi : ''}` : '';
+  };
+  const recs = (d.recordings || []).filter((r) => String(r.date).slice(0, 7) === d.next);
+  const marks = [
+    ...recs.map((r) => ({ date: String(r.date).slice(0, 10), kind: 'gravacao', short: `Gravação ${hora(r.time)}`.trim(), text: `Gravação${r.time ? ` às ${hora(r.time)}` : ''}` })),
+    ...(d.calendar || []).map((x) => (x.kind === 'feriado'
+      ? { date: x.date, kind: 'feriado', short: 'Arte de aviso', text: `${x.label}: arte de aviso do feriado` }
+      : { date: x.date, kind: 'sazonal', short: x.label, text: `${x.label}: ${x.idea}` })),
+  ].sort((a, b) => a.date.localeCompare(b.date) || (a.kind === 'gravacao' ? -1 : 1));
+  const semana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  const diaSemana = (iso) => semana[new Date(`${iso}T12:00:00Z`).getUTCDay()];
+
   return {
     kind: 'relatorio',
+    cover: {
+      client: d.client.name,
+      logo: d.clientLogo || null,
+      month: monthLabel(d.ref),
+      title: 'O que entregamos para você',
+      thanks: `Obrigada por mais um mês com a Pulse, ${nome}! Foi um prazer cuidar do seu perfil em ${monthName(d.ref)}. Aqui está tudo o que construímos juntos e o que vem por aí em ${monthName(d.next)}.`,
+      badge: extraTotal > 0 ? `+${extraTotal} ${extraTotal === 1 ? 'ENTREGA' : 'ENTREGAS'} ALÉM DO PLANO` : null,
+      footer: `Período de ${period}`,
+    },
     title: `O que entregamos em ${monthName(d.ref)}`,
     subtitle: `${d.client.name} · período de ${period}`,
     status: acima ? 'acima' : null,
-    intro: `Olá, ${first(d.client.responsible) || d.client.name}! Este é o resumo do trabalho da Pulse no seu perfil em ${monthName(d.ref)}: o que produzimos, o tempo dedicado${net ? ', os resultados da rede social' : ''} e as nossas ideias para ${monthName(d.next)}.`,
     cards: [
       { label: 'Vídeos entregues', value: n.deliveries.videos.total, highlight: true },
       { label: 'Artes', value: n.deliveries.arts.total },
@@ -189,19 +217,9 @@ export function relatorioDoc(d) {
       { label: 'Horas dedicadas', value: n.time.total_hours > 0 ? `${num(n.time.total_hours)} h` : '—' },
     ],
     sections: [
-      ...(acima ? [{ type: 'callout', tone: 'verde', heading: 'Acima do plano contratado', text: acima }] : []),
+      ...(acima ? [{ type: 'callout', heading: 'Acima do plano contratado', text: acima }] : []),
       ...(items.length ? [{ title: 'Entregas do mês', type: 'tiles', rows: deliveryTiles(items) }] : []),
-      // sugestões do mês: as datas que combinam com o nicho (lib/monthDates.mjs) e as ideias aprovadas no relatório
-      ...((d.dates || []).length ? [{
-        title: `Sugestões para ${monthName(d.next)}`,
-        type: 'table',
-        columns: [{ label: 'Data', width: 64 }, { label: 'Data comemorativa', width: 170 }, { label: 'O que podemos fazer' }],
-        rows: d.dates.map((x) => [{ text: x.day, bold: true }, x.label, x.idea.charAt(0).toUpperCase() + x.idea.slice(1)]),
-      }] : []),
-      ...(suggestions.length ? [{
-        ...((d.dates || []).length ? {} : { title: `Sugestões para ${monthName(d.next)}` }),
-        type: 'callout', heading: 'Mais ideias para o mês', text: suggestions.map((s) => `• ${s}`).join('\n'),
-      }] : []),
+      ...((d.highlights || []).length ? [{ title: 'Destaques do mês', type: 'gallery', items: d.highlights }] : []),
       ...(n.deliveries.videos.by_type.length ? [{
         title: 'Vídeos entregues',
         type: 'table',
@@ -211,12 +229,6 @@ export function relatorioDoc(d) {
       ...(n.deliveries.arts.total ? [{
         title: 'Artes entregues',
         bullets: n.deliveries.arts.titles.concat(n.deliveries.arts.total > n.deliveries.arts.titles.length ? [`e mais ${n.deliveries.arts.total - n.deliveries.arts.titles.length}`] : []),
-      }] : []),
-      ...(rec.done ? [{
-        title: 'Gravações',
-        type: 'table',
-        columns: [{ label: 'Gravações realizadas', align: 'center' }, { label: 'Vídeos gravados', align: 'center' }, { label: 'Média por gravação', align: 'center' }],
-        rows: [[{ text: String(rec.done), bold: true }, String(rec.videos_recorded), rec.avg_videos_per_recording === null ? '—' : num(rec.avg_videos_per_recording)]],
       }] : []),
       ...(n.time.total_hours > 0 ? [{
         title: `Tempo dedicado · ${num(n.time.total_hours)} horas`,
@@ -232,14 +244,39 @@ export function relatorioDoc(d) {
         rows: netRows,
       }] : []),
       ...(net?.top_posts?.length ? [{
-        title: 'Posts de destaque',
+        title: 'Posts que mais alcançaram',
         type: 'table',
         columns: [{ label: 'Data', width: 64 }, { label: 'Post' }, { label: 'Alcance', width: 80, align: 'right' }, { label: 'Interações', width: 90, align: 'right' }],
         rows: net.top_posts.map((p) => [dataBr(p.date).slice(0, 5) || '—', p.caption || '(sem legenda)', num(p.reach), num(p.interactions)]),
       }] : []),
-      ...(d.link ? [{ title: 'Relatório completo', text: d.link }] : []),
+      // calendário editorial do mês que começa
+      { title: `Calendário editorial de ${monthName(d.next)}`, type: 'calendar', month: d.next, marks },
+      ...(marks.length ? [{
+        type: 'table',
+        columns: [{ label: 'Data', width: 90 }, { label: 'O que acontece' }],
+        rows: marks.map((mk) => [{ text: `${mk.date.slice(8, 10)}/${mk.date.slice(5, 7)} · ${diaSemana(mk.date)}`, bold: true }, mk.kind === 'gravacao' ? { text: mk.text, bold: true, color: '#F15A24' } : mk.text]),
+      }] : []),
+      ...(recs.length ? [{
+        type: 'callout',
+        heading: 'Confirme suas gravações no portal',
+        text: `${recs.length === 1 ? 'A data acima já está reservada' : `As ${recs.length} datas acima já estão reservadas`} para você. Confirme no seu portal para a equipe chegar com tudo pronto.`,
+      }] : []),
+      ...(suggestions.length ? [{ title: `Mais ideias para ${monthName(d.next)}`, type: 'callout', heading: 'O que propomos para o próximo mês', text: suggestions.map((s) => `• ${s}`).join('\n') }] : []),
+      ...(d.portalUrl ? [{
+        title: 'Seu portal',
+        type: 'portal',
+        url: d.portalUrl,
+        heading: 'Acompanhe tudo no seu portal',
+        text: 'Veja os vídeos e os conteúdos do mês, aprove o que está esperando por você e confirme as próximas gravações.',
+      }] : []),
+      ...((d.team?.people || []).length ? [{ title: 'Quem cuidou do seu projeto', type: 'team', people: d.team.people }] : []),
+      ...((d.team?.agents || []).length ? [{ title: 'Agentes de IA da Pulse no seu projeto', type: 'team', people: d.team.agents.map((a) => ({ ...a, agent: true })) }] : []),
     ],
-    closing: { text: 'Obrigada pela parceria. Bora para mais um mês!', ...SIGNATURE },
+    closing: {
+      text: `Obrigada pela parceria e pela confiança, ${nome}. Seguimos juntos em ${monthName(d.next)}!`,
+      ...SIGNATURE,
+      band: d.contact ? `Dúvidas: ${d.contact}` : 'Agência Pulse',
+    },
   };
 }
 

@@ -86,3 +86,39 @@ describe('PDFs da Ísis: conteúdo', () => {
     expect(sem).not.toContain('{');
   });
 });
+
+describe('relatório premium', () => {
+  const numbers = {
+    period: { since: '2026-10-01', until: '2026-10-31' },
+    deliveries: { videos: { total: 7, by_type: [{ type: 'Reels', total: 7, titles: [] }] }, arts: { total: 0, titles: [] }, posts: { total: 3 }, recordings: { scheduled: 2, done: 2, cancelled: 0, videos_recorded: 9, avg_videos_per_recording: 4.5 } },
+    time: { total_hours: 0, recording_hours: 0, editing_hours: 0, design_hours: 0 },
+  };
+  const base = { ref: '2026-10', next: '2026-11', client: { name: 'Clínica X', responsible: 'Ana Souza' }, plan: { reels_qty: 4 }, numbers, network: null, suggestions: '' };
+
+  it('capa com o agradecimento e o selo do que passou do plano', () => {
+    const d = relatorioDoc(base);
+    expect(d.cover.title).toBe('O que entregamos para você');
+    expect(d.cover.thanks).toContain('Ana');
+    expect(d.cover.badge).toBe('+3 ENTREGAS ALÉM DO PLANO');
+  });
+
+  it('calendário: gravações do mês, feriados com arte de aviso e o pedido de confirmar no portal', () => {
+    const d = relatorioDoc({
+      ...base,
+      calendar: [{ date: '2026-11-02', kind: 'feriado', label: 'Finados', idea: 'x' }, { date: '2026-11-01', kind: 'sazonal', label: 'Novembro Azul', idea: 'série sobre a saúde do homem' }],
+      recordings: [{ date: '2026-11-05', time: '09:00' }, { date: '2026-12-03', time: '09:00' }],
+      portalUrl: 'https://agenciapulse.tech/portal/x',
+      team: { people: [{ name: 'Rafael', role: 'Videomaker' }], agents: [{ name: 'Davi', role: 'Edição de vídeo' }] },
+    });
+    const cal = d.sections.find((s: { type?: string }) => s.type === 'calendar');
+    expect(cal.marks.map((m: { kind: string; short: string }) => `${m.kind}:${m.short}`)).toEqual(['sazonal:Novembro Azul', 'feriado:Arte de aviso', 'gravacao:Gravação 9h']);
+    expect(d.sections.some((s: { heading?: string }) => s.heading === 'Confirme suas gravações no portal')).toBe(true);
+    expect(d.sections.find((s: { type?: string }) => s.type === 'portal').url).toBe('https://agenciapulse.tech/portal/x');
+    expect(d.sections.filter((s: { type?: string }) => s.type === 'team')).toHaveLength(2);
+  });
+
+  it('sem gravação agendada: só as datas, sem pedido de confirmar', () => {
+    const d = relatorioDoc({ ...base, calendar: [{ date: '2026-11-02', kind: 'feriado', label: 'Finados', idea: 'x' }] });
+    expect(d.sections.some((s: { heading?: string }) => s.heading === 'Confirme suas gravações no portal')).toBe(false);
+  });
+});

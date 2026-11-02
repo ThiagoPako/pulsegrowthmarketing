@@ -35,7 +35,7 @@ export const STATUS_STYLE = {
   aberto: { label: 'EM ABERTO', fg: C.laranja, bg: C.laranjaClaro },
   vencido: { label: 'VENCIDA', fg: C.vermelho, bg: C.vermelhoClaro },
   pago: { label: 'PAGA', fg: C.verde, bg: C.verdeClaro },
-  acima: { label: 'ACIMA DO PLANO', fg: C.verde, bg: C.verdeClaro },
+  acima: { label: 'ACIMA DO PLANO', fg: C.laranja, bg: C.laranjaClaro },
 };
 
 const NO_LIGA = { liga: false, clig: false, dlig: false, rlig: false };
@@ -330,13 +330,13 @@ function tiles(doc, items) {
     const y = doc.y;
     items.slice(i, i + per).forEach((it, j) => {
       const x = M + j * (w + gap);
-      doc.roundedRect(x, y, w, h, 10).fill(it.highlight ? C.verdeClaro : C.cinzaClaro);
-      doc.font('bold').fontSize(26).fillColor(it.highlight ? C.verde : C.texto).text(String(it.value), x + 14, y + 12, { width: w - 28, height: 32 });
+      doc.roundedRect(x, y, w, h, 10).fill(it.highlight ? C.laranjaClaro : C.cinzaClaro);
+      doc.font('bold').fontSize(26).fillColor(it.highlight ? C.laranja : C.texto).text(String(it.value), x + 14, y + 12, { width: w - 28, height: 32 });
       doc.font('semibold').fontSize(9.5).fillColor(C.texto).text(it.label, x + 14, y + 44, { width: w - 28, height: 13, ellipsis: true });
       if (it.badge) {
         doc.font('bold').fontSize(7.5);
         const bw = Math.min(doc.widthOfString(it.badge) + 14, w - 28);
-        doc.roundedRect(x + 14, y + 59, bw, 13, 6.5).fill(it.highlight ? C.verde : '#E3E3E8');
+        doc.roundedRect(x + 14, y + 59, bw, 13, 6.5).fill(it.highlight ? C.laranja : '#E3E3E8');
         doc.fillColor(it.highlight ? '#FFFFFF' : C.cinza).text(it.badge, x + 14, y + 62, { width: bw, align: 'center' });
       }
     });
@@ -402,8 +402,8 @@ async function payment(doc, pay) {
 }
 
 /** Fechamento assinado. */
-function closing(doc, { text, signature, role }) {
-  ensure(doc, 80);
+function closing(doc, { text, signature, role, band }) {
+  ensure(doc, band ? 170 : 80);
   doc.y += 4;
   if (text) { doc.font('regular').fontSize(10).fillColor(C.texto).text(text, M, doc.y, { width: CW, lineGap: 2 }); doc.y += 14; }
   doc.moveTo(M, doc.y).lineTo(M + 40, doc.y).lineWidth(2).strokeColor(C.laranja).stroke();
@@ -411,11 +411,207 @@ function closing(doc, { text, signature, role }) {
   doc.font('bold').fontSize(10.5).fillColor(C.texto).text(signature || 'Agência Pulse', M, doc.y, { width: CW });
   if (role) doc.font('regular').fontSize(9).fillColor(C.cinza).text(role, M, doc.y + 1, { width: CW });
   doc.y += 10;
+  if (band) {
+    // faixa final: logo da Pulse e o contato da cidade
+    const y = doc.y + 8;
+    doc.roundedRect(M, y, CW, 64, 12).fill(C.fundo);
+    const logo = path.join(ASSETS, 'pulse-logo.png');
+    if (fs.existsSync(logo)) doc.image(logo, M + 20, y + 20, { height: 24 });
+    doc.font('regular').fontSize(9).fillColor('#BDBDC5').text(band, M + 180, y + 18, { width: CW - 200, align: 'right' });
+    doc.font('semibold').fontSize(9).fillColor(C.laranja).text('@agenciapulse', M + 180, y + 34, { width: CW - 200, align: 'right' });
+    doc.y = y + 64 + 10;
+  }
 }
 
-function footer(doc, { note, contact, generated }) {
+// ── relatório premium (usuário, 01/11/2026: "muito bem elaborado, bonito ... cara de material premium") ──
+
+const iniciais = (nome) => String(nome || '?').trim().split(/\s+/).slice(0, 2).map((p) => p[0] || '').join('').toUpperCase() || '?';
+
+/** Foto redonda (buffer PNG/JPEG) ou círculo laranja com as iniciais. */
+function avatar(doc, x, y, size, image, name, { ring = C.laranja } = {}) {
+  doc.circle(x + size / 2, y + size / 2, size / 2 + 2).fill(ring);
+  if (image) {
+    try {
+      doc.save();
+      doc.circle(x + size / 2, y + size / 2, size / 2).clip();
+      doc.image(image, x, y, { cover: [size, size], align: 'center', valign: 'center' });
+      doc.restore();
+      return;
+    } catch {
+      doc.restore();
+    }
+  }
+  doc.circle(x + size / 2, y + size / 2, size / 2).fill(C.fundo2);
+  doc.font('bold').fontSize(size * 0.36).fillColor('#FFFFFF').text(iniciais(name), x, y + size * 0.3, { width: size, align: 'center' });
+}
+
+/** Capa: grafite, logo da Pulse, logo do cliente num círculo, o mês e o agradecimento. */
+function cover(doc, c) {
+  doc.rect(0, 0, W, H).fill(C.fundo);
+  doc.rect(0, 0, 8, H).fill(C.laranja);
+  const logo = path.join(ASSETS, 'pulse-logo.png');
+  if (fs.existsSync(logo)) doc.image(logo, M + 10, 54, { height: 30 });
+  doc.font('bold').fontSize(9).fillColor(C.laranja).text((c.kicker || 'RELATÓRIO DO MÊS').toUpperCase(), M, 64, { width: CW, align: 'right', characterSpacing: 2 });
+  // logo do cliente num círculo branco
+  const size = 132;
+  const cx = M + 10;
+  const cy = 210;
+  doc.circle(cx + size / 2, cy + size / 2, size / 2 + 4).fill(C.laranja);
+  doc.circle(cx + size / 2, cy + size / 2, size / 2).fill('#FFFFFF');
+  let drew = false;
+  if (c.logo) {
+    try {
+      doc.save();
+      doc.circle(cx + size / 2, cy + size / 2, size / 2 - 6).clip();
+      doc.image(c.logo, cx + 12, cy + 12, { fit: [size - 24, size - 24], align: 'center', valign: 'center' });
+      doc.restore();
+      drew = true;
+    } catch {
+      doc.restore();
+    }
+  }
+  if (!drew) doc.font('bold').fontSize(44).fillColor(C.fundo).text(iniciais(c.client), cx, cy + 40, { width: size, align: 'center' });
+  doc.font('semibold').fontSize(13).fillColor('#BDBDC5').text(c.client, M + 10, 372, { width: CW - 20 });
+  doc.font('bold').fontSize(12).fillColor(C.laranja).text(String(c.month || '').toUpperCase(), M + 10, 394, { width: CW - 20, characterSpacing: 2 });
+  doc.font('bold').fontSize(40).fillColor('#FFFFFF').text(c.title || 'O que entregamos para você', M + 10, 430, { width: CW - 40, lineGap: -4 });
+  doc.rect(M + 10, doc.y + 18, 56, 4).fill(C.laranja);
+  if (c.thanks) doc.font('regular').fontSize(13).fillColor('#D8D8DE').text(c.thanks, M + 10, doc.y + 40, { width: CW - 80, lineGap: 4 });
+  if (c.badge) {
+    doc.font('bold').fontSize(10);
+    const bw = doc.widthOfString(c.badge, { characterSpacing: 1 }) + 28;
+    doc.roundedRect(M + 10, H - 150, bw, 28, 14).fill(C.laranja);
+    doc.fillColor('#FFFFFF').text(c.badge, M + 24, H - 141, { characterSpacing: 1, lineBreak: false });
+  }
+  doc.font('regular').fontSize(9).fillColor('#8C8C96').text('Agência Pulse · @agenciapulse', M + 10, H - 70, { width: CW - 20 });
+  doc.font('regular').fontSize(9).fillColor('#8C8C96').text(c.footer || '', M + 10, H - 70, { width: CW - 20, align: 'right' });
+}
+
+const SEMANA = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+const MARK = {
+  gravacao: { fill: C.laranja, fg: '#FFFFFF', legend: 'Gravação agendada' },
+  feriado: { fill: C.fundo2, fg: '#FFFFFF', legend: 'Feriado · arte de aviso' },
+  sazonal: { fill: C.laranjaClaro, fg: C.laranja, legend: 'Data do seu nicho' },
+};
+
+/** Calendário editorial do mês: grade domingo a sábado com as marcas e a legenda. */
+function calendar(doc, { month, marks = [] }) {
+  const [y, m] = String(month).split('-').map(Number);
+  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const weeks = Math.ceil((first + days) / 7);
+  const cw = CW / 7;
+  const ch = 64;
+  ensure(doc, 26 + weeks * ch + 40);
+  let top = doc.y;
+  // cabeçalho dos dias da semana
+  doc.roundedRect(M, top, CW, 22, 6).fill(C.fundo);
+  SEMANA.forEach((d, i) => doc.font('bold').fontSize(7.5).fillColor(i === 0 ? C.laranja : '#FFFFFF').text(d, M + i * cw, top + 7, { width: cw, align: 'center', characterSpacing: 1 }));
+  top += 26;
+  const byDay = {};
+  for (const mk of marks) (byDay[Number(String(mk.date).slice(8, 10))] ||= []).push(mk);
+  for (let day = 1; day <= days; day++) {
+    const idx = first + day - 1;
+    const x = M + (idx % 7) * cw;
+    const yy = top + Math.floor(idx / 7) * ch;
+    const list = byDay[day] || [];
+    doc.roundedRect(x + 2, yy + 2, cw - 4, ch - 4, 6).fill(list.length ? '#FFFFFF' : C.cinzaClaro);
+    if (list.length) doc.roundedRect(x + 2, yy + 2, cw - 4, ch - 4, 6).lineWidth(1).strokeColor(C.linha).stroke();
+    doc.font('bold').fontSize(10).fillColor(list.length ? C.texto : '#A6A6AE').text(String(day), x + 8, yy + 7, { width: cw - 16 });
+    let my = yy + 22;
+    for (const mk of list.slice(0, 2)) {
+      const st = MARK[mk.kind] || MARK.sazonal;
+      doc.roundedRect(x + 5, my, cw - 10, 17, 4).fill(st.fill);
+      doc.font('semibold').fontSize(6.3).fillColor(st.fg).text(mk.short || mk.text, x + 8, my + 3.5, { width: cw - 16, height: 11, ellipsis: true, lineBreak: false });
+      my += 19;
+    }
+  }
+  doc.y = top + weeks * ch + 8;
+  // legenda
+  let lx = M;
+  for (const kind of ['gravacao', 'feriado', 'sazonal']) {
+    if (!marks.some((mk) => mk.kind === kind)) continue;
+    const st = MARK[kind];
+    doc.roundedRect(lx, doc.y + 2, 10, 10, 2).fill(st.fill);
+    if (kind === 'sazonal') doc.roundedRect(lx, doc.y + 2, 10, 10, 2).lineWidth(0.8).strokeColor(C.laranja).stroke();
+    doc.font('regular').fontSize(8.5).fillColor(C.cinza).text(st.legend, lx + 15, doc.y + 2, { lineBreak: false });
+    lx += doc.widthOfString(st.legend) + 40;
+  }
+  doc.y += 26;
+}
+
+/** Galeria de destaques (capa do vídeo + título), 3 por linha. */
+function gallery(doc, items) {
+  const per = 3;
+  const gap = 12;
+  const w = (CW - gap * (per - 1)) / per;
+  const ih = 190;
+  for (let i = 0; i < items.length; i += per) {
+    ensure(doc, ih + 50);
+    const y = doc.y;
+    items.slice(i, i + per).forEach((it, j) => {
+      const x = M + j * (w + gap);
+      doc.save();
+      doc.roundedRect(x, y, w, ih, 10).clip();
+      doc.rect(x, y, w, ih).fill(C.fundo2);
+      try { doc.image(it.image, x, y, { cover: [w, ih], align: 'center', valign: 'center' }); } catch { /* sem imagem: fica o fundo */ }
+      doc.restore();
+      if (it.tag) {
+        doc.font('bold').fontSize(7);
+        const tw = doc.widthOfString(it.tag) + 12;
+        doc.roundedRect(x + 8, y + 8, tw, 14, 7).fill(C.laranja);
+        doc.fillColor('#FFFFFF').text(it.tag, x + 8, y + 11.5, { width: tw, align: 'center' });
+      }
+      doc.font('semibold').fontSize(9).fillColor(C.texto).text(it.title, x, y + ih + 6, { width: w, height: 24, ellipsis: true });
+    });
+    doc.y = y + ih + 38;
+  }
+}
+
+/** Portal do cliente: chamada, botão grande clicável e o QR. */
+async function portal(doc, { url, title, text }) {
+  const h = 128;
+  ensure(doc, h + 10);
+  const y = doc.y;
+  doc.roundedRect(M, y, CW, h, 14).fill(C.fundo);
+  doc.font('bold').fontSize(15).fillColor('#FFFFFF').text(title || 'Seu portal Pulse', M + 22, y + 18, { width: CW - 170 });
+  if (text) doc.font('regular').fontSize(9.5).fillColor('#D8D8DE').text(text, M + 22, y + 40, { width: CW - 170, lineGap: 1.5 });
+  const by = y + h - 44;
+  doc.roundedRect(M + 22, by, 210, 28, 14).fill(C.laranja);
+  doc.font('bold').fontSize(10).fillColor('#FFFFFF').text('Abrir meu portal', M + 22, by + 8.5, { width: 210, align: 'center', link: url, underline: false });
+  doc.link(M + 22, by, 210, 28, url);
+  try {
+    const qr = await QRCode.toBuffer(url, { margin: 1, width: 240, color: { dark: '#0E0E10', light: '#FFFFFF' } });
+    doc.roundedRect(W - M - 118, y + 14, 100, 100, 8).fill('#FFFFFF');
+    doc.image(qr, W - M - 114, y + 18, { width: 92 });
+  } catch { /* sem QR */ }
+  doc.font('regular').fontSize(7).fillColor('#8C8C96').text(url, M + 242, by + 10, { width: CW - 380, height: 10, ellipsis: true, link: url });
+  doc.y = y + h + 18;
+}
+
+/** Equipe do projeto: fotos redondas com nome e função, 4 por linha. */
+function team(doc, people) {
+  const per = 4;
+  const w = CW / per;
+  const size = 58;
+  for (let i = 0; i < people.length; i += per) {
+    ensure(doc, size + 50);
+    const y = doc.y;
+    people.slice(i, i + per).forEach((p, j) => {
+      const x = M + j * w;
+      avatar(doc, x + (w - size) / 2, y + 2, size, p.photo, p.name, { ring: p.agent ? C.fundo2 : C.laranja });
+      doc.font('bold').fontSize(9.5).fillColor(C.texto).text(p.name, x + 4, y + size + 10, { width: w - 8, align: 'center', height: 13, ellipsis: true });
+      doc.font('regular').fontSize(8).fillColor(C.cinza).text(p.role || '', x + 4, y + size + 24, { width: w - 8, align: 'center', height: 20, ellipsis: true });
+    });
+    doc.y = y + size + 50;
+  }
+  doc.y += 4;
+}
+
+function footer(doc, { note, contact, generated, skipFirst = false }) {
   const range = doc.bufferedPageRange();
-  for (let i = range.start; i < range.start + range.count; i++) {
+  const start = range.start + (skipFirst ? 1 : 0);
+  const count = range.count - (skipFirst ? 1 : 0);
+  for (let i = start; i < range.start + range.count; i++) {
     doc.switchToPage(i);
     const y = H - 70;
     doc.moveTo(M, y).lineTo(W - M, y).lineWidth(1).strokeColor(C.linha).stroke();
@@ -423,14 +619,14 @@ function footer(doc, { note, contact, generated }) {
       .text(note || '', M, y + 10, { width: CW - 160, lineBreak: true, height: 22 });
     doc.text([contact, generated].filter(Boolean).join(' · '), M, y + 34, { width: CW - 160, height: 11, ellipsis: true });
     doc.font('semibold').fontSize(8).fillColor(C.texto).text('Agência Pulse · @agenciapulse', W - M - 150, y + 10, { width: 150, align: 'right' });
-    doc.font('regular').fontSize(8).fillColor(C.cinza).text(`página ${i - range.start + 1} de ${range.count}`, W - M - 150, y + 24, { width: 150, align: 'right' });
+    doc.font('regular').fontSize(8).fillColor(C.cinza).text(`página ${i - start + 1} de ${count}`, W - M - 150, y + 24, { width: 150, align: 'right' });
     doc.rect(0, H - 8, W, 8).fill(C.laranja);
   }
 }
 
 async function block(doc, s) {
   // o título não fica sozinho no pé da página: reserva o começo do bloco junto
-  const need = { table: 110, compare: 110, progress: 90, bars: 80, callout: 90, tiles: 110 }[s.type] || 60;
+  const need = { table: 110, compare: 110, progress: 90, bars: 80, callout: 90, tiles: 110, calendar: 440, gallery: 260, portal: 160, team: 130 }[s.type] || 60;
   if (s.title) section(doc, s.title, need);
   switch (s.type) {
     case 'table': table(doc, s.columns, s.rows, { totals: s.totals, total: s.total }); break;
@@ -439,6 +635,10 @@ async function block(doc, s) {
     case 'compare': compare(doc, s.rows, s); break;
     case 'callout': callout(doc, { title: s.heading, text: s.text, tone: s.tone }); break;
     case 'tiles': tiles(doc, s.rows); break;
+    case 'calendar': calendar(doc, s); break;
+    case 'gallery': gallery(doc, s.items); break;
+    case 'portal': await portal(doc, { url: s.url, title: s.heading, text: s.text }); break;
+    case 'team': team(doc, s.people); break;
     default:
       if (s.text) paragraph(doc, s.text);
       if (s.bullets?.length) bullets(doc, s.bullets);
@@ -460,6 +660,8 @@ export async function renderPdf(d) {
   doc.on('data', (c) => chunks.push(c));
   const done = new Promise((resolve, reject) => { doc.on('end', resolve); doc.on('error', reject); });
   fonts(doc);
+  // capa (relatório premium): página inteira, sem rodapé; o conteúdo começa na página seguinte
+  if (d.cover) { cover(doc, d.cover); doc.addPage(); }
   header(doc, { kicker: { cobranca: 'Cobrança', relatorio: 'Relatório do mês', agradecimento: 'Agenda e parceria', recibo: 'Recibo' }[d.kind] || 'Pulse', number: d.number, issued: d.issued });
   title(doc, d.title, d.status, d.subtitle);
   if (d.intro) intro(doc, d.intro);
@@ -470,7 +672,7 @@ export async function renderPdf(d) {
   if (d.payment) { section(doc, 'Como pagar', 200); await payment(doc, d.payment); }
   for (const s of d.sections || []) await block(doc, s);
   if (d.closing) closing(doc, d.closing);
-  footer(doc, { note: d.footerNote, contact: d.footerContact, generated: d.generated });
+  footer(doc, { note: d.footerNote, contact: d.footerContact, generated: d.generated, skipFirst: !!d.cover });
   doc.end();
   await done;
   return Buffer.concat(chunks);

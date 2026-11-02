@@ -99,7 +99,12 @@ export function monthDates(month, niche, { limit = 3 } = {}) {
   const pick = (rules, seasonal) => rules
     .map((r) => ({ r, d: inMonth(r) }))
     .filter(({ r, d }) => d && (!seasonal || !r.niches || (n && r.niches.includes(n))))
-    .map(({ r, d }) => ({ date: `${y}-${pad(m)}-${pad(d.getUTCDate())}`, day: `${pad(d.getUTCDate())}/${pad(m)}`, label: r.label, idea: r.idea }));
+    .map(({ r, d }) => ({ date: `${y}-${pad(m)}-${pad(d.getUTCDate())}`, day: `${pad(d.getUTCDate())}/${pad(m)}`, label: r.label, idea: r.idea, kind: seasonal ? 'sazonal' : 'feriado' }));
   // datas do nicho primeiro; feriado só completa a lista
   return [...pick(SEASONAL, true), ...pick(HOLIDAYS, false)].slice(0, limit).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Todas as datas do mês para o calendário editorial: feriados (arte de aviso) e as datas do nicho. */
+export function monthCalendar(month, niche) {
+  return monthDates(month, niche, { limit: Infinity });
 }

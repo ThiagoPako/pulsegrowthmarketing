@@ -23,7 +23,7 @@ import { renderPdf } from './lib/billingPdf.mjs';
 import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, monthName as nomeMes } from './lib/billingPdfDocs.mjs';
 import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
-import { monthDates } from './lib/monthDates.mjs';
+import { monthCalendar } from './lib/monthDates.mjs';
 import { enqueueWhatsApp } from './whatsapp/shared.mjs';
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -185,6 +185,90 @@ export function registerBillingIsisRoutes(app, {
   async function assistantNumbers() {
     const { rows } = await pool.query(`SELECT name, phone, active FROM assistant_numbers`).catch(() => ({ rows: [] }));
     return rows;
+  }
+
+  // ── extras do relatório premium (capa, calendário, portal, equipe) ──
+  const PROFILE_ROLES = { videomaker: 'Videomaker', editor: 'Edição de vídeo', designer: 'Design', social_media: 'Social media', admin: 'Direção', gestor: 'Gestão' };
+  const AGENT_ROLES_PT = { chefe: 'Coordenação', editor: 'Edição de vídeo', revisor: 'Revisão de vídeo', colorista: 'Cor', som: 'Som', social_media: 'Social media', designer: 'Design', revisor_arte: 'Revisão de artes', roteirista: 'Roteiros' };
+  // agentes que trabalham em todo projeto (os editores entram quando mexeram nos cards do cliente no mês)
+  const ALWAYS_AGENTS = ['chefe', 'revisor', 'colorista', 'som', 'social_media'];
+
+  /** Imagem PNG/JPEG para o PDF (upload local lido do disco; de fora, com tempo e tamanho limitados); senão null. */
+  async function loadImage(url) {
+    const raw = String(url || '').trim();
+    if (!raw) return null;
+    const okImage = (b) => b && b.length > 64 && b.length < 4_000_000
+      && (b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) || (b[0] === 0xff && b[1] === 0xd8));
+    try {
+      const abs = new URL(raw, appBase);
+      const i = abs.pathname.indexOf('/uploads/');
+      if (i >= 0 && (abs.origin === new URL(appBase).origin || abs.href.startsWith(uploadsBase))) {
+        const file = path.resolve(uploadRoot, decodeURIComponent(abs.pathname.slice(i + '/uploads/'.length)));
+        if (file.startsWith(path.resolve(uploadRoot))) {
+          const b = await fs.readFile(file).catch(() => null);
+          return okImage(b) ? b : null;
+        }
+      }
+      const res = await fetch(abs.href, { signal: AbortSignal.timeout(4000) });
+      if (!res.ok) return null;
+      const b = Buffer.from(await res.arrayBuffer());
+      return okImage(b) ? b : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function reportExtras(contract, ref, next, config) {
+    const q = (sql, params) => pool.query(sql, params).then((r) => r.rows).catch(() => []);
+    const [client] = await q(`SELECT logo_url FROM clients WHERE id = $1`, [contract.client_id]);
+    const recordings = await q(
+      `SELECT date, start_time FROM recordings WHERE client_id = $1 AND to_char(date, 'YYYY-MM') = $2
+          AND coalesce(status, '') NOT IN ('cancelada', 'cancelado') ORDER BY date, start_time`, [contract.client_id, next]
+    );
+    const covers = await q(
+      `SELECT title, cover_url, content_type FROM content_tasks
+        WHERE client_id = $1 AND cover_url IS NOT NULL AND btrim(cover_url) <> '' AND to_char(coalesce(approved_at, updated_at), 'YYYY-MM') = $2
+        ORDER BY approved_at DESC NULLS LAST LIMIT 3`, [contract.client_id, ref]
+    );
+    // quem trabalhou nos cards e nas gravações do cliente no mês
+    const ids = new Set();
+    for (const r of await q(`SELECT assigned_to, edited_by, agent_review_by, agent_step_by FROM content_tasks WHERE client_id = $1 AND to_char(updated_at, 'YYYY-MM') = $2`, [contract.client_id, ref])) {
+      for (const v of Object.values(r)) if (v) ids.add(v);
+    }
+    for (const r of await q(`SELECT assigned_to, collaborator_id FROM design_tasks WHERE client_id = $1 AND to_char(updated_at, 'YYYY-MM') = $2`, [contract.client_id, ref])) {
+      for (const v of Object.values(r)) if (v) ids.add(v);
+    }
+    for (const r of await q(`SELECT videomaker_id FROM recordings WHERE client_id = $1 AND to_char(date, 'YYYY-MM') = $2`, [contract.client_id, ref])) {
+      if (r.videomaker_id) ids.add(r.videomaker_id);
+    }
+    const rows = await q(
+      `SELECT DISTINCT ON (p.id) p.id, coalesce(nullif(btrim(p.display_name), ''), p.name) AS name, p.avatar_url, p.role::text AS role, k.role AS agent_role
+         FROM profiles p LEFT JOIN agent_keys k ON k.user_id = p.id AND k.revoked_at IS NULL
+        WHERE p.id = ANY($1::uuid[]) OR k.role = ANY($2::text[])
+        ORDER BY p.id, k.created_at DESC NULLS LAST`, [[...ids], ALWAYS_AGENTS]
+    );
+    const firstName = (name) => String(name || '').trim().split(/\s+/)[0];
+    const people = [];
+    const agents = [];
+    for (const r of rows.slice(0, 24)) {
+      const photo = await loadImage(r.avatar_url);
+      if (r.agent_role) agents.push({ name: firstName(r.name), role: AGENT_ROLES_PT[r.agent_role] || 'Agente', photo });
+      else people.push({ name: firstName(r.name), role: PROFILE_ROLES[r.role] || 'Equipe Pulse', photo });
+    }
+    const highlights = [];
+    for (const c of covers) {
+      const image = await loadImage(c.cover_url);
+      if (image) highlights.push({ image, title: String(c.title || '').trim() || 'Vídeo', tag: { reels: 'REELS', reel: 'REELS', criativo: 'CRIATIVO', story: 'STORY' }[c.content_type] || 'VÍDEO' });
+    }
+    const contact = contactForCity(contract.client_city || contract.city, config, await assistantNumbers());
+    return {
+      clientLogo: await loadImage(client?.logo_url),
+      recordings: recordings.map((r) => ({ date: dateKey(r.date), time: r.start_time })),
+      highlights,
+      team: { people: people.slice(0, 8), agents: agents.slice(0, 8) },
+      portalUrl: `${appBase}/portal/${contract.client_id}`,
+      contact: contact?.phone ? `${contact.name} · ${contact.phone}` : null,
+    };
   }
 
   /** Página de pagamento da cobrança (uma por contrato e mês; o token não muda entre a cobrança e o lembrete). */
@@ -354,8 +438,10 @@ export function registerBillingIsisRoutes(app, {
       const pdfRelatorio = relatorioDoc({
         ref, prev: previousMonth(`${ref}-01`), next: month, client: clientOf(contract), plan: planOf(contract), issuer: issuerOf(contract, config),
         numbers: n, network: report.network, suggestions: report.draft.suggestions,
-        // datas do mês que começa que combinam com o nicho do cliente (só no PDF)
-        dates: monthDates(month, contract.niche),
+        // calendário editorial do mês que começa: feriados (arte de aviso) e datas do nicho do cliente
+        calendar: monthCalendar(month, contract.niche),
+        // capa, gravações agendadas, destaques, portal e equipe
+        ...(await reportExtras(contract, ref, month, config)),
       });
       return {
         config,

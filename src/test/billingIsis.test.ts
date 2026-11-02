@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  stepsDueOn, stepDates, attendanceTip, cardAmount, crc16, pixPayload, applyTemplate, bulletList, nextMonth, previousMonth,
+  stepsDueOn, stepDates, attendanceTip, recordingsText, cardAmount, crc16, pixPayload, applyTemplate, bulletList, nextMonth, previousMonth,
   DEFAULT_TEMPLATES, DEFAULT_FOOTER, withFooter, checkBillingData, accountSummary, ensurePayLink, payToken, effectiveTemplate,
 } from '../../vps-api-server/lib/billingIsis.mjs';
 import { contactForCity, formatPhoneBr } from '../../vps-api-server/lib/contactByCity.mjs';
@@ -91,7 +91,12 @@ describe('cobranças da Ísis · textos', () => {
   it('dica de assiduidade pelo que aconteceu', () => {
     expect(attendanceTip({ done: 4, scheduled: 4, cancelled: 0, avg: 5 })).toMatch(/Agenda em dia/);
     expect(attendanceTip({ done: 4, scheduled: 4, cancelled: 0, avg: 2 })).toMatch(/3 ou 4 temas/);
-    expect(attendanceTip({ done: 2, scheduled: 3, cancelled: 1, avg: 5 })).toMatch(/1 gravação remarcada/);
+    // remarcação ou mês sem agenda: sem dica (nada que soe como cobrança de gravação)
+    expect(attendanceTip({ done: 2, scheduled: 3, cancelled: 1, avg: 5 })).toBe('');
+    expect(attendanceTip({ done: 0, scheduled: 0, cancelled: 0, avg: null })).toBe('');
+    expect(recordingsText(1)).toBe('1 gravação');
+    expect(recordingsText(3)).toBe('3 gravações');
+    expect(recordingsText(0)).toBe('');
   });
 
   it('sugestões viram tópicos', () => {
@@ -168,15 +173,22 @@ describe('cobranças da Ísis · conferência antes de cobrar', () => {
 
 describe('cobranças da Ísis · respiro e modelos antigos', () => {
   it('blocos separados por uma linha em branco; bloco vazio e chamada sem conteúdo somem sem deixar 3 quebras', () => {
-    const vars = { nome_cliente: 'X', mes_anterior: 'outubro', mes_atual: 'novembro', qtd_videos: 9, qtd_artes: 5, qtd_posts: 12, qtd_gravacoes: 2 };
-    const body = applyTemplate(DEFAULT_TEMPLATES.relatorio_mensal, { ...vars, horas_dedicadas: '', resumo_rede: '', sugestoes: '', link_relatorio: '' });
-    expect(body).not.toMatch(/\n{3,}/);
-    expect(body).not.toContain('Para novembro:');
-    expect(body).not.toContain('Relatório completo');
-    expect(body.split('\n\n')).toHaveLength(3);
-    const cheio = applyTemplate(DEFAULT_TEMPLATES.relatorio_mensal, { ...vars, horas_dedicadas: '11,5', resumo_rede: '18 mil contas', sugestoes: '• A\n• B', link_relatorio: 'https://x' });
+    const modelo = 'Bom dia, {nome_cliente}!\n\nFechamos {mes}. Veja:\n\n🎬 {videos}\n⏱️ {horas} h\n\n📈 {rede}\n\nPara {proximo}:\n{sugestoes}\n\nRelatório: {link}';
+    const vars = { nome_cliente: 'X', mes: 'outubro', proximo: 'novembro', videos: 9 };
+    const body = applyTemplate(modelo, { ...vars, horas: '', rede: '', sugestoes: '', link: '' });
+    expect(body).toBe('Bom dia, X!\n\nFechamos outubro. Veja:\n\n🎬 9');
+    const cheio = applyTemplate(modelo, { ...vars, horas: '11,5', rede: '18 mil contas', sugestoes: '• A\n• B', link: 'https://x' });
     expect(cheio).toContain('Para novembro:\n• A\n• B');
     expect(cheio).not.toMatch(/\n{3,}/);
+  });
+
+  it('dia 1: só a abertura (o PDF fala do relatório); D−5: só o que foi feito', () => {
+    expect(applyTemplate(DEFAULT_TEMPLATES.relatorio_mensal, { nome_cliente: 'Posto X', mes_anterior: 'outubro' }))
+      .toBe('Bom dia, Posto X! ☀️\n\nSegue o resumo do que entregamos em outubro para você 🧡');
+    const pre = applyTemplate(DEFAULT_TEMPLATES.pre_vencimento, { nome_cliente: 'X', mes_ref: 'outubro', gravacoes: '2 gravações', dica_assiduidade: '', dia_vencimento: '10' });
+    expect(pre).toBe('Oi, X! Obrigada por mais um mês de parceria 🧡\n\nEm outubro, fizemos 2 gravações juntos.\n\nSua mensalidade vence dia 10.');
+    // sem gravação no mês: a linha some
+    expect(applyTemplate(DEFAULT_TEMPLATES.pre_vencimento, { nome_cliente: 'X', mes_ref: 'outubro', gravacoes: '', dia_vencimento: '10' })).not.toContain('fizemos');
   });
 
   it('modelo salvo igual a um padrão antigo vira o padrão novo; editado de verdade fica', () => {

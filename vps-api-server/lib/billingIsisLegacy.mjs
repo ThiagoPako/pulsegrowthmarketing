@@ -2,9 +2,11 @@
 // é tratado como "não editado" e passa a usar o padrão atual (usuário, 01/11/2026: mensagens mais curtas e com respiro).
 export const LEGACY_TEMPLATES = {
   "relatorio_mensal": [
+    "Bom dia, {nome_cliente}! ☀️\n\nFechamos {mes_anterior}. Veja o que fizemos juntos:\n\n🎬 {qtd_videos} vídeos · 🎨 {qtd_artes} artes\n📲 {qtd_posts} posts · 🎥 {qtd_gravacoes} gravações\n⏱️ {horas_dedicadas} h dedicadas ao seu perfil\n\n📈 {resumo_rede}\n\nPara {mes_atual}:\n{sugestoes}\n\nRelatório completo: {link_relatorio}",
     "Bom dia, {nome_cliente}! ☀️ Aqui é a Ísis, da Pulse.\nFechamos {mes_anterior} e quero te mostrar o que fizemos juntos:\n🎬 {qtd_videos} vídeos · 🎨 {qtd_artes} artes · 📲 {qtd_posts} posts · 🎥 {qtd_gravacoes} gravações\n⏱️ {horas_dedicadas} h dedicadas ao seu perfil\n📈 {resumo_rede}\nPara {mes_atual}, nossas sugestões:\n{sugestoes}\nO relatório completo está aqui: {link_relatorio}\nQualquer ideia, é só me chamar! 🧡"
   ],
   "pre_vencimento": [
+    "Oi, {nome_cliente}! Obrigada por mais um mês de parceria 🧡\n\nEm {mes_ref}: {gravacoes_feitas} de {gravacoes_marcadas} gravações feitas.\n{dica_assiduidade}\n\nSua mensalidade vence dia {dia_vencimento}.",
     "Oi, {nome_cliente}! Passando para agradecer a parceria de mais um mês 🧡\nNas agendas de {mes_ref}: {gravacoes_feitas} de {gravacoes_marcadas} gravações realizadas, com média de {media_videos} vídeos por gravação.\n{dica_assiduidade}\nSua mensalidade vence dia {dia_vencimento}; no dia te mando o Pix e o link, tudo certinho."
   ],
   "cobranca": [

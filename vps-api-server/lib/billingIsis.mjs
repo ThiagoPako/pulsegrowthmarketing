@@ -21,26 +21,17 @@ export const MODES = ['desligado', 'previa', 'ativo'];
 export const DEFAULT_TEMPLATES = {
   // mais curtas e com respiro, sem se apresentar (usuário, 01/11/2026: "as mensagens de texto estão muito grandes ...
   // a mensagem tá muito junta, não precisa se identificar"): linha em branco entre os blocos
+  // o PDF anexado fala do relatório (usuário, 01/11/2026: "a mensagem do relatório não precisa falar o relatório")
   relatorio_mensal: [
     'Bom dia, {nome_cliente}! ☀️',
     '',
-    'Fechamos {mes_anterior}. Veja o que fizemos juntos:',
-    '',
-    '🎬 {qtd_videos} vídeos · 🎨 {qtd_artes} artes',
-    '📲 {qtd_posts} posts · 🎥 {qtd_gravacoes} gravações',
-    '⏱️ {horas_dedicadas} h dedicadas ao seu perfil',
-    '',
-    '📈 {resumo_rede}',
-    '',
-    'Para {mes_atual}:',
-    '{sugestoes}',
-    '',
-    'Relatório completo: {link_relatorio}',
+    'Segue o resumo do que entregamos em {mes_anterior} para você 🧡',
   ].join('\n'),
+  // só o que foi feito; a dica entra quando ajuda e em tom positivo (nada que soe como cobrança de gravação)
   pre_vencimento: [
     'Oi, {nome_cliente}! Obrigada por mais um mês de parceria 🧡',
     '',
-    'Em {mes_ref}: {gravacoes_feitas} de {gravacoes_marcadas} gravações feitas.',
+    'Em {mes_ref}, fizemos {gravacoes} juntos.',
     '{dica_assiduidade}',
     '',
     'Sua mensalidade vence dia {dia_vencimento}.',
@@ -152,16 +143,18 @@ export function stepDates(dueDate) {
 }
 
 /** Frase de "como melhorar" pelo que aconteceu nas agendas (texto do plano aprovado). */
+// dica do D−5 só quando ajuda o cliente e em tom positivo (usuário, 01/11/2026): nada que soe como cobrança de
+// gravação; mês com gravação remarcada ou sem agenda fica sem dica
 export function attendanceTip({ done = 0, scheduled = 0, cancelled = 0, avg = null } = {}) {
-  if (scheduled > 0 && done >= scheduled && !cancelled) {
-    if (avg !== null && avg < 3) return 'Agenda em dia, parabéns! Para render mais vídeos por gravação, vale separar 3 ou 4 temas antes; a Victoria pode mandar os roteiros.';
-    return 'Agenda em dia, parabéns! Assim o conteúdo não para.';
-  }
-  if (cancelled > 0 || done < scheduled) {
-    const faltas = Math.max(cancelled, scheduled - done);
-    return `Tivemos ${faltas} ${faltas === 1 ? 'gravação remarcada' : 'gravações remarcadas'}. Quanto mais gravações, mais conteúdo no ar: que tal já deixarmos as próximas datas marcadas?`;
-  }
-  return 'Que tal já deixarmos as próximas gravações marcadas? Assim o conteúdo não para.';
+  if (!(scheduled > 0 && done >= scheduled && !cancelled)) return '';
+  if (avg !== null && avg < 3) return 'Agenda em dia, parabéns! Para render ainda mais vídeos por gravação, vale separar 3 ou 4 temas antes; a gente ajuda com os roteiros.';
+  return 'Agenda em dia, parabéns! Assim o conteúdo não para.';
+}
+
+/** "2 gravações" / "1 gravação"; vazio sem gravação (a linha sai). */
+export function recordingsText(done) {
+  const n = Number(done) || 0;
+  return n ? `${n} ${n === 1 ? 'gravação' : 'gravações'}` : '';
 }
 
 // aviso discreto do cartão (usuário, 01/11/2026): a taxa é da facilitadora, a Pulse não cobra nada a mais

@@ -35,6 +35,7 @@ export const STATUS_STYLE = {
   aberto: { label: 'EM ABERTO', fg: C.laranja, bg: C.laranjaClaro },
   vencido: { label: 'VENCIDA', fg: C.vermelho, bg: C.vermelhoClaro },
   pago: { label: 'PAGA', fg: C.verde, bg: C.verdeClaro },
+  acima: { label: 'ACIMA DO PLANO', fg: C.verde, bg: C.verdeClaro },
 };
 
 const NO_LIGA = { liga: false, clig: false, dlig: false, rlig: false };
@@ -299,18 +300,49 @@ function compare(doc, rows, { previousLabel = 'Mês anterior', currentLabel = 'E
 }
 
 /** Quadro de destaque (fundo laranja claro, filete à esquerda). */
-function callout(doc, { title: t, text }) {
+function callout(doc, { title: t, text, tone }) {
   doc.font('regular').fontSize(10);
   const th = doc.heightOfString(text, { width: CW - 40, lineGap: 2 });
   const h = th + (t ? 40 : 24);
   ensure(doc, h + 10);
   const y = doc.y;
-  doc.roundedRect(M, y, CW, h, 10).fill(C.laranjaClaro);
-  doc.rect(M, y, 4, h).fill(C.laranja);
+  const verde = tone === 'verde';
+  doc.roundedRect(M, y, CW, h, 10).fill(verde ? C.verdeClaro : C.laranjaClaro);
+  doc.rect(M, y, 4, h).fill(verde ? C.verde : C.laranja);
   let ty = y + 12;
   if (t) { doc.font('bold').fontSize(10.5).fillColor(C.texto).text(t, M + 20, ty, { width: CW - 40 }); ty += 17; }
   doc.font('regular').fontSize(10).fillColor(C.texto).text(text, M + 20, ty, { width: CW - 40, lineGap: 2 });
   doc.y = y + h + 16;
+}
+
+/**
+ * Quadros do que foi entregue (relatório para mostrar serviço; usuário, 01/11/2026): número grande, nome e, quando
+ * passou do plano, selo verde ("+3 além do plano"). Nada de "faltou": o que ficou abaixo do plano é só o número.
+ * tiles = [{ label, value, badge?, highlight? }], 3 por linha.
+ */
+function tiles(doc, items) {
+  const per = 3;
+  const gap = 10;
+  const w = (CW - gap * (per - 1)) / per;
+  const h = 78;
+  for (let i = 0; i < items.length; i += per) {
+    ensure(doc, h + 10);
+    const y = doc.y;
+    items.slice(i, i + per).forEach((it, j) => {
+      const x = M + j * (w + gap);
+      doc.roundedRect(x, y, w, h, 10).fill(it.highlight ? C.verdeClaro : C.cinzaClaro);
+      doc.font('bold').fontSize(26).fillColor(it.highlight ? C.verde : C.texto).text(String(it.value), x + 14, y + 12, { width: w - 28, height: 32 });
+      doc.font('semibold').fontSize(9.5).fillColor(C.texto).text(it.label, x + 14, y + 44, { width: w - 28, height: 13, ellipsis: true });
+      if (it.badge) {
+        doc.font('bold').fontSize(7.5);
+        const bw = Math.min(doc.widthOfString(it.badge) + 14, w - 28);
+        doc.roundedRect(x + 14, y + 59, bw, 13, 6.5).fill(it.highlight ? C.verde : '#E3E3E8');
+        doc.fillColor(it.highlight ? '#FFFFFF' : C.cinza).text(it.badge, x + 14, y + 62, { width: bw, align: 'center' });
+      }
+    });
+    doc.y = y + h + gap;
+  }
+  doc.y += 6;
 }
 
 async function payment(doc, pay) {
@@ -398,14 +430,15 @@ function footer(doc, { note, contact, generated }) {
 
 async function block(doc, s) {
   // o título não fica sozinho no pé da página: reserva o começo do bloco junto
-  const need = { table: 110, compare: 110, progress: 90, bars: 80, callout: 90 }[s.type] || 60;
+  const need = { table: 110, compare: 110, progress: 90, bars: 80, callout: 90, tiles: 110 }[s.type] || 60;
   if (s.title) section(doc, s.title, need);
   switch (s.type) {
     case 'table': table(doc, s.columns, s.rows, { totals: s.totals, total: s.total }); break;
     case 'progress': progress(doc, s.rows); break;
     case 'bars': bars(doc, s.rows); break;
     case 'compare': compare(doc, s.rows, s); break;
-    case 'callout': callout(doc, { title: s.heading, text: s.text }); break;
+    case 'callout': callout(doc, { title: s.heading, text: s.text, tone: s.tone }); break;
+    case 'tiles': tiles(doc, s.rows); break;
     default:
       if (s.text) paragraph(doc, s.text);
       if (s.bullets?.length) bullets(doc, s.bullets);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, planContents, deliveryProgress } from '../../vps-api-server/lib/billingPdfDocs.mjs';
+import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, planContents, deliveredItems, aboveSummary } from '../../vps-api-server/lib/billingPdfDocs.mjs';
 import { valorPorExtenso, applyTemplate, DEFAULT_TEMPLATES } from '../../vps-api-server/lib/billingIsis.mjs';
 
 const client = { name: 'Cliente Teste Ltda', responsible: 'Maria Teste', city: 'uruacu', plan: 'Plano Pro' };
@@ -21,10 +21,15 @@ describe('PDFs da Ísis: conteúdo', () => {
     expect(planContents({})).toBe('');
   });
 
-  it('entregas × plano: metas do plano, tipos extras e nada vazio', () => {
-    const rows = deliveryProgress(numbers, plan);
-    expect(rows.map((r: { label: string }) => r.label)).toEqual(['Reels', 'Stories', 'Artes', 'Gravações', 'Otimizações']);
-    expect(rows.find((r: { label: string }) => r.label === 'Stories')).toMatchObject({ done: 0, goal: 8 });
+  it('entregas: só o que foi entregue, com o que passou do plano', () => {
+    const rows = deliveredItems(numbers, plan);
+    // Stories (0 de 8) e Artes (0) não aparecem: nada de "faltou"
+    expect(rows.map((r: { label: string }) => r.label)).toEqual(['Reels', 'Gravações', 'Otimizações']);
+    expect(rows.find((r: { label: string }) => r.label === 'Reels')).toMatchObject({ done: 4, extra: 0, met: true });
+    expect(rows.find((r: { label: string }) => r.label === 'Gravações')).toMatchObject({ done: 2, extra: 0, met: false });
+    const acima = deliveredItems({ ...numbers, deliveries: { ...numbers.deliveries, videos: { total: 7, by_type: [{ type: 'Reels', total: 7, titles: [] }] }, arts: { total: 8, titles: [] } } }, plan);
+    expect(aboveSummary(acima)).toBe('Neste mês entregamos +3 Reels e +2 artes além do que o seu plano prevê.');
+    expect(aboveSummary(rows)).toBeNull();
   });
 
   it('cobrança: emitente, cliente, item com o plano e a situação da conta', () => {
@@ -44,13 +49,16 @@ describe('PDFs da Ísis: conteúdo', () => {
   it('relatório: sem rede social nem horas, esses blocos não aparecem', () => {
     const d = relatorioDoc({ ref: '2026-10', next: '2026-11', client, plan, numbers, network: null, suggestions: '' });
     const titles = d.sections.map((s: { title: string }) => s.title);
-    expect(titles).toContain('Entregas × plano contratado');
-    expect(titles.some((t: string) => /Rede social|Tempo dedicado|Artes entregues|Sugestões/.test(t))).toBe(false);
+    expect(titles).toContain('Entregas do mês');
+    expect(titles.some((t: string) => /Rede social|Tempo dedicado|Artes entregues|Ideias/.test(t))).toBe(false);
+    // nada negativo no relatório
+    expect(JSON.stringify(d)).not.toMatch(/faltou|pendente|Canceladas| de 8/i);
   });
 
-  it('agradecimento: aproveitamento e lembrete do vencimento', () => {
-    const d = agradecimentoDoc({ ref: '2026-10', client, plan, numbers, attendance: { done: 2, scheduled: 3, cancelled: 1, avg: 4.5 }, tip: 'dica', dueDate: '2026-11-10', amount: 1500 });
-    expect(d.cards[0].note).toBe('67% das agendas aproveitadas');
+  it('agradecimento: só o que foi feito e o lembrete do vencimento', () => {
+    const d = agradecimentoDoc({ ref: '2026-10', client, plan, numbers, attendance: { done: 2, scheduled: 3, cancelled: 1, avg: 4.5 }, tip: '', dueDate: '2026-11-10', amount: 1500 });
+    expect(d.cards[0]).toMatchObject({ label: 'Gravações feitas', value: 2 });
+    expect(JSON.stringify(d)).not.toMatch(/2 de 3|Canceladas|Aproveitamento|dica/i);
     expect(d.closing.text).toContain('10/11/2026');
   });
 

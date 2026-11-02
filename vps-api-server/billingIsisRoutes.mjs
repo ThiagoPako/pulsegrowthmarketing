@@ -17,7 +17,7 @@ import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import {
   BILLING_STEPS, MODES, DEFAULT_TEMPLATES, monthName, previousMonth, nextMonth, stepDates, attendanceTip,
-  brl, pixPayload, CARD_NOTICE, ensurePayLink, payToken, valorPorExtenso, effectiveTemplate, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
+  brl, pixPayload, CARD_NOTICE, ensurePayLink, payToken, valorPorExtenso, effectiveTemplate, recordingsText, applyTemplate, bulletList, DEFAULT_FOOTER, withFooter, footerText, checkBillingData,
 } from './lib/billingIsis.mjs';
 import { renderPdf } from './lib/billingPdf.mjs';
 import { cobrancaDoc, relatorioDoc, agradecimentoDoc, reciboDoc, monthName as nomeMes } from './lib/billingPdfDocs.mjs';
@@ -391,7 +391,7 @@ export function registerBillingIsisRoutes(app, {
           numbers: (await socialReports.reportFor(contract.client_id, ref).catch(() => null))?.numbers || null,
         }),
         body: applyTemplate(templateOf(config, step), {
-          ...base, mes_ref: monthName(`${ref}-01`), gravacoes_feitas: a.done, gravacoes_marcadas: a.scheduled,
+          ...base, mes_ref: monthName(`${ref}-01`), gravacoes: recordingsText(a.done), gravacoes_feitas: a.done, gravacoes_marcadas: a.scheduled,
           media_videos: a.avg === null ? '' : a.avg.toLocaleString('pt-BR'),
           dica_assiduidade: attendanceTip(a), dia_vencimento: String(Number(dueDate.slice(8, 10))),
         }),

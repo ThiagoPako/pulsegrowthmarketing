@@ -58,22 +58,48 @@ function revenueSituation(r, today) {
   return { text: 'Em aberto', color: '#F15A24', bold: true };
 }
 
-/** Linhas de "entregas × plano" a partir dos números do relatório. */
-export function deliveryProgress(numbers, plan = {}) {
+/**
+ * O que foi entregue no mês, item a item, com o que passou do plano (relatório para mostrar serviço; usuário,
+ * 01/11/2026: "dê ênfase em serviços entregues, ainda mais se for acima do plano contratado"). Só itens entregues;
+ * extra = quanto passou do plano (0 quando ficou no plano ou abaixo: abaixo não aparece como falta).
+ */
+export function deliveredItems(numbers, plan = {}) {
   if (!numbers) return [];
   const byType = Object.fromEntries((numbers.deliveries.videos.by_type || []).map((t) => [t.type, t.total]));
-  const rec = numbers.deliveries.recordings;
   const rows = [
-    { label: 'Reels', done: byType.Reels || 0, goal: plan.reels_qty },
-    { label: 'Criativos', done: byType.Criativos || 0, goal: plan.creatives_qty },
-    { label: 'Stories', done: byType.Stories || 0, goal: plan.stories_qty },
-    { label: 'Artes', done: numbers.deliveries.arts.total, goal: plan.arts_qty },
-    { label: 'Gravações', done: rec.done, goal: plan.recording_sessions },
+    { label: 'Reels', done: byType.Reels || 0, goal: plan.reels_qty, one: 'Reels', unit: 'Reels' },
+    { label: 'Criativos', done: byType.Criativos || 0, goal: plan.creatives_qty, one: 'criativo', unit: 'criativos' },
+    { label: 'Stories', done: byType.Stories || 0, goal: plan.stories_qty, one: 'story', unit: 'stories' },
+    { label: 'Artes', done: numbers.deliveries.arts.total, goal: plan.arts_qty, one: 'arte', unit: 'artes' },
+    { label: 'Gravações', done: numbers.deliveries.recordings.done, goal: plan.recording_sessions, one: 'gravação', unit: 'gravações' },
   ];
   for (const t of numbers.deliveries.videos.by_type || []) {
-    if (!['Reels', 'Criativos', 'Stories'].includes(t.type)) rows.push({ label: t.type, done: t.total, goal: 0 });
+    if (!['Reels', 'Criativos', 'Stories'].includes(t.type)) rows.push({ label: t.type, done: t.total, goal: 0, one: t.type, unit: t.type });
   }
-  return rows.filter((r) => Number(r.goal) > 0 || Number(r.done) > 0);
+  return rows.filter((r) => Number(r.done) > 0).map((r) => {
+    const goal = Number(r.goal) || 0;
+    const done = Number(r.done) || 0;
+    return { label: r.label, done, goal, extra: goal && done > goal ? done - goal : 0, met: goal > 0 && done === goal, one: r.one, unit: r.unit };
+  });
+}
+
+/** Quadros de entrega: o que passou do plano ganha o selo verde; o que bateu o plano, "plano completo". */
+function deliveryTiles(items) {
+  return items.map((r) => ({
+    label: r.label,
+    value: r.done,
+    highlight: r.extra > 0,
+    badge: r.extra > 0 ? `+${r.extra} além do plano` : r.met ? 'plano completo' : '',
+  }));
+}
+
+/** "Entregamos acima do plano: +3 vídeos e +2 artes além do contratado." (null se nada passou) */
+export function aboveSummary(items) {
+  const above = items.filter((r) => r.extra > 0);
+  if (!above.length) return null;
+  const parts = above.map((r) => `+${r.extra} ${r.extra === 1 ? r.one : r.unit}`);
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}` : parts[0];
+  return `Neste mês entregamos ${list} além do que o seu plano prevê.`;
 }
 
 /**
@@ -135,31 +161,35 @@ const NET_ROWS = [
 ];
 
 /**
- * Relatório do mês. d = { ref (mês do relatório), next (mês atual), today, client, plan, numbers, network, suggestions }
+ * Relatório do mês: mostra o serviço entregue (o que foi feito, grande e primeiro; o que passou do plano em destaque).
+ * d = { ref (mês do relatório), prev, next (mês atual), today, client, plan, numbers, network, suggestions, link? }
  */
 export function relatorioDoc(d) {
   const n = d.numbers;
   const rec = n.deliveries.recordings;
   const net = d.network?.connected && d.network.current ? d.network : null;
-  const netRows = net ? NET_ROWS.filter(([k]) => net.current[k] !== null && net.current[k] !== undefined)
+  // rede social: só o que subiu ou se manteve (o relatório mostra resultado, não queda)
+  const netRows = net ? NET_ROWS.filter(([k]) => net.current[k] !== null && net.current[k] !== undefined && !(Number(net.change?.[k]) < 0))
     .map(([k, label]) => ({ label, previous: net.previous?.[k] ?? null, current: net.current[k], change: net.change?.[k] ?? null })) : [];
-  const progress = deliveryProgress(n, d.plan);
+  const items = deliveredItems(n, d.plan);
+  const acima = aboveSummary(items);
   const suggestions = String(d.suggestions || '').split('\n').map((s) => s.replace(/^[•\-–*]\s*/, '').trim()).filter(Boolean);
   const period = n.period ? `${dataBr(n.period.since)} a ${dataBr(n.period.until)}` : monthLabel(d.ref);
   return {
     kind: 'relatorio',
-    title: `Relatório de ${monthLabel(d.ref)}`,
+    title: `O que entregamos em ${monthName(d.ref)}`,
     subtitle: `${d.client.name} · período de ${period}`,
-    intro: `Olá, ${first(d.client.responsible) || d.client.name}! Este é o resumo do que a Pulse produziu e publicou no seu perfil em ${monthName(d.ref)}: as entregas comparadas ao plano, o tempo dedicado${net ? ', os resultados da rede social' : ''} e o que sugerimos para ${monthName(d.next)}.`,
-    parties: [issuerParty(d.issuer), clientParty(d.client)],
+    status: acima ? 'acima' : null,
+    intro: `Olá, ${first(d.client.responsible) || d.client.name}! Este é o resumo do trabalho da Pulse no seu perfil em ${monthName(d.ref)}: o que produzimos, o tempo dedicado${net ? ', os resultados da rede social' : ''} e as nossas ideias para ${monthName(d.next)}.`,
     cards: [
-      { label: 'Vídeos', value: n.deliveries.videos.total, highlight: true },
+      { label: 'Vídeos entregues', value: n.deliveries.videos.total, highlight: true },
       { label: 'Artes', value: n.deliveries.arts.total },
-      { label: 'Posts', value: n.deliveries.posts.total },
+      { label: 'Posts publicados', value: n.deliveries.posts.total },
       { label: 'Horas dedicadas', value: n.time.total_hours > 0 ? `${num(n.time.total_hours)} h` : '—' },
     ],
     sections: [
-      ...(progress.length ? [{ title: 'Entregas × plano contratado', type: 'progress', rows: progress }] : []),
+      ...(acima ? [{ type: 'callout', tone: 'verde', heading: 'Acima do plano contratado', text: acima }] : []),
+      ...(items.length ? [{ title: 'Entregas do mês', type: 'tiles', rows: deliveryTiles(items) }] : []),
       ...(n.deliveries.videos.by_type.length ? [{
         title: 'Vídeos entregues',
         type: 'table',
@@ -170,11 +200,11 @@ export function relatorioDoc(d) {
         title: 'Artes entregues',
         bullets: n.deliveries.arts.titles.concat(n.deliveries.arts.total > n.deliveries.arts.titles.length ? [`e mais ${n.deliveries.arts.total - n.deliveries.arts.titles.length}`] : []),
       }] : []),
-      ...(rec.scheduled || rec.done ? [{
+      ...(rec.done ? [{
         title: 'Gravações',
         type: 'table',
-        columns: [{ label: 'Agendadas', align: 'center' }, { label: 'Realizadas', align: 'center' }, { label: 'Canceladas', align: 'center' }, { label: 'Vídeos gravados', align: 'center' }, { label: 'Média por gravação', align: 'center' }],
-        rows: [[String(rec.scheduled), { text: String(rec.done), bold: true }, String(rec.cancelled), String(rec.videos_recorded), rec.avg_videos_per_recording === null ? '—' : num(rec.avg_videos_per_recording)]],
+        columns: [{ label: 'Gravações realizadas', align: 'center' }, { label: 'Vídeos gravados', align: 'center' }, { label: 'Média por gravação', align: 'center' }],
+        rows: [[{ text: String(rec.done), bold: true }, String(rec.videos_recorded), rec.avg_videos_per_recording === null ? '—' : num(rec.avg_videos_per_recording)]],
       }] : []),
       ...(n.time.total_hours > 0 ? [{
         title: `Tempo dedicado · ${num(n.time.total_hours)} horas`,
@@ -195,9 +225,10 @@ export function relatorioDoc(d) {
         columns: [{ label: 'Data', width: 64 }, { label: 'Post' }, { label: 'Alcance', width: 80, align: 'right' }, { label: 'Interações', width: 90, align: 'right' }],
         rows: net.top_posts.map((p) => [dataBr(p.date).slice(0, 5) || '—', p.caption || '(sem legenda)', num(p.reach), num(p.interactions)]),
       }] : []),
-      ...(suggestions.length ? [{ title: `Sugestões para ${monthName(d.next)}`, type: 'callout', heading: 'O que propomos para o próximo mês', text: suggestions.map((s) => `• ${s}`).join('\n') }] : []),
+      ...(suggestions.length ? [{ title: `Ideias para ${monthName(d.next)}`, type: 'callout', heading: 'O que propomos para o próximo mês', text: suggestions.map((s) => `• ${s}`).join('\n') }] : []),
+      ...(d.link ? [{ title: 'Relatório completo', text: d.link }] : []),
     ],
-    closing: { text: 'Qualquer dúvida sobre o relatório, é só chamar. Bora para mais um mês!', ...SIGNATURE },
+    closing: { text: 'Obrigada pela parceria. Bora para mais um mês!', ...SIGNATURE },
   };
 }
 
@@ -231,32 +262,29 @@ export function reciboDoc(d) {
 }
 
 /**
- * Agradecimento (D−5). d = { ref, today, client, plan, attendance: { done, scheduled, cancelled, avg }, numbers?,
- * tip, dueDate, amount }
+ * Agradecimento (D−5): agradece e mostra o que o mês rendeu. Nada que soe como cobrança de gravação (usuário,
+ * 01/11/2026): só o que foi feito; a dica entra quando ajuda e em tom positivo.
+ * d = { ref, today, client, plan, attendance: { done, scheduled, cancelled, avg }, numbers?, tip, dueDate, amount }
  */
 export function agradecimentoDoc(d) {
   const a = d.attendance;
-  const rate = a.scheduled ? Math.round((a.done / a.scheduled) * 100) : null;
-  const progress = deliveryProgress(d.numbers, d.plan);
+  const items = deliveredItems(d.numbers, d.plan);
+  const acima = aboveSummary(items);
   return {
     kind: 'agradecimento',
     title: `Obrigada pela parceria em ${monthName(d.ref)}!`,
-    subtitle: `${d.client.name} · agendas de ${monthLabel(d.ref)}`,
-    intro: `Olá, ${first(d.client.responsible) || d.client.name}! Obrigada pela parceria em ${monthName(d.ref)}. Veja como foram as agendas e as entregas do mês: cada gravação feita vira conteúdo no ar.`,
+    subtitle: `${d.client.name} · ${monthLabel(d.ref)}`,
+    intro: `Olá, ${first(d.client.responsible) || d.client.name}! Obrigada por mais um mês com a Pulse. Veja o que construímos juntos em ${monthName(d.ref)}.`,
     cards: [
-      { label: 'Gravações feitas', value: `${a.done} de ${a.scheduled}`, highlight: true, note: rate === null ? '' : `${rate}% das agendas aproveitadas` },
-      { label: 'Vídeos por gravação', value: a.avg === null ? '—' : num(a.avg) },
+      ...(a.done ? [{ label: 'Gravações feitas', value: a.done, highlight: true }] : []),
+      ...(a.avg !== null && a.avg !== undefined ? [{ label: 'Vídeos por gravação', value: num(a.avg) }] : []),
+      ...(d.numbers ? [{ label: 'Vídeos entregues', value: d.numbers.deliveries.videos.total, highlight: !a.done }] : []),
       { label: 'Próximo vencimento', value: dataBr(d.dueDate), note: d.amount ? brl(d.amount) : '' },
     ],
     sections: [
-      {
-        title: 'Agendas do mês',
-        type: 'table',
-        columns: [{ label: 'Agendadas', align: 'center' }, { label: 'Realizadas', align: 'center' }, { label: 'Canceladas', align: 'center' }, { label: 'Aproveitamento', align: 'center' }],
-        rows: [[String(a.scheduled), { text: String(a.done), bold: true }, String(a.cancelled || 0), rate === null ? '—' : { text: `${rate}%`, bold: true, color: rate >= 100 ? '#1F9D55' : '#F15A24' }]],
-      },
-      ...(progress.length ? [{ title: `O que entregamos em ${monthName(d.ref)}`, type: 'progress', rows: progress }] : []),
-      { title: 'Como melhorar a entrega', type: 'callout', heading: rate !== null && rate >= 100 ? 'Agenda em dia' : 'Uma sugestão para o próximo mês', text: d.tip },
+      ...(acima ? [{ type: 'callout', tone: 'verde', heading: 'Acima do plano contratado', text: acima }] : []),
+      ...(items.length ? [{ title: `O que entregamos em ${monthName(d.ref)}`, type: 'tiles', rows: deliveryTiles(items) }] : []),
+      ...(d.tip ? [{ title: 'Uma dica para o próximo mês', type: 'callout', text: d.tip }] : []),
     ],
     closing: {
       text: `Lembrete: a mensalidade de ${monthName(iso(d.dueDate).slice(0, 7))} vence em ${dataBr(d.dueDate)}${d.amount ? ` (${brl(d.amount)})` : ''}; no dia, você recebe a cobrança com o Pix e o link do cartão. Obrigada por caminhar com a gente!`,

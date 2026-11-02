@@ -3,7 +3,8 @@
 // Chave: ANTHROPIC_API_KEY ou a integração "Claude" da tela de APIs (resolveAiConfig do server.mjs).
 // Modelo: o escolhido na tela de APIs (resolveAiModel), padrão claude-opus-5-5. Sem temperature; o pensamento é
 // adaptativo (campo omitido); o esforço vai em output_config.effort. tool_choice só "auto" (os modelos atuais
-// recusam forçar ferramenta) e ferramentas com strict: true. Opus/Sonnet com o modelo de reserva do servidor.
+// recusam forçar ferramenta). strict: true só nas ferramentas de ação (tools.mjs, STRICT_TOOLS); um 400 de esquema
+// faz tentar de novo sem strict. Opus/Sonnet com o modelo de reserva do servidor.
 // O texto é lido pelos blocos "text"; os blocos de pensamento e de ferramenta voltam inteiros, sem mudança, no
 // histórico do laço (laço manual de tool use, como na documentação do SDK).
 // Cache do prompt: ferramentas + instruções (iguais em todo pedido do mesmo número) e o histórico até a última
@@ -13,9 +14,18 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 const MAX_TOOL_ROUNDS = 8;
+const LOOSE_HOURS = 6;
+
+/** 400 por esquema de ferramenta strict grande demais (o texto da API muda; os dois que já vimos). */
+export const isSchemaError = (error) => error?.status === 400
+  && /compiled grammar is too large|schema is too complex|too many strict|strict tools/i.test(String(error?.message || ''));
+
+/** As mesmas ferramentas sem o strict: true. */
+export const withoutStrict = (tools) => (tools || []).map(({ strict, ...tool }) => tool);
 
 export function createClaude({ pool, resolveAiConfig, resolveAiModel }) {
   const clients = new Map();
+  let looseUntil = 0; // até quando as ferramentas vão sem strict depois de um 400 de esquema
 
   /** { client, model } ou null quando não há chave do Claude cadastrada. */
   async function connection() {
@@ -70,14 +80,28 @@ export function createClaude({ pool, resolveAiConfig, resolveAiModel }) {
     const conn = await connection();
     if (!conn) return { unavailable: true };
     const history = [...messages];
+    // a API recusou o esquema das ferramentas strict nas últimas horas: vai direto sem strict (sem gastar um 400 a cada pedido)
+    let toolList = Date.now() < looseUntil ? withoutStrict(tools) : tools;
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const response = await create(conn.client, conn.model, {
+      const params = (list) => ({
         max_tokens: 16000,
         ...withCache(system, history),
-        tools,
+        tools: list,
         tool_choice: { type: 'auto' },
         output_config: { effort },
       });
+      let response;
+      try {
+        response = await create(conn.client, conn.model, params(toolList));
+      } catch (error) {
+        // 400 "compiled grammar is too large" / "schema is too complex": tenta de novo sem strict, em vez de responder
+        // "Tive um problema" à pessoa. O servidor confere os dados em run() de todo jeito.
+        if (!isSchemaError(error) || !toolList.some((t) => t.strict)) throw error;
+        console.error('[assistente] esquema strict recusado, tentando sem strict:', error.message);
+        looseUntil = Date.now() + LOOSE_HOURS * 3600_000;
+        toolList = withoutStrict(toolList);
+        response = await create(conn.client, conn.model, params(toolList));
+      }
       if (response.stop_reason === 'refusal') return { refusal: true, category: response.stop_details?.category || null, model: conn.model };
       if (response.stop_reason === 'pause_turn') {
         history.push({ role: 'assistant', content: response.content });

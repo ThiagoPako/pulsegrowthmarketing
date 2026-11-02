@@ -42,6 +42,7 @@ async function cleanup() {
   await pool.query(`DELETE FROM task_history WHERE task_id = ANY($1)`, [content.map((r) => r.id)]).catch(() => {});
   await pool.query(`DELETE FROM design_task_history WHERE task_id = ANY($1)`, [design.map((r) => r.id)]).catch(() => {});
   await pool.query(`DELETE FROM content_tasks WHERE client_id = $1`, [ids.client]).catch(() => {});
+  await pool.query(`DELETE FROM scripts WHERE client_id = $1`, [ids.client]).catch(() => {});
   await pool.query(`DELETE FROM design_tasks WHERE client_id = $1`, [ids.client]).catch(() => {});
   await pool.query(`DELETE FROM agent_pauses WHERE scope = $1`, [ids.triagem]).catch(() => {});
   await pool.query(`DELETE FROM agent_keys WHERE user_id = ANY($1)`, [PEOPLE]).catch(() => {});
@@ -142,6 +143,27 @@ try {
   r = await call(TRIAGE_KEY, 'POST', `/agent/tasks/${contentId}/claim`);
   assert.equal(r.status, 403);
   ok('a triagem não pega vídeo; o card fica para os editores');
+
+  // ── Roteiro achado no Drive → anexado ao card sem roteiro ──
+  r = await call(TRIAGE_KEY, 'POST', `/agent/triage/content-cards/${contentId.slice(0, 8)}/script`, {
+    title: 'Roteiro do evento', content: '<h3>GANCHO</h3><p>Fala do roteiro.</p>',
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const scriptId = r.body.script_id;
+  assert.deepEqual(r.body.cards, [contentId]);
+  const { rows: [roteiro] } = await pool.query(`SELECT * FROM scripts WHERE id = $1`, [scriptId]);
+  assert.equal(roteiro.client_id, ids.client);
+  assert.equal(roteiro.title, 'Roteiro do evento');
+  assert.equal(roteiro.created_by, ids.triagem);
+  assert.equal((await pool.query(`SELECT script_id FROM content_tasks WHERE id = $1`, [contentId])).rows[0].script_id, scriptId);
+  r = await call(TRIAGE_KEY, 'POST', `/agent/triage/content-cards/${contentId}/script`, { content: '<p>outro</p>' });
+  assert.equal(r.status, 409);
+  r = await call(TRIAGE_KEY, 'POST', `/agent/triage/content-cards/${contentId}/script`, { content: '<p>outro</p>', replace: true });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.substituiu, scriptId);
+  r = await call(EDITOR_KEY, 'POST', `/agent/triage/content-cards/${contentId}/script`, { content: '<p>x</p>', replace: true });
+  assert.equal(r.status, 403);
+  ok('roteiro do Drive vira roteiro do cliente e entra no card (começo do id basta); com roteiro, só com replace');
 
   // ── Card de Design ──
   r = await call(TRIAGE_KEY, 'POST', '/agent/triage/design-cards', {

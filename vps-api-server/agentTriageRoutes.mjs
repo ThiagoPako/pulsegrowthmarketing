@@ -13,7 +13,12 @@
 //   GET  /api/agent/triage/existing?link=   cards (conteúdo e design) que já usam esse link do Drive
 //   POST /api/agent/triage/content-cards    { client_id, title, drive_link, content_type?, description?, script_id? }
 //   POST /api/agent/triage/design-cards     { client_id, title, materials_link, format?, priority?, description?, copy_text?, due_date? }
+//   POST /api/agent/triage/content-cards/:id/script  { content, title?, replace? }
+//        card que chegou sem roteiro (o roteiro estava num PDF ou documento do Drive): cria o roteiro do cliente
+//        do card (Roteiros) e liga ao card e aos cards filhos (content_tasks.script_id). Card que já tem
+//        roteiro: 409, a não ser com replace: true.
 
+import crypto from 'node:crypto';
 import { DESIGN_FORMAT_PRESETS } from './lib/designBrief.mjs';
 
 export const TRIAGE_ROLE = 'triagem';
@@ -148,6 +153,59 @@ export function registerAgentTriageRoutes(app, { pool, agentApi, designApi }) {
       await pool.query('INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, $3, $4)',
         [task.id, agent.userId, 'Card criado', 'Brutos encontrados no Drive do cliente']).catch(() => {});
       res.json({ ja_existia: false, task: { ...task, client_name: client.company_name } });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Roteiro achado no Drive → roteiro do cliente, ligado ao card que estava sem
+  app.post('/api/agent/triage/content-cards/:id/script', async (req, res) => {
+    try {
+      const agent = await triageAgent(req);
+      const id = String(req.params.id || '').trim();
+      // aceita o começo do id (8+ caracteres), como os recados mostram
+      if (!/^[0-9a-f-]{8,36}$/i.test(id)) return res.status(400).json({ error: 'Informe o id do card (8 caracteres ou mais)' });
+      const content = String(req.body?.content ?? '').trim().slice(0, 100000);
+      if (!content) return res.status(400).json({ error: 'Informe o texto do roteiro (content, HTML simples)' });
+      const replace = req.body?.replace === true;
+
+      const where = "id::text LIKE $1 || '%'";
+      const { rows: found } = await pool.query(
+        `SELECT id, title, client_id, content_type, script_id, city FROM content_tasks WHERE ${where} LIMIT 2`, [id.toLowerCase()]
+      ).catch(() => pool.query(
+        `SELECT id, title, client_id, content_type, script_id, NULL AS city FROM content_tasks WHERE ${where} LIMIT 2`, [id.toLowerCase()]
+      ));
+      if (!found.length) return res.status(404).json({ error: 'Card não encontrado' });
+      if (found.length > 1) return res.status(400).json({ error: 'Mais de um card com esse começo de id: use mais caracteres' });
+      const [task] = found;
+      if (task.script_id && !replace) {
+        return res.status(409).json({ error: 'O card já tem roteiro (use replace: true para trocar)', script_id: task.script_id });
+      }
+
+      const title = text(req.body?.title, 200) || task.title;
+      const format = CONTENT_TYPES.has(task.content_type) ? task.content_type : 'reels';
+      const { rows: cityCols } = await pool.query(
+        `SELECT 1 FROM information_schema.columns WHERE table_name = 'scripts' AND column_name = 'city'`
+      );
+      const withCity = Boolean(task.city && cityCols.length);
+      const scriptId = crypto.randomUUID();
+      await pool.query(
+        `INSERT INTO scripts (id, client_id, title, video_type, content_format, content, recorded, created_by${withCity ? ', city' : ''})
+         VALUES ($1, $2, $3, 'institucional', $4, $5, true, $6${withCity ? ', $7' : ''})`,
+        [scriptId, task.client_id, title, format, content, agent.userId, ...(withCity ? [task.city] : [])]
+      );
+      // pacote de story já dividido: os cards filhos sem roteiro recebem o mesmo
+      const { rows: linked } = await pool.query(
+        `UPDATE content_tasks SET script_id = $1, updated_at = now()
+          WHERE id = $2 OR (parent_task_id = $2 AND (script_id IS NULL OR $3))
+          RETURNING id`,
+        [scriptId, task.id, replace]
+      ).catch(() => pool.query(
+        'UPDATE content_tasks SET script_id = $1, updated_at = now() WHERE id = $2 RETURNING id', [scriptId, task.id]
+      ));
+      await pool.query('INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+        [task.id, agent.userId, 'Roteiro anexado', `Roteiro "${title}" achado no Drive`]).catch(() => {});
+      res.json({ script_id: scriptId, title, cards: linked.map((r) => r.id), substituiu: task.script_id || null });
     } catch (error) {
       sendError(res, error);
     }

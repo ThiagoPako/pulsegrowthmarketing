@@ -25,6 +25,7 @@ import { contactForCity, contactInfo } from './lib/contactByCity.mjs';
 import { staticTxid } from './lib/pixReceipt.mjs';
 import { OFFER_LINE } from './lib/pixAutomatico.mjs';
 import { billingTarget } from './lib/billingContacts.mjs';
+import { alertTeam } from './lib/teamAlerts.mjs';
 
 const CARD_LINE = '💳 Se preferir, dá para pagar no cartão de crédito, em até 12x, pelo mesmo link.';
 import { normalizeCityValue } from './lib/cityResolution.mjs';
@@ -342,6 +343,8 @@ export function registerBillingIsisRoutes(app, {
     return `${appBase}/pagar/${row.token}`;
   }
 
+  const cardWarned = new Set();
+
   // ── obrigado depois do pagamento confirmado (baixa da InfinitePay ou manual no Financeiro), uma vez por cobrança ──
   const thanking = new Set();
 
@@ -560,6 +563,17 @@ export function registerBillingIsisRoutes(app, {
     // cartão pela Efí (02/11/2026): o link já vem no valor com a taxa do cartão repassada (a Pulse recebe a mensalidade inteira)
     const card = await paymentLink({ contract, revenue, amount, month, dueDate }).catch((error) => {
       logger.error('[cobranca-isis] link do cartão:', error.message);
+      // a Efí recusou o cartão (ex.: limite por transação da conta): avisa a equipe da cidade, uma vez por contrato e mês
+      const key = `${contract.id}|${month}`;
+      if (!cardWarned.has(key)) {
+        cardWarned.add(key);
+        const cidade = normalizeCityValue(contract.client_city || contract.city) || 'minacu';
+        alertTeam(pool, cidade, [
+          `⚠️ Cartão · ${cidade === 'uruacu' ? 'Uruaçu' : 'Minaçu'}`,
+          `A Efí recusou o link do cartão de ${String(contract.company_name || '').trim()} (${brl(amount)}): ${String(error.message).replace(/^Efí Cobranças \d+: /, '').slice(0, 160)}`,
+          'A cobrança sai só com Pix. Se for o limite por transação, peça à Efí o aumento do limite do cartão.',
+        ].join('\n'), { logger }).catch(() => {});
+      }
       return null;
     });
     const link = typeof card === 'string' ? card : card?.url || null;

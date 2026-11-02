@@ -127,6 +127,21 @@ describe('Pix Automático · adesão e débito', () => {
     expect(t.client.postRec.mock.calls[0][0]).toMatchObject({ calendario: { dataInicial: '2026-12-10', periodicidade: 'MENSAL' }, loc: 77 });
   });
 
+  it('um toque: sem documento a recorrência sai sem devedor; se a Efí exigir, a página pede só o CPF/CNPJ', async () => {
+    const t = setup();
+    const ok = t.res();
+    await t.handlers['/api/public/cobranca/:token/pix-automatico']({ params: { token: 'tok_0123456789abcdef' }, body: {} }, ok);
+    expect(ok.body).toMatchObject({ status: 'aguardando', copiaECola: '00020126...rec' });
+    expect(t.client.postRec.mock.calls[0][0].vinculo.devedor).toBeUndefined();
+
+    const strict = setup();
+    strict.client.postRec.mockRejectedValueOnce(Object.assign(new Error('Efí 400: devedor obrigatório'), { status: 400 }));
+    const r = strict.res();
+    await strict.handlers['/api/public/cobranca/:token/pix-automatico']({ params: { token: 'tok_0123456789abcdef' }, body: {} }, r);
+    expect(r.code).toBe(422);
+    expect(r.body).toMatchObject({ needDoc: true });
+  });
+
   it('aprovou no banco: avisa a equipe; cria a cobrança de dezembro na janela e o débito pago dá baixa', async () => {
     const t = setup();
     await t.handlers['/api/public/cobranca/:token/pix-automatico']({ params: { token: 'tok_0123456789abcdef' }, body: { documento: '52998224725', nome: 'Maria Souza' } }, t.res());

@@ -107,6 +107,22 @@ export const SEASONAL_RULES: Rule[] = [
   { slug: 'dia-dentista', label: 'Dia do Dentista', date: (y) => at(y, 10, 25), niches: ['odontologia'], suggestion: 'Homenagem aos dentistas.' },
   { slug: 'novembro-azul', label: 'Novembro Azul', date: (y) => at(y, 11, 1), niches: [...SAUDE, 'barbearia'], suggestion: 'Conscientização sobre a saúde do homem e o câncer de próstata.' },
   { slug: 'black-friday', label: 'Black Friday', date: (y) => lastWeekday(y, 11, 5), niches: VAREJO, suggestion: 'Aquecimento e ofertas reais da Black Friday.' },
+  // mais datas por nicho (01/11/2026; espelho em vps-api-server/lib/monthDates.mjs)
+  { slug: 'dia-mundial-da-saude', label: 'Dia Mundial da Saúde', date: (y) => at(y, 4, 7), niches: SAUDE, suggestion: 'Conteúdo sobre cuidado com a saúde e prevenção.' },
+  { slug: 'dia-da-enfermagem', label: 'Dia da Enfermagem', date: (y) => at(y, 5, 12), niches: ['saude'], suggestion: 'Homenagem à equipe de enfermagem.' },
+  { slug: 'dia-do-trabalhador-rural', label: 'Dia do Trabalhador Rural', date: (y) => at(y, 5, 25), niches: ['agropecuaria'], suggestion: 'Homenagem ao trabalhador rural.' },
+  { slug: 'dia-do-meio-ambiente', label: 'Dia do Meio Ambiente', date: (y) => at(y, 6, 5), niches: ['agropecuaria'], suggestion: 'Conteúdo sobre cuidado com a terra e a produção.' },
+  { slug: 'dia-do-comerciante', label: 'Dia do Comerciante', date: (y) => at(y, 7, 16), niches: [...VAREJO, ...COMIDA, 'automotivo'], suggestion: 'Homenagem aos comerciantes e à equipe da loja.' },
+  { slug: 'dia-do-estudante', label: 'Dia do Estudante', date: (y) => at(y, 8, 11), niches: ['educacao'], suggestion: 'Homenagem aos alunos.' },
+  { slug: 'dia-do-psicologo', label: 'Dia do Psicólogo', date: (y) => at(y, 8, 27), niches: ['saude'], suggestion: 'Homenagem aos psicólogos.' },
+  { slug: 'dia-do-profissional-de-educacao-fisica', label: 'Dia do Profissional de Educação Física', date: (y) => at(y, 9, 1), niches: ['fitness'], suggestion: 'Homenagem aos profissionais de educação física.' },
+  { slug: 'dia-da-arvore', label: 'Dia da Árvore', date: (y) => at(y, 9, 21), niches: ['agropecuaria'], suggestion: 'Conteúdo sobre a natureza e o campo.' },
+  { slug: 'dia-dos-animais', label: 'Dia dos Animais', date: (y) => at(y, 10, 4), niches: ['pet', 'clinica_veterinaria'], suggestion: 'Homenagem aos pets dos clientes.' },
+  { slug: 'dia-do-engenheiro-agronomo', label: 'Dia do Engenheiro Agrônomo', date: (y) => at(y, 10, 12), niches: ['agropecuaria'], suggestion: 'Homenagem aos engenheiros agrônomos.' },
+  { slug: 'dia-do-fisioterapeuta', label: 'Dia do Fisioterapeuta', date: (y) => at(y, 10, 13), niches: ['saude', 'fitness'], suggestion: 'Homenagem aos fisioterapeutas.' },
+  { slug: 'dia-mundial-da-alimentacao', label: 'Dia Mundial da Alimentação', date: (y) => at(y, 10, 16), niches: [...COMIDA, 'emagrecimento'], suggestion: 'Conteúdo sobre boa alimentação.' },
+  { slug: 'dia-do-arquiteto', label: 'Dia do Arquiteto', date: (y) => at(y, 12, 15), niches: ['construcao', 'imoveis'], suggestion: 'Homenagem aos arquitetos.' },
+  { slug: 'dia-do-mecanico', label: 'Dia do Mecânico', date: (y) => at(y, 12, 20), niches: ['automotivo'], suggestion: 'Homenagem aos mecânicos.' },
   { slug: 'natal-campanha', label: 'Campanha de Natal', date: (y) => at(y, 12, 1), suggestion: 'Campanha e decoração de Natal, mensagem de fim de ano.' },
 ];
 

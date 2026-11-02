@@ -1007,7 +1007,7 @@ export function createTools({ pool, publicUploadsUrl }) {
     passar_para_marcely: {
       permission: 'marcely',
       strict: false,
-      description: 'Passa a mensagem para a Marcely, a chefe dos agentes, que responde por este mesmo WhatsApp. Use quando não é um comando simples que as outras ferramentas resolvem na hora: demanda ou ideia para a operação, pergunta sobre como estão os vídeos/agentes/clientes que pede análise ("como está o G4?"), pedido que precisa de agente (editar, refazer, priorizar, organizar a fila), conversa com a Marcely ou resposta a uma mensagem dela (as dela terminam com "— Marcely"). A mensagem original vai junto sozinha; escreva no resumo o que a pessoa quer, com cliente, card e prazo se ela disse. Uma vez por mensagem.',
+      description: 'Passa a mensagem para a Marcely, a chefe dos agentes, que responde por este mesmo WhatsApp. Use quando não é um comando simples que as outras ferramentas resolvem na hora: demanda ou ideia para a operação, pergunta sobre como estão os vídeos/agentes/clientes que pede análise ("como está o G4?"), pedido que precisa de agente (editar, refazer, priorizar, organizar a fila), conversa com a Marcely ou resposta a uma mensagem dela. A mensagem original vai junto sozinha; escreva no resumo o que a pessoa quer, com cliente, card e prazo se ela disse. Uma vez por mensagem.',
       input_schema: loose({
         tipo: strEnum(['pedido', 'pergunta', 'resposta'], 'pedido (fazer algo), pergunta (quer saber algo) ou resposta (responde a uma mensagem da Marcely).'),
         resumo: str('O que a pessoa quer, em uma ou duas frases, com os nomes certos (cliente, card, agente, prazo).'),

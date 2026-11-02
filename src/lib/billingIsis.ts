@@ -34,7 +34,7 @@ export const STEP_STATUS_LABELS: Record<string, string> = {
 };
 export const TEMPLATE_VARS: Record<TemplateStep, string[]> = {
   relatorio_mensal: ['nome_cliente', 'mes_anterior', 'mes_atual', 'qtd_videos', 'qtd_artes', 'qtd_posts', 'qtd_gravacoes', 'horas_dedicadas', 'resumo_rede', 'sugestoes', 'link_relatorio'],
-  pre_vencimento: ['nome_cliente', 'mes_ref', 'gravacoes_feitas', 'gravacoes_marcadas', 'media_videos', 'dica_assiduidade', 'dia_vencimento'],
+  pre_vencimento: ['nome_cliente', 'mes_ref', 'gravacoes', 'gravacoes_feitas', 'gravacoes_marcadas', 'media_videos', 'dica_assiduidade', 'dia_vencimento'],
   cobranca: ['nome_cliente', 'plano', 'valor', 'link_pagamento', 'pix_copia_cola', 'chave_pix', 'nome_recebedor', 'link_infinitepay', 'aviso_cartao'],
   lembrete: ['nome_cliente', 'mes_ref', 'valor', 'link_pagamento', 'pix_copia_cola', 'link_infinitepay'],
   obrigado: ['nome_cliente', 'plano', 'valor', 'mes_ref', 'data_pagamento', 'recibo'],

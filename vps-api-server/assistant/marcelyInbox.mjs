@@ -20,6 +20,23 @@ import { cityLabel, clip, norm, phoneVariants } from './common.mjs';
 
 export const MARCELY_RECEIVED = '📨 Recebi, a Marcely já vai ver.';
 
+// As mensagens da Marcely não levam mais assinatura (usuário, 01/11/2026: "não precisa se identificar"): a resposta de
+// alguém a um aviso dela é reconhecida pela conversa. Se o último evento com aquela pessoa (assistant_log) nas últimas
+// 24 h foi um aviso ou uma resposta da Marcely, o que ela mandar agora vai para a caixa da Marcely.
+export const MARCELY_THREAD_KINDS = ['aviso_marcely', 'resposta_marcely'];
+export const MARCELY_THREAD_HOURS = 24;
+
+/** A última coisa entre o PULSE e esta pessoa foi a Marcely falando? (evento mais recente do número nas últimas 24 h) */
+export async function repliesToMarcely(pool, numberId) {
+  if (!numberId) return false;
+  const { rows: [last] } = await pool.query(
+    `SELECT kind FROM assistant_log WHERE number_id = $1 AND created_at > now() - make_interval(hours => $2)
+      ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [numberId, MARCELY_THREAD_HOURS]
+  ).catch(() => ({ rows: [] }));
+  return MARCELY_THREAD_KINDS.includes(last?.kind);
+}
+
 /** Tipos de item (o que a Marcely vê na caixa). */
 export const INBOX_KINDS = {
   pedido: 'Pedido',

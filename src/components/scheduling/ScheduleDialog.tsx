@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, BellRing, CalendarCheck2, CalendarClock, Check, Copy, Facebook, Instagram, Loader2, Repeat2, Sparkles, Trash2 } from 'lucide-react';
+import { AlertTriangle, BellRing, CalendarCheck2, CalendarClock, Check, Copy, Facebook, Instagram, Linkedin, Loader2, Music2, Repeat2, Sparkles, Trash2, Youtube } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,8 +10,12 @@ import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/Con
 import { cn } from '@/lib/utils';
 import {
   addDaysKey, brtToIso, formatDayLabel, suggestFormat, todayKey, weekdayIndex,
-  type PublishFormat, type PublishTarget, type SchedulingAccount, type SchedulingItem, type StoryLinkDefaults,
+  NETWORK_LABELS, NETWORK_MAX,
+  type Network, type PublishFormat, type PublishTarget, type SchedulingAccount, type SchedulingItem, type StoryLinkDefaults,
 } from '@/lib/postingSchedule';
+
+const NETWORK_ICONS: Record<Network, typeof Instagram> = { instagram: Instagram, facebook: Facebook, tiktok: Music2, linkedin: Linkedin, youtube: Youtube };
+const NETWORK_ORDER: Network[] = ['instagram', 'facebook', 'tiktok', 'linkedin', 'youtube'];
 import {
   DEFAULT_BUTTON_TEXTS, defaultRepeat, rememberTime, repeatFromRule, repeatPayload, repeatProblem, type RepeatDraft,
 } from '@/lib/storySeries';
@@ -108,7 +112,9 @@ export default function ScheduleDialog({
 }: Props) {
   const hasIg = accounts.some((a) => a.platform === 'instagram');
   const hasFb = accounts.some((a) => a.platform === 'facebook');
-  const hasAccounts = hasIg || hasFb;
+  // redes com conta conectada (Instagram/Facebook pela Meta ou pela Upload-Post; TikTok, LinkedIn e YouTube pela Upload-Post)
+  const connectedNets = NETWORK_ORDER.filter((n) => accounts.some((a) => a.platform === n));
+  const hasAccounts = connectedNets.length > 0;
   const series = item?.series || null;
   const isSeriesItem = !!series;
   const seriesActive = series?.status === 'ativa';
@@ -120,7 +126,13 @@ export default function ScheduleDialog({
   const [mode, setMode] = useState<PostMode>('manual');
   const [platform, setPlatform] = useState<PublishTarget>('instagram');
   const [format, setFormat] = useState<PublishFormat>('reels');
-  const [caption, setCaption] = useState('');
+  // uma legenda por rede (02/11/2026: "cada rede social a legenda deve ser focada para atender o público daquela rede")
+  const [networks, setNetworks] = useState<Network[]>([]);
+  const [captions, setCaptions] = useState<Partial<Record<Network, string>>>({});
+  const [activeNet, setActiveNet] = useState<Network>('instagram');
+  const caption = captions[activeNet] ?? '';
+  const [captionsTouched, setCaptionsTouched] = useState(false);
+  const setCaption = (text: string) => { setCaptionsTouched(true); setCaptions((c) => ({ ...c, [activeNet]: text })); };
   const [storyLink, setStoryLink] = useState('');
   const [storyLinkText, setStoryLinkText] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
@@ -150,6 +162,10 @@ export default function ScheduleDialog({
       platform: (post?.platform || (hasIg ? 'instagram' : hasFb ? 'facebook' : 'instagram')) as PublishTarget,
       format: fmt,
       caption: post?.caption || item.caption || '',
+      networks: ((post?.platforms && post.platforms.length ? post.platforms
+        : post?.platform === 'both' ? ['instagram', 'facebook'] : post?.platform ? [post.platform] : connectedNets.filter((n) => n === 'instagram' || n === 'facebook'))
+        .filter((n) => connectedNets.includes(n as Network)) as Network[]),
+      captions: (post?.captions || null) as Partial<Record<Network, string>> | null,
       storyLink: post?.story_link || clientLink?.url || '',
       storyLinkText: post?.story_link_text || clientLink?.default_text || DEFAULT_BUTTON_TEXTS[0],
       mediaUrl: post?.media_url || item.media_url || '',
@@ -166,7 +182,15 @@ export default function ScheduleDialog({
     setMode(initial.mode);
     setPlatform(initial.platform);
     setFormat(initial.format);
-    setCaption(initial.caption);
+    {
+      const nets = initial.networks.length ? initial.networks : (connectedNets.slice(0, 1) as Network[]);
+      setNetworks(nets);
+      setActiveNet(nets[0] || 'instagram');
+      const base: Partial<Record<Network, string>> = {};
+      for (const n of NETWORK_ORDER) base[n] = initial.captions?.[n] ?? initial.caption;
+      setCaptions(base);
+      setCaptionsTouched(false);
+    }
     setStoryLink(initial.storyLink);
     setStoryLinkText(initial.storyLinkText);
     setMediaUrl(initial.mediaUrl);
@@ -180,9 +204,9 @@ export default function ScheduleDialog({
     if (!item) return;
     setGenerating(true);
     try {
-      const result = await generateCaption({ client_id: clientId, kind: item.kind, id: item.id });
+      const result = await generateCaption({ client_id: clientId, kind: item.kind, id: item.id, network: mode === 'manual' ? 'instagram' : activeNet });
       setCaption(result.caption);
-      toast.success(`Legenda criada ${CAPTION_SOURCES[result.fonte] || ''}`.trim(), { description: 'Revise antes de salvar.' });
+      toast.success(`Legenda para o ${NETWORK_LABELS[mode === 'manual' ? 'instagram' : activeNet]} criada ${CAPTION_SOURCES[result.fonte] || ''}`.trim(), { description: 'Revise antes de salvar.' });
     } catch (err) {
       toast.error((err as Error).message || 'Não foi possível gerar a legenda');
     } finally {
@@ -281,6 +305,7 @@ export default function ScheduleDialog({
   const onlyWhenChanged = scheduled && !isSeriesItem && item.state !== 'erro'
     && mode === initial.mode && platform === initial.platform && format === initial.format
     && caption === initial.caption && storyLink === initial.storyLink && storyLinkText === initial.storyLinkText
+    && networks.join() === initial.networks.join() && !captionsTouched
     && mediaUrl === initial.mediaUrl && !repeatOn;
 
   const save = async (allowPast = false) => {
@@ -299,6 +324,9 @@ export default function ScheduleDialog({
     }
     const problem = repeatOn ? repeatProblem({ ...repeat, enabled: true }, date) : null;
     if (problem) { toast.error(problem); return; }
+    if (postsAlone && !isSeriesItem && !networks.length) { toast.error('Marque pelo menos uma rede.'); return; }
+    const tooLong = postsAlone && !isStory ? networks.find((n) => (captions[n] ?? '').length > NETWORK_MAX[n]) : undefined;
+    if (tooLong) { toast.error(`A legenda do ${NETWORK_LABELS[tooLong]} passou de ${NETWORK_MAX[tooLong]} caracteres.`); return; }
     if (mode === 'lembrete' && storyLink.trim() && !/^https?:\/\//i.test(storyLink.trim())) {
       toast.error('O link do story precisa começar com https://');
       return;
@@ -342,8 +370,12 @@ export default function ScheduleDialog({
         time,
         mode: postsAlone ? 'auto' : 'manual',
         platform,
+        ...(postsAlone && !isStory ? {
+          platforms: networks,
+          captions: Object.fromEntries(networks.map((n) => [n, captions[n] ?? ''])),
+        } : postsAlone && isStory ? { platforms: networks.filter((n) => n === 'instagram' || n === 'facebook') } : {}),
         publish_type: format,
-        caption: isStory ? '' : caption,
+        caption: isStory ? '' : postsAlone ? (captions.instagram ?? caption) : caption,
         ...(isStory && postsAlone ? storyFields() : {}),
         allow_past: allowPast || undefined,
         ...media,
@@ -446,7 +478,7 @@ export default function ScheduleDialog({
                   )}
                   {accounts.map((a) => (
                     <span key={a.id} className="inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-px text-[10px] text-muted-foreground">
-                      {a.platform === 'instagram' ? <Instagram size={10} /> : <Facebook size={10} />}
+                      {(() => { const Icon = NETWORK_ICONS[a.platform] || Instagram; return <Icon size={10} />; })()}
                       {a.username || a.account_name}
                     </span>
                   ))}
@@ -509,10 +541,35 @@ export default function ScheduleDialog({
               </div>
             )}
 
-            <div className="space-y-1">
-              <Label className="text-xs">Rede</Label>
-              <Segmented<PublishTarget> label="Rede" value={platform} onChange={setPlatform} options={platformOptions} disabled={readOnly} />
-            </div>
+            {mode === 'auto' && !isSeriesItem ? (
+              <div className="space-y-1">
+                <Label className="text-xs">Redes</Label>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Redes">
+                  {connectedNets.filter((n) => !isStory || n === 'instagram' || n === 'facebook').map((n) => {
+                    const Icon = NETWORK_ICONS[n];
+                    const on = networks.includes(n);
+                    return (
+                      <button key={n} type="button" aria-pressed={on} disabled={readOnly}
+                        onClick={() => {
+                          const next = on ? networks.filter((x) => x !== n) : NETWORK_ORDER.filter((x) => x === n || networks.includes(x));
+                          setNetworks(next);
+                          if (!next.includes(activeNet) && next.length) setActiveNet(next[0]);
+                          if (!on) setActiveNet(n);
+                        }}
+                        className={cn('flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all disabled:opacity-50',
+                          on ? 'border-primary bg-primary/10 text-primary shadow-sm' : 'border-border text-muted-foreground hover:border-primary/40')}>
+                        <Icon size={13} aria-hidden="true" /> {NETWORK_LABELS[n]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <Label className="text-xs">Rede</Label>
+                <Segmented<PublishTarget> label="Rede" value={platform} onChange={setPlatform} options={platformOptions} disabled={readOnly} />
+              </div>
+            )}
 
             {isStory && mode === 'lembrete' && !readOnly && (
               <StoryLinkFields
@@ -533,7 +590,18 @@ export default function ScheduleDialog({
             {!isSeriesItem && !isStory && (
               <div className="space-y-1">
                 <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="sched-caption" className="text-xs">Legenda</Label>
+                  {mode === 'auto' && networks.length > 1 ? (
+                    <div className="flex flex-wrap gap-1" role="tablist" aria-label="Legenda de cada rede">
+                      {networks.map((n) => (
+                        <button key={n} type="button" role="tab" aria-selected={activeNet === n} onClick={() => setActiveNet(n)}
+                          className={cn('rounded-md px-2 py-0.5 text-[11px] font-medium', activeNet === n ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+                          {NETWORK_LABELS[n]}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <Label htmlFor="sched-caption" className="text-xs">Legenda{mode === 'auto' && networks.length === 1 ? ` · ${NETWORK_LABELS[networks[0]]}` : ''}</Label>
+                  )}
                   <div className="flex items-center gap-1">
                     {caption && (
                       <Button type="button" variant="ghost" size="sm" className="h-6 gap-1 px-1.5 text-[11px]" onClick={() => copyText(caption)}>
@@ -554,7 +622,7 @@ export default function ScheduleDialog({
                         {generating ? 'Gerando…' : caption ? 'Gerar outra' : 'Gerar com IA'}
                       </Button>
                     )}
-                    <span className={cn('text-[10px] tabular-nums', caption.length > 2200 ? 'text-destructive' : 'text-muted-foreground')}>{caption.length}/2200</span>
+                    <span className={cn('text-[10px] tabular-nums', caption.length > NETWORK_MAX[activeNet] ? 'text-destructive' : 'text-muted-foreground')}>{caption.length}/{NETWORK_MAX[activeNet]}</span>
                   </div>
                 </div>
                 <Textarea

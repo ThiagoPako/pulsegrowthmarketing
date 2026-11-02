@@ -8715,6 +8715,9 @@ async function ensureSocialPostsSchema() {
     -- Stories do módulo Agendamentos (storySeries.mjs): 'lembrete' nunca é publicado pelo robô (só avisa a
     -- equipe, que posta pelo app com o adesivo de link); série de repetição com uma linha por horário.
     ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_mode TEXT;
+    -- redes do post e a legenda de cada uma (Upload-Post, 02/11/2026); NULL = só o platform antigo
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS platforms TEXT[];
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS captions JSONB;
     ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_series_id UUID;
     ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS series_slot_at TIMESTAMPTZ;
     ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;
@@ -9307,7 +9310,9 @@ async function runScheduledPostNow(post, { manual = false } = {}) {
   }
 
   const accounts = await getConnectedAccounts(post.client_id);
-  const targets = accounts.filter(a => post.platform === 'both' ? ['instagram', 'facebook'].includes(a.platform) : a.platform === post.platform);
+  const wanted = Array.isArray(post.platforms) && post.platforms.length ? post.platforms
+    : post.platform === 'both' ? ['instagram', 'facebook'] : [post.platform];
+  const targets = accounts.filter(a => wanted.includes(a.platform));
   const duplicated = duplicatedPlatformAccounts(targets);
   if (duplicated.length) {
     // Conexão antiga gravou várias Páginas/perfis no mesmo cliente: publicar em todas
@@ -9350,7 +9355,9 @@ async function runScheduledPostNow(post, { manual = false } = {}) {
   if (targets.length === 0) errors.push(`Nenhuma conta ${post.platform === 'both' ? '' : post.platform + ' '}conectada para este cliente.`);
   for (const account of targets) {
     try {
-      const r = await publishToClientAccount(account, publishPost);
+      // legenda própria da rede, quando o agendamento escreveu uma
+      const own = post.captions && typeof post.captions === 'object' ? post.captions[account.platform] : undefined;
+      const r = await publishToClientAccount(account, own != null ? { ...publishPost, caption: own } : publishPost);
       results.push({ platform: account.platform, account: account.account_name, id: r?.id || r?.post_id || null, raw: r });
       await pool.query(
         `INSERT INTO integration_logs (client_id, platform, action, status, message) VALUES ($1,$2,'auto_publish','success',$3)`,
@@ -10200,9 +10207,21 @@ async function prepareScheduledPost(input = {}, { requireAccounts = true, apiPub
     client_id, platform = 'instagram', publish_type = 'reels',
     media_url, media_items, caption = '', scheduled_at, story_link, story_link_text,
   } = input;
+  // várias redes (Upload-Post): a lista manda; o platform guardado fica 'both' / a rede única, para as telas antigas
+  const NETWORKS = ['instagram', 'facebook', 'tiktok', 'linkedin', 'youtube'];
+  const platforms = Array.isArray(input.platforms) && input.platforms.length ? input.platforms : null;
+  if (platforms && platforms.some((p) => !NETWORKS.includes(p))) fail('Rede inválida');
+  if (platforms && publish_type === 'stories' && platforms.some((p) => !['instagram', 'facebook'].includes(p))) fail('Story só sai no Instagram e no Facebook.');
+  const captions = {};
+  for (const p of platforms || []) {
+    const c = String(input.captions?.[p] ?? caption ?? '');
+    const max = p === 'linkedin' ? 3000 : p === 'youtube' ? 5000 : 2200;
+    if (c.length > max) fail(`Legenda do ${p} acima de ${max} caracteres`);
+    captions[p] = c;
+  }
 
   if (!client_id) fail('client_id é obrigatório');
-  if (!['instagram', 'facebook', 'both'].includes(platform)) fail('platform inválida');
+  if (!platforms && !['instagram', 'facebook', 'both'].includes(platform)) fail('platform inválida');
   if (!['reels', 'feed', 'stories', 'carousel'].includes(publish_type)) fail('publish_type inválido');
 
   const items = Array.isArray(media_items)
@@ -10222,7 +10241,7 @@ async function prepareScheduledPost(input = {}, { requireAccounts = true, apiPub
   // Duração que a API do Instagram aceita (ffprobe com cache; vídeos de /uploads): story até 60 s, reels de
   // 3 s a 15 min. Só vale quando o robô publica no Instagram (apiPublish): o lembrete a equipe posta pelo
   // app, e o post só do Facebook sai como vídeo comum. Com 'both' vale.
-  const instagramApi = apiPublish && platform !== 'facebook';
+  const instagramApi = apiPublish && (platforms ? platforms.includes('instagram') : platform !== 'facebook');
   if (instagramApi) {
     const durationProblem = await igVideo.durationProblem(urls, publish_type);
     if (durationProblem) fail(durationProblem);
@@ -10236,8 +10255,9 @@ async function prepareScheduledPost(input = {}, { requireAccounts = true, apiPub
 
   // Story em modo lembrete (storySeries.mjs) não passa pela conta: a equipe posta pelo app.
   const accounts = requireAccounts ? await getConnectedAccounts(client_id) : [];
-  const needed = !requireAccounts ? [] : platform === 'both' ? ['instagram', 'facebook'] : [platform];
-  const missing = needed.filter(p => !accounts.some(a => a.platform === p && a.access_token));
+  const needed = !requireAccounts ? [] : platforms || (platform === 'both' ? ['instagram', 'facebook'] : [platform]);
+  // conta da Upload-Post não tem token da Meta (quem publica é ela)
+  const missing = needed.filter(p => !accounts.some(a => a.platform === p && (a.access_token || a.api_base === 'upload_post')));
   if (missing.length) fail(`Cliente sem conta conectada: ${missing.join(', ')}. Conecte em Clientes → editar → Redes Sociais.`);
   // Várias contas da mesma rede: o robô não publicaria (não sabe qual é a do cliente). Avisa já no agendamento.
   const duplicated = duplicatedPlatformAccounts(accounts.filter(a => needed.includes(a.platform)));
@@ -10248,8 +10268,12 @@ async function prepareScheduledPost(input = {}, { requireAccounts = true, apiPub
   // A versão Instagram do vídeo começa logo depois do agendamento (a tarefa relê os posts em segundos)
   if (instagramApi) igVideo.scanSoon();
 
+  const storedPlatform = !platforms ? platform
+    : platforms.length === 1 ? platforms[0]
+      : platforms.includes('instagram') && platforms.includes('facebook') ? 'both' : platforms[0];
   return {
-    client_id, platform, publish_type, items, urls, caption, when,
+    client_id, platform: storedPlatform, platforms, captions: platforms ? captions : null, publish_type, items, urls,
+    caption: platforms ? (captions.instagram ?? captions[platforms[0]] ?? caption) : caption, when,
     story_link: story_link || null, story_link_text: story_link_text || null,
   };
 }

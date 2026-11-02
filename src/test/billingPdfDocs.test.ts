@@ -49,7 +49,7 @@ describe('PDFs da Ísis: conteúdo', () => {
   it('relatório: sem rede social nem horas, esses blocos não aparecem', () => {
     const d = relatorioDoc({ ref: '2026-10', next: '2026-11', client, plan, numbers, network: null, suggestions: '' });
     const titles = d.sections.map((s: { title: string }) => s.title);
-    expect(d.sections[0].type).toBe('stats');
+    expect(d.sections[0].type).toBe('stats'); // sem portal, os números abrem
     expect(titles.some((t: string) => /Rede social|Tempo dedicado|Artes entregues|Ideias/.test(t))).toBe(false);
     // nada negativo no relatório
     expect(JSON.stringify(d)).not.toMatch(/faltou|pendente|Canceladas| de 8/i);
@@ -123,7 +123,9 @@ describe('relatório premium', () => {
     const cal = d.sections.find((s: { type?: string }) => s.type === 'calendar');
     expect(cal.marks.map((m: { kind: string; name: string; tag: string }) => `${m.kind}:${m.name}:${m.tag}`)).toEqual(['sazonal:Novembro Azul:Arte comemorativa', 'feriado:Finados:Arte de aviso', 'gravacao:Gravação:9h']);
     expect(d.sections.some((s: { heading?: string }) => s.heading === 'Confirme suas gravações no portal')).toBe(true);
-    expect(d.sections.find((s: { type?: string }) => s.type === 'portal').url).toBe('https://agenciapulse.tech/portal/x');
+    // o portal abre o relatório, antes dos números, e aparece uma vez só
+    expect(d.sections[0]).toMatchObject({ type: 'portal', url: 'https://agenciapulse.tech/portal/x', heading: 'Confira todos os seus resultados no portal' });
+    expect(d.sections.filter((s: { type?: string }) => s.type === 'portal')).toHaveLength(1);
     expect(d.sections.filter((s: { type?: string }) => s.type === 'team')).toHaveLength(2);
   });
 

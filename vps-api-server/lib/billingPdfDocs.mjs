@@ -219,6 +219,14 @@ export function relatorioDoc(d) {
     status: acima ? 'acima' : null,
     intro: `Obrigada por mais um mês com a Pulse, ${nome}! Aqui está, de relance, tudo o que fizemos juntos em ${monthName(d.ref)}.`,
     sections: [
+      // o portal logo na 1ª página (usuário, 01/11/2026: "o cliente já tem que ver 'confira todos os seus resultados
+      // no portal' e depois vem o relatório completo")
+      ...(d.portalUrl ? [{
+        type: 'portal',
+        url: d.portalUrl,
+        heading: 'Confira todos os seus resultados no portal',
+        text: 'Os vídeos e os conteúdos do mês, o que está esperando a sua aprovação e as próximas gravações para confirmar.',
+      }] : []),
       ...(stats.length ? [{ type: 'stats', items: stats }] : []),
       ...(acima ? [{ type: 'callout', heading: 'Acima do plano contratado', text: acima }] : []),
       ...(storiesPlan ? [{
@@ -278,13 +286,6 @@ export function relatorioDoc(d) {
         text: `${recs.length === 1 ? 'A data acima já está reservada' : `As ${recs.length} datas acima já estão reservadas`} para você. Confirme no seu portal para a equipe chegar com tudo pronto.`,
       }] : []),
       ...(suggestions.length ? [{ title: `Mais ideias para ${monthName(d.next)}`, type: 'callout', heading: 'O que propomos para o próximo mês', text: suggestions.map((s) => `• ${s}`).join('\n') }] : []),
-      ...(d.portalUrl ? [{
-        title: 'Seu portal',
-        type: 'portal',
-        url: d.portalUrl,
-        heading: 'Acompanhe tudo no seu portal',
-        text: 'Veja os vídeos e os conteúdos do mês, aprove o que está esperando por você e confirme as próximas gravações.',
-      }] : []),
       ...((d.team?.people || []).length ? [{ title: 'Quem cuidou do seu projeto', type: 'team', people: d.team.people }] : []),
       ...((d.team?.agents || []).length ? [{ title: 'Agentes de IA da Pulse no seu projeto', type: 'team', people: d.team.agents.map((a) => ({ ...a, agent: true })) }] : []),
     ],

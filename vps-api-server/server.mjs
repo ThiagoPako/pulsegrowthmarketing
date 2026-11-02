@@ -20421,6 +20421,9 @@ const portalShare = registerPortalShareRoutes(app, {
   // link da equipe (02/11/2026): Aprovar manda ao cliente, Pedir alteração devolve ao editor; aviso a quem aprova a cidade
   moveCard: (taskId, column, opts) => agentApi.moveEditCard(taskId, column, opts),
   enqueue: (to, body) => enqueueWhatsApp(pool, { to, body, purpose: 'assistente', triggerType: 'aprovacao_equipe', history: false }),
+  // pedido de alteração por áudio: guardado nos uploads e transcrito pelo Whisper do servidor (02/11/2026)
+  uploadRoot: UPLOAD_ROOT,
+  transcribeUrl,
 });
 registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, verifyTeamManager, handleWhatsAppReply, runBillingAutomation, runConfirmationCron, hasPulsePlus: pulsePlus.hasPulsePlus, shareLink: portalShare.shareLink });
 

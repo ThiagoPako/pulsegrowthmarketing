@@ -5,7 +5,7 @@
 // post quando já existe, e os botões Aprovar e Pedir alteração. Depois, o convite para a Área do Cliente.
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Bookmark, Check, Heart, Loader2, MessageCircle, MoreHorizontal, Music2, Pencil, Play, Send, Volume2, VolumeX } from 'lucide-react';
+import { Bookmark, Check, Heart, Loader2, MessageCircle, Mic, MoreHorizontal, Music2, Pencil, Play, Send, Square, Trash2, Volume2, VolumeX } from 'lucide-react';
 import logo from '@/assets/pulse-logo-branco.png';
 
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
@@ -24,6 +24,86 @@ interface ShareData {
   signup_url: string;
   // link da equipe (02/11/2026): Aprovar manda ao cliente, Pedir alteração volta ao editor
   team?: boolean;
+  team_info?: { editor: string | null; urgent: boolean } | null;
+}
+
+const MAX_AUDIO_SECONDS = 180;
+
+/**
+ * Pedido de alteração por áudio (usuário, 02/11/2026: "ele pode clicar lá e enviar um áudio para pedir alteração, ele
+ * não precisa escrever"). Grava no próprio navegador (webm no Android, mp4 no iPhone), até 3 min, e mostra para ouvir
+ * antes de enviar.
+ */
+function AudioRecorder({ value, onChange, disabled }: { value: Blob | null; onChange: (b: Blob | null) => void; disabled?: boolean }) {
+  const [recording, setRecording] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const [error, setError] = useState('');
+  const [url, setUrl] = useState('');
+  const rec = useRef<MediaRecorder | null>(null);
+  const timer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!value) { setUrl(''); return; }
+    const u = URL.createObjectURL(value);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [value]);
+  useEffect(() => () => { if (timer.current) window.clearInterval(timer.current); rec.current?.stream.getTracks().forEach((t) => t.stop()); }, []);
+
+  const stop = () => {
+    if (timer.current) { window.clearInterval(timer.current); timer.current = null; }
+    if (rec.current && rec.current.state !== 'inactive') rec.current.stop();
+    setRecording(false);
+  };
+
+  const start = async () => {
+    setError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const type = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find((t) => MediaRecorder.isTypeSupported?.(t)) || '';
+      const mr = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+      const chunks: Blob[] = [];
+      mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      mr.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunks, { type: (mr.mimeType || type || 'audio/webm').split(';')[0] });
+        onChange(blob.size > 1000 ? blob : null);
+      };
+      rec.current = mr;
+      mr.start();
+      setSeconds(0);
+      setRecording(true);
+      timer.current = window.setInterval(() => setSeconds((v) => {
+        if (v + 1 >= MAX_AUDIO_SECONDS) stop();
+        return v + 1;
+      }), 1000);
+    } catch {
+      setError('Não deu para usar o microfone. Libere o acesso ao microfone no navegador ou escreva o pedido.');
+    }
+  };
+
+  const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  return (
+    <div>
+      {recording ? (
+        <button type="button" onClick={stop}
+          className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#D64545] px-4 py-4 text-base font-bold active:scale-[0.98]">
+          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-white" /> Gravando {clock} · tocar para parar <Square className="h-4 w-4 fill-white" />
+        </button>
+      ) : value ? (
+        <div className="flex items-center gap-2 rounded-xl bg-white/5 p-2">
+          <audio src={url} controls className="h-10 min-w-0 flex-1" />
+          <button type="button" onClick={() => onChange(null)} aria-label="Apagar o áudio" className="rounded-lg p-2 text-white/70"><Trash2 className="h-5 w-5" /></button>
+        </div>
+      ) : (
+        <button type="button" onClick={start} disabled={disabled}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#F15A24] px-4 py-4 text-base font-bold text-[#FFB08C] active:scale-[0.98] disabled:opacity-50">
+          <Mic className="h-5 w-5" /> Gravar um áudio
+        </button>
+      )}
+      {error && <p className="mt-2 text-center text-xs text-[#FF8A8A]">{error}</p>}
+    </div>
+  );
 }
 
 const handleOf = (d: ShareData) => d.client.username || d.client.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '');
@@ -38,6 +118,7 @@ export default function ApproveContent() {
   const [moreCaption, setMoreCaption] = useState(false);
   const [mode, setMode] = useState<'idle' | 'adjust'>('idle');
   const [notes, setNotes] = useState('');
+  const [audio, setAudio] = useState<Blob | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<'aprovado' | 'ajuste' | null>(null);
   const [actionError, setActionError] = useState('');
@@ -66,8 +147,18 @@ export default function ApproveContent() {
     setBusy(true);
     setActionError('');
     try {
+      // o áudio sobe primeiro; o pedido leva o link dele (o servidor transcreve)
+      let audioUrl: string | null = null;
+      if (action === 'adjust' && audio) {
+        const up = await fetch(`${VPS_API_BASE}/public/aprovar/${encodeURIComponent(token || '')}/audio`, {
+          method: 'POST', headers: { 'Content-Type': audio.type || 'audio/webm' }, body: audio,
+        });
+        const upBody = await up.json().catch(() => ({}));
+        if (!up.ok) throw new Error(upBody.error || 'Não deu para enviar o áudio. Tente de novo.');
+        audioUrl = upBody.audio_url;
+      }
       const r = await fetch(`${VPS_API_BASE}/public/aprovar/${encodeURIComponent(token || '')}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, notes }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, notes, audio_url: audioUrl }),
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || 'Não deu certo. Tente de novo.');
@@ -100,7 +191,18 @@ export default function ApproveContent() {
 
         {data && (
           <>
-            <p className="mb-3 text-center text-sm text-white/70">Assim vai ficar no Instagram de <b className="text-white">{data.client.name}</b></p>
+            {data.team ? (
+              // link da equipe (usuário, 02/11/2026: "que esse link seja um pouco diferente")
+              <div className="mb-4 rounded-2xl border border-[#F15A24]/50 bg-[#F15A24]/10 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#F15A24]">Só para a equipe Pulse</p>
+                <p className="mt-1 text-base font-bold">{data.team_info?.urgent ? '🔥 Urgente · ' : ''}{data.client.name}</p>
+                <p className="mt-0.5 text-sm text-white/70">
+                  {data.team_info?.editor ? `Editado por ${data.team_info.editor}. ` : ''}Aprovar manda o vídeo para o cliente; Pedir alteração devolve ao editor.
+                </p>
+              </div>
+            ) : (
+              <p className="mb-3 text-center text-sm text-white/70">Assim vai ficar no Instagram de <b className="text-white">{data.client.name}</b></p>
+            )}
 
             {/* Reels de mentira: o vídeo com a cara do Instagram */}
             <div className="relative mx-auto aspect-[9/16] w-full overflow-hidden rounded-2xl bg-black shadow-2xl ring-1 ring-white/10">
@@ -170,12 +272,14 @@ export default function ApproveContent() {
             ) : mode === 'adjust' ? (
               <div className="mt-5 space-y-3">
                 <label className="block text-sm font-semibold" htmlFor="ajuste">{data.team ? 'O que o editor precisa mudar?' : 'O que você quer mudar?'}</label>
-                <textarea id="ajuste" value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} autoFocus
+                <AudioRecorder value={audio} onChange={setAudio} disabled={busy} />
+                <p className="text-center text-xs text-white/50">ou escreva</p>
+                <textarea id="ajuste" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
                   placeholder="Ex.: trocar a música, tirar a parte do começo, corrigir o nome na legenda…"
                   className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-3 text-base text-white placeholder:text-white/40" />
-                <button type="button" onClick={() => decide('adjust')} disabled={busy || notes.trim().length < 3}
+                <button type="button" onClick={() => decide('adjust')} disabled={busy || (notes.trim().length < 3 && !audio)}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#F15A24] px-4 py-4 text-base font-bold active:scale-[0.98] disabled:opacity-50">
-                  {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : data.team ? 'Devolver ao editor' : 'Enviar pedido de ajuste'}
+                  {busy ? <><Loader2 className="h-5 w-5 animate-spin" />{audio ? ' Enviando o áudio…' : ''}</> : data.team ? 'Devolver ao editor' : 'Enviar pedido de ajuste'}
                 </button>
                 <button type="button" onClick={() => setMode('idle')} className="w-full py-2 text-sm text-white/60">Voltar</button>
               </div>
@@ -187,7 +291,7 @@ export default function ApproveContent() {
                 </button>
                 <button type="button" onClick={() => decide('approve')} disabled={busy}
                   className="flex items-center justify-center gap-2 rounded-xl bg-[#1F9D55] px-3 py-4 text-[15px] font-bold active:scale-[0.98] disabled:opacity-60">
-                  {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Check className="h-5 w-5" /> Aprovar</>}
+                  {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Check className="h-5 w-5" /> {data.team ? 'Aprovar e enviar' : 'Aprovar'}</>}
                 </button>
               </div>
             )}

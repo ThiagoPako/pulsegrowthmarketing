@@ -204,7 +204,7 @@ export function EfiAccountSection({ account, demo }: { account: PaymentAccount; 
         {efi.webhook_at && <p>Webhook cadastrado em {dataHora(efi.webhook_at)}.</p>}
         {efi.webhook_error && <p className="text-amber-700">Webhook: {efi.webhook_error}</p>}
         <p>
-          Sem webhook, a Pulse confere os Pix recebidos na Efí de 10 em 10 minutos e os links do cartão de 30 em 30. Client ID, Client Secret e
+          O webhook avisa o Pix na hora; sem ele, a Pulse confere os Pix recebidos na Efí de 5 em 5 minutos e os links do cartão de 30 em 30. Client ID, Client Secret e
           certificado vão cifrados para o servidor e nunca voltam para a tela.
         </p>
       </div>

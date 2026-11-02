@@ -165,6 +165,7 @@ describe('Efí · cobrança, webhook e conciliação (homologação simulada)', 
       putCob: vi.fn(async (txid: string, body: { valor: { original: string } }) => ({ txid, status: 'ATIVA', loc: { id: 7 }, calendario: { expiracao: 86400 }, valor: body.valor, pixCopiaECola: `00020101BR.GOV.BCB.PIX-qrcodespix.sejaefi.com.br/${txid}` })),
       getCob: vi.fn(async (txid: string) => ({ txid, status: cobStatus, valor: { original: '5.00' }, pix: cobStatus === 'CONCLUIDA' ? [{ endToEndId: 'E1', valor: '5.00', horario: '2026-11-02T13:20:00Z' }] : [] })),
       listPix: vi.fn(async () => []),
+      getPix: vi.fn(async (e2e: string) => bank.get(e2e) || null),
       saldo: vi.fn(async () => ({ saldo: '100.00' })),
     };
     const handlers: Record<string, (req: unknown, res: unknown) => Promise<void>> = {};
@@ -178,7 +179,12 @@ describe('Efí · cobrança, webhook e conciliação (homologação simulada)', 
     return { routes, handlers, fake, charges, received, markRevenuePaid };
   }
   const contract = { id: 'c1', client_id: 'cli1', client_city: 'uruacu', company_name: 'Clínica Exemplo' };
-  const webhookReq = (hmac: string, pix: unknown[]) => ({ params: { city: 'uruacu' }, query: { hmac }, headers: { 'x-forwarded-for': '34.193.116.226' }, body: { pix } });
+  // a Efí "de verdade" da simulação: o webhook só vale para Pix que está na conta (getPix)
+  const bank = new Map<string, Record<string, unknown>>();
+  const webhookReq = (hmac: string, pix: Record<string, unknown>[]) => {
+    for (const p of pix) bank.set(String(p.endToEndId), p);
+    return { params: { city: 'uruacu' }, query: { hmac }, headers: { 'x-forwarded-for': '34.193.116.226' }, body: { pix } };
+  };
   const res = () => { const r = { code: 0, status(c: number) { r.code = c; return r; }, json: () => r, send: () => r }; return r; };
   const tick = () => new Promise((r) => setTimeout(r, 10));
 
@@ -228,6 +234,17 @@ describe('Efí · cobrança, webhook e conciliação (homologação simulada)', 
     await handlers['/api/webhooks/efi/:city'](webhookReq('segredo123', [{ endToEndId: 'E9', txid, valor: '5.00' }]), res());
     await tick();
     expect(fake.getCob).toHaveBeenCalledWith(txid);
+    expect(markRevenuePaid).not.toHaveBeenCalled();
+  });
+
+  it('webhook de Pix que não está na conta (corpo inventado): ignora, sem gravar nem dar baixa', async () => {
+    const { handlers, received, markRevenuePaid } = setup({ cobStatus: 'CONCLUIDA' });
+    const r = res();
+    const req = { params: { city: 'uruacu' }, query: { hmac: 'segredo123' }, headers: {}, body: { pix: [{ endToEndId: 'E-INVENTADO', txid: 'x', valor: '5.00' }] } };
+    await handlers['/api/webhooks/efi/:city/pix'](req, r);
+    await tick();
+    expect(r.code).toBe(200);
+    expect(received.has('E-INVENTADO')).toBe(false);
     expect(markRevenuePaid).not.toHaveBeenCalled();
   });
 

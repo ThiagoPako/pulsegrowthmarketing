@@ -1517,8 +1517,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     portalTaskLinkReady = rowCount > 0;
     return portalTaskLinkReady;
   }
-  const SOCIAL_STATUS = { revisao: 'revisao', alteracao: 'ajuste' };
-  const MOVE_ACTION = { edicao: 'Movido para Edição', revisao: 'Enviado para Revisão', alteracao: 'Solicitado Alteração' };
+  const SOCIAL_STATUS = { revisao: 'revisao', alteracao: 'ajuste', envio: 'aprovacao_cliente' };
+  const MOVE_ACTION = { edicao: 'Movido para Edição', revisao: 'Enviado para Revisão', alteracao: 'Solicitado Alteração', envio: 'Enviado para Cliente' };
   const PORTAL_NOTIF = {
     edicao: ['✂️ Vídeo em edição', (t) => `"${t}" foi enviado para edição. Prazo previsto: 2 dias úteis.`, 'editing_started'],
     revisao: ['👁 Revisão interna', (t) => `"${t}" está em revisão interna de qualidade.`, 'internal_review'],
@@ -1594,8 +1594,10 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
 
   // Move um card do fluxo de edição (Edição, Revisão, Alteração) gravando o mesmo que src/lib/contentTaskSync.ts.
   // Usado pela chefe (rota abaixo) e pelo Assistente PULSE (ordem pelo WhatsApp). userId = quem fica no histórico.
-  async function moveEditCard(taskId, column, { userId = null, reason = null, notes = null } = {}) {
-    if (!MOVABLE.has(column)) {
+  // human: a decisão é de uma pessoa da equipe (Aprovar no link de aprovação da equipe, 02/11/2026); só assim o
+  // card vai de Revisão para "envio" (o cliente recebe). Os agentes continuam sem poder enviar ao cliente.
+  async function moveEditCard(taskId, column, { userId = null, reason = null, notes = null, human = false } = {}) {
+    if (!MOVABLE.has(column) && !(human && column === 'envio')) {
       throw Object.assign(new Error('Coluna permitida: edicao, revisao ou alteracao (enviar ao cliente é decisão humana)'), { status: 400 });
     }
     const client = await pool.connect();
@@ -1612,6 +1614,9 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         throw Object.assign(new Error(`O card está em "${task.kanban_column}", fora do fluxo de edição`), { status: 409 });
       }
       if (task.kanban_column === column && notes == null) throw Object.assign(new Error('O card já está nessa coluna'), { status: 409 });
+      if (column === 'envio' && !['revisao', 'pre_revisao'].includes(task.kanban_column)) {
+        throw Object.assign(new Error(`O card está em "${task.kanban_column}": só sai de Revisão para o cliente`), { status: 409 });
+      }
       if (column === 'revisao' && !task.edited_video_link) {
         throw Object.assign(new Error('Não dá para mandar para revisão sem vídeo editado no card'), { status: 409 });
       }
@@ -1660,6 +1665,11 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         set.editing_started_at = null;
         set.editing_paused_at = null;
         set.editing_paused_seconds = 0;
+        set.assigned_to = null;
+      }
+      if (column === 'envio') {
+        set.approval_deadline = deadline('approval_deadline_hours', 'approval_deadline_enabled', 48);
+        set.approval_sent_at = now.toISOString();
         set.assigned_to = null;
       }
       if (notes != null) set.adjustment_notes = notes;
@@ -1717,9 +1727,30 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             );
           }
         }
-        const [title, message, type] = PORTAL_NOTIF[column];
-        await client.query('INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)',
-          [task.client_id, title, message(task.title), type]);
+        if (column === 'envio') {
+          // como o contentTaskSync: o vídeo sai da revisão interna e fica visível ao cliente; o WhatsApp ao cliente sai
+          // sozinho quando o conteúdo fica "pendente" (whatsapp/routes.mjs, notifyNewPortalContent)
+          const linked = await hasPortalTaskLink(client);
+          const { rows: [pc] } = await client.query(
+            linked
+              ? `UPDATE client_portal_contents SET status = 'pendente', updated_at = now() WHERE id = (
+                   SELECT id FROM client_portal_contents WHERE client_id = $1 AND status = 'revisao_interna'
+                     AND (content_task_id = $3 OR (content_task_id IS NULL AND title = $2))
+                   ORDER BY (content_task_id IS NOT NULL) DESC, created_at DESC LIMIT 1) RETURNING id`
+              : `UPDATE client_portal_contents SET status = 'pendente', updated_at = now() WHERE id = (
+                   SELECT id FROM client_portal_contents WHERE client_id = $1 AND status = 'revisao_interna' AND title = $2
+                   ORDER BY created_at DESC LIMIT 1) RETURNING id`,
+            linked ? [task.client_id, task.title, task.id] : [task.client_id, task.title]
+          );
+          await client.query(
+            `INSERT INTO client_portal_notifications (client_id, title, message, type, link_content_id) VALUES ($1, $2, $3, 'video_approval', $4)`,
+            [task.client_id, '🎬 Novo vídeo para aprovação', `"${task.title}" está pronto para sua análise e aprovação.`, pc?.id || null]
+          );
+        } else {
+          const [title, message, type] = PORTAL_NOTIF[column];
+          await client.query('INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)',
+            [task.client_id, title, message(task.title), type]);
+        }
       }
       if (column === 'revisao') {
         await client.query(`SELECT notify_role('social_media'::app_role, $1, $2, 'review', '/entregas-social')`,

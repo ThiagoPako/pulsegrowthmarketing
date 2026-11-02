@@ -22,6 +22,8 @@ interface ShareData {
   decided: 'aprovado' | 'ajuste' | null;
   portal_url: string;
   signup_url: string;
+  // link da equipe (02/11/2026): Aprovar manda ao cliente, Pedir alteração volta ao editor
+  team?: boolean;
 }
 
 const handleOf = (d: ShareData) => d.client.username || d.client.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '');
@@ -83,7 +85,7 @@ export default function ApproveContent() {
       <header className="border-b-4 border-[#F15A24]">
         <div className="mx-auto flex max-w-md items-center justify-between px-5 py-4">
           <img src={logo} alt="Pulse" className="h-6" />
-          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#F15A24]">Aprovação</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#F15A24]">{data?.team ? 'Aprovação da equipe' : 'Aprovação'}</span>
         </div>
       </header>
 
@@ -156,20 +158,24 @@ export default function ApproveContent() {
             {/* decisão */}
             {done ? (
               <div className={`mt-5 rounded-2xl p-5 text-center ${done === 'aprovado' ? 'bg-[#1F9D55]/15 text-[#7BE0A6]' : 'bg-[#F15A24]/15 text-[#FFB08C]'}`}>
-                <p className="text-base font-bold">{done === 'aprovado' ? 'Aprovado! Obrigada 🧡' : 'Recebemos o seu pedido de ajuste 🧡'}</p>
+                <p className="text-base font-bold">{data.team
+                  ? (done === 'aprovado' ? 'Aprovado! Foi para o cliente ✅' : 'Alteração pedida 🔧')
+                  : (done === 'aprovado' ? 'Aprovado! Obrigada 🧡' : 'Recebemos o seu pedido de ajuste 🧡')}</p>
                 <p className="mt-1 text-sm text-white/70">
-                  {done === 'aprovado' ? 'A equipe já foi avisada e segue para o agendamento.' : 'A equipe já está ajustando e manda a nova versão para você aprovar.'}
+                  {data.team
+                    ? (done === 'aprovado' ? 'O cliente recebe o vídeo para aprovar.' : 'O card voltou para o editor com o seu pedido.')
+                    : (done === 'aprovado' ? 'A equipe já foi avisada e segue para o agendamento.' : 'A equipe já está ajustando e manda a nova versão para você aprovar.')}
                 </p>
               </div>
             ) : mode === 'adjust' ? (
               <div className="mt-5 space-y-3">
-                <label className="block text-sm font-semibold" htmlFor="ajuste">O que você quer mudar?</label>
+                <label className="block text-sm font-semibold" htmlFor="ajuste">{data.team ? 'O que o editor precisa mudar?' : 'O que você quer mudar?'}</label>
                 <textarea id="ajuste" value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} autoFocus
                   placeholder="Ex.: trocar a música, tirar a parte do começo, corrigir o nome na legenda…"
                   className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-3 text-base text-white placeholder:text-white/40" />
                 <button type="button" onClick={() => decide('adjust')} disabled={busy || notes.trim().length < 3}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#F15A24] px-4 py-4 text-base font-bold active:scale-[0.98] disabled:opacity-50">
-                  {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Enviar pedido de ajuste'}
+                  {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : data.team ? 'Devolver ao editor' : 'Enviar pedido de ajuste'}
                 </button>
                 <button type="button" onClick={() => setMode('idle')} className="w-full py-2 text-sm text-white/60">Voltar</button>
               </div>
@@ -187,15 +193,15 @@ export default function ApproveContent() {
             )}
             {actionError && <p className="mt-3 text-center text-sm text-[#FF8A8A]" aria-live="polite">{actionError}</p>}
 
-            {/* sempre levar ao portal (02/11/2026) */}
-            <div className="mt-8 rounded-2xl bg-white/5 p-5 text-center">
+            {/* sempre levar ao portal (02/11/2026); no link da equipe não */}
+            {!data.team && <div className="mt-8 rounded-2xl bg-white/5 p-5 text-center">
               <p className="text-sm font-semibold">Acompanhe tudo na sua Área do Cliente</p>
               <p className="mt-1 text-xs text-white/60">Vídeos, artes, gravações e relatórios num lugar só.</p>
               <div className="mt-3 flex flex-col gap-2">
                 <a href={data.portal_url} className="rounded-xl bg-white px-4 py-3 text-sm font-bold text-[#0E0E10]">Entrar no portal</a>
                 <a href={data.signup_url} className="text-xs text-white/70 underline">Ainda não tenho acesso: criar agora</a>
               </div>
-            </div>
+            </div>}
             <p className="mt-6 text-center text-xs text-white/40">Agência Pulse · @agenciapulse</p>
           </>
         )}

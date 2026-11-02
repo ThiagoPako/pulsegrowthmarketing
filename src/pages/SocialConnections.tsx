@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, Share2, Copy, Stethoscope, XCircle } from 'lucide-react';
+import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, Share2, Copy, Stethoscope, XCircle, Music2, Linkedin, Youtube, KeyRound, Link2 } from 'lucide-react';
 
 interface ClientConnection {
   id: string;
@@ -22,6 +22,14 @@ interface ClientConnection {
 }
 
 type Platform = 'instagram' | 'facebook';
+// redes que só chegam pela Upload-Post (aparecem quando conectadas)
+const EXTRA_PLATFORMS = [
+  { id: 'tiktok', label: 'TikTok', Icon: Music2 },
+  { id: 'linkedin', label: 'LinkedIn', Icon: Linkedin },
+  { id: 'youtube', label: 'YouTube', Icon: Youtube },
+] as const;
+
+interface UploadPostStatus { configured: boolean; key_end?: string; plan?: string | null; limit?: number | null; used?: number; error?: string }
 
 export default function SocialConnections() {
   const { t } = useLang();
@@ -38,6 +46,63 @@ export default function SocialConnections() {
   const lastLoadRef = useRef(0);
   const [diagBusy, setDiagBusy] = useState<string | null>(null);
   const [diag, setDiag] = useState<{ name: string; checks: DiagnosticCheck[] } | null>(null);
+  // Upload-Post (02/11/2026): chave (só admin), link de conexão por cliente e atualização das contas
+  const [up, setUp] = useState<UploadPostStatus | null>(null);
+  const [upKey, setUpKey] = useState('');
+  const [upSaving, setUpSaving] = useState(false);
+  const [upBusy, setUpBusy] = useState<string | null>(null);
+  const [upLink, setUpLink] = useState<{ client: ClientConnection; url: string } | null>(null);
+
+  const loadUploadPost = async () => {
+    const { data, error } = await invokeVpsFunction('upload-post/config', { method: 'GET' });
+    if (!error && data && !data.error) setUp(data as UploadPostStatus);
+  };
+  useEffect(() => { loadUploadPost(); }, []);
+
+  const saveUploadPostKey = async () => {
+    setUpSaving(true);
+    try {
+      const { data, error } = await invokeVpsFunction('upload-post/config', { method: 'PUT', body: { api_key: upKey.trim() } });
+      if (error || data?.error) throw new Error(data?.error || error?.message || 'Não deu para salvar a chave.');
+      setUp(data as UploadPostStatus);
+      setUpKey('');
+      toast.success('Chave da Upload-Post salva e conferida.');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setUpSaving(false);
+    }
+  };
+
+  /** Link da página de conexão da Upload-Post do cliente (a equipe abre ou manda ao cliente; vale 48 h). */
+  const uploadPostConnect = async (client: ClientConnection) => {
+    setUpBusy(client.id);
+    try {
+      const { data, error } = await invokeVpsFunction(`upload-post/clients/${client.id}/connect`, { body: {} });
+      if (error || data?.error || !data?.url) throw new Error(data?.error || error?.message || 'Não deu para gerar o link.');
+      setUpLink({ client, url: data.url });
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setUpBusy(null);
+    }
+  };
+
+  const uploadPostSync = async (client: ClientConnection) => {
+    setUpBusy(client.id);
+    try {
+      const { data, error } = await invokeVpsFunction(`upload-post/clients/${client.id}/sync`, { body: {} });
+      if (error || data?.error) throw new Error(data?.error || error?.message || 'Não deu para atualizar.');
+      const n = (data?.accounts || []).length;
+      if ((data?.facebook_pages || []).length > 1 && !data?.facebook_page_id) toast.warning('O Facebook tem mais de uma Página: fale com a Marcely para escolher a do cliente.');
+      toast.success(n ? `${n} rede(s) conectada(s) pela Upload-Post.` : 'Nenhuma rede conectada ainda.');
+      await load(true);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setUpBusy(null);
+    }
+  };
 
   /** Roda o teste de conexão do cliente e mostra o resultado em linguagem simples. */
   const runDiagnostic = async (client: ClientConnection) => {
@@ -205,6 +270,31 @@ export default function SocialConnections() {
         </Button>
       </header>
 
+      {up && (
+        <Card className="border-primary/40">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-start gap-2">
+              <KeyRound size={18} className="text-primary mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Upload-Post · postagem automática</p>
+                <p className="text-xs text-muted-foreground">
+                  {up.configured
+                    ? `Chave ativa (final ${up.key_end}).${up.used != null ? ` Perfis usados: ${up.used}${up.limit ? ` de ${up.limit}` : ''}.` : ''}${up.plan ? ` Plano: ${up.plan}.` : ''}${up.error ? ` Aviso: ${up.error}` : ''}`
+                    : 'Cole a chave da API (Upload-Post → API Keys) para os clientes conectarem Instagram, Facebook, TikTok, LinkedIn e YouTube.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Input type="password" autoComplete="off" value={upKey} onChange={e => setUpKey(e.target.value)}
+                placeholder={up.configured ? 'Trocar a chave' : 'Chave da API da Upload-Post'} />
+              <Button onClick={saveUploadPostKey} disabled={upSaving || upKey.trim().length < 16} className="shrink-0">
+                {upSaving ? <Loader2 size={14} className="animate-spin" /> : 'Salvar'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: 'Clientes', value: stats.total },
@@ -294,6 +384,7 @@ export default function SocialConnections() {
                             <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
                               <CheckCircle2 size={12} className="text-primary shrink-0" />
                               {accountLabel(account)}
+                              {account.api_base === 'upload_post' && <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">Upload-Post</Badge>}
                               {account.expiring_soon && (
                                 <span className="text-destructive flex items-center gap-1"><AlertTriangle size={12} /> token expirando</span>
                               )}
@@ -313,6 +404,42 @@ export default function SocialConnections() {
                     </div>
                     );
                   })}
+
+                  {EXTRA_PLATFORMS.map(({ id, label, Icon }) => {
+                    const account = client.accounts.find(a => a.platform === id);
+                    if (!account) return null;
+                    return (
+                      <div key={account.id} className="flex items-center gap-2 rounded-lg border p-3">
+                        {account.profile_picture_url
+                          ? <img src={account.profile_picture_url} alt={`Foto do perfil ${account.username || account.account_name}`} className="h-9 w-9 rounded-full object-cover shrink-0 border" loading="lazy" referrerPolicy="no-referrer" />
+                          : <span className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0"><Icon size={16} className="text-muted-foreground" /></span>}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{label}</p>
+                          <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                            <CheckCircle2 size={12} className="text-primary shrink-0" />{account.username ? `@${account.username.replace(/^@/, '')}` : account.account_name}
+                            <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">Upload-Post</Badge>
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {up?.configured !== false && (
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/40 p-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">Conectar redes pela Upload-Post</p>
+                        <p className="text-xs text-muted-foreground">Instagram, Facebook, TikTok, LinkedIn e YouTube. Abra aqui ou mande o link ao cliente.</p>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <Button size="sm" variant="ghost" title="Atualizar contas da Upload-Post" disabled={upBusy === client.id} onClick={() => uploadPostSync(client)}>
+                          <RefreshCw size={14} />
+                        </Button>
+                        <Button size="sm" className="gap-1" disabled={upBusy === client.id} onClick={() => uploadPostConnect(client)}>
+                          {upBusy === client.id ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />} Conectar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
                     <div className="min-w-0">
@@ -379,6 +506,30 @@ export default function SocialConnections() {
           })}
         </div>
       )}
+
+      <Dialog open={!!upLink} onOpenChange={o => { if (!o) { const c = upLink?.client; setUpLink(null); if (c) uploadPostSync(c); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Conectar as redes · {upLink?.client.name}</DialogTitle>
+            <DialogDescription>
+              Abra o link e entre em cada rede do cliente, ou mande o link para ele fazer sozinho. Vale por 48 horas.
+              Ao fechar esta janela, as contas conectadas aparecem no cartão do cliente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input readOnly value={upLink?.url ?? ''} onFocus={e => e.currentTarget.select()} />
+            <Button variant="outline" className="gap-1 shrink-0" onClick={async () => {
+              if (!upLink) return;
+              try { await navigator.clipboard.writeText(upLink.url); toast.success('Link copiado'); } catch { toast.error('Copie manualmente o link acima.'); }
+            }}>
+              <Copy size={14} /> Copiar
+            </Button>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button asChild><a href={upLink?.url} target="_blank" rel="noreferrer">Abrir e conectar</a></Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!inviteLink} onOpenChange={o => !o && setInviteLink(null)}>
         <DialogContent>

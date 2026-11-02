@@ -57,6 +57,7 @@ import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOp
 import { cleanupOldEditVersions } from './lib/versionCleanup.mjs';
 import { createWebVideo, captureVideoUploads, isDerivedVariantName, originalNamesForVariant, WEB_TMP_DIR, resolveUploadFile, webVariantUrl } from './lib/webVideo.mjs';
 import { createInstagramVideo } from './lib/instagramVideo.mjs';
+import { createUploadPost, registerUploadPostRoutes } from './lib/uploadPost.mjs';
 import { buildProposalRevenueSchedule, stripRevenueMark } from './lib/proposalRevenues.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
@@ -8961,6 +8962,13 @@ async function enablePortalInsights(clientId) {
  * @param post { publish_type: 'reels'|'feed'|'stories'|'carousel', media_url, media_items, caption, story_link }
  */
 async function publishToClientAccount(account, post) {
+  // conectada pela Upload-Post (lib/uploadPost.mjs, 02/11/2026): ela publica, sem token da Meta
+  if (account.api_base === 'upload_post') {
+    const media = postMediaList(post);
+    if (!media.length) throw new Error('Post sem mídia válida.');
+    for (const item of media) await assertPublicMedia(item.url);
+    return uploadPost.publish(account, post, media);
+  }
   const token = account.access_token;
   if (!token) throw new Error(`Conta ${account.platform} sem token. Reconecte a conta no cadastro do cliente.`);
   const media = postMediaList(post);
@@ -9299,7 +9307,7 @@ async function runScheduledPostNow(post, { manual = false } = {}) {
   }
 
   const accounts = await getConnectedAccounts(post.client_id);
-  const targets = accounts.filter(a => post.platform === 'both' ? true : a.platform === post.platform);
+  const targets = accounts.filter(a => post.platform === 'both' ? ['instagram', 'facebook'].includes(a.platform) : a.platform === post.platform);
   const duplicated = duplicatedPlatformAccounts(targets);
   if (duplicated.length) {
     // Conexão antiga gravou várias Páginas/perfis no mesmo cliente: publicar em todas
@@ -9892,7 +9900,7 @@ async function getClientInsights(clientId, since, until, { maxAgeMinutes = 180 }
 
 async function fetchAndCacheClientInsights(clientId, since, until, cached) {
   const { rows: accounts } = await pool.query(
-    `SELECT * FROM social_accounts WHERE client_id = $1 AND platform IN ('instagram', 'facebook') AND status = 'connected'`,
+    `SELECT * FROM social_accounts WHERE client_id = $1 AND platform IN ('instagram', 'facebook') AND status = 'connected' AND api_base <> 'upload_post'`,
     [clientId]
   );
   const instagram = accounts.find(account => account.platform === 'instagram');
@@ -19144,6 +19152,8 @@ webVideo.start();
 // (próximas 48 h). Mesma fila da versão leve. Na hora de publicar, o robô troca só a URL enviada à
 // Meta; scheduled_posts.media_url continua o original. igVideo.instagramUrlFor(url) serve às outras telas.
 const igVideo = createInstagramVideo({ pool, webVideo, allowedOrigins: MEDIA_ALLOWED_ORIGINS });
+// postagem pela Upload-Post (lib/uploadPost.mjs): publishToClientAccount desvia para ela nas contas api_base = 'upload_post'
+const uploadPost = createUploadPost({ pool, appBase: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' });
 igVideo.start();
 
 // Busca REAL de empresas via OpenStreetMap (Overpass API) — sem chave de API.
@@ -20404,6 +20414,9 @@ app.use(pulsePlus.guard);
 pulsePlus.registerRoutes(app);
 
 // ─── Agentes de edição (chaves próprias, fila, entrega) ─────
+// ─── Upload-Post: postagem automática pelas redes dos clientes (lib/uploadPost.mjs, 02/11/2026) ──
+registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager });
+
 // ─── Aprovação sem login (/aprovar/<token>): página do vídeo com o jeito do Instagram, aprovar ou pedir ajuste ──
 const portalShare = registerPortalShareRoutes(app, {
   pool,

@@ -6,7 +6,11 @@
 // Aprovar e pedir ajuste fazem o mesmo que no portal (status, comentário, Kanban e avisos à equipe).
 //
 //   GET  /api/public/aprovar/:token                  o conteúdo, o cliente e o "perfil" do Instagram dele
-//   POST /api/public/aprovar/:token { action: approve|adjust, notes?, name? }
+//   POST /api/public/aprovar/:token { action: approve|adjust, notes?, name?, audio_url? }
+//   POST /api/public/aprovar/:token/audio            (corpo = o áudio gravado) → { audio_url }
+// Pedido de alteração por áudio (usuário, 02/11/2026: "ele pode clicar lá e enviar um áudio para pedir alteração, ele
+// não precisa escrever"): o áudio fica em uploads/aprovacao-audio, o Whisper do servidor transcreve e o editor recebe
+// o texto e o link do áudio nos ajustes do card.
 //
 // Link da equipe (usuário, 02/11/2026): "quando um vídeo entrar para aprovação… já manda o link estilo Instagram para
 // a gente aprovar". Vídeo que entra em Revisão (revisao_interna no portal) gera um link próprio da equipe, enviado aos
@@ -14,12 +18,15 @@
 // e Victor). Aprovar manda o card para o cliente (envio); Pedir alteração devolve ao editor (alteração).
 
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import express from 'express';
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
 export function registerPortalShareRoutes(app, {
   pool, approveContent, adjustContent, publicAppUrl = process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech', logger = console,
-  verifyAgent = null, sendToTeam = null, moveCard = null, enqueue = null,
+  verifyAgent = null, sendToTeam = null, moveCard = null, enqueue = null, uploadRoot = null, transcribeUrl = null,
 }) {
   const appBase = String(publicAppUrl).replace(/\/+$/, '');
   let schemaPromise = null;
@@ -141,6 +148,25 @@ export function registerPortalShareRoutes(app, {
     timer.unref?.();
   }
 
+  const AUDIO_EXT = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac', 'audio/mpeg': 'mp3', 'audio/wav': 'wav' };
+  const audioPrefix = (contentId) => `${appBase}/uploads/aprovacao-audio/${contentId}-`;
+
+  /** Junta o texto escrito, o que foi dito no áudio (Whisper, até 90 s de espera) e o link do áudio. */
+  async function adjustmentText(row, notes, audioUrl) {
+    const audio = audioUrl && String(audioUrl).startsWith(audioPrefix(row.id)) ? String(audioUrl) : null;
+    if (!audio) return notes;
+    let said = '';
+    if (transcribeUrl) {
+      const r = await Promise.race([
+        transcribeUrl(audio, { maxSeconds: 300 }).catch(() => null),
+        new Promise((resolve) => { setTimeout(() => resolve(null), 90_000).unref?.(); }),
+      ]);
+      if (r?.ok) said = r.text;
+    }
+    return [notes, said ? `🎙️ Pedido por áudio: "${said}"` : '🎙️ Pedido por áudio (ouça no link abaixo)', `Áudio: ${audio}`]
+      .filter(Boolean).join('\n');
+  }
+
   async function byToken(token) {
     if (!/^[A-Za-z0-9_-]{16,64}$/.test(String(token || ''))) throw httpError(404, 'Link não encontrado');
     await ensureSchema();
@@ -187,6 +213,7 @@ export function registerPortalShareRoutes(app, {
           ? (row.status === 'revisao_interna' ? (row.decision || null) : row.decision || 'aprovado')
           : ['aprovado', 'agendado', 'publicado'].includes(row.status) ? 'aprovado' : row.status === 'ajuste_solicitado' ? 'ajuste' : null,
         team: !!row.team,
+        team_info: row.team ? await teamInfo(row) : null,
         portal_url: `${appBase}/portal/${row.client_id}`,
         signup_url: `${appBase}/portal-registro/${row.client_id}`,
       });
@@ -198,7 +225,7 @@ export function registerPortalShareRoutes(app, {
       const row = await byToken(req.params.token);
       const action = req.body?.action;
       const name = String(req.body?.name || '').trim().slice(0, 80) || (row.team ? 'Equipe' : 'Cliente');
-      if (row.team) return res.json(await decideTeam(row, req.body?.action, String(req.body?.notes || '').trim().slice(0, 2000)));
+      if (row.team) return res.json(await decideTeam(row, req.body?.action, String(req.body?.notes || '').trim().slice(0, 2000), String(req.body?.audio_url || '')));
       if (action === 'approve') {
         const { rows: [done] } = await pool.query(
           `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW()
@@ -215,8 +242,10 @@ export function registerPortalShareRoutes(app, {
         return res.json({ success: true, decided: 'aprovado' });
       }
       if (action === 'adjust') {
-        const notes = String(req.body?.notes || '').trim().slice(0, 2000);
-        if (notes.length < 3) throw httpError(400, 'Conte o que você quer mudar no vídeo');
+        const written = String(req.body?.notes || '').trim().slice(0, 2000);
+        const audioUrl = String(req.body?.audio_url || '');
+        if (written.length < 3 && !audioUrl.startsWith(audioPrefix(row.id))) throw httpError(400, 'Conte o que você quer mudar no vídeo (escrevendo ou por áudio)');
+        const notes = await adjustmentText(row, written, audioUrl);
         const { rows: [done] } = await pool.query(
           `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW()
             WHERE id = $1 AND status NOT IN ('revisao_interna', 'agendado', 'publicado') RETURNING *`, [row.id]
@@ -234,8 +263,18 @@ export function registerPortalShareRoutes(app, {
     } catch (error) { sendError(res, error); }
   });
 
+  /** Para a página da equipe: quem editou e se é urgente. */
+  async function teamInfo(row) {
+    if (!row.content_task_id) return { editor: null, urgent: false };
+    const { rows: [t] } = await pool.query(
+      `SELECT t.urgent_at IS NOT NULL AS urgent, coalesce(nullif(p.display_name, ''), p.name) AS editor
+         FROM content_tasks t LEFT JOIN profiles p ON p.id = t.edited_by WHERE t.id = $1`, [row.content_task_id]
+    ).catch(() => ({ rows: [] }));
+    return { editor: t?.editor ? String(t.editor).trim().split(/\s+/)[0] : null, urgent: !!t?.urgent };
+  }
+
   /** Decisão da equipe: Aprovar = o card vai ao cliente (envio); Pedir alteração = volta ao editor com o pedido. */
-  async function decideTeam(row, action, notes) {
+  async function decideTeam(row, action, written, audioUrl = '') {
     if (!moveCard) throw httpError(501, 'Indisponível');
     if (row.decision || row.status !== 'revisao_interna') throw httpError(409, 'Este vídeo já foi decidido por alguém da equipe.');
     if (!row.content_task_id) throw httpError(409, 'Este vídeo não tem card ligado. Decida pelo sistema.');
@@ -245,13 +284,30 @@ export function registerPortalShareRoutes(app, {
       return { success: true, decided: 'aprovado' };
     }
     if (action === 'adjust') {
-      if (notes.length < 3) throw httpError(400, 'Conte o que precisa mudar no vídeo');
+      if (written.length < 3 && !audioUrl.startsWith(audioPrefix(row.id))) throw httpError(400, 'Conte o que precisa mudar no vídeo (escrevendo ou por áudio)');
+      const notes = await adjustmentText(row, written, audioUrl);
       await moveCard(row.content_task_id, 'alteracao', { notes, reason: 'Alteração pedida pela equipe no link de aprovação' });
       await pool.query(`UPDATE portal_team_links SET decided_at = now(), decision = 'ajuste' WHERE token = $1`, [row.token]);
       return { success: true, decided: 'ajuste' };
     }
     throw httpError(400, 'Ação inválida');
   }
+
+  // o áudio do pedido de alteração (até 15 MB, ~3 min); só enquanto o vídeo espera decisão
+  app.post('/api/public/aprovar/:token/audio', express.raw({ type: 'audio/*', limit: '15mb' }), async (req, res) => {
+    try {
+      if (!uploadRoot) throw httpError(501, 'Indisponível');
+      const row = await byToken(req.params.token);
+      const type = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+      const ext = AUDIO_EXT[type];
+      if (!ext || !Buffer.isBuffer(req.body) || req.body.length < 1000) throw httpError(400, 'Áudio inválido. Grave de novo.');
+      const dir = path.join(uploadRoot, 'aprovacao-audio');
+      await fs.mkdir(dir, { recursive: true });
+      const name = `${row.id}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`;
+      await fs.writeFile(path.join(dir, name), req.body);
+      res.json({ audio_url: `${audioPrefix(row.id)}${name.slice(row.id.length + 1)}` });
+    } catch (error) { sendError(res, error); }
+  });
 
   // teste para a equipe (chefe): o link sem login do conteúdo mais recente que espera aprovação, só para quem pediu
   //   POST /api/agent/portal/test-share { only?, client? }

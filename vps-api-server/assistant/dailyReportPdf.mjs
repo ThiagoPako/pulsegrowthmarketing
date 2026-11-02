@@ -13,7 +13,7 @@
 //   5. pendências para amanhã: atrasados, urgentes, aguardando material e agentes parados
 // Cada consulta falha sozinha (log e lista vazia): uma tabela que não existe não derruba o resumo.
 
-import { cityLabel, clip, fmtMoney, roundMoney } from './common.mjs';
+import { cityExpr, cityLabel, clip, fmtMoney, normalizeCity, roundMoney } from './common.mjs';
 
 const TZ = 'America/Sao_Paulo';
 const TODAY_OF = (col) => `(${col} AT TIME ZONE '${TZ}')::date = (now() AT TIME ZONE '${TZ}')::date`;
@@ -62,10 +62,16 @@ async function fetchPhoto(url, { publicUploadsUrl } = {}) {
   }
 }
 
-/** Tudo do dia nas cidades dadas (null/[] = todas). Financeiro só com { financeiro: true }. */
+/**
+ * Tudo do dia nas cidades dadas (null/[] = todas). Financeiro só com { financeiro: true }.
+ * A cidade é a do cliente (clients.city, a mesma regra das cobranças e do contato por cidade; vazia = Minaçu), com a do
+ * card ou da gravação quando não há cliente: o resumo de Minaçu não traz nada de Uruaçu e vice-versa (usuário,
+ * 01/11/2026: "o Victor não precisa ter acesso a nada de Uruaçu").
+ */
 export async function collectDayPdf(pool, cities, { financeiro = false, publicUploadsUrl, photos = true } = {}) {
-  const params = cities?.length ? [cities] : [];
-  const cityOf = (alias) => (cities?.length ? `AND ${alias}city = ANY($1::text[])` : '');
+  cities = (cities || []).map(normalizeCity).filter(Boolean);
+  const params = cities.length ? [cities] : [];
+  const cityOf = (expr) => (cities.length ? `AND ${cityExpr(expr)} = ANY($1::text[])` : '');
   const q = (sql, extra = params) => pool.query(sql, extra).then((r) => r.rows).catch((error) => {
     console.error('[resumo do dia · pdf]', error.message);
     return [];
@@ -81,21 +87,21 @@ export async function collectDayPdf(pool, cities, { financeiro = false, publicUp
               array_agg(DISTINCT c.company_name) FILTER (WHERE c.company_name IS NOT NULL) AS clientes
          FROM task_history h JOIN profiles p ON p.id = h.user_id
          LEFT JOIN content_tasks t ON t.id = h.task_id LEFT JOIN clients c ON c.id = t.client_id
-        WHERE ${TODAY_OF('h.created_at')} ${cityOf('h.')} GROUP BY 1, 2, 3, 4, 5, 6`),
+        WHERE ${TODAY_OF('h.created_at')} ${cityOf('coalesce(c.city, t.city, h.city)')} GROUP BY 1, 2, 3, 4, 5, 6`),
     q(`SELECT h.user_id, ${NAME} AS nome, p.role::text AS role, p.job_title, p.avatar_url, h.action, count(*)::int AS n,
               array_agg(DISTINCT c.company_name) FILTER (WHERE c.company_name IS NOT NULL) AS clientes
          FROM design_task_history h JOIN profiles p ON p.id = h.user_id
          LEFT JOIN design_tasks t ON t.id = h.task_id LEFT JOIN clients c ON c.id = t.client_id
-        WHERE ${TODAY_OF('h.created_at')} ${cityOf('h.')} GROUP BY 1, 2, 3, 4, 5, 6`),
+        WHERE ${TODAY_OF('h.created_at')} ${cityOf('coalesce(c.city, t.city, h.city)')} GROUP BY 1, 2, 3, 4, 5, 6`),
     q(`SELECT v.created_by AS user_id, ${NAME} AS nome, p.role::text AS role, p.job_title, p.avatar_url,
               count(DISTINCT v.task_id)::int AS n, array_agg(DISTINCT c.company_name) FILTER (WHERE c.company_name IS NOT NULL) AS clientes
          FROM edit_versions v JOIN content_tasks t ON t.id = v.task_id JOIN profiles p ON p.id = v.created_by
          LEFT JOIN clients c ON c.id = t.client_id
-        WHERE ${TODAY_OF('v.created_at')} ${cityOf('t.')} GROUP BY 1, 2, 3, 4, 5`),
+        WHERE ${TODAY_OF('v.created_at')} ${cityOf('coalesce(c.city, t.city)')} GROUP BY 1, 2, 3, 4, 5`),
     q(`SELECT r.videomaker_id AS user_id, ${NAME} AS nome, p.role::text AS role, p.job_title, p.avatar_url, count(*)::int AS n,
               array_agg(DISTINCT coalesce(c.company_name, r.prospect_name)) AS clientes
          FROM recordings r JOIN profiles p ON p.id = r.videomaker_id LEFT JOIN clients c ON c.id = r.client_id
-        WHERE r.date = ${BR_TODAY} AND coalesce(r.status, '') !~* 'cancel' ${cityOf('r.')} GROUP BY 1, 2, 3, 4, 5`),
+        WHERE r.date = ${BR_TODAY} AND coalesce(r.status, '') !~* 'cancel' ${cityOf('coalesce(c.city, r.city)')} GROUP BY 1, 2, 3, 4, 5`),
     // posts publicados hoje (automático pelo Estúdio ou marcado como postado na mão)
     q(`SELECT s.created_by AS user_id, ${NAME} AS nome, p.role::text AS role, p.job_title, p.avatar_url, count(*)::int AS n,
               array_agg(DISTINCT c.company_name) FILTER (WHERE c.company_name IS NOT NULL) AS clientes
@@ -103,7 +109,7 @@ export async function collectDayPdf(pool, cities, { financeiro = false, publicUp
                UNION ALL
                SELECT created_by, client_id FROM social_media_deliveries WHERE status = 'postado' AND posted_at::date = ${BR_TODAY}) s
          LEFT JOIN profiles p ON p.id = s.created_by LEFT JOIN clients c ON c.id = s.client_id
-        GROUP BY 1, 2, 3, 4, 5`, []),
+        WHERE true ${cityOf('c.city')} GROUP BY 1, 2, 3, 4, 5`),
     // agentes: quem tem chave, o último status de hoje
     q(`SELECT DISTINCT ON (k.user_id) k.user_id, k.role, ${NAME} AS nome, p.avatar_url, a.status, a.updated_at
          FROM agent_keys k JOIN profiles p ON p.id = k.user_id LEFT JOIN agent_activity a ON a.user_id = k.user_id
@@ -111,43 +117,44 @@ export async function collectDayPdf(pool, cities, { financeiro = false, publicUp
     // cards em que um agente trabalhou hoje (etapa ao vivo)
     q(`SELECT t.assigned_to AS user_id, t.title, t.agent_step, c.company_name AS cliente, 'video' AS tipo
          FROM content_tasks t LEFT JOIN clients c ON c.id = t.client_id
-        WHERE t.agent_heartbeat_at IS NOT NULL AND ${TODAY_OF('t.agent_heartbeat_at')} ${cityOf('t.')}
+        WHERE t.agent_heartbeat_at IS NOT NULL AND ${TODAY_OF('t.agent_heartbeat_at')} ${cityOf('coalesce(c.city, t.city)')}
        UNION ALL
        SELECT t.assigned_to, t.title, t.agent_step, c.company_name, 'arte'
          FROM design_tasks t LEFT JOIN clients c ON c.id = t.client_id
-        WHERE t.agent_heartbeat_at IS NOT NULL AND ${TODAY_OF('t.agent_heartbeat_at')} ${cityOf('t.')}`),
+        WHERE t.agent_heartbeat_at IS NOT NULL AND ${TODAY_OF('t.agent_heartbeat_at')} ${cityOf('coalesce(c.city, t.city)')}`),
     // por cliente: entregue (versão nova), aprovado, alteração pedida, artes, postado
     q(`SELECT c.company_name AS cliente, t.title FROM edit_versions v JOIN content_tasks t ON t.id = v.task_id JOIN clients c ON c.id = t.client_id
-        WHERE ${TODAY_OF('v.created_at')} ${cityOf('t.')} GROUP BY 1, 2`),
+        WHERE ${TODAY_OF('v.created_at')} ${cityOf('coalesce(c.city, t.city)')} GROUP BY 1, 2`),
     q(`SELECT c.company_name AS cliente, t.title FROM task_history h JOIN content_tasks t ON t.id = h.task_id JOIN clients c ON c.id = t.client_id
-        WHERE ${TODAY_OF('h.created_at')} AND h.action ~ '^✅ Aprovado' ${cityOf('h.')} GROUP BY 1, 2
+        WHERE ${TODAY_OF('h.created_at')} AND h.action ~ '^✅ Aprovado' ${cityOf('coalesce(c.city, t.city, h.city)')} GROUP BY 1, 2
        UNION
        SELECT c.company_name, t.title FROM design_task_history h JOIN design_tasks t ON t.id = h.task_id JOIN clients c ON c.id = t.client_id
-        WHERE ${TODAY_OF('h.created_at')} AND h.action ~* '^Aprovad' ${cityOf('h.')} GROUP BY 1, 2`),
+        WHERE ${TODAY_OF('h.created_at')} AND h.action ~* '^Aprovad' ${cityOf('coalesce(c.city, t.city, h.city)')} GROUP BY 1, 2`),
     q(`SELECT c.company_name AS cliente, t.title FROM task_history h JOIN content_tasks t ON t.id = h.task_id JOIN clients c ON c.id = t.client_id
-        WHERE ${TODAY_OF('h.created_at')} AND h.action = 'Solicitado Alteração' ${cityOf('h.')} GROUP BY 1, 2`),
+        WHERE ${TODAY_OF('h.created_at')} AND h.action = 'Solicitado Alteração' ${cityOf('coalesce(c.city, t.city, h.city)')} GROUP BY 1, 2`),
     q(`SELECT c.company_name AS cliente, t.title FROM design_task_history h JOIN design_tasks t ON t.id = h.task_id JOIN clients c ON c.id = t.client_id
-        WHERE ${TODAY_OF('h.created_at')} AND h.action ~* '^Arte (enviada|entregue|corrigida)' ${cityOf('h.')} GROUP BY 1, 2`),
+        WHERE ${TODAY_OF('h.created_at')} AND h.action ~* '^Arte (enviada|entregue|corrigida)' ${cityOf('coalesce(c.city, t.city, h.city)')} GROUP BY 1, 2`),
     q(`SELECT c.company_name AS cliente, coalesce(s.caption, s.title, '') AS title
          FROM (SELECT client_id, left(caption, 60) AS caption, NULL::text AS title FROM scheduled_posts
                 WHERE status = 'publicado' AND ${TODAY_OF('coalesce(published_at, scheduled_at)')}
                UNION ALL
                SELECT client_id, NULL, title FROM social_media_deliveries WHERE status = 'postado' AND posted_at::date = ${BR_TODAY}) s
-         JOIN clients c ON c.id = s.client_id ${cities?.length ? 'WHERE c.city = ANY($1::text[])' : ''}`),
+         JOIN clients c ON c.id = s.client_id WHERE true ${cityOf('c.city')}`),
     // pendências: prazo vencido nas colunas da edição
     q(`SELECT t.title, c.company_name AS cliente, t.kanban_column AS col, coalesce(t.alteration_deadline, t.editing_deadline) AS prazo
          FROM content_tasks t LEFT JOIN clients c ON c.id = t.client_id
-        WHERE t.kanban_column IN ('edicao', 'alteracao') AND coalesce(t.alteration_deadline, t.editing_deadline) < now() ${cityOf('t.')}
+        WHERE t.kanban_column IN ('edicao', 'alteracao') AND coalesce(t.alteration_deadline, t.editing_deadline) < now() ${cityOf('coalesce(c.city, t.city)')}
         ORDER BY 4 LIMIT 8`),
     q(`SELECT t.title, c.company_name AS cliente, ${NAME} AS agente, t.agent_step, t.agent_heartbeat_at
          FROM content_tasks t LEFT JOIN clients c ON c.id = t.client_id LEFT JOIN profiles p ON p.id = t.assigned_to
         WHERE t.kanban_column IN ('edicao', 'alteracao') AND t.agent_heartbeat_at < now() - interval '30 minutes'
           AND t.agent_heartbeat_at > now() - interval '3 days' AND t.assigned_to IN (SELECT user_id FROM agent_keys WHERE revoked_at IS NULL)
-          ${cityOf('t.')} ORDER BY t.agent_heartbeat_at LIMIT 6`),
-    q(`SELECT kanban_column AS col, count(*)::int AS n,
-              count(*) FILTER (WHERE urgent_at IS NOT NULL)::int AS urgentes,
-              count(*) FILTER (WHERE waiting_material_at IS NOT NULL)::int AS aguardando
-         FROM content_tasks WHERE kanban_column IN ('edicao', 'alteracao', 'pre_revisao', 'revisao') ${cityOf('')} GROUP BY 1`),
+          ${cityOf('coalesce(c.city, t.city)')} ORDER BY t.agent_heartbeat_at LIMIT 6`),
+    q(`SELECT t.kanban_column AS col, count(*)::int AS n,
+              count(*) FILTER (WHERE t.urgent_at IS NOT NULL)::int AS urgentes,
+              count(*) FILTER (WHERE t.waiting_material_at IS NOT NULL)::int AS aguardando
+         FROM content_tasks t LEFT JOIN clients c ON c.id = t.client_id
+        WHERE t.kanban_column IN ('edicao', 'alteracao', 'pre_revisao', 'revisao') ${cityOf('coalesce(c.city, t.city)')} GROUP BY 1`),
   ]);
 
   // ── pessoas ──
@@ -212,7 +219,8 @@ export async function collectDayPdf(pool, cities, { financeiro = false, publicUp
   }
   for (const a of agentes) {
     const cards = cardsByAgent.get(a.user_id) || [];
-    const statusToday = a.status && a.updated_at && new Date(a.updated_at).toDateString() === new Date().toDateString();
+    // o status do agente não tem cidade: no resumo de uma cidade, o agente entra só pelo que fez para ela
+    const statusToday = !cities.length && a.status && a.updated_at && new Date(a.updated_at).toDateString() === new Date().toDateString();
     if (!cards.length && !statusToday && !people.has(a.user_id)) continue;
     const p = person({ user_id: a.user_id, nome: a.nome, avatar_url: a.avatar_url });
     for (const [tipo, icone] of [['video', 'edicao'], ['arte', 'arte']]) {
@@ -277,7 +285,8 @@ async function collectFinance(pool, cities, q) {
   const { rows: [col] } = await pool.query(
     `SELECT 1 FROM information_schema.columns WHERE table_name = 'cash_reserve_movements' AND column_name = 'city'`
   ).catch(() => ({ rows: [] }));
-  const cityCash = col && cities?.length ? 'AND m.city = ANY($1::text[])' : '';
+  // sem a coluna city no caixa não dá para separar por cidade: com cidade pedida, não mostra movimento (não vaza)
+  const cityCash = cities?.length ? (col ? `AND ${cityExpr('m.city')} = ANY($1::text[])` : 'AND false') : '';
   const params = col && cities?.length ? [cities] : [];
   const [movs, cobrancas, saldo] = await Promise.all([
     q(`SELECT m.id, m.type, m.amount, m.description, m.date, m.created_at, m.is_reserve,
@@ -287,7 +296,7 @@ async function collectFinance(pool, cities, q) {
         ORDER BY m.created_at`, params),
     q(`SELECT b.message_type, b.status, c.company_name AS cliente, b.sent_at
          FROM billing_messages b LEFT JOIN clients c ON c.id = b.client_id
-        WHERE ${TODAY_OF('b.sent_at')} ${cities?.length ? 'AND (c.city IS NULL OR c.city = ANY($1::text[]))' : ''} ORDER BY b.sent_at`),
+        WHERE ${TODAY_OF('b.sent_at')} ${cities?.length ? `AND ${cityExpr('c.city')} = ANY($1::text[])` : ''} ORDER BY b.sent_at`),
     q(`SELECT COALESCE(SUM(CASE WHEN m.type = 'entrada' THEN m.amount ELSE -m.amount END) FILTER (WHERE NOT m.is_reserve), 0) AS conta
          FROM cash_reserve_movements m WHERE true ${cityCash}`, params),
   ]);
@@ -422,8 +431,8 @@ export function dailyPdfSpec(d, { date = new Date(), financeiro = true } = {}) {
 
   return {
     kind: 'resumo',
-    title: `Resumo do dia · ${dia}`,
-    subtitle: `${semana.charAt(0).toUpperCase()}${semana.slice(1)} · ${lugar}`,
+    title: `Resumo do dia · ${lugar}`,
+    subtitle: `${semana.charAt(0).toUpperCase()}${semana.slice(1)}, ${dia}`,
     issued: new Intl.DateTimeFormat('pt-BR', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date),
     sections,
     footerNote: fin ? 'Interno, com financeiro: não encaminhe a clientes' : 'Agência Pulse · documento interno',

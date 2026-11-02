@@ -12,11 +12,12 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { getSettings, logEvent, remember, sendToNumber, brazilToday, cityLabel, clip } from './common.mjs';
+import { getSettings, logEvent, remember, sendToNumber, brazilToday, cityLabel, clip, normalizeCity } from './common.mjs';
 import { collectDayPdf, dailyPdfSpec } from './dailyReportPdf.mjs';
 import { renderDailyPdf } from '../lib/dailyPdf.mjs';
 
 const JOB = 'resumo_diario';
+const CITY_ORDER = ['uruacu', 'minacu']; // ordem das mensagens para quem recebe as duas cidades
 const TZ = 'America/Sao_Paulo';
 const brazilHour = (date = new Date()) => Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: '2-digit', hourCycle: 'h23' }).format(date));
 const weekday = (date = new Date()) => new Intl.DateTimeFormat('pt-BR', { timeZone: TZ, weekday: 'long' }).format(date);
@@ -176,11 +177,32 @@ export async function buildDailyPdf(pool, cities, { financeiro, uploadRoot, publ
     }
   }
   const uploadsBase = String(publicUploadsUrl || 'https://agenciapulse.tech/uploads').replace(/\/+$/, '');
-  return { url: `${uploadsBase}/resumos/${day}/${file}`, name: `Resumo-do-dia-${dayLabel(date).replace('/', '-')}.pdf`, buffer, data };
+  const lugar = cities?.length === 1 ? `-${cityLabel(normalizeCity(cities[0])).normalize('NFD').replace(/[̀-ͯ]/g, '')}` : '';
+  return { url: `${uploadsBase}/resumos/${day}/${file}`, name: `Resumo-do-dia-${dayLabel(date).replace('/', '-')}${lugar}.pdf`, buffer, data };
 }
 
 export function createDailyReport({ pool, hour = 18, intervalMs = 300_000, uploadRoot, publicUploadsUrl }) {
   let running = false;
+
+  /** Uma mensagem com o PDF daquela cidade; sem PDF, o texto de antes, só daquela cidade. */
+  async function sendCity(number, city, pdf, financeiro) {
+    const today = brazilToday();
+    const lugar = cityLabel(city);
+    if (pdf) {
+      const body = `Resumo do dia ${dayLabel()} · ${lugar} 📊`;
+      await sendToNumber(pool, number, body, { mediaUrl: pdf.url, mediaName: pdf.name });
+      const n = pdf.data.numeros;
+      await remember(pool, number.id, 'assistant', `${body} [PDF anexado, só ${lugar}: ${n.videos} vídeo(s) entregue(s), ${n.artes} arte(s), ${n.posts} post(s), ${n.gravacoes} gravação(ões), ${pdf.data.pessoas.length} pessoa(s) com atividade${pdf.data.financeiro ? `, caixa +${pdf.data.financeiro.entradas} / −${pdf.data.financeiro.saidas}` : ''}]`);
+      await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'resumo_diario', text: today, detail: { pdf: pdf.url, cidade: city, financeiro } });
+      return;
+    }
+    // sem PDF: o texto de antes, só desta cidade, para o resumo não faltar
+    const body = formatDay(await collectDay(pool, [city]), [city]);
+    await sendToNumber(pool, number, body);
+    await remember(pool, number.id, 'assistant', body);
+    await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'resumo_diario', text: today, detail: { pdf: null, cidade: city } });
+  }
+
   async function runDaily({ force = false } = {}) {
     if (running) return null;
     running = true;
@@ -204,37 +226,33 @@ export function createDailyReport({ pool, hour = 18, intervalMs = 300_000, uploa
         `SELECT * FROM assistant_numbers WHERE active AND 'resumo_diario' = ANY(permissions)`
       );
       let sent = 0;
-      const pdfs = new Map(); // mesmo PDF para quem tem as mesmas cidades e a mesma permissão financeira
+      // um PDF por cidade (usuário, 01/11/2026: "enviar os relatórios separados … para o Victor, os relatórios só de
+      // Minaçu"): cada número recebe uma mensagem por cidade em que pode agir (assistant_numbers.cities; vazio = as
+      // duas), cada PDF só com os dados daquela cidade. O mesmo PDF serve a quem tem a mesma cidade e permissão.
+      const pdfs = new Map();
       for (const number of numbers) {
-        try {
-          const cities = number.cities || [];
-          const financeiro = (number.permissions || []).includes('consultar_financeiro');
-          const key = `${[...cities].sort().join(',')}|${financeiro}`;
-          let pdf = pdfs.get(key);
-          if (pdf === undefined) {
-            pdf = await buildDailyPdf(pool, cities, { financeiro, uploadRoot, publicUploadsUrl }).catch((error) => {
-              console.error('[resumo do dia] PDF:', error.message);
-              return null;
-            });
-            pdfs.set(key, pdf);
+        const own = (number.cities || []).map(normalizeCity).filter(Boolean);
+        const cities = CITY_ORDER.filter((c) => (own.length ? own.includes(c) : true));
+        const financeiro = (number.permissions || []).includes('consultar_financeiro');
+        let ok = 0;
+        for (const city of cities) {
+          try {
+            const key = `${city}|${financeiro}`;
+            let pdf = pdfs.get(key);
+            if (pdf === undefined) {
+              pdf = await buildDailyPdf(pool, [city], { financeiro, uploadRoot, publicUploadsUrl }).catch((error) => {
+                console.error('[resumo do dia] PDF:', city, error.message);
+                return null;
+              });
+              pdfs.set(key, pdf);
+            }
+            await sendCity(number, city, pdf, financeiro);
+            ok++;
+          } catch (error) {
+            console.error('[resumo do dia]', number.name, city, error.message);
           }
-          if (pdf) {
-            const body = `Resumo do dia ${dayLabel()} 📊`;
-            await sendToNumber(pool, number, body, { mediaUrl: pdf.url, mediaName: pdf.name });
-            const n = pdf.data.numeros;
-            await remember(pool, number.id, 'assistant', `${body} [PDF anexado: ${n.videos} vídeo(s) entregue(s), ${n.artes} arte(s), ${n.posts} post(s), ${n.gravacoes} gravação(ões), ${pdf.data.pessoas.length} pessoa(s) com atividade${pdf.data.financeiro ? `, caixa +${pdf.data.financeiro.entradas} / −${pdf.data.financeiro.saidas}` : ''}]`);
-            await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'resumo_diario', text: today, detail: { pdf: pdf.url, financeiro } });
-          } else {
-            // sem PDF: o texto de antes, para o resumo não faltar
-            const body = formatDay(await collectDay(pool, cities), cities);
-            await sendToNumber(pool, number, body);
-            await remember(pool, number.id, 'assistant', body);
-            await logEvent(pool, { numberId: number.id, phone: number.phone, kind: 'resumo_diario', text: today, detail: { pdf: null } });
-          }
-          sent++;
-        } catch (error) {
-          console.error('[resumo do dia]', number.name, error.message);
         }
+        if (ok) sent++;
       }
       if (!force) await pool.query(`UPDATE pulse_job_runs SET result = $3 WHERE job = $1 AND day = $2::date`, [JOB, today, JSON.stringify({ enviados: sent })]);
       console.log(`[resumo do dia] enviado a ${sent} número(s)`);

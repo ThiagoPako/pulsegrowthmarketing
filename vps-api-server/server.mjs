@@ -10058,7 +10058,8 @@ app.get('/api/social-posts/media-library', async (req, res) => {
 
     const [designs, portal, contents] = await Promise.all([
       pool.query(
-        `SELECT id, title, mockup_url, attachment_url, attachment_urls, format_type, updated_at
+        `SELECT id, title, mockup_url, attachment_url, attachment_urls, format_type, updated_at,
+                (SELECT coalesce(nullif(p.display_name, ''), p.name) FROM profiles p WHERE p.id = design_tasks.assigned_to) AS designer_name
            FROM design_tasks WHERE client_id = $1 ORDER BY updated_at DESC LIMIT 120`,
         [clientId]
       ).catch(() => ({ rows: [] })),
@@ -10084,7 +10085,7 @@ app.get('/api/social-posts/media-library', async (req, res) => {
       files.forEach((url, i) => push({
         id: `design-${d.id}${files.length > 1 ? `-${i + 1}` : ''}`,
         title: `${d.title || 'Arte'}${files.length > 1 ? ` · ${i + 1}/${files.length}` : ''}`,
-        url, thumbnail: isVideo(url) ? null : absolute(url), source: 'Design', tag: d.format_type, date: d.updated_at,
+        url, thumbnail: isVideo(url) ? null : absolute(url), source: 'Design', tag: d.format_type, date: d.updated_at, author: d.designer_name || null,
       }));
     }
     for (const c of portal.rows) {

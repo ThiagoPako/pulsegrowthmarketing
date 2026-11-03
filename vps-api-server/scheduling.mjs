@@ -397,6 +397,8 @@ export function buildMaterials(rows, { from, to, publicAppUrl, now = Date.now() 
       media_items: urls,
       caption: current?.caption || savedCaption.get(`arte:${id}`) || '',
       platform_label: null,
+      // filtro por designer no Estúdio de Postagem (usuário, 03/11/2026)
+      author: d.designer_name || null,
     };
     materialInfo.set(base.key, { thumb_url: base.thumb_url, media_kind: base.media_kind });
     const inSeries = seriesMaterial.get(base.key);
@@ -941,7 +943,8 @@ export function registerSchedulingRoutes(app, deps) {
       ),
       pool.query(
         `SELECT id, title, format_type, kanban_column, posting_at, attachment_url, attachment_urls, mockup_url,
-                client_approved_at, completed_at, updated_at
+                client_approved_at, completed_at, updated_at,
+                (SELECT coalesce(nullif(p.display_name, ''), p.name) FROM profiles p WHERE p.id = design_tasks.assigned_to) AS designer_name
            FROM design_tasks
           WHERE client_id = $1 AND coalesce(format_type, '') <> ALL($3::text[])
             AND (kanban_column = 'aprovado'

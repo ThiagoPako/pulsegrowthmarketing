@@ -46,6 +46,7 @@ function Row({ item, onPick, dragging }: { item: SchedulingItem; onPick: (item: 
         <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
           <span className={cn('rounded px-1.5 py-px font-medium', type.soft, type.text)}>{type.label}</span>
           {approved && <span>Aprovado {approved}</span>}
+          {item.author && <span>· {item.author}</span>}
         </div>
       </div>
     </div>
@@ -56,11 +57,14 @@ function Row({ item, onPick, dragging }: { item: SchedulingItem; onPick: (item: 
 export default function UnscheduledPanel({ items, onPick, draggable, className }: Props) {
   const [query, setQuery] = useState('');
   const [type, setType] = useState<SchedulingType | 'all'>('all');
+  // filtro por designer das artes (usuário, 03/11/2026)
+  const [designer, setDesigner] = useState('');
+  const designers = useMemo(() => [...new Set(items.map((i) => i.author).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [items]);
   const types = useMemo(() => [...new Set(items.map((i) => i.type))], [items]);
   const normalize = (v: string) => v.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const filtered = useMemo(() => items.filter((i) =>
-    (type === 'all' || i.type === type) && (!query.trim() || normalize(i.title).includes(normalize(query.trim())))),
-  [items, type, query]);
+    (type === 'all' || i.type === type) && (!designer || i.author === designer) && (!query.trim() || normalize(i.title).includes(normalize(query.trim())))),
+  [items, type, query, designer]);
   const byKey = useMemo(() => new Map(items.map((i) => [i.key, i])), [items]);
 
   return (
@@ -78,6 +82,13 @@ export default function UnscheduledPanel({ items, onPick, draggable, className }
             <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar" className="h-8 pl-7 text-xs" aria-label="Buscar material" />
           </div>
+        )}
+        {designers.length > 0 && (
+          <select value={designer} onChange={(e) => setDesigner(e.target.value)} aria-label="Filtrar por designer"
+            className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs">
+            <option value="">Todos os designers</option>
+            {designers.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
         )}
         {types.length > 1 && (
           <div className="flex flex-wrap gap-1">

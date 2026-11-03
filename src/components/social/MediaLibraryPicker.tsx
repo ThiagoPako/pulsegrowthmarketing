@@ -24,15 +24,19 @@ export function MediaLibraryPicker({
 }: MediaLibraryPickerProps) {
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<KindFilter>('all');
+  // filtro por designer (usuário, 03/11/2026: "no estúdio de postagem não tem o filtro de designers")
+  const [designer, setDesigner] = useState('');
+  const designers = useMemo(() => [...new Set(assets.map(a => a.author).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [assets]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return assets.filter(a => {
       if (kind !== 'all' && a.kind !== kind) return false;
+      if (designer && a.author !== designer) return false;
       if (!term) return true;
-      return `${a.title} ${a.source} ${a.tag ?? ''}`.toLowerCase().includes(term);
+      return `${a.title} ${a.source} ${a.tag ?? ''} ${a.author ?? ''}`.toLowerCase().includes(term);
     });
-  }, [assets, search, kind]);
+  }, [assets, search, kind, designer]);
 
   const filters: { value: KindFilter; label: string }[] = [
     { value: 'all', label: 'Tudo' },
@@ -67,6 +71,13 @@ export function MediaLibraryPicker({
             </button>
           ))}
         </div>
+        {designers.length > 0 && (
+          <select value={designer} onChange={e => setDesigner(e.target.value)} aria-label="Filtrar por designer"
+            className="h-9 rounded-lg border border-border bg-background px-2 text-xs">
+            <option value="">Todos os designers</option>
+            {designers.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+        )}
         {onRefresh && (
           <Button type="button" variant="ghost" size="icon" aria-label="Atualizar biblioteca" onClick={onRefresh}>
             <RefreshCw size={14} />

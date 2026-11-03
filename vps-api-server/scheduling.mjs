@@ -888,6 +888,64 @@ export function registerSchedulingRoutes(app, deps) {
     }
   });
 
+  // Visão geral do Estúdio (03/11/2026, referência de painel de social media que o usuário mandou): os próximos posts
+  // de todos os clientes da cidade, os números do dia e da semana e o que precisa de alguém (erro, conta pedindo login)
+  app.get('/api/scheduling/overview', async (req, res) => {
+    try {
+      const { city } = await requireModule(req);
+      const media = makeMediaHelpers(publicAppUrl);
+      const vis = cityVisibilityExpression('c.city', '$1');
+      const tz = POSTING_TZ;
+      const [next, stats, errors, reauth] = await Promise.all([
+        pool.query(
+          `SELECT sp.id, sp.client_id, sp.publish_type, sp.platform, sp.media_url, sp.caption, sp.scheduled_at, sp.story_mode,
+                  c.company_name, c.logo_url
+             FROM scheduled_posts sp JOIN clients c ON c.id = sp.client_id
+            WHERE sp.status = 'agendado' AND sp.scheduled_at > now() AND ${vis}
+            ORDER BY sp.scheduled_at LIMIT 8`, [city]
+        ),
+        pool.query(
+          `SELECT
+             count(*) FILTER (WHERE sp.status = 'agendado' AND (sp.scheduled_at AT TIME ZONE '${tz}')::date = (now() AT TIME ZONE '${tz}')::date)::int AS today,
+             count(*) FILTER (WHERE sp.status = 'agendado' AND sp.scheduled_at > now() AND sp.scheduled_at < now() + interval '7 days')::int AS week,
+             count(*) FILTER (WHERE sp.status = 'publicado' AND date_trunc('month', sp.published_at AT TIME ZONE '${tz}') = date_trunc('month', now() AT TIME ZONE '${tz}'))::int AS published_month,
+             count(*) FILTER (WHERE sp.status = 'erro')::int AS errors
+             FROM scheduled_posts sp JOIN clients c ON c.id = sp.client_id
+            WHERE ${vis} AND sp.story_series_id IS NULL`, [city]
+        ),
+        pool.query(
+          `SELECT sp.id, sp.client_id, sp.publish_type, sp.platform, sp.scheduled_at, sp.last_error, c.company_name, c.logo_url
+             FROM scheduled_posts sp JOIN clients c ON c.id = sp.client_id
+            WHERE sp.status = 'erro' AND ${vis} ORDER BY sp.updated_at DESC LIMIT 8`, [city]
+        ),
+        pool.query(
+          `SELECT DISTINCT ON (a.client_id, a.platform) a.client_id, a.platform, c.company_name, c.logo_url
+             FROM social_accounts a JOIN clients c ON c.id = a.client_id
+            WHERE a.status = 'reauth' AND ${vis} AND coalesce(c.status, 'ativo') <> 'cancelado' LIMIT 12`, [city]
+        ).catch(() => ({ rows: [] })),
+      ]);
+      const when = (v) => (v ? whenFromInstant(v) : null);
+      res.set('Cache-Control', 'no-store');
+      res.json({
+        stats: stats.rows[0] || { today: 0, week: 0, published_month: 0, errors: 0 },
+        next: next.rows.map((r) => ({
+          id: r.id, client_id: r.client_id, client: String(r.company_name || '').trim(), logo_url: r.logo_url || null,
+          type: visualType({ kind: 'post', publishType: r.publish_type }), platform: r.platform, reminder: r.story_mode === 'lembrete',
+          at: new Date(r.scheduled_at).toISOString(), when: when(r.scheduled_at),
+          thumb_url: media.thumbFor(r.media_url), caption: String(r.caption || '').split('\n')[0].slice(0, 140),
+        })),
+        errors: errors.rows.map((r) => ({
+          id: r.id, client_id: r.client_id, client: String(r.company_name || '').trim(), logo_url: r.logo_url || null,
+          type: visualType({ kind: 'post', publishType: r.publish_type }), platform: r.platform, when: when(r.scheduled_at),
+          error: String(r.last_error || '').slice(0, 200),
+        })),
+        reauth: reauth.rows.map((r) => ({ client_id: r.client_id, client: String(r.company_name || '').trim(), logo_url: r.logo_url || null, platform: r.platform })),
+      });
+    } catch (error) {
+      sendError(res, error, logger);
+    }
+  });
+
   app.get('/api/scheduling/clients', async (req, res) => {
     try {
       const { city } = await requireModule(req);

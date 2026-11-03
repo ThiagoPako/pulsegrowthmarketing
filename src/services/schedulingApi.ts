@@ -62,6 +62,8 @@ export interface ScheduleInput {
   story_mode?: 'auto' | 'lembrete';
   media_url?: string | null;
   media_items?: string[];
+  /** Sequência de story: cada imagem de media_items vira um story, na ordem, 1 por minuto (só "Postar sozinho") */
+  story_sequence?: boolean;
   allow_past?: boolean;
 }
 

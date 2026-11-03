@@ -10,6 +10,8 @@ export const DESIGN_FORMAT_PRESETS = {
   quadrado: { label: 'Quadrado', width: 1080, height: 1080, unit: 'px', format_type: 'feed' },
   story: { label: 'Story', width: 1080, height: 1920, unit: 'px', format_type: 'story' },
   carrossel: { label: 'Carrossel', width: 1080, height: 1350, unit: 'px', slides: 5, format_type: 'carrossel' },
+  // várias telas de story que saem uma depois da outra (Estúdio de Postagem → sequência de story, 03/11/2026)
+  story_sequencia: { label: 'Sequência de story', width: 1080, height: 1920, unit: 'px', slides: 3, format_type: 'story_sequencia' },
   capa_destaque: { label: 'Capa de destaque', width: 1080, height: 1920, unit: 'px', format_type: 'capa' },
   thumbnail: { label: 'Thumbnail', width: 1280, height: 720, unit: 'px', format_type: 'thumbnail' },
   panfleto_a5: { label: 'Panfleto A5', width: 148, height: 210, unit: 'mm', dpi: 300, bleed_mm: 3, print: true, format_type: 'midia_fisica' },
@@ -24,6 +26,7 @@ export const DESIGN_FORMAT_PRESETS = {
 // tarefas antigas (sem `dimensions`): o formato vem do format_type
 const LEGACY_FORMAT_PRESET = {
   feed: 'feed', story: 'story', carrossel: 'carrossel', capa: 'capa_destaque', thumbnail: 'thumbnail', logomarca: 'logomarca',
+  story_sequencia: 'story_sequencia',
 };
 
 export const DESIGN_ERROR_CATEGORIES = {
@@ -75,7 +78,8 @@ export function describeDesignFormat(dimensions, formatType) {
   const dpi = unit && unit !== 'px' ? (num(f.dpi) || 300) : null;
   const bleed = unit && unit !== 'px' ? (Number(f.bleed_mm) >= 0 ? Number(f.bleed_mm) : 3) : 0;
   const print = unit === 'cm' || unit === 'mm' || !!f.print;
-  const slides = dims.preset === 'carrossel' ? Math.max(2, Math.min(20, Number(f.slides) || 5)) : null;
+  const slides = dims.preset === 'carrossel' ? Math.max(2, Math.min(20, Number(f.slides) || 5))
+    : dims.preset === 'story_sequencia' ? Math.max(2, Math.min(10, Number(f.slides) || 3)) : null;
   const toMm = (v) => (unit === 'cm' ? v * 10 : v);
   let pixels = null;
   let pixelsWithBleed = null;
@@ -87,7 +91,7 @@ export function describeDesignFormat(dimensions, formatType) {
   }
   const size = unit ? `${fmtNum(width)}×${fmtNum(height)} ${unit}` : 'vetor';
   const label = (unit ? `${base.label} · ${size}` : base.label)
-    + (slides ? ` · ${slides} slides` : '')
+    + (slides ? ` · ${slides} ${dims.preset === 'story_sequencia' ? 'stories' : 'slides'}` : '')
     + (print ? ` · ${dpi} dpi${bleed ? ` + sangria ${fmtNum(bleed)} mm` : ''}` : '');
   return {
     preset: dims.preset,

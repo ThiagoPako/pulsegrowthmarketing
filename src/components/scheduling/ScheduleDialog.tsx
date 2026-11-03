@@ -156,6 +156,8 @@ export default function ScheduleDialog({
   // ordem do carrossel (usuário, 02/11/2026: "possível postar carrossel e organizar a ordem certinha")
   const [order, setOrder] = useState<string[]>([]);
   const [track, setTrack] = useState<StoryTrack | null>(null);
+  // Sequência de story (usuário, 03/11/2026): as telas da arte saem como stories seguidos, na ordem
+  const [sequence, setSequence] = useState(false);
   // formato que o Instagram recusa (story > 60 s, reels < 3 s): trava o agendamento automático
   const [mediaBlocked, setMediaBlocked] = useState(false);
   // "Postar agora" (usuário, 02/11/2026): põe o horário de agora e salva; o robô publica em até 15 s
@@ -195,6 +197,8 @@ export default function ScheduleDialog({
       mediaUrl: post?.media_url || item.media_url || '',
       order: post?.media_items?.length ? post.media_items : item.media_items,
       track: post?.story_audio_url ? { url: post.story_audio_url, name: post.story_audio_name || null } : null,
+      // arte feita como "Sequência de story" já abre em sequência; a agendada volta como estava
+      sequence: post ? !!post.story_sequence_id : item.content_type === 'story_sequencia' && item.media_items.length > 1,
       repeat: series ? repeatFromRule(series.rule, series.index) : defaultRepeat(initialDate),
       scope: (item.virtual ? 'following' : 'one') as Scope,
     };
@@ -224,6 +228,7 @@ export default function ScheduleDialog({
     setMediaUrl(initial.mediaUrl);
     setOrder(initial.order);
     setTrack(initial.track);
+    setSequence(initial.sequence);
     setRepeat(initial.repeat);
     setScope(initial.scope);
     setSaving(false);
@@ -280,8 +285,12 @@ export default function ScheduleDialog({
   const isStory = format === 'stories';
   const multiImage = item.kind === 'arte' && item.media_items.length > 0;
   const following = isSeriesItem && scope === 'following';
+  // Sequência de story: arte com 2+ telas, story postado sozinho (no lembrete a equipe posta uma de cada vez)
+  const canSequence = isStory && mode === 'auto' && multiImage && order.length > 1 && !isSeriesItem;
+  const sequenceOn = canSequence && sequence;
+  const orderedMedia = format === 'carousel' || sequenceOn;
   // Repetir: story de um material (o post solto do Estúdio não repete); na série, só "este e os próximos"
-  const canRepeat = isStory && mode !== 'manual' && !readOnly && (isSeriesItem ? following : ['conteudo', 'arte', 'portal'].includes(item.kind));
+  const canRepeat = isStory && mode !== 'manual' && !readOnly && !sequenceOn && (isSeriesItem ? following : ['conteudo', 'arte', 'portal'].includes(item.kind));
   const repeatOn = canRepeat && (following || repeat.enabled);
   const reminderPost = item.post?.story_mode === 'lembrete' && item.post.id && !item.virtual
     && (item.state === 'agendado' || (item.state === 'publicado' && item.post.manual_posted));
@@ -335,7 +344,7 @@ export default function ScheduleDialog({
     : platform === 'both' ? ['instagram', 'facebook'] : [platform];
   const storyMedia = (multiImage ? order[0] : mediaUrl.trim()) || '';
   // trilha: story de UMA arte postado sozinho, sem repetição (a série não leva trilha)
-  const canTrack = isStory && mode === 'auto' && !repeatOn && !!storyMedia && !/\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(storyMedia);
+  const canTrack = isStory && mode === 'auto' && !repeatOn && !sequenceOn && !!storyMedia && !/\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(storyMedia);
   const storyFields = () => ({
     client_id: clientId,
     date,
@@ -353,7 +362,8 @@ export default function ScheduleDialog({
     && caption === initial.caption && storyLink === initial.storyLink && storyLinkText === initial.storyLinkText
     && networks.join() === initial.networks.join() && !captionsTouched
     && firstComment === (item.post?.first_comment || '') && collab === (item.post?.collaborators ? item.post.collaborators.split(',').map((u) => `@${u}`).join(', ') : '')
-    && mediaUrl === initial.mediaUrl && order.join() === initial.order.join() && (track?.url || '') === (initial.track?.url || '') && !repeatOn;
+    && mediaUrl === initial.mediaUrl && order.join() === initial.order.join() && (track?.url || '') === (initial.track?.url || '') && !repeatOn
+    && sequenceOn === initial.sequence;
 
   const askPostNow = () => setConfirm({
     title: 'Postar agora?',
@@ -406,7 +416,9 @@ export default function ScheduleDialog({
         return;
       }
       const media = postsAlone
-        ? (format === 'carousel'
+        ? (sequenceOn
+          ? { media_items: order, story_sequence: true }
+          : format === 'carousel'
           ? { media_items: order }
           : { media_url: (multiImage ? order[0] : mediaUrl.trim()) || null })
         : {};
@@ -600,6 +612,22 @@ export default function ScheduleDialog({
               </div>
             )}
 
+            {canSequence && (
+              <label className={cn('flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5 transition-colors',
+                sequenceOn ? 'border-primary/60 bg-primary/5' : 'border-border hover:border-primary/40', readOnly && 'cursor-not-allowed opacity-60')}>
+                <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]" checked={sequenceOn} disabled={readOnly}
+                  onChange={(e) => setSequence(e.target.checked)} />
+                <span className="space-y-0.5">
+                  <span className="block text-xs font-semibold">Sequência de story</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    {sequenceOn
+                      ? `As ${order.length} telas saem como stories seguidos, na ordem abaixo, 1 por minuto a partir de ${time || 'o horário escolhido'}.`
+                      : `Publicar as ${order.length} telas em sequência, uma depois da outra (sem marcar, sai só a primeira).`}
+                  </span>
+                </span>
+              </label>
+            )}
+
             {!readOnly && modeOptions.length > 1 && (
               <div className="space-y-1">
                 <Label className="text-xs">Postagem</Label>
@@ -756,22 +784,22 @@ export default function ScheduleDialog({
             {postsAlone && !readOnly && !isSeriesItem && (
               multiImage ? (
                 <div className="space-y-1">
-                  <Label className="text-xs">{format === 'carousel' ? 'Ordem do carrossel' : 'Mídia'}</Label>
+                  <Label className="text-xs">{format === 'carousel' ? 'Ordem do carrossel' : sequenceOn ? 'Ordem dos stories' : 'Mídia'}</Label>
                   <p className="text-[11px] text-muted-foreground">
-                    {format === 'carousel' ? 'Use as setas para pôr na ordem em que vai aparecer; o X tira a imagem deste post.' : 'Toque na imagem que vai ser postada.'}
+                    {orderedMedia ? 'Use as setas para pôr na ordem em que vai aparecer; o X tira a imagem deste post.' : 'Toque na imagem que vai ser postada.'}
                   </p>
                   <div className="flex gap-2 overflow-x-auto pb-1">
                     {order.map((url, i) => {
-                      const chosen = format === 'carousel' || i === 0;
+                      const chosen = orderedMedia || i === 0;
                       const move = (to: number) => setOrder((o) => { const n = [...o]; [n[i], n[to]] = [n[to], n[i]]; return n; });
                       return (
                         <div key={url} className="relative shrink-0">
-                          <button type="button" disabled={format === 'carousel'} aria-label={`Imagem ${i + 1}`}
+                          <button type="button" disabled={orderedMedia} aria-label={`Imagem ${i + 1}`}
                             onClick={() => setOrder((o) => [url, ...o.filter((u) => u !== url)])}
                             className={cn('block overflow-hidden rounded-md border-2', chosen ? 'border-primary' : 'border-transparent opacity-50 hover:opacity-100')}>
                             <img src={url} alt="" loading="lazy" className="h-20 w-16 object-cover" />
                           </button>
-                          {format === 'carousel' && (
+                          {orderedMedia && (
                             <>
                               <span className="absolute left-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">{i + 1}</span>
                               {order.length > 2 && (
@@ -797,7 +825,7 @@ export default function ScheduleDialog({
               )
             )}
             {postsAlone && !readOnly && !isSeriesItem && (
-              <MediaFitNotes urls={format === 'carousel' ? order : [multiImage ? order[0] : mediaUrl.trim()].filter(Boolean)} publishType={format} onBlock={setMediaBlocked} />
+              <MediaFitNotes urls={orderedMedia ? order : [multiImage ? order[0] : mediaUrl.trim()].filter(Boolean)} publishType={format} onBlock={setMediaBlocked} />
             )}
           </div>
           {/* prévia em cada rede (usuário, 03/11/2026: "que simule o Instagram e o Facebook e qualquer rede social que vá publicar") */}

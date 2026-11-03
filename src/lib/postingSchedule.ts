@@ -53,6 +53,9 @@ export interface SchedulingPost {
   reminder_followup_at?: string | null;
   /** Marcado como "Postado" por alguém (lembrete). */
   manual_posted?: boolean;
+  /** Sequência de story (03/11/2026): as telas da arte saem como stories seguidos; este é o de índice 0 */
+  story_sequence_id?: string | null;
+  story_sequence_index?: number | null;
 }
 
 export type StoryMode = 'auto' | 'lembrete';

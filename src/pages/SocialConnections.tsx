@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import TeamFacebookPanel from '@/components/social/TeamFacebookPanel';
 import { useLang, tr } from '@/lib/i18n';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { useCity } from '@/contexts/CityContext';
@@ -310,6 +311,8 @@ export default function SocialConnections() {
           </CardContent>
         </Card>
       )}
+
+      {up?.configured && <TeamFacebookPanel clients={clients.map(c => ({ id: c.id, name: c.name }))} />}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[

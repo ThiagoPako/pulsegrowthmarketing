@@ -113,3 +113,15 @@ describe('Upload-Post · link do cliente com as redes marcadas', () => {
     await expect(up.connectLink('c1', [])).rejects.toThrow('Marque pelo menos uma rede');
   });
 });
+
+describe('Upload-Post · primeiro comentário e Collab', () => {
+  it('vai como <rede>_first_comment e collaborators só no Instagram; story não leva', () => {
+    const ig = uploadFields({ platform: 'instagram', publishType: 'reels', media: video, caption: 'x', firstComment: 'Chama no zap', collaborators: 'parceiro' }).fields;
+    expect(get(ig, 'instagram_first_comment')).toEqual(['Chama no zap']);
+    expect(get(ig, 'collaborators')).toEqual(['parceiro']);
+    const fb = uploadFields({ platform: 'facebook', publishType: 'reels', media: video, caption: 'x', firstComment: 'Oi', collaborators: 'parceiro' }).fields;
+    expect(get(fb, 'facebook_first_comment')).toEqual(['Oi']);
+    expect(get(fb, 'collaborators')).toEqual([]);
+    expect(get(uploadFields({ platform: 'instagram', publishType: 'stories', media: video, caption: '', firstComment: 'Oi' }).fields, 'instagram_first_comment')).toEqual([]);
+  });
+});

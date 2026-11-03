@@ -114,6 +114,14 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
         ALTER TABLE upload_post_config ADD COLUMN IF NOT EXISTS webhook_secret TEXT;
         ALTER TABLE google_reviews ADD COLUMN IF NOT EXISTS removal_reason TEXT;
         ALTER TABLE google_reviews ADD COLUMN IF NOT EXISTS removal_status TEXT;
+        -- métricas de cada rede, uma foto por dia (Upload-Post /analytics; 02/11/2026)
+        CREATE TABLE IF NOT EXISTS social_metrics (
+          client_id UUID NOT NULL,
+          platform TEXT NOT NULL,
+          day DATE NOT NULL,
+          data JSONB NOT NULL,
+          PRIMARY KEY (client_id, platform, day)
+        );
         CREATE TABLE IF NOT EXISTS review_monitors (
           client_id UUID PRIMARY KEY,
           active BOOLEAN NOT NULL DEFAULT false,
@@ -512,12 +520,58 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
     return { ok: true };
   }
 
+  // ── métricas de todas as redes (uma foto por dia) ──
+  const METRIC_KEYS = ['followers', 'reach', 'views', 'impressions', 'profileViews', 'likes', 'comments', 'shares', 'saves', 'watch_time_minutes', 'engagement'];
+  async function snapshotMetrics(clientId) {
+    await ensureSchema();
+    const user = await profileOf(clientId);
+    if (!user) return 0;
+    const { rows: accs } = await pool.query(
+      `SELECT platform FROM social_accounts WHERE client_id = $1 AND api_base = 'upload_post' AND status = 'connected' AND platform = ANY($2::text[])`, [clientId, HUB_PLATFORMS]
+    );
+    if (!accs.length) return 0;
+    const { rows: [fb] } = await pool.query(`SELECT facebook_page_id FROM client_upload_post WHERE client_id = $1`, [clientId]);
+    const q = `platforms=${accs.map((a) => a.platform).join(',')}${fb?.facebook_page_id ? `&page_id=${encodeURIComponent(fb.facebook_page_id)}&days=30` : ''}`;
+    const r = await uploadPost.call('GET', `/analytics/${encodeURIComponent(user)}?${q}`).catch((error) => { logger.warn?.('[métricas]', error.message); return null; });
+    let n = 0;
+    for (const a of accs) {
+      const d = r?.[a.platform] || r?.results?.[a.platform] || r?.analytics?.[a.platform];
+      if (!d || typeof d !== 'object') continue;
+      const data = Object.fromEntries(METRIC_KEYS.filter((k) => d[k] != null && !Number.isNaN(Number(d[k]))).map((k) => [k, Number(d[k])]));
+      if (d.metric_type) data.metric_type = d.metric_type;
+      if (!Object.keys(data).length) continue;
+      await pool.query(
+        `INSERT INTO social_metrics (client_id, platform, day, data) VALUES ($1, $2, (now() AT TIME ZONE 'America/Sao_Paulo')::date, $3)
+         ON CONFLICT (client_id, platform, day) DO UPDATE SET data = EXCLUDED.data`, [clientId, a.platform, JSON.stringify(data)]
+      );
+      n += 1;
+    }
+    return n;
+  }
+
+  /** Última foto de cada rede, a de ~30 dias antes (para a variação) e a série de seguidores. */
+  async function metricsOf(clientId, days = 30) {
+    await ensureSchema();
+    const { rows } = await pool.query(
+      `SELECT platform, day, data FROM social_metrics WHERE client_id = $1 AND day >= current_date - $2::int ORDER BY platform, day`, [clientId, Math.min(Number(days) || 30, 365)]
+    );
+    const by = {};
+    for (const r of rows) (by[r.platform] = by[r.platform] || []).push({ day: r.day, ...r.data });
+    return Object.entries(by).map(([platform, list]) => ({
+      platform, latest: list[list.length - 1], first: list[0], followers_series: list.map((x) => ({ day: x.day, followers: x.followers ?? null })),
+    }));
+  }
+
   // ── leitura geral (a cada hora) ──
   async function syncAll() {
     if (!(await uploadPost.apiKey())) return;
     await ensureSchema();
     const { rows } = await pool.query(`SELECT DISTINCT client_id FROM social_accounts WHERE api_base = 'upload_post' AND status = 'connected'`);
+    // métricas: uma foto por dia por cliente (a primeira leitura do dia)
+    const { rows: done } = await pool.query(`SELECT DISTINCT client_id FROM social_metrics WHERE day = (now() AT TIME ZONE 'America/Sao_Paulo')::date`);
+    const today = new Set(done.map((d) => String(d.client_id)));
     for (const r of rows) {
+      if (!today.has(String(r.client_id))) await snapshotMetrics(r.client_id).catch((error) => logger.error('[métricas]', error.message));
       await syncComments(r.client_id).catch((error) => logger.error('[central-social] comentários:', error.message));
       const { rows: [g] } = await pool.query(`SELECT 1 FROM social_accounts WHERE client_id = $1 AND api_base = 'upload_post' AND platform = 'google_business'`, [r.client_id]);
       if (g) await syncReviews(r.client_id).catch((error) => logger.error('[central-social] avaliações:', error.message));
@@ -613,7 +667,7 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
   return {
     ensureSchema, syncComments, ingestWebhookComment, processNew, replyComment, setCommentStatus, hideComment, redraft,
     syncReviews, replyReview, syncAll, registerWebhook, webhookSecret, listComments, listReviews, overview, settingsOf, saveSettings,
-    monitorOf, saveMonitor, alertMonitors, audit, publicReview, publicDecide, markRemovalRequested,
+    monitorOf, saveMonitor, alertMonitors, audit, publicReview, publicDecide, markRemovalRequested, snapshotMetrics, metricsOf,
   };
 }
 
@@ -647,6 +701,8 @@ export function registerSocialHubRoutes(app, { hub, uploadPost, pool, verifySoci
   app.post('/api/social-hub/reviews/:id/reply', team(async (req, user) => hub.replyReview(req.params.id, req.body?.text, await nameOf(user))));
   app.get('/api/social-hub/settings/:clientId', team(async (req) => hub.settingsOf(req.params.clientId)));
   app.get('/api/social-hub/review-monitor/:clientId', team(async (req) => hub.monitorOf(req.params.clientId)));
+  app.get('/api/social-hub/metrics/:clientId', team(async (req) => ({ metrics: await hub.metricsOf(req.params.clientId, req.query.days) })));
+  app.post('/api/social-hub/metrics/:clientId/refresh', team(async (req) => ({ saved: await hub.snapshotMetrics(req.params.clientId), metrics: await hub.metricsOf(req.params.clientId) })));
   app.put('/api/social-hub/review-monitor/:clientId', team(async (req) => hub.saveMonitor(req.params.clientId, req.body || {})));
   app.get('/api/social-hub/reviews/:id/audit', team(async (req) => ({ audit: await hub.audit(req.params.id) })));
   app.post('/api/social-hub/reviews/:id/removal-requested', team(async (req) => hub.markRemovalRequested(req.params.id)));

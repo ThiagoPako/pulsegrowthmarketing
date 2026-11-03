@@ -48,6 +48,9 @@ export interface ScheduleInput {
   /** postagem automática: as redes marcadas e a legenda de cada uma */
   platforms?: string[];
   captions?: Record<string, string>;
+  /** primeiro comentário e Collab no Instagram (Upload-Post) */
+  first_comment?: string;
+  collaborators?: string;
   publish_type?: PublishFormat;
   caption?: string;
   story_link?: string | null;

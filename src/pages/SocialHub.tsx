@@ -12,6 +12,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
+import { useCallback } from 'react';
+import NetworkMetrics, { type NetworkMetric } from '@/components/social/NetworkMetrics';
 
 interface HubComment {
   id: string; client_id: string; client_name: string | null; platform: string; post_permalink: string | null; post_caption: string | null;
@@ -49,7 +51,7 @@ function ReplyBox({ draft, onSend, busy }: { draft: string | null; onSend: (text
 }
 
 export default function SocialHub() {
-  const [tab, setTab] = useState<'escalado' | 'rascunho' | 'todos' | 'google' | 'clientes'>('escalado');
+  const [tab, setTab] = useState<'escalado' | 'rascunho' | 'todos' | 'google' | 'metricas' | 'clientes'>('escalado');
   const [clientId, setClientId] = useState<string>('todos');
   const [clients, setClients] = useState<HubClient[]>([]);
   const [comments, setComments] = useState<HubComment[]>([]);
@@ -59,6 +61,7 @@ export default function SocialHub() {
   const [settings, setSettings] = useState<{ isis_mode: string; notes: string } | null>(null);
 
   const cid = clientId === 'todos' ? undefined : clientId;
+  const loadMetrics = useCallback(async () => (cid ? (await api<{ metrics: NetworkMetric[] }>(`social-hub/metrics/${cid}`, { method: 'GET' })).metrics : []), [cid]);
 
   const load = async () => {
     setLoading(true);
@@ -131,10 +134,13 @@ export default function SocialHub() {
         {tabBtn('rascunho', 'Rascunhos da Ísis', totals.ras)}
         {tabBtn('todos', 'Todos')}
         {tabBtn('google', 'Google', reviews.filter((r) => r.status !== 'respondido').length)}
+        {tabBtn('metricas', 'Métricas')}
         {tabBtn('clientes', 'Ísis por cliente')}
       </div>
 
-      {loading ? (
+      {tab === 'metricas' ? (
+        cid ? <NetworkMetrics load={loadMetrics} /> : <Card><CardContent className="p-8 text-center text-muted-foreground">Escolha um cliente para ver as métricas das redes dele.</CardContent></Card>
+      ) : loading ? (
         <div className="flex justify-center py-16"><Loader2 className="animate-spin" /></div>
       ) : tab === 'clientes' ? (
         <div className="space-y-3">

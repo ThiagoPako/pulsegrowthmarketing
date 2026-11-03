@@ -6283,6 +6283,10 @@ app.post('/api/portal-actions', async (req, res) => {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
       return res.json({ comments: await socialHub.listComments({ clientId: client_id, forPortal: !isTeamCaller, limit: 150 }) });
     }
+    if (action === 'get_social_metrics') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      return res.json({ metrics: await socialHub.metricsOf(client_id, 30) });
+    }
     if (action === 'get_google_reviews') {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
       return res.json({ reviews: await socialHub.listReviews({ clientId: client_id, forPortal: !isTeamCaller }) });
@@ -8732,6 +8736,9 @@ async function ensureSocialPostsSchema() {
     -- redes do post e a legenda de cada uma (Upload-Post, 02/11/2026); NULL = só o platform antigo
     ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS platforms TEXT[];
     ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS captions JSONB;
+    -- primeiro comentário (todas as redes da Upload-Post) e Collab no Instagram (02/11/2026)
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS first_comment TEXT;
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS collaborators TEXT;
     ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_series_id UUID;
     ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS series_slot_at TIMESTAMPTZ;
     ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;
@@ -10282,6 +10289,8 @@ async function prepareScheduledPost(input = {}, { requireAccounts = true, apiPub
   // A versão Instagram do vídeo começa logo depois do agendamento (a tarefa relê os posts em segundos)
   if (instagramApi) igVideo.scanSoon();
 
+  const firstComment = String(input.first_comment || '').trim().slice(0, 1000) || null;
+  const collaborators = String(input.collaborators || '').split(/[,\s]+/).map((u) => u.replace(/^@/, '').trim()).filter((u) => /^[A-Za-z0-9._]{1,30}$/.test(u)).slice(0, 3).join(',') || null;
   const storedPlatform = !platforms ? platform
     : platforms.length === 1 ? platforms[0]
       : platforms.includes('instagram') && platforms.includes('facebook') ? 'both' : platforms[0];
@@ -10289,6 +10298,7 @@ async function prepareScheduledPost(input = {}, { requireAccounts = true, apiPub
     client_id, platform: storedPlatform, platforms, captions: platforms ? captions : null, publish_type, items, urls,
     caption: platforms ? (captions.instagram ?? captions[platforms[0]] ?? caption) : caption, when,
     story_link: story_link || null, story_link_text: story_link_text || null,
+    first_comment: publish_type === 'stories' ? null : firstComment, collaborators: publish_type === 'stories' ? null : collaborators,
   };
 }
 

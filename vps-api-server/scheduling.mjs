@@ -173,6 +173,8 @@ function postSummary(p) {
     platform: p.platform,
     platforms: Array.isArray(p.platforms) && p.platforms.length ? p.platforms : null,
     captions: p.captions && typeof p.captions === 'object' ? p.captions : null,
+    first_comment: p.first_comment || null,
+    collaborators: p.collaborators || null,
     publish_type: p.publish_type,
     caption: p.caption || '',
     media_url: p.media_url || null,
@@ -1344,6 +1346,8 @@ export function registerSchedulingRoutes(app, deps) {
             platform,
             platforms,
             captions: body.publish_type === 'stories' ? null : captions,
+            first_comment: body.first_comment,
+            collaborators: body.collaborators,
             publish_type: body.publish_type,
             media_items: mediaItems,
             media_url: mediaUrl,
@@ -1376,8 +1380,9 @@ export function registerSchedulingRoutes(app, deps) {
           const { rows: [created] } = await db.query(
             `INSERT INTO scheduled_posts
                (client_id, delivery_id, content_task_id, design_task_id, portal_content_id, platform, publish_type,
-                media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text, story_mode, platforms, captions)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text, story_mode, platforms, captions,
+                first_comment, collaborators)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
              RETURNING *`,
             [
               client.id,
@@ -1390,6 +1395,7 @@ export function registerSchedulingRoutes(app, deps) {
               prepared.caption, prepared.when.toISOString(), user?.id || null,
               prepared.story_link, prepared.story_link_text, storyMode,
               prepared.platforms, prepared.captions ? JSON.stringify(prepared.captions) : null,
+              prepared.first_comment, prepared.collaborators,
             ]
           );
           post = created;

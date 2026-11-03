@@ -312,6 +312,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       items: cat.items.filter(item => {
         if (!currentUser) return false;
         if (item.module && !hiddenModules.has(item.module)) return false;
+        // Conexões Sociais liberada para a pessoa na tela Equipe (sem precisar do cargo)
+        if (item.path === '/conexoes-sociais' && hiddenModules.has('conexoes_sociais')) return true;
         
         // Check role(s) — considera função principal + adicionais
         const userRoles = currentUser.roles && currentUser.roles.length ? currentUser.roles : [currentUser.role];

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
-import { portalAction, hasPortalSession, clearPortalSession } from '@/lib/portalApi';
+import { portalAction, portalAdmin, hasPortalSession, clearPortalSession } from '@/lib/portalApi';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Play, Pause, Maximize, Check, MessageSquare, X, ChevronLeft, ChevronRight,
@@ -10,6 +10,7 @@ import {
   Trash2, Settings, Users, MessageCircle
 } from 'lucide-react';
 import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
+import PortalCompanyAdmin from '@/components/portal/PortalCompanyAdmin';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -81,7 +82,7 @@ interface ClientData {
   client_type?: string;
 }
 
-type TabView = 'library' | 'comentarios' | 'metrics' | 'insights' | 'criativa' | 'agenda' | 'posts' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento' | 'otimizados' | 'admin';
+type TabView = 'library' | 'comentarios' | 'metrics' | 'insights' | 'criativa' | 'agenda' | 'posts' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento' | 'otimizados' | 'admin' | 'equipe';
 
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
@@ -167,6 +168,9 @@ export default function ClientPortal() {
   const isClientLoggedIn = hasPortalSession();
   const isAuthenticated = isTeamMember || isClientLoggedIn;
   const portalUserName = sessionStorage.getItem('portal_user_name') || '';
+  // admin da empresa (convite da equipe, 03/11/2026): o papel vem do servidor, não do navegador
+  const [portalRole, setPortalRole] = useState<string | null>(null);
+  const isCompanyAdmin = !isTeamMember && portalRole === 'admin';
   
   const getCommentAuthor = () => {
     if (isTeamMember && profile) {
@@ -201,6 +205,11 @@ export default function ClientPortal() {
     toast.success('Até logo! 👋');
     navigate(`/portal-login/${paramSlug}`);
   };
+
+  useEffect(() => {
+    if (isTeamMember || !isClientLoggedIn || !client?.id) return;
+    portalAdmin({ action: 'me', client_id: client.id }).then((d) => setPortalRole(d?.role || null));
+  }, [isTeamMember, isClientLoggedIn, client?.id]);
 
   // Auth guard: redirect to login if not authenticated
   useEffect(() => {
@@ -726,6 +735,15 @@ export default function ClientPortal() {
                 </button>
               )}
             </div>
+            {(isTeamMember || isCompanyAdmin) && (
+              <button
+                onClick={() => setActiveTab('equipe')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'equipe' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                <Users size={14} />
+                Acessos
+              </button>
+            )}
             {isTeamMember && (
               <button
                 onClick={() => setActiveTab('admin')}
@@ -764,6 +782,12 @@ export default function ClientPortal() {
               <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/15 border border-violet-500/20">
                 <Shield size={10} className="text-violet-400" />
                 <span className="text-[10px] font-semibold text-violet-300">{profile?.name?.split(' ')[0]}</span>
+              </div>
+            )}
+            {isCompanyAdmin && (
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full border" style={{ background: `hsl(${clientColor} / 0.15)`, borderColor: `hsl(${clientColor} / 0.3)` }}>
+                <Shield size={10} style={{ color: `hsl(${clientColor})` }} />
+                <span className="text-[10px] font-semibold text-white/80">Admin</span>
               </div>
             )}
             {isClientLoggedIn && !isTeamMember && (
@@ -838,6 +862,11 @@ export default function ClientPortal() {
         <button onClick={() => setActiveTab('treinamento')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'treinamento' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'treinamento' ? { borderColor: `hsl(${clientColor})` } : {}}>
           📚 Treinamento
         </button>
+        {(isTeamMember || isCompanyAdmin) && (
+          <button onClick={() => setActiveTab('equipe')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'equipe' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'equipe' ? { borderColor: `hsl(${clientColor})` } : {}}>
+            👥 Acessos
+          </button>
+        )}
         {client.company_name?.toLowerCase().includes('super brasil') && (
           <button onClick={() => setActiveTab('rendimento')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'rendimento' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'rendimento' ? { borderColor: `hsl(${clientColor})` } : {}}>
             🥩 Rendimento
@@ -1041,6 +1070,15 @@ export default function ClientPortal() {
         ) : activeTab === 'treinamento' ? (
           <motion.div key="treinamento" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
             <PortalTraining clientId={client.id} clientColor={clientColor} isTeamMember={isTeamMember} />
+          </motion.div>
+        ) : activeTab === 'equipe' && (isTeamMember || isCompanyAdmin) ? (
+          <motion.div key="equipe" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[800px] mx-auto px-4 sm:px-8 py-8 pb-20">
+            <h2 className="text-xl font-bold text-white mb-1 flex items-center gap-2">
+              <Users size={20} style={{ color: `hsl(${clientColor})` }} />
+              Acessos da {client.company_name}
+            </h2>
+            <p className="text-sm text-white/50 mb-6">Quem da empresa entra no portal e quem é admin.</p>
+            <PortalCompanyAdmin clientId={client.id} clientColor={clientColor} isTeamMember={isTeamMember} />
           </motion.div>
         ) : activeTab === 'admin' && isTeamMember ? (
           <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[800px] mx-auto px-4 sm:px-8 py-8 pb-20">

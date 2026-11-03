@@ -90,6 +90,17 @@ export async function portalAction(body: Record<string, any>): Promise<any> {
   }
 }
 
+/** Admin da empresa no portal (/api/portal-admin): papel, logins e convite de admin. Erro vem em { error }. */
+export async function portalAdmin(body: Record<string, any>): Promise<any> {
+  try {
+    const { ok, status, data } = await postPortal('portal-admin', body);
+    if (!ok) return { error: data?.error || `HTTP ${status}` };
+    return data;
+  } catch (error: any) {
+    return { error: error.message || 'Network error' };
+  }
+}
+
 /** Agenda do portal (/api/portal-recordings) — mesmo formato de retorno do invokeVpsFunction. */
 export async function portalRecordings(body: Record<string, any>): Promise<{ data: any; error: { message: string } | null }> {
   try {

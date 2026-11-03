@@ -18,7 +18,7 @@ export interface Flow {
   client_name?: string | null;
   name: string;
   active: boolean;
-  trigger: { type: 'comment_keyword' | 'dm_keyword'; keywords: string[]; post_ids: string[] };
+  trigger: { type: 'comment_keyword' | 'dm_keyword'; keywords: string[]; post_ids: string[]; followers_only?: boolean; follow_message?: string | null };
   public_reply: string | null;
   steps: FlowStep[];
   runs?: number;
@@ -36,6 +36,8 @@ export interface DmMessage {
 }
 
 export const FIELD_LABELS: Record<string, string> = { nome: 'Nome', telefone: 'Telefone/WhatsApp', email: 'E-mail', texto: 'Texto livre' };
+
+export const FOLLOW_DEFAULT = 'Oi, {primeiro_nome}! 😊 Esse presente é só para quem segue a gente. Segue o perfil e me responde JÁ SIGO aqui que eu te mando na hora 💛';
 
 export const newStepId = () => `s${Math.random().toString(36).slice(2, 8)}`;
 

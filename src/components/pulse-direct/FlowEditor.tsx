@@ -4,7 +4,7 @@
 // Ao lado, o celular com a prévia do direct do Instagram.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowLeft, ChevronDown, ChevronUp, Hand, Loader2, MessageSquare, MessageSquareReply, Plus, Save, Tag, Trash2, Workflow } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronUp, Hand, Heart, Loader2, MessageSquare, MessageSquareReply, Plus, Save, Tag, Trash2, Workflow } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import InstagramPreview from './InstagramPreview';
 import ButtonEditor from './ButtonEditor';
-import { FIELD_LABELS, newStepId, type Flow, type FlowStep } from './types';
+import { FIELD_LABELS, FOLLOW_DEFAULT, newStepId, type Flow, type FlowStep } from './types';
 
 interface Post { id: string; permalink: string; caption: string; thumb: string | null }
 const NONE = '__nenhuma__';
@@ -150,6 +150,16 @@ export default function FlowEditor({ clientId, accountName, initial, onSaved, on
                     </div>
                   )}
                 </Section>
+                <div className="space-y-2 rounded-lg border p-3">
+                  <label className="flex items-center gap-2 text-sm font-semibold">
+                    <Switch checked={!!flow.trigger.followers_only} onCheckedChange={(v) => setFlow({ ...flow, trigger: { ...flow.trigger, followers_only: v, follow_message: flow.trigger.follow_message || FOLLOW_DEFAULT } })} />
+                    <Heart size={14} className="text-pink-500" /> Só para seguidores
+                  </label>
+                  <p className="text-xs text-muted-foreground">Ligado: quem comenta recebe primeiro um pedido para seguir o perfil. O link ou presente só vai quando a pessoa responde "JÁ SIGO" (ou toca no botão "Já sigo ✅").</p>
+                  {flow.trigger.followers_only && (
+                    <Textarea rows={3} value={flow.trigger.follow_message ?? FOLLOW_DEFAULT} onChange={(e) => setFlow({ ...flow, trigger: { ...flow.trigger, follow_message: e.target.value } })} placeholder={FOLLOW_DEFAULT} aria-label="Mensagem pedindo para seguir" />
+                  )}
+                </div>
                 <Section title="Resposta no comentário" help="Aparece embaixo do comentário, para a pessoa saber que recebeu no direct. Opcional.">
                   <Input value={flow.public_reply || ''} onChange={(e) => setFlow({ ...flow, public_reply: e.target.value })} placeholder="Te mandei no direct! 💌" />
                 </Section>

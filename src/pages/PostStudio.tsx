@@ -57,6 +57,8 @@ export default function PostStudio() {
   const [firstComment, setFirstComment] = useState('');
   const [collab, setCollab] = useState('');
   const [track, setTrack] = useState<StoryTrack | null>(null);
+  // formato que o Instagram recusa (story > 60 s, reels < 3 s): não deixa publicar
+  const [mediaBlocked, setMediaBlocked] = useState(false);
   const [storyLink, setStoryLink] = useState('');
   const [storyLinkText, setStoryLinkText] = useState('Saiba mais');
   const [scheduledAt, setScheduledAt] = useState('');
@@ -471,7 +473,7 @@ export default function PostStudio() {
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">3. Legenda, link e horário</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <MediaFitNotes urls={selectedUrls} publishType={publishType} />
+                <MediaFitNotes urls={selectedUrls} publishType={publishType} onBlock={setMediaBlocked} />
                 {publishType === 'stories' ? (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
@@ -515,10 +517,10 @@ export default function PostStudio() {
                     <Input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)} />
                   </div>
                   <div className="flex items-end gap-2">
-                    <Button className="flex-1" onClick={() => submit(false)} disabled={saving}>
+                    <Button className="flex-1" onClick={() => submit(false)} disabled={saving || mediaBlocked}>
                       {saving ? <Loader2 size={14} className="mr-1 animate-spin" /> : <CalendarClock size={14} className="mr-1" />} {t('Agendar', 'Schedule Post')}
                     </Button>
-                    <Button variant="secondary" onClick={() => submit(true)} disabled={saving}>
+                    <Button variant="secondary" onClick={() => submit(true)} disabled={saving || mediaBlocked}>
                       <Zap size={14} className="mr-1" /> {t('Publicar agora', 'Publish Now')}
                     </Button>
                   </div>

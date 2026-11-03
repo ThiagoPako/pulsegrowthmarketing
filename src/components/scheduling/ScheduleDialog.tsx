@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, CalendarCheck2, CalendarClock, Check, Copy, Facebook, Instagram, Linkedin, Loader2, Music2, Repeat2, Sparkles, Trash2, Youtube } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, Zap, CalendarCheck2, CalendarClock, Check, Copy, Facebook, Instagram, Linkedin, Loader2, Music2, Repeat2, Sparkles, Trash2, Youtube } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import MediaFitNotes from './MediaFitNotes';
 import StoryTrackField, { type StoryTrack } from './StoryTrackField';
 import {
-  addDaysKey, brtToIso, formatDayLabel, suggestFormat, todayKey, weekdayIndex,
+  addDaysKey, brtParts, brtToIso, formatDayLabel, suggestFormat, todayKey, weekdayIndex,
   NETWORK_LABELS, NETWORK_MAX,
   type Network, type PublishFormat, type PublishTarget, type SchedulingAccount, type SchedulingItem, type StoryLinkDefaults,
 } from '@/lib/postingSchedule';
@@ -143,6 +143,10 @@ export default function ScheduleDialog({
   // ordem do carrossel (usuário, 02/11/2026: "possível postar carrossel e organizar a ordem certinha")
   const [order, setOrder] = useState<string[]>([]);
   const [track, setTrack] = useState<StoryTrack | null>(null);
+  // formato que o Instagram recusa (story > 60 s, reels < 3 s): trava o agendamento automático
+  const [mediaBlocked, setMediaBlocked] = useState(false);
+  // "Postar agora" (usuário, 02/11/2026): põe o horário de agora e salva; o robô publica em até 15 s
+  const [postNowPending, setPostNowPending] = useState(false);
   const [repeat, setRepeat] = useState<RepeatDraft>(defaultRepeat(''));
   const [scope, setScope] = useState<Scope>('one');
   const [saving, setSaving] = useState(false);
@@ -326,6 +330,26 @@ export default function ScheduleDialog({
     && networks.join() === initial.networks.join() && !captionsTouched
     && firstComment === (item.post?.first_comment || '') && collab === (item.post?.collaborators ? item.post.collaborators.split(',').map((u) => `@${u}`).join(', ') : '')
     && mediaUrl === initial.mediaUrl && order.join() === initial.order.join() && (track?.url || '') === (initial.track?.url || '') && !repeatOn;
+
+  useEffect(() => {
+    if (!postNowPending) return;
+    setPostNowPending(false);
+    save(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postNowPending, date, time]);
+
+  const askPostNow = () => setConfirm({
+    title: 'Postar agora?',
+    description: 'Sai em menos de 1 minuto, nas redes marcadas.',
+    confirmLabel: 'Postar agora',
+    onConfirm: () => {
+      const now = brtParts(Date.now());
+      if (!now) return;
+      setDate(now.date);
+      setTime(now.time);
+      setPostNowPending(true);
+    },
+  });
 
   const save = async (allowPast = false) => {
     const iso = brtToIso(date, time);
@@ -731,7 +755,7 @@ export default function ScheduleDialog({
               )
             )}
             {postsAlone && !readOnly && !isSeriesItem && (
-              <MediaFitNotes urls={format === 'carousel' ? order : [multiImage ? order[0] : mediaUrl.trim()].filter(Boolean)} publishType={format} />
+              <MediaFitNotes urls={format === 'carousel' ? order : [multiImage ? order[0] : mediaUrl.trim()].filter(Boolean)} publishType={format} onBlock={setMediaBlocked} />
             )}
           </div>
 
@@ -753,8 +777,13 @@ export default function ScheduleDialog({
                 </Button>
               )}
               <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={saving}>Fechar</Button>
+              {!readOnly && postsAlone && mode === 'auto' && !repeatOn && !isSeriesItem && (
+                <Button type="button" variant="secondary" size="sm" onClick={askPostNow} disabled={saving || mediaBlocked} className="gap-1.5">
+                  <Zap size={14} /> Postar agora
+                </Button>
+              )}
               {!readOnly && (
-                <Button type="button" size="sm" onClick={() => save(false)} disabled={saving || !date || !time} className="gap-1.5">
+                <Button type="button" size="sm" onClick={() => save(false)} disabled={saving || !date || !time || (postsAlone && mediaBlocked)} className="gap-1.5">
                   {saving ? <Loader2 size={14} className="animate-spin" /> : repeatOn ? <Repeat2 size={14} /> : <CalendarClock size={14} />}
                   {saveLabel}
                 </Button>

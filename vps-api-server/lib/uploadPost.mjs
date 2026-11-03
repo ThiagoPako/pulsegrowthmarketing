@@ -191,7 +191,7 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     if (!/^[A-Za-z0-9_-]{20,40}$/.test(String(token || ''))) throw Object.assign(new Error('Link não encontrado'), { status: 404 });
     await ensureSchema();
     const { rows: [l] } = await pool.query(
-      `SELECT l.*, c.company_name, c.logo_url FROM client_connect_links l JOIN clients c ON c.id = l.client_id WHERE l.token = $1`, [token]
+      `SELECT l.*, c.company_name, c.logo_url, c.status AS client_status FROM client_connect_links l JOIN clients c ON c.id = l.client_id WHERE l.token = $1`, [token]
     );
     if (!l) throw Object.assign(new Error('Link não encontrado'), { status: 404 });
     if (new Date(l.expires_at) < new Date()) throw Object.assign(new Error('Este link venceu. Peça um novo para a equipe da Pulse.'), { status: 410 });
@@ -207,6 +207,8 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     );
     return {
       client: { name: String(l.company_name || '').trim(), logo: l.logo_url || null },
+      // cliente só de evento (storymaker, 03/11/2026): a página explica que é para os stories do evento
+      kind: l.client_status === 'evento' ? 'evento' : 'cliente',
       // primeiro as do plano; depois as outras, apagadas na página, com convite para ampliar o plano (usuário, 02/11/2026)
       networks: [...l.networks, ...UP_PLATFORMS.filter((p) => !l.networks.includes(p))].map((p) => {
         const acc = rows.find((x) => x.platform === p);

@@ -3,6 +3,7 @@ import { Toaster as Sonner, Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { loginReturnPath } from "@/lib/loginReturn";
 import { AppProvider, useApp } from "@/contexts/AppContext";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { CityProvider } from "@/contexts/CityContext";
@@ -110,6 +111,7 @@ const ApproveContent = lazy(() => import("@/pages/ApproveContent"));
 const ReviewApproval = lazy(() => import("@/pages/ReviewApproval"));
 const ConnectNetworks = lazy(() => import("@/pages/ConnectNetworks"));
 const RedesPulse = lazy(() => import("@/pages/RedesPulse"));
+const StoryMaker = lazy(() => import("@/pages/StoryMaker"));
 const RecordingControl = lazy(() => import("@/pages/RecordingControl"));
 const EditingControl = lazy(() => import("@/pages/EditingControl"));
 const AvulsoApproval = lazy(() => import("@/pages/AvulsoApproval"));
@@ -292,7 +294,7 @@ function AppRoutes() {
         <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />
         <Route path="/termos-de-uso" element={<TermsOfUse />} />
         <Route path="/exclusao-de-dados" element={<DataDeletion />} />
-        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+        <Route path="/login" element={user ? <Navigate to={loginReturnPath(window.location.search) || "/dashboard"} replace /> : <Login />} />
         <Route path="/gestao/login" element={<GestaoLogin />} />
         <Route path="/gestao" element={<RequireSocioGestor><GestaoDashboard /></RequireSocioGestor>} />
         <Route path="/gestao/custos" element={<RequireSocioGestor><GestaoCustos /></RequireSocioGestor>} />
@@ -420,6 +422,7 @@ function AppRoutes() {
         <Route path="/avaliacao/:token" element={<Suspense fallback={<PageLoader />}><ReviewApproval /></Suspense>} />
         <Route path="/conectar/:token" element={<Suspense fallback={<PageLoader />}><ConnectNetworks /></Suspense>} />
         <Route path="/redes" element={<Suspense fallback={<PageLoader />}><RedesPulse /></Suspense>} />
+        <Route path="/story/:token" element={<Suspense fallback={<PageLoader />}><StoryMaker /></Suspense>} />
         <Route path="/avulso/:taskId" element={<AvulsoApproval />} />
         <Route path="/video-avulso/:taskId" element={<AvulsoApproval />} />
         <Route path="/feedback" element={<ClientFeedback />} />

@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion, type Transition } from 'framer-motion';
-import { ArrowUpRight, AtSign, Check, Facebook, Instagram, Linkedin, Loader2, Lock, MapPin, MessageCircle, Music2, Pin, ShieldCheck, Twitter, Youtube } from 'lucide-react';
+import { ArrowUpRight, AtSign, Check, EyeOff, KeyRound, Unplug, Facebook, Instagram, Linkedin, Loader2, Lock, MapPin, MessageCircle, Music2, Pin, ShieldCheck, Twitter, Youtube } from 'lucide-react';
 import { pulseWhatsapp } from '@/lib/pulseContato';
 import logo from '@/assets/pulse-logo-branco.png';
 
@@ -25,7 +25,7 @@ const NETWORKS: Record<string, { label: string; bg: string; glow: string; Icon: 
   pinterest: { label: 'Pinterest', bg: '#E60023', glow: '#E60023', Icon: Pin, help: 'A conta da empresa' },
 };
 
-interface Data { client: { name: string; logo: string | null }; networks: { id: string; in_plan?: boolean; connected: boolean; reconnect: boolean; account: string | null }[] }
+interface Data { client: { name: string; logo: string | null }; kind?: 'evento' | 'cliente'; networks: { id: string; in_plan?: boolean; connected: boolean; reconnect: boolean; account: string | null }[] }
 
 function Mark({ data }: { data: Data }) {
   return data.client.logo
@@ -85,7 +85,8 @@ export default function ConnectNetworks() {
 
   // as do plano para conectar; as outras aparecem apagadas, com convite para ampliar o plano (usuário, 02/11/2026)
   const plan = data ? data.networks.filter((n) => n.in_plan !== false && NETWORKS[n.id]) : [];
-  const others = data ? data.networks.filter((n) => n.in_plan === false && NETWORKS[n.id]) : [];
+  // cliente só de evento não vê o convite para ampliar o plano
+  const others = data && data.kind !== 'evento' ? data.networks.filter((n) => n.in_plan === false && NETWORKS[n.id]) : [];
   const total = plan.length;
   const done = plan.filter((n) => n.connected).length;
   const more = data ? `/redes?cliente=${encodeURIComponent(data.client.name)}` : '/redes';
@@ -118,7 +119,11 @@ export default function ConnectNetworks() {
             <motion.div className="mt-8 text-center" initial={{ opacity: 0, y: still ? 0 : 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: still ? 0 : 0.7, delay: still ? 0 : 1.1 }}>
               <p className="text-sm font-medium" style={{ color: '#FFB08C' }}>Bem-vindo à Pulse</p>
               <h1 className="mt-1 text-[1.7rem] font-bold leading-tight">Vamos conectar as redes de {data.client.name}</h1>
-              <p className="mx-auto mt-3 max-w-[22rem] text-sm leading-relaxed text-white/65">Toque em cada rede e entre com o seu login. A gente só publica o que você aprovar, e você desconecta quando quiser.</p>
+              <p className="mx-auto mt-3 max-w-[22rem] text-sm leading-relaxed text-white/65">
+                {data.kind === 'evento'
+                  ? 'É assim que a nossa equipe posta os stories do seu evento em tempo real, direto no seu perfil. Toque na rede e entre com o seu login.'
+                  : 'Toque em cada rede e entre com o seu login. A gente só publica o que você aprovar, e você desconecta quando quiser.'}
+              </p>
             </motion.div>
 
             <AnimatePresence>
@@ -221,6 +226,24 @@ export default function ConnectNetworks() {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* por que é seguro (usuário, 03/11/2026: "que mostre segurança para ele e diga o porquê") */}
+            <section className="mt-9 rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+              <p className="flex items-center gap-2 font-semibold"><ShieldCheck className="h-5 w-5 text-[#7BE0A6]" /> Por que é seguro</p>
+              <ul className="mt-4 space-y-3.5">
+                {[
+                  { Icon: KeyRound, t: 'Sua senha fica com você', d: 'O login é feito na página oficial do Instagram, do Facebook ou da rede escolhida. A Pulse nunca vê nem guarda a sua senha.' },
+                  { Icon: EyeOff, t: 'Só o necessário', d: data.kind === 'evento' ? 'A permissão serve para publicar os stories do evento. Não lemos as suas mensagens nem mexemos no seu perfil.' : 'A permissão serve para publicar e responder pela sua marca. Não mexemos nas configurações do seu perfil.' },
+                  { Icon: Unplug, t: 'Você desconecta quando quiser', d: data.kind === 'evento' ? 'Terminou o evento? A gente desconecta, ou você mesmo tira o acesso nas configurações da rede.' : 'É só pedir para a nossa equipe ou tirar o acesso nas configurações da rede.' },
+                  { Icon: Lock, t: 'Conexão protegida', d: 'Tudo passa por conexão criptografada (o cadeado do navegador), igual à do seu banco.' },
+                ].map(({ Icon, t, d }) => (
+                  <li key={t} className="flex gap-3">
+                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]"><Icon className="h-4 w-4" style={{ color: '#FFB08C' }} /></span>
+                    <div><p className="text-sm font-semibold">{t}</p><p className="text-xs leading-relaxed text-white/55">{d}</p></div>
+                  </li>
+                ))}
+              </ul>
+            </section>
 
             <p className="mt-10 text-center text-xs text-white/35">Agência Pulse · seus dados ficam protegidos e você pode desconectar quando quiser</p>
           </>

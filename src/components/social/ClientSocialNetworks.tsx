@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
+import PlanUpgradeDialog from '@/components/social/PlanUpgradeDialog';
 
 const NETWORKS = [
   { id: 'instagram', label: 'Instagram', Icon: Instagram },
@@ -32,24 +33,36 @@ interface Info {
   name?: string | null;
 }
 
-export default function ClientSocialNetworks({ clientId, whatsapp }: { clientId: string; whatsapp?: string }) {
+export default function ClientSocialNetworks({ clientId, whatsapp, onContractValue }: { clientId: string; whatsapp?: string; onContractValue?: (value: number) => void }) {
   const [info, setInfo] = useState<Info | null>(null);
   const [chosen, setChosen] = useState<string[]>([]);
   const [busy, setBusy] = useState<'link' | 'sync' | 'send' | null>(null);
   const [link, setLink] = useState('');
   const [message, setMessage] = useState('');
   const [phone, setPhone] = useState('');
+  // upgrade do plano (03/11/2026): rede nova marcada num cliente que já tinha redes no plano
+  const [upgrade, setUpgrade] = useState<{ id: string; label: string } | null>(null);
+  const [addons, setAddons] = useState<{ id: string; network: string; monthly_value: number; charge: string; start_date: string; first_amount: number | null; first_days: number | null }[]>([]);
 
   const load = async () => {
     const { data, error } = await invokeVpsFunction(`upload-post/clients/${clientId}`, { method: 'GET' });
     if (error || data?.error) return;
     setInfo(data as Info);
+    invokeVpsFunction(`clients/${clientId}/plan-addons`, { method: 'GET' }).then(({ data: a }) => setAddons(a?.addons || []));
     setChosen((data as Info).networks?.length ? (data as Info).networks : ['instagram', 'facebook']);
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setLink(''); load(); }, [clientId]);
 
-  const toggle = (id: string) => setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
+  const toggle = (id: string) => {
+    const planned = info?.networks || [];
+    // rede nova num plano que já existe = upgrade: abre a cobrança (valor mensal + proporcional)
+    if (!chosen.includes(id) && planned.length > 0 && !planned.includes(id)) {
+      setUpgrade({ id, label: NETWORKS.find((n) => n.id === id)?.label || id });
+      return;
+    }
+    setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
+  };
 
   const makeLink = async () => {
     setBusy('link');
@@ -131,6 +144,19 @@ export default function ClientSocialNetworks({ clientId, whatsapp }: { clientId:
           );
         })}
       </div>
+      {addons.length > 0 && (
+        <div className="space-y-1 rounded-lg bg-muted/40 px-3 py-2">
+          <p className="text-[11px] font-semibold text-muted-foreground">Upgrades do plano</p>
+          {addons.map((a) => (
+            <p key={a.id} className="text-[11px]">
+              {NETWORKS.find((n) => n.id === a.network)?.label || a.network}: {a.charge === 'cortesia'
+                ? 'sem cobrança'
+                : `+${a.monthly_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês`} desde {a.start_date.split('-').reverse().join('/')}
+              {a.charge !== 'cortesia' && a.first_amount != null && <span className="text-muted-foreground"> · 1ª fatura: {a.first_days} dias ({a.first_amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})</span>}
+            </p>
+          ))}
+        </div>
+      )}
       {info.accounts.length > 0 && (
         <p className="text-[11px] text-muted-foreground">
           Conectadas: {info.accounts.map((a) => `${NETWORKS.find((n) => n.id === a.platform)?.label || a.platform}${a.username ? ` (@${a.username.replace(/^@/, '')})` : ''}${a.status !== 'connected' ? ' · precisa reconectar' : ''}`).join(' · ')}
@@ -166,6 +192,12 @@ export default function ClientSocialNetworks({ clientId, whatsapp }: { clientId:
           {digits.length < 10 && <p className="text-[11px] text-muted-foreground">Coloque o WhatsApp do cliente com DDD para enviar.</p>}
         </div>
       )}
+      <PlanUpgradeDialog
+        clientId={clientId}
+        network={upgrade}
+        onClose={() => setUpgrade(null)}
+        onDone={(v) => { if (upgrade) setChosen((c) => [...new Set([...c, upgrade.id])]); if (v != null) onContractValue?.(v); setUpgrade(null); load(); }}
+      />
     </div>
   );
 }

@@ -10,13 +10,17 @@ import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 // Facebook, fazer o login dele e setar manualmente os clientes". Cada login vira um perfil na Upload-Post; as páginas
 // dele aparecem aqui e cada uma é ligada a um cliente. O post do Facebook do cliente sai por esse login, na página ligada.
 
-interface TeamPage { id: string; name: string; client_id: string | null; client_name: string | null }
+interface TeamPage { id: string; name: string; picture?: string | null; client_id: string | null; client_name: string | null }
 interface TeamFacebook { id: string; name: string; connected: boolean; reauth: boolean; account: string | null; pages: TeamPage[] }
 
 export default function TeamFacebookPanel({ clients }: { clients: { id: string; name: string }[] }) {
   const [teams, setTeams] = useState<TeamFacebook[] | null>(null);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  // muitas páginas por login: busca pelo nome da página ou do cliente
+  const [pageQuery, setPageQuery] = useState('');
+  const norm = (v: string) => v.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const matches = (pg: TeamPage) => !pageQuery.trim() || norm(`${pg.name} ${pg.client_name || ''}`).includes(norm(pageQuery.trim()));
 
   const load = useCallback(async () => {
     const { data, error } = await invokeVpsFunction('upload-post/team-facebook', { method: 'GET' });
@@ -79,6 +83,10 @@ export default function TeamFacebookPanel({ clients }: { clients: { id: string; 
           </Button>
         </div>
 
+        {teams && teams.some((t) => t.pages.length > 6) && (
+          <Input value={pageQuery} onChange={(e) => setPageQuery(e.target.value)} placeholder="Buscar página ou cliente" className="h-9" />
+        )}
+
         {teams === null ? (
           <div className="flex justify-center py-6"><Loader2 size={18} className="animate-spin text-muted-foreground" /></div>
         ) : teams.length === 0 ? (
@@ -105,8 +113,9 @@ export default function TeamFacebookPanel({ clients }: { clients: { id: string; 
                     <p className="px-3 py-3 text-xs text-muted-foreground">Nenhuma página liberada. Toque em "Entrar de novo" e marque as páginas dos clientes na tela do Facebook.</p>
                   ) : (
                     <ul className="divide-y divide-border/60">
-                      {t.pages.map((pg) => (
+                      {t.pages.filter(matches).map((pg) => (
                         <li key={pg.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+                          {pg.picture ? <img src={pg.picture} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" /> : <Facebook size={16} className="shrink-0 text-[#1877F2]" />}
                           <span className="min-w-0 flex-1 truncate text-sm">{pg.name}</span>
                           <select
                             value={pg.client_id || ''}

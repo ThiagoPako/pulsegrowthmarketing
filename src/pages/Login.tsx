@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { loginReturnPath } from '@/lib/loginReturn';
 import { useAuth } from '@/hooks/useAuth';
 import pulseLogo from '@/assets/pulse_logo.png';
 import { Button } from '@/components/ui/button';
@@ -29,7 +30,7 @@ export default function Login() {
     if (error) {
       toast.error(error);
     } else {
-      navigate('/dashboard');
+      navigate(loginReturnPath(window.location.search) || '/dashboard');
     }
   };
 

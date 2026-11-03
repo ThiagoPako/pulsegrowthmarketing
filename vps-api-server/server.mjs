@@ -63,6 +63,7 @@ import { createSocialHub, registerSocialHubRoutes } from './lib/socialHub.mjs';
 import { createAutomations, registerAutomationRoutes } from './lib/socialAutomations.mjs';
 import { createFlows, registerFlowRoutes } from './lib/socialFlows.mjs';
 import { registerAgentClientLogoRoutes } from './lib/agentClientLogo.mjs';
+import { createStorymaker, registerStorymakerRoutes } from './lib/storymaker.mjs';
 import { buildProposalRevenueSchedule, stripRevenueMark } from './lib/proposalRevenues.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
@@ -20571,6 +20572,19 @@ const pulseDirect = createFlows({ pool, uploadPost, notifyTeam: notifySocialTeam
 // logo dos clientes pelos agentes (Severino cuida; a Nina faz quando a do Drive não serve), 02/11/2026
 registerAgentClientLogoRoutes(app, { pool, verifyAgent: (req) => agentApi.verifyAgent(req), uploadRoot: UPLOAD_ROOT, appBase: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' });
 registerFlowRoutes(app, { flows: pulseDirect, pool, verifySocialManager: verifySocialOrAgent, scope: socialScope });
+// storymaker de evento: link público para postar story em tempo real (lib/storymaker.mjs, 03/11/2026)
+registerStorymakerRoutes(app, {
+  storymaker: createStorymaker({ pool, prepareScheduledPost, ensureSocialPostsSchema, appBase: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' }),
+  verifySocialManager, scope: socialScope, publicUploadHandler, uploadRoot: UPLOAD_ROOT,
+  // equipe Pulse logada posta sem convite; o nome vai para a auditoria
+  verifyTeamMember: async (req) => {
+    const { user } = await verifyUser(req);
+    if (!(await userHasAnyRole(user, INTERNAL_TEAM_ROLES))) throw Object.assign(new Error('Sem permissão'), { status: 403 });
+    const { rows: [p] } = await pool.query(`SELECT coalesce(nullif(display_name, ''), name) AS name FROM profiles WHERE id::text = $1`, [String(user.id)]).catch(() => ({ rows: [] }));
+    return { id: user.id, name: p?.name || user.email || 'Equipe Pulse' };
+  },
+  publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL || 'https://agenciapulse.tech/uploads',
+});
 registerSocialHubRoutes(app, { flows: pulseDirect, hub: socialHub, uploadPost, pool, verifySocialManager: verifySocialOrAgent, verifyAdmin, scope: socialScope, publicApiUrl: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' });
 
 // ─── Aprovação sem login (/aprovar/<token>): página do vídeo com o jeito do Instagram, aprovar ou pedir ajuste ──

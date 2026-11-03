@@ -67,6 +67,11 @@ export interface DesignTask {
   /** pasta "Referências/<data> <título>" no Drive do cliente, quando o designer arquivou */
   references_drive_link?: string | null;
   references_archived_at?: string | null;
+  /** arte humana × IA (03/11/2026) */
+  made_by?: 'humano' | 'agente' | null;
+  ab_test?: boolean | null;
+  twin_id?: string | null;
+  ab_result?: string | null;
   /** Data e hora de postagem (módulo Agendamentos) */
   posting_at?: string | null;
   clients?: { company_name: string; color: string; logo_url: string | null; whatsapp: string; responsible_person: string; drive_link?: string | null };
@@ -252,7 +257,7 @@ export function useDesignTasks() {
     'auto_approved','time_spent_seconds','timer_running','timer_started_at','version',
     'mockup_url','due_date','position','created_at','updated_at','collaborator_id','checklist',
     'copy_brief','dimensions','materials_link','designed_by','agent_step','agent_heartbeat_at',
-    'references_drive_link','references_archived_at','posting_at'
+    'references_drive_link','references_archived_at','posting_at','made_by','ab_test','twin_id','ab_result'
   ].join(',');
 
   const tasksQuery = useQuery({

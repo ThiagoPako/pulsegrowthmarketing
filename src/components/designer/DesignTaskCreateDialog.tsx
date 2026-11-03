@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useDesignAbSettings } from '@/components/designer/DesignAbControls';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -58,6 +59,10 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
   const [dimensions, setDimensions] = useState<DesignDimensions | null>(dimensionsFromPreset('feed'));
   const [extraFormats, setExtraFormats] = useState<DesignFormatPresetKey[]>([]);
   const [priority, setPriority] = useState('media');
+  // quem faz a arte (03/11/2026): equipe humana + versão da IA para comparar, só humano, só IA ou quem estiver livre
+  const { data: abSettings } = useDesignAbSettings();
+  const [madeBy, setMadeBy] = useState<'ab' | 'humano' | 'agente' | 'livre' | null>(null);
+  const madeByValue = madeBy ?? (abSettings?.enabled ? 'ab' : 'livre');
   const [copyBrief, setCopyBrief] = useState<DesignCopyBrief>({});
   const [description, setDescription] = useState('');
   const [materialsLink, setMaterialsLink] = useState('');
@@ -148,6 +153,8 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
           created_by: user?.id || null,
           kanban_column: 'nova_tarefa',
           position: 0, // Posicionamento inicial seguro no topo
+          made_by: madeByValue === 'ab' || madeByValue === 'humano' ? 'humano' : madeByValue === 'agente' ? 'agente' : null,
+          ab_test: madeByValue === 'ab' && !isUnregistered,
         };
         const { data, error } = await supabase.from('design_tasks').insert(row as any).select('id').single();
         if (error) throw new Error(error.message || 'Erro ao criar a tarefa');
@@ -291,6 +298,26 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
                 onUploadingChange={setUploadingRefs}
               />
             </div>
+          </div>
+
+          {/* Quem faz a arte */}
+          <div className={`${section} space-y-2`}>
+            <Label className="text-xs">Quem faz a arte</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {([
+                ...(abSettings?.enabled ? [['ab', 'Equipe humana + versão da IA', 'A designer faz a dela e a IA faz outra. O cliente escolhe uma.']] : []),
+                ['humano', 'Só equipe humana', 'Os agentes não pegam este card.'],
+                ['agente', 'Só IA', 'Vai para a fila dos agentes de design.'],
+                ['livre', 'Quem estiver livre', 'Como antes: humano ou agente.'],
+              ] as const).map(([value, label, hint]) => (
+                <button key={value} type="button" onClick={() => setMadeBy(value as 'ab' | 'humano' | 'agente' | 'livre')} aria-pressed={madeByValue === value}
+                  className={`rounded-xl border p-2.5 text-left transition-colors ${madeByValue === value ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'}`}>
+                  <p className="text-sm font-medium">{label}</p>
+                  <p className="text-[11px] text-muted-foreground">{hint}</p>
+                </button>
+              ))}
+            </div>
+            {madeByValue === 'ab' && isUnregistered && <p className="text-[11px] text-amber-600">Cliente sem cadastro: a versão da IA só é criada para cliente cadastrado.</p>}
           </div>
 
           {/* Prazo, prioridade, título */}

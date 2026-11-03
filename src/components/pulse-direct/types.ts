@@ -47,7 +47,7 @@ export function flowTemplates(): { id: string; label: string; flow: Flow }[] {
   const d = newStepId();
   return [
     {
-      id: 'link', label: 'Comentou → manda o link',
+      id: 'link', label: 'Comentou, recebe o link',
       flow: {
         name: 'Comentou EU QUERO', active: true, trigger: { type: 'comment_keyword', keywords: ['EU QUERO', 'QUERO'], post_ids: [] },
         public_reply: 'Te mandei no direct! 💌',

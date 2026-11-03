@@ -161,6 +161,7 @@ export function ensureWhatsAppSchema(pool) {
       await pool.query(`CREATE TABLE IF NOT EXISTS wa_engine (id INTEGER PRIMARY KEY, seen_at TIMESTAMPTZ, version TEXT)`);
       // pedido de reler os grupos agora (botão Atualizar grupos, 03/11/2026)
       await pool.query(`ALTER TABLE wa_engine ADD COLUMN IF NOT EXISTS groups_refresh_at TIMESTAMPTZ`);
+      await pool.query(`ALTER TABLE wa_connections ADD COLUMN IF NOT EXISTS groups_error TEXT, ADD COLUMN IF NOT EXISTS groups_synced_at TIMESTAMPTZ, ADD COLUMN IF NOT EXISTS groups_tried_at TIMESTAMPTZ`).catch(() => {});
       // grupos em que cada número conectado está (para mandar no grupo do cliente pelo número que está nele)
       await pool.query(`
         CREATE TABLE IF NOT EXISTS wa_groups (

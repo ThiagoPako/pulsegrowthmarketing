@@ -574,6 +574,15 @@ class Connection {
   async syncGroups() {
     if (!this.sock || this.state !== 'conectada') return;
     this.groupsSyncedAt = Date.now();
+    // o erro da releitura fica gravado (03/11/2026: a lista parou de atualizar sem ninguém ver o motivo)
+    try { await this.syncGroupsOnce(); await pool.query(`UPDATE wa_connections SET groups_error = NULL, groups_synced_at = now() WHERE id = $1`, [this.id]).catch(() => {}); }
+    catch (error) {
+      await pool.query(`UPDATE wa_connections SET groups_error = $2, groups_tried_at = now() WHERE id = $1`, [this.id, String(error?.message || error).slice(0, 300)]).catch(() => {});
+      throw error;
+    }
+  }
+
+  async syncGroupsOnce() {
     const all = await this.sock.groupFetchAllParticipating();
     const groups = Object.values(all || {});
     this.knownGroups = new Set(groups.map((g) => g.id));

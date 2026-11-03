@@ -42,6 +42,7 @@ import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BRIEFING_FIELD_LABELS, formatBriefingValue, getBriefingFieldLabel } from '@/lib/briefingLabels';
 import ClientTag from '@/components/ClientTag';
+import { DriveLinkField, FormSection, SectionNav, type SectionMeta } from '@/components/clients/ClientFormKit';
 
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
@@ -142,6 +143,9 @@ export default function Clients() {
   const [loadingEditData, setLoadingEditData] = useState(false);
   const editLoadRef = useRef<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  // edição em seções com menu lateral (03/11/2026)
+  const editScrollRef = useRef<HTMLDivElement>(null);
+  const [activeSection, setActiveSection] = useState('identidade');
   const [preferredShift, setPreferredShift] = useState<PreferredShift>('ambos');
   const [sendWaOpen, setSendWaOpen] = useState(false);
   const [sendWaClient, setSendWaClient] = useState<Client | null>(null);
@@ -186,7 +190,8 @@ export default function Clients() {
   const [pagePicker, setPagePicker] = useState<{ clientId: string; pages: FacebookPageOption[]; selectionKey?: string; manualToken?: string } | null>(null);
   const [pagePickerSaving, setPagePickerSaving] = useState<string | null>(null);
   /** A etapa de conexão de redes sociais é sempre exibida — sem ela o botão de conectar ficava invisível. */
-  const hasMetaApi = true;
+  // redes sociais pela Upload-Post (03/11/2026): sem a etapa de conexão direta da Meta
+  const hasMetaApi = false;
 
   // ============ Validação de coerência das metas x plano ============
   // Regras:
@@ -1036,7 +1041,8 @@ export default function Clients() {
 
   // ========== STEP RENDERERS ==========
 
-  const renderStep0 = () => (
+  // ── Partes do cadastro (redesenho de 03/11/2026): cada uma vira uma seção na edição e uma etapa no cadastro novo ──
+  const renderIdentity = () => (
     <div className="space-y-4">
       {/* Logo upload */}
       <div className="space-y-2">
@@ -1154,94 +1160,6 @@ export default function Clients() {
         />
         <p className="text-[10px] text-muted-foreground">Para mudar a cidade, use o botão Transferir Cidade no card do cliente.</p>
       </div>
-      <div className="space-y-1">
-        <Label>WhatsApp do Cliente *</Label>
-        <Input value={form.whatsapp} onChange={e => setForm({ ...form, whatsapp: e.target.value })} placeholder="5562999999999" />
-        <p className="text-[10px] text-muted-foreground">Formato: 55 + DDD + número (ex: 5562999999999)</p>
-      </div>
-      <div className="space-y-1">
-        <Label>Grupo WhatsApp (opcional)</Label>
-        <WhatsAppGroupPicker value={form.whatsappGroup || ''} onChange={v => setForm({ ...form, whatsappGroup: v })} />
-      </div>
-
-      {/* redes sociais do cliente (02/11/2026): escolher as redes e gerar o link de login (Upload-Post) */}
-      {editing?.id && <ClientSocialNetworks clientId={editing.id} whatsapp={form.whatsapp} onContractValue={setContractValue} />}
-
-      {/* financeiro do cliente (02/11/2026): quem recebe as cobranças e quem recebe os recibos */}
-      <div className="p-4 rounded-xl border space-y-4">
-        <div>
-          <p className="text-sm font-semibold">Financeiro do cliente</p>
-          <p className="text-[11px] text-muted-foreground">Para quem vão as cobranças e os recibos. Empresa com financeiro próprio: desmarque e cadastre o número dele.</p>
-        </div>
-        {([
-          ['billing', 'Quem recebe as cobranças', 'Cobranças, lembretes e o aviso de vencimento'],
-          ['receipt', 'Quem recebe os recibos', 'O obrigado com o recibo, assim que o pagamento cai'],
-        ] as const).map(([kind, title, hint]) => {
-          const same = kind === 'billing' ? form.billingSameAsOwner !== false : form.receiptSameAsOwner !== false;
-          const nameKey = kind === 'billing' ? 'billingContactName' : 'receiptContactName';
-          const phoneKey = kind === 'billing' ? 'billingWhatsapp' : 'receiptWhatsapp';
-          const sameKey = kind === 'billing' ? 'billingSameAsOwner' : 'receiptSameAsOwner';
-          return (
-            <div key={kind} className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium">{title}</p>
-                  <p className="text-[10px] text-muted-foreground">{hint}</p>
-                </div>
-                <label className="flex items-center gap-2 text-xs">
-                  <Switch checked={same} onCheckedChange={v => setForm({ ...form, [sameKey]: v })} />
-                  O mesmo do responsável
-                </label>
-              </div>
-              {!same && (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Input value={(form[nameKey] as string) || ''} onChange={e => setForm({ ...form, [nameKey]: e.target.value })} placeholder="Nome (ex.: Ana do financeiro)" />
-                  <Input value={(form[phoneKey] as string) || ''} onChange={e => setForm({ ...form, [phoneKey]: e.target.value })} placeholder="WhatsApp 5562999999999" />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Cliente Star toggle - moved here from Step 2 */}
-      <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-3">
-        <div className="flex items-center gap-3">
-          <Switch
-            checked={form.fullShiftRecording || false}
-            onCheckedChange={v => {
-              setPreferredShift(v ? ((form.preferredShift || 'manha') === 'tarde' ? 'turnoB' : 'turnoA') : 'ambos');
-              setForm(prev => ({
-                ...prev,
-                fullShiftRecording: v,
-                preferredShift: v ? (prev.preferredShift || 'manha') : prev.preferredShift,
-                fixedTime: v ? ((prev.preferredShift || 'manha') === 'tarde' ? settings.shiftBStart : settings.shiftAStart) : prev.fixedTime,
-              }));
-            }}
-          />
-          <div>
-            <Label className="font-medium flex items-center gap-1.5"><Star size={14} className="text-amber-500" /> Cliente Star</Label>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Reserva o turno inteiro (manhã ou tarde) para este cliente.
-            </p>
-          </div>
-        </div>
-        {form.fullShiftRecording && (
-          <div className="space-y-1">
-            <Label>Turno Preferido</Label>
-            <Select value={form.preferredShift || 'manha'} onValueChange={v => {
-              setPreferredShift(v === 'tarde' ? 'turnoB' : 'turnoA');
-              setForm(prev => ({ ...prev, preferredShift: v as 'manha' | 'tarde', fixedTime: v === 'tarde' ? settings.shiftBStart : settings.shiftAStart }));
-            }}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="manha">☀️ Manhã ({settings.shiftAStart} – {settings.shiftAEnd})</SelectItem>
-                <SelectItem value="tarde">🌙 Tarde ({settings.shiftBStart} – {settings.shiftBEnd})</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-      </div>
       <div className="space-y-2">
         <Label>Cor de Identificação</Label>
         <div className="flex gap-2 flex-wrap">
@@ -1311,6 +1229,106 @@ export default function Clients() {
         );
       })()}
 
+    </div>
+  );
+
+  const renderContact = () => (
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <Label>WhatsApp do Cliente *</Label>
+        <Input value={form.whatsapp} onChange={e => setForm({ ...form, whatsapp: e.target.value })} placeholder="5562999999999" />
+        <p className="text-[10px] text-muted-foreground">Formato: 55 + DDD + número (ex: 5562999999999)</p>
+      </div>
+      <div className="space-y-1">
+        <Label>Grupo WhatsApp (opcional)</Label>
+        <WhatsAppGroupPicker value={form.whatsappGroup || ''} onChange={v => setForm({ ...form, whatsappGroup: v })} />
+      </div>
+
+      {/* financeiro do cliente (02/11/2026): quem recebe as cobranças e quem recebe os recibos */}
+      <div className="p-4 rounded-xl border space-y-4">
+        <div>
+          <p className="text-sm font-semibold">Financeiro do cliente</p>
+          <p className="text-[11px] text-muted-foreground">Para quem vão as cobranças e os recibos. Empresa com financeiro próprio: desmarque e cadastre o número dele.</p>
+        </div>
+        {([
+          ['billing', 'Quem recebe as cobranças', 'Cobranças, lembretes e o aviso de vencimento'],
+          ['receipt', 'Quem recebe os recibos', 'O obrigado com o recibo, assim que o pagamento cai'],
+        ] as const).map(([kind, title, hint]) => {
+          const same = kind === 'billing' ? form.billingSameAsOwner !== false : form.receiptSameAsOwner !== false;
+          const nameKey = kind === 'billing' ? 'billingContactName' : 'receiptContactName';
+          const phoneKey = kind === 'billing' ? 'billingWhatsapp' : 'receiptWhatsapp';
+          const sameKey = kind === 'billing' ? 'billingSameAsOwner' : 'receiptSameAsOwner';
+          return (
+            <div key={kind} className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">{title}</p>
+                  <p className="text-[10px] text-muted-foreground">{hint}</p>
+                </div>
+                <label className="flex items-center gap-2 text-xs">
+                  <Switch checked={same} onCheckedChange={v => setForm({ ...form, [sameKey]: v })} />
+                  O mesmo do responsável
+                </label>
+              </div>
+              {!same && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input value={(form[nameKey] as string) || ''} onChange={e => setForm({ ...form, [nameKey]: e.target.value })} placeholder="Nome (ex.: Ana do financeiro)" />
+                  <Input value={(form[phoneKey] as string) || ''} onChange={e => setForm({ ...form, [phoneKey]: e.target.value })} placeholder="WhatsApp 5562999999999" />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+    </div>
+  );
+
+  const renderStar = () => (
+    <>
+      {/* Cliente Star toggle - moved here from Step 2 */}
+      <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-3">
+        <div className="flex items-center gap-3">
+          <Switch
+            checked={form.fullShiftRecording || false}
+            onCheckedChange={v => {
+              setPreferredShift(v ? ((form.preferredShift || 'manha') === 'tarde' ? 'turnoB' : 'turnoA') : 'ambos');
+              setForm(prev => ({
+                ...prev,
+                fullShiftRecording: v,
+                preferredShift: v ? (prev.preferredShift || 'manha') : prev.preferredShift,
+                fixedTime: v ? ((prev.preferredShift || 'manha') === 'tarde' ? settings.shiftBStart : settings.shiftAStart) : prev.fixedTime,
+              }));
+            }}
+          />
+          <div>
+            <Label className="font-medium flex items-center gap-1.5"><Star size={14} className="text-amber-500" /> Cliente Star</Label>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Reserva o turno inteiro (manhã ou tarde) para este cliente.
+            </p>
+          </div>
+        </div>
+        {form.fullShiftRecording && (
+          <div className="space-y-1">
+            <Label>Turno Preferido</Label>
+            <Select value={form.preferredShift || 'manha'} onValueChange={v => {
+              setPreferredShift(v === 'tarde' ? 'turnoB' : 'turnoA');
+              setForm(prev => ({ ...prev, preferredShift: v as 'manha' | 'tarde', fixedTime: v === 'tarde' ? settings.shiftBStart : settings.shiftAStart }));
+            }}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="manha">☀️ Manhã ({settings.shiftAStart} – {settings.shiftAEnd})</SelectItem>
+                <SelectItem value="tarde">🌙 Tarde ({settings.shiftBStart} – {settings.shiftBEnd})</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  const renderEditorial = () => (
+    <>
       {/* Editorial / Linha Editorial */}
       <div className="space-y-2">
         <Label className="flex items-center gap-1.5">
@@ -1326,12 +1344,11 @@ export default function Clients() {
           A linha editorial será utilizada como referência na criação automática de roteiros para este cliente.
         </p>
       </div>
+    </>
+  );
 
-      {/* Access & Drive links */}
-      <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
-        <p className="text-sm font-semibold flex items-center gap-2">
-          <KeyRound size={16} className="text-primary" /> Acessos e Links
-        </p>
+  const renderAccess = () => (
+    <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label>Login</Label>
@@ -1360,32 +1377,6 @@ export default function Clients() {
             )}
           </div>
         </div>
-        <div className="space-y-1">
-          <Label className="flex items-center gap-1">
-            <FolderOpen size={12} /> Pasta do Drive do cliente (geral)
-            {(!editing || !(editing.driveLink || '').trim()) && <span className="text-destructive">*</span>}
-          </Label>
-          <Input value={form.driveLink || ''} onChange={e => setForm({ ...form, driveLink: e.target.value })} placeholder="https://drive.google.com/drive/folders/..." />
-          <p className="text-[11px] text-muted-foreground">
-            {pulsePlus
-              ? 'Obrigatória. A equipe de design e os agentes buscam nesta pasta a identidade visual, os logos e as fotos do cliente.'
-              : 'Obrigatória. A equipe de design busca nesta pasta a identidade visual, os logos e as fotos do cliente.'}
-            Use a pasta principal do cliente no Drive da Pulse.
-          </p>
-        </div>
-        <div className="space-y-1">
-          <Label className="flex items-center gap-1"><FolderOpen size={12} /> Drive de Fotos</Label>
-          <Input value={form.driveFotos || ''} onChange={e => setForm({ ...form, driveFotos: e.target.value })} placeholder="https://drive.google.com/..." />
-        </div>
-        <div className="space-y-1">
-          <Label className="flex items-center gap-1"><FolderOpen size={12} /> Drive de Identidade Visual</Label>
-          <Input value={form.driveIdentidadeVisual || ''} onChange={e => setForm({ ...form, driveIdentidadeVisual: e.target.value })} placeholder="https://drive.google.com/..." />
-        </div>
-        <div className="space-y-1">
-          <Label className="flex items-center gap-1"><FolderOpen size={12} /> Pasta de referências de design</Label>
-          <Input value={form.driveReferenciasDesign || ''} onChange={e => setForm({ ...form, driveReferenciasDesign: e.target.value })} placeholder="https://drive.google.com/..." />
-          <p className="text-[11px] text-muted-foreground">Referência não é cópia: mostra como a agência acha bonito, e o designer adapta à identidade do cliente.</p>
-        </div>
         <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
           <div>
             <p className="text-sm font-medium">Métricas no Portal</p>
@@ -1402,8 +1393,34 @@ export default function Clients() {
           </div>
           <Switch checked={isAdminClient} onCheckedChange={setIsAdminClient} />
         </div>
-      </div>
+    </div>
+  );
 
+  const renderDrives = () => (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <DriveLinkField
+        label="Pasta do Drive do cliente (geral)"
+        required={!editing || !(editing.driveLink || '').trim()}
+        value={form.driveLink || ''}
+        onChange={v => setForm({ ...form, driveLink: v })}
+        hint={pulsePlus
+          ? 'A equipe de design e os agentes buscam aqui a identidade visual, os logos e as fotos.'
+          : 'A equipe de design busca aqui a identidade visual, os logos e as fotos.'}
+      />
+      <DriveLinkField label="Drive de Fotos" value={form.driveFotos || ''} onChange={v => setForm({ ...form, driveFotos: v })} />
+      <DriveLinkField label="Drive de Identidade Visual" value={form.driveIdentidadeVisual || ''} onChange={v => setForm({ ...form, driveIdentidadeVisual: v })} />
+      <DriveLinkField
+        label="Referências de design"
+        anyLink
+        value={form.driveReferenciasDesign || ''}
+        onChange={v => setForm({ ...form, driveReferenciasDesign: v })}
+        hint="Referência não é cópia: mostra o que a agência acha bonito, e o designer adapta à identidade do cliente."
+      />
+    </div>
+  );
+
+  const renderRelationship = () => (
+    <>
       {/* Experiência do Cliente: aniversários da empresa e dos proprietários */}
       <div className="space-y-3 p-3 rounded-lg border border-border bg-card">
         <p className="text-sm font-semibold flex items-center gap-1.5">
@@ -1505,6 +1522,23 @@ export default function Clients() {
           ))}
         </div>
       </div>
+    </>
+  );
+
+  // cadastro novo: tudo da primeira etapa, na ordem das seções
+  const renderStep0 = () => (
+    <div className="space-y-6">
+      {renderIdentity()}
+      {renderContact()}
+      {editing?.id && <ClientSocialNetworks clientId={editing.id} whatsapp={form.whatsapp} onContractValue={setContractValue} />}
+      <div className="space-y-2">
+        <p className="text-sm font-semibold">Pastas do Drive</p>
+        {renderDrives()}
+      </div>
+      {renderAccess()}
+      {renderEditorial()}
+      {renderStar()}
+      {renderRelationship()}
     </div>
   );
 
@@ -2518,12 +2552,131 @@ export default function Clients() {
 
 
 
-  const renderStep4 = () => (
-    <div className="space-y-5">
-      <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
-        <p className="text-sm font-semibold flex items-center gap-2">
-          <DollarSign size={16} className="text-primary" /> Contrato Financeiro
-        </p>
+  // ── Edição do cliente em seções (redesenho de 03/11/2026) ──
+  const editSections = (): SectionMeta[] => {
+    const drives = [form.driveLink, form.driveFotos, form.driveIdentidadeVisual, form.driveReferenciasDesign].filter(v => (v || '').trim()).length;
+    const base: SectionMeta[] = [
+      { id: 'identidade', title: 'Identidade', icon: Building2, state: form.companyName && form.responsiblePerson && form.niche ? 'ok' : 'pending', hint: 'Logo, nome, responsável, nicho e cor' },
+      { id: 'contato', title: 'Contato e cobrança', icon: MessageSquare, state: (form.whatsapp || '').trim() ? 'ok' : 'pending', hint: 'WhatsApp, grupo e quem recebe cobrança e recibo' },
+      { id: 'redes', title: 'Redes sociais', icon: Globe, state: 'neutral', hint: 'Redes do plano, conexão e upgrades' },
+      { id: 'drives', title: 'Pastas do Drive', icon: FolderOpen, state: (form.driveLink || '').trim() ? 'ok' : 'pending', hint: `${drives} de 4 pastas com link` },
+      { id: 'acessos', title: 'Portal e acessos', icon: KeyRound, state: 'neutral', hint: 'Login, métricas no portal e cliente admin' },
+      { id: 'editorial', title: 'Linha editorial', icon: FileTextIcon, state: ((form as any).editorial || '').trim() ? 'ok' : 'pending', hint: 'Base para os roteiros' },
+      { id: 'relacionamento', title: 'Relacionamento', icon: Award, state: form.companyBirthday || (form.owners || []).length ? 'ok' : 'neutral', hint: 'Aniversários da empresa e dos donos' },
+    ];
+    if (clientType === 'sem_contrato') return [...base, { id: 'proposta', title: 'Proposta', icon: FileTextIcon, state: proposalId ? 'ok' : 'pending' }];
+    return [
+      ...base,
+      { id: 'gravacao', title: 'Gravação', icon: Video, state: form.videomaker ? 'ok' : 'pending', hint: 'Videomaker, dias, horários e Cliente Star' },
+      { id: 'entregas', title: 'Entregas e plano', icon: Target, state: 'neutral', hint: 'Metas do mês e plano' },
+      { id: 'contrato', title: 'Contrato', icon: DollarSign, state: contractValue > 0 ? 'ok' : 'pending', hint: 'Valor, vencimento e pagamento' },
+    ];
+  };
+
+  const goToSection = (id: string) => {
+    setActiveSection(id);
+    editScrollRef.current?.querySelector(`#cad-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const renderEditLayout = () => {
+    const sections = editSections();
+    const missing = [
+      !form.companyName && 'nome da empresa', !form.responsiblePerson && 'responsável', !(form.whatsapp || '').trim() && 'WhatsApp',
+      !form.niche && 'nicho', !(form.driveLink || '').trim() && 'pasta do Drive',
+    ].filter(Boolean) as string[];
+    const cityLabel = isAdminClient ? 'Todas as cidades' : CITY_LABELS[form.city as CityCode] || '';
+    return (
+      <>
+        {/* topo: quem é o cliente */}
+        <div className="flex items-center gap-3 border-b border-border px-5 py-4 pr-12">
+          {logoPreview
+            ? <img src={logoPreview} alt="" className="h-11 w-11 shrink-0 rounded-xl border border-border object-cover" />
+            : <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-base font-bold text-white" style={{ background: `hsl(${form.color || '220 70% 50%'})` }}>{(form.companyName || '?').charAt(0)}</span>}
+          <div className="min-w-0 flex-1">
+            <DialogTitle className="truncate text-lg font-semibold tracking-tight">{form.companyName || 'Cliente'}</DialogTitle>
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+              {form.responsiblePerson && <span>{form.responsiblePerson}</span>}
+              {cityLabel && <span>· {cityLabel}</span>}
+              {clientType !== 'sem_contrato' && contractValue > 0 && <span>· {contractValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês · vence dia {dueDay}</span>}
+              {clientType === 'sem_contrato' && <span>· Pacotes de serviços</span>}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+          <aside className="shrink-0 border-b border-border md:w-60 md:overflow-y-auto md:border-b-0 md:border-r md:bg-muted/20">
+            <SectionNav sections={sections} active={activeSection} onPick={goToSection} />
+          </aside>
+          <div
+            ref={editScrollRef}
+            className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-muted/10 p-4 sm:p-6"
+            onScroll={(e) => {
+              // seção ativa = a última cujo topo já passou do alto da área
+              const box = e.currentTarget.getBoundingClientRect().top;
+              let current = sections[0]?.id;
+              e.currentTarget.querySelectorAll<HTMLElement>('[data-section]').forEach((el) => {
+                if (el.getBoundingClientRect().top - box < 120) current = el.dataset.section || current;
+              });
+              if (current && current !== activeSection) setActiveSection(current);
+            }}
+          >
+            {loadingEditData && (
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground"><Loader2 size={14} className="animate-spin" /> Carregando os dados do cliente…</div>
+            )}
+            <FormSection id="identidade" icon={Building2} title="Identidade" description="Como o cliente aparece no sistema, no portal e nos relatórios.">{renderIdentity()}</FormSection>
+            <FormSection id="contato" icon={MessageSquare} title="Contato e cobrança" description="Por onde a Pulse fala com o cliente e quem recebe cobranças e recibos.">{renderContact()}</FormSection>
+            <FormSection id="redes" icon={Globe} title="Redes sociais" description="Redes que a Pulse cuida, link de conexão e upgrades do plano.">
+              {editing?.id && <ClientSocialNetworks clientId={editing.id} whatsapp={form.whatsapp} onContractValue={setContractValue} />}
+            </FormSection>
+            <FormSection id="drives" icon={FolderOpen} title="Pastas do Drive" description="Onde a equipe e os agentes acham fotos, identidade e referências."
+              aside={<span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">{[form.driveLink, form.driveFotos, form.driveIdentidadeVisual, form.driveReferenciasDesign].filter(v => (v || '').trim()).length}/4</span>}>
+              {renderDrives()}
+            </FormSection>
+            <FormSection id="acessos" icon={KeyRound} title="Portal e acessos" description="Login do cliente no Pulse Club e o que ele vê no portal.">{renderAccess()}</FormSection>
+            <FormSection id="editorial" icon={FileTextIcon} title="Linha editorial" description="Tom de voz, público e diferenciais: a base dos roteiros.">{renderEditorial()}</FormSection>
+            <FormSection id="relacionamento" icon={Award} title="Relacionamento" description="Datas para ações de relacionamento com a empresa e os donos.">{renderRelationship()}</FormSection>
+            {clientType === 'sem_contrato' ? (
+              <FormSection id="proposta" icon={FileTextIcon} title="Proposta" description="O pacote de serviços aceito por este cliente.">
+                <Select value={proposalId || 'none'} onValueChange={v => setProposalId(v === 'none' ? null : v)}>
+                  <SelectTrigger><SelectValue placeholder="Selecione uma proposta" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhuma proposta</SelectItem>
+                    {proposals.map(p => <SelectItem key={p.id} value={p.id}>{p.client_company || p.client_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormSection>
+            ) : (
+              <>
+                <FormSection id="gravacao" icon={Video} title="Gravação" description="Videomaker, dia e horário fixos, backup e Cliente Star.">
+                  {renderStar()}
+                  {renderStep2()}
+                </FormSection>
+                <FormSection id="entregas" icon={Target} title="Entregas e plano" description="O que entra por mês e o plano do cliente.">{renderStep3()}</FormSection>
+                <FormSection id="contrato" icon={DollarSign} title="Contrato" description="Valor, vencimento e forma de pagamento.">{renderContract()}</FormSection>
+              </>
+            )}
+            <div className="h-6" />
+          </div>
+        </div>
+
+        {/* rodapé fixo: o que falta e o Salvar */}
+        <div className="flex flex-wrap items-center gap-3 border-t border-border bg-background px-5 py-3">
+          <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+            {missing.length
+              ? <span className="text-amber-600 dark:text-amber-400">Falta: {missing.join(', ')}</span>
+              : <span className="text-emerald-600 dark:text-emerald-400">Tudo preenchido</span>}
+          </p>
+          <Button variant="ghost" onClick={() => setOpen(false)} disabled={saving}>Fechar</Button>
+          <Button onClick={handleSave} className="min-w-[160px] gap-1.5" disabled={saving || loadingEditData}>
+            {loadingEditData ? <><Loader2 size={14} className="animate-spin" /> Carregando…</> : saving ? <><Loader2 size={14} className="animate-spin" /> Salvando…</> : 'Salvar alterações'}
+          </Button>
+        </div>
+      </>
+    );
+  };
+
+  const renderContract = () => (
+        <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label>Valor do Contrato (R$)</Label>
@@ -2546,6 +2699,16 @@ export default function Clients() {
             </SelectContent>
           </Select>
         </div>
+        </div>
+  );
+
+  const renderStep4 = () => (
+    <div className="space-y-5">
+      <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <DollarSign size={16} className="text-primary" /> Contrato Financeiro
+        </p>
+        {renderContract()}
       </div>
 
       {/* Final Summary */}
@@ -2585,9 +2748,10 @@ export default function Clients() {
             <DialogTrigger asChild>
               <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Cliente</Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className={editing ? 'flex h-[92vh] max-w-6xl flex-col gap-0 overflow-hidden p-0' : 'max-w-2xl max-h-[90vh] overflow-y-auto'}>
+              {editing ? renderEditLayout() : (<>
               <DialogHeader>
-                <DialogTitle>{editing ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
+                <DialogTitle>Novo Cliente</DialogTitle>
               </DialogHeader>
 
               {/* Stepper indicator */}
@@ -2717,6 +2881,7 @@ export default function Clients() {
                   );
                 })()}
               </div>
+              </>)}
             </DialogContent>
           </Dialog>
         )}

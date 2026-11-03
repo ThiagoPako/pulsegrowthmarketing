@@ -29,12 +29,13 @@ import crypto from 'node:crypto';
 
 const BASE = 'https://api.upload-post.com/api';
 // google_business: a ficha do Google (postar novidades e responder avaliações, lib/socialHub.mjs)
-export const UP_PLATFORMS = ['instagram', 'facebook', 'tiktok', 'linkedin', 'youtube', 'google_business'];
+// threads, x e pinterest (02/11/2026): a página do cliente mostra todas as redes que a Pulse consegue gerenciar
+export const UP_PLATFORMS = ['instagram', 'facebook', 'tiktok', 'linkedin', 'youtube', 'google_business', 'threads', 'x', 'pinterest'];
 const VIDEO_RE = /\.(mp4|mov|webm|m4v)(\?|#|$)/i;
 
 export const profileName = (clientId) => `pulse-${String(clientId).toLowerCase()}`;
 // nome da rede na Connect API da Upload-Post (Google com hífen)
-const OAUTH_NAME = { instagram: 'instagram', facebook: 'facebook', tiktok: 'tiktok', linkedin: 'linkedin', youtube: 'youtube', google_business: 'google-business' };
+const OAUTH_NAME = { instagram: 'instagram', facebook: 'facebook', tiktok: 'tiktok', linkedin: 'linkedin', youtube: 'youtube', google_business: 'google-business', threads: 'threads', x: 'x', pinterest: 'pinterest' };
 
 /** Conta conectada de um perfil (social_accounts do perfil): objeto com handle; vazio ou null = não conectada. */
 export function connectedAccounts(socialAccounts = {}) {
@@ -206,9 +207,10 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     );
     return {
       client: { name: String(l.company_name || '').trim(), logo: l.logo_url || null },
-      networks: l.networks.map((p) => {
+      // primeiro as do plano; depois as outras, apagadas na página, com convite para ampliar o plano (usuário, 02/11/2026)
+      networks: [...l.networks, ...UP_PLATFORMS.filter((p) => !l.networks.includes(p))].map((p) => {
         const acc = rows.find((x) => x.platform === p);
-        return { id: p, connected: !!acc && acc.status === 'connected', reconnect: acc?.status === 'reauth', account: acc ? acc.username || acc.account_name : null };
+        return { id: p, in_plan: l.networks.includes(p), connected: !!acc && acc.status === 'connected', reconnect: acc?.status === 'reauth', account: acc ? acc.username || acc.account_name : null };
       }),
       expires_at: l.expires_at,
     };

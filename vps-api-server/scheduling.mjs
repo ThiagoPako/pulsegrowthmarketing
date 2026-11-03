@@ -30,6 +30,7 @@
 // portal_content_id em scheduled_posts; gatilhos que mantêm posting_at igual ao que as outras telas
 // gravam (Entregas Social, Kanban de Conteúdo, Estúdio e a fila de postagem).
 
+import { randomUUID } from 'node:crypto';
 import { POSTING_TZ, DATE_KEY_RE, TIME_RE, brtParts, brtToIso, formatBrt } from './lib/postingTime.mjs';
 import { listOccurrences, occurrenceAt, ruleFromRow, ruleSummary } from './lib/storyRecurrence.mjs';
 import { isHttpsUrl, registerStoryRoutes } from './storySeries.mjs';
@@ -148,7 +149,20 @@ function visualType({ kind, contentType, publishType, formatType, mediaCount }) 
 }
 
 function newestFirst(a, b) {
-  return Date.parse(b.created_at || 0) - Date.parse(a.created_at || 0);
+  // os stories de uma sequência nascem juntos: o 1º (índice 0) é o que aparece no calendário
+  return Date.parse(b.created_at || 0) - Date.parse(a.created_at || 0)
+    || (Number(a.story_sequence_index) || 0) - (Number(b.story_sequence_index) || 0);
+}
+
+/** Sequência de story: intervalo entre um story e o próximo, e o limite de telas (o do carrossel). */
+export const STORY_SEQUENCE_STEP_MS = 60_000;
+export const STORY_SEQUENCE_MAX = 10;
+
+/** Horário de cada story da sequência: o 1º no horário escolhido, os outros 1 minuto depois do anterior. */
+export function storySequenceSlots(startIso, count, stepMs = STORY_SEQUENCE_STEP_MS) {
+  const start = Date.parse(startIso);
+  if (!Number.isFinite(start) || !(count > 0)) return [];
+  return Array.from({ length: count }, (_, i) => new Date(start + i * stepMs).toISOString());
 }
 
 /** Instante → { at, date, time } no fuso de Brasília. */
@@ -193,6 +207,8 @@ function postSummary(p) {
     reminder_sent_at: p.reminder_sent_at ? new Date(p.reminder_sent_at).toISOString() : null,
     reminder_followup_at: p.reminder_followup_at ? new Date(p.reminder_followup_at).toISOString() : null,
     manual_posted: !!p.manual_posted_by,
+    story_sequence_id: p.story_sequence_id || null,
+    story_sequence_index: p.story_sequence_id ? Number(p.story_sequence_index) || 0 : null,
   };
 }
 
@@ -650,6 +666,9 @@ export function registerSchedulingRoutes(app, deps) {
       ['client_portal_contents', 'posting_at', 'TIMESTAMPTZ'],
       ['scheduled_posts', 'design_task_id', 'UUID'],
       ['scheduled_posts', 'portal_content_id', 'UUID'],
+      // Sequência de story (03/11/2026): as telas de uma arte saem como stories seguidos, 1 por minuto
+      ['scheduled_posts', 'story_sequence_id', 'UUID'],
+      ['scheduled_posts', 'story_sequence_index', 'INTEGER'],
     ]) {
       if (await addColumnIfMissing(table, column, type)) changed.add(table);
     }
@@ -658,6 +677,7 @@ export function registerSchedulingRoutes(app, deps) {
       CREATE INDEX IF NOT EXISTS idx_scheduled_posts_delivery ON scheduled_posts (delivery_id) WHERE delivery_id IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_scheduled_posts_design_task ON scheduled_posts (design_task_id) WHERE design_task_id IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_scheduled_posts_portal_content ON scheduled_posts (portal_content_id) WHERE portal_content_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_scheduled_posts_story_sequence ON scheduled_posts (story_sequence_id) WHERE story_sequence_id IS NOT NULL;
     `);
 
     // Gatilhos: só escrevem posting_at (e cancelam o post pendente da arte que saiu de Aprovado).
@@ -724,7 +744,8 @@ export function registerSchedulingRoutes(app, deps) {
       BEGIN
         BEGIN
           -- ocorrências de repetição de stories (story_series_id) não mexem na data do material
-          IF NEW.status = 'agendado' AND NEW.story_series_id IS NULL
+          -- na sequência de story, só o 1º (story_sequence_index 0) dá a data do material
+          IF NEW.status = 'agendado' AND NEW.story_series_id IS NULL AND coalesce(NEW.story_sequence_index, 0) = 0
              AND (TG_OP = 'INSERT' OR NEW.scheduled_at IS DISTINCT FROM OLD.scheduled_at
                   OR OLD.status IS DISTINCT FROM 'agendado') THEN
             IF NEW.content_task_id IS NOT NULL THEN
@@ -1438,6 +1459,13 @@ export function registerSchedulingRoutes(app, deps) {
       // Story: "Postar sozinho" (o robô publica) ou "Lembrete com link" (avisa a equipe, que posta pelo app)
       const storyMode = mode === 'auto' && body.publish_type === 'stories'
         ? (body.story_mode === 'lembrete' ? 'lembrete' : 'auto') : null;
+      // Sequência de story (usuário, 03/11/2026): as telas da arte saem como stories seguidos, na ordem,
+      // 1 por minuto. Só quando o robô posta (no lembrete a equipe posta pelo app, uma tela de cada vez).
+      const sequenceUrls = storyMode === 'auto' && body.story_sequence === true && Array.isArray(body.media_items)
+        ? [...new Set(body.media_items.map((i) => (typeof i === 'string' ? i : i?.url)).filter((u) => typeof u === 'string' && u.trim()).map((u) => u.trim()))]
+        : null;
+      if (sequenceUrls && sequenceUrls.length < 2) throw httpError(400, 'A sequência de story precisa de pelo menos 2 telas.');
+      if (sequenceUrls && sequenceUrls.length > STORY_SEQUENCE_MAX) throw httpError(400, `A sequência de story aceita no máximo ${STORY_SEQUENCE_MAX} telas.`);
       // O link do lembrete vira <a href> na página e vai no sino e no WhatsApp: só https
       if (storyMode === 'lembrete' && String(body.story_link || '').trim() && !isHttpsUrl(body.story_link)) {
         throw httpError(400, 'O link do story precisa começar com https://');
@@ -1472,6 +1500,7 @@ export function registerSchedulingRoutes(app, deps) {
         }
 
         let prepared = null;
+        const sequence = [];
         if (mode === 'auto') {
           // Mídia: a que veio do diálogo ou a do próprio material (carrossel leva todas; os outros, a primeira)
           const fallback = kind === 'post'
@@ -1484,7 +1513,7 @@ export function registerSchedulingRoutes(app, deps) {
           else if (typeof body.media_url === 'string' && body.media_url.trim()) mediaUrl = body.media_url.trim();
           else if (body.publish_type === 'carousel') mediaItems = fallback;
           else mediaUrl = fallback[0];
-          prepared = await prepareScheduledPost({
+          const prepareInput = {
             client_id: client.id,
             platform,
             platforms,
@@ -1500,9 +1529,22 @@ export function registerSchedulingRoutes(app, deps) {
             story_link: storyMode === 'lembrete' ? (String(body.story_link || '').trim() || null) : null,
             story_link_text: storyMode === 'lembrete' ? (String(body.story_link_text || '').trim().slice(0, 40) || 'Clique aqui') : null,
             // trilha do story de arte: só quando o robô posta (o lembrete a equipe posta pelo app, com a música de lá)
-            story_audio_url: storyMode === 'auto' ? body.story_audio_url || null : null,
-            story_audio_name: storyMode === 'auto' ? body.story_audio_name || null : null,
-          }, { requireAccounts: storyMode !== 'lembrete' });
+            story_audio_url: storyMode === 'auto' && !sequenceUrls ? body.story_audio_url || null : null,
+            story_audio_name: storyMode === 'auto' && !sequenceUrls ? body.story_audio_name || null : null,
+          };
+          if (sequenceUrls) {
+            // um story por tela, cada um conferido como um story comum (conta, formato, limite de 24 h)
+            const slots = storySequenceSlots(whenIso, sequenceUrls.length);
+            for (let i = 0; i < sequenceUrls.length; i++) {
+              sequence.push(await prepareScheduledPost(
+                { ...prepareInput, media_items: undefined, media_url: sequenceUrls[i], scheduled_at: slots[i] },
+                { requireAccounts: true },
+              ));
+            }
+            prepared = sequence[0];
+          } else {
+            prepared = await prepareScheduledPost(prepareInput, { requireAccounts: storyMode !== 'lembrete' });
+          }
         }
 
         // Entrega do Social (o registro do agendamento dos vídeos): data, hora e rede
@@ -1523,34 +1565,41 @@ export function registerSchedulingRoutes(app, deps) {
         let post = null;
         if (mode === 'auto') {
           const keep = kind === 'post' ? material : {};
-          const { rows: [created] } = await db.query(
-            `INSERT INTO scheduled_posts
-               (client_id, delivery_id, content_task_id, design_task_id, portal_content_id, platform, publish_type,
-                media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text, story_mode, platforms, captions,
-                first_comment, collaborators, story_audio_url, story_audio_name)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
-             RETURNING *`,
-            [
-              client.id,
-              kind === 'conteudo' ? deliveryId : (keep.delivery_id || null),
-              kind === 'conteudo' ? material.id : (keep.content_task_id || null),
-              kind === 'arte' ? material.id : (keep.design_task_id || null),
-              kind === 'portal' ? material.id : (keep.portal_content_id || null),
-              prepared.platform, prepared.publish_type, prepared.urls[0],
-              prepared.items.length ? JSON.stringify(prepared.items) : null,
-              prepared.caption, prepared.when.toISOString(), user?.id || null,
-              prepared.story_link, prepared.story_link_text, storyMode,
-              prepared.platforms, prepared.captions ? JSON.stringify(prepared.captions) : null,
-              prepared.first_comment, prepared.collaborators,
-              prepared.story_audio_url || null, prepared.story_audio_name || null,
-            ]
-          );
-          post = created;
+          const sequenceId = sequence.length ? randomUUID() : null;
+          const toInsert = sequence.length ? sequence : [prepared];
+          for (let index = 0; index < toInsert.length; index++) {
+            const prep = toInsert[index];
+            const { rows: [created] } = await db.query(
+              `INSERT INTO scheduled_posts
+                 (client_id, delivery_id, content_task_id, design_task_id, portal_content_id, platform, publish_type,
+                  media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text, story_mode, platforms, captions,
+                  first_comment, collaborators, story_audio_url, story_audio_name, story_sequence_id, story_sequence_index)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+               RETURNING *`,
+              [
+                client.id,
+                kind === 'conteudo' ? deliveryId : (keep.delivery_id || null),
+                kind === 'conteudo' ? material.id : (keep.content_task_id || null),
+                kind === 'arte' ? material.id : (keep.design_task_id || null),
+                kind === 'portal' ? material.id : (keep.portal_content_id || null),
+                prep.platform, prep.publish_type, prep.urls[0],
+                prep.items.length ? JSON.stringify(prep.items) : null,
+                prep.caption, prep.when.toISOString(), user?.id || null,
+                prep.story_link, prep.story_link_text, storyMode,
+                prep.platforms, prep.captions ? JSON.stringify(prep.captions) : null,
+                prep.first_comment, prep.collaborators,
+                prep.story_audio_url || null, prep.story_audio_name || null,
+                sequenceId, sequenceId ? index : null,
+              ]
+            );
+            if (index === 0) post = created;
+          }
         }
 
         const modeLabel = mode !== 'auto' ? 'manual'
           : storyMode === 'lembrete' ? `${platformLabel(prepared.platform)} (lembrete de story)`
-            : `${platformLabel(prepared.platform)} (automático)`;
+            : sequence.length ? `${platformLabel(prepared.platform)} (sequência de ${sequence.length} stories, automático)`
+              : `${platformLabel(prepared.platform)} (automático)`;
         // a legenda fica guardada no material também (o manual não cria post; o auto volta a ela se cancelar)
         if (kind !== 'post' && body.publish_type !== 'stories' && typeof body.caption === 'string') {
           await saveCaption(db, { kind, id: material.id, clientId: client.id, caption: body.caption, userId: user?.id });
@@ -1735,7 +1784,16 @@ export function registerSchedulingRoutes(app, deps) {
         pastCheck(whenIso, mode, !!body.allow_past);
 
         const postToMove = kind === 'post' ? material : active;
-        if (postToMove) {
+        if (postToMove?.story_sequence_id) {
+          const { rowCount } = await db.query(
+            `UPDATE scheduled_posts
+                SET scheduled_at = $2::timestamptz + make_interval(secs => coalesce(story_sequence_index, 0) * $3::int),
+                    updated_at = now()
+              WHERE story_sequence_id = $1 AND status = 'agendado'`,
+            [postToMove.story_sequence_id, whenIso, STORY_SEQUENCE_STEP_MS / 1000]
+          );
+          if (!rowCount) throw httpError(409, 'Esta sequência de stories está sendo publicada agora.', { code: 'publishing' });
+        } else if (postToMove) {
           const { rowCount } = await db.query(
             // lembrete de story remarcado avisa de novo no horário novo
             `UPDATE scheduled_posts SET scheduled_at = $2, reminder_sent_at = NULL, reminder_followup_at = NULL, updated_at = now()

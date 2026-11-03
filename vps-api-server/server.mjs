@@ -8874,6 +8874,9 @@ async function ensureSocialPostsSchema() {
       ON scheduled_posts (scheduled_at) WHERE story_mode = 'lembrete' AND status = 'agendado';
     ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_audio_url TEXT;
     ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_audio_name TEXT;
+    -- sequência de story (scheduling.mjs, 03/11/2026): as telas de uma arte saem como stories seguidos
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_sequence_id UUID;
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_sequence_index INTEGER;
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS access_token TEXT NOT NULL DEFAULT '';
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS token_expiration TIMESTAMPTZ;
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS api_base TEXT NOT NULL DEFAULT 'facebook';
@@ -9321,6 +9324,17 @@ async function getAutoPostCancelReason(post) {
     const { rows } = await pool.query('SELECT 1 FROM story_series WHERE id = $1', [post.story_series_id]);
     if (!rows.length) return 'a série de stories foi excluída';
   }
+  // Sequência de story (scheduling.mjs): depois do 1º story, o robô já moveu a arte para Postadas; os
+  // seguintes saem. Só vale se um story anterior da mesma sequência foi publicado (marcação manual ainda trava).
+  let sequenceStarted = false;
+  if (post.story_sequence_id && Number(post.story_sequence_index) > 0) {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM scheduled_posts WHERE story_sequence_id = $1 AND id <> $2 AND status = 'publicado' LIMIT 1`,
+      [post.story_sequence_id, post.id]
+    );
+    sequenceStarted = rows.length > 0;
+  }
+  const alreadyOut = inSeries || sequenceStarted;
   let deliveryStatus = null;
   if (post.delivery_id) {
     const { rows } = await pool.query('SELECT status FROM social_media_deliveries WHERE id = $1', [post.delivery_id]);
@@ -9336,7 +9350,7 @@ async function getAutoPostCancelReason(post) {
     const column = rows[0].kanban_column;
     if (AUTOPOST_BLOCKING_CONTENT_COLUMNS.has(column)) return `o card de conteúdo voltou para "${column}"`;
     // "Postado!" manual (entrega postada e card arquivado): publicar agora duplicaria o post.
-    if (!inSeries && deliveryStatus === 'postado' && column === 'arquivado') return 'o conteúdo já foi marcado como postado manualmente';
+    if (!alreadyOut && deliveryStatus === 'postado' && column === 'arquivado') return 'o conteúdo já foi marcado como postado manualmente';
   }
   // Arte e conteúdo avulso do portal agendados pelo módulo de Agendamentos (scheduling.mjs)
   if (post.design_task_id) {
@@ -9347,8 +9361,8 @@ async function getAutoPostCancelReason(post) {
     );
     if (!rows.length) return 'a arte foi excluída';
     // 'postado' aqui só pode ser marcação manual (o robô move depois de publicar): sair de novo duplicaria.
-    if (!inSeries && rows[0].kanban_column === 'postado') return 'a arte já foi marcada como postada';
-    if (!['aprovado', ...(inSeries ? ['postado'] : [])].includes(rows[0].kanban_column)) {
+    if (!alreadyOut && rows[0].kanban_column === 'postado') return 'a arte já foi marcada como postada';
+    if (!['aprovado', ...(alreadyOut ? ['postado'] : [])].includes(rows[0].kanban_column)) {
       return `a arte saiu de Aprovado (está em "${rows[0].kanban_column}")`;
     }
     // O post guarda a cópia das URLs: se a arte foi trocada, publicaria a versão antiga.
@@ -9363,8 +9377,8 @@ async function getAutoPostCancelReason(post) {
   if (post.portal_content_id) {
     const { rows } = await pool.query('SELECT status FROM client_portal_contents WHERE id = $1', [post.portal_content_id]);
     if (!rows.length) return 'o conteúdo foi excluído do portal';
-    if (!inSeries && rows[0].status === 'publicado') return 'o conteúdo já foi marcado como publicado';
-    if (!['aprovado', 'agendado', ...(inSeries ? ['publicado'] : [])].includes(rows[0].status)) {
+    if (!alreadyOut && rows[0].status === 'publicado') return 'o conteúdo já foi marcado como publicado';
+    if (!['aprovado', 'agendado', ...(alreadyOut ? ['publicado'] : [])].includes(rows[0].status)) {
       return `o conteúdo saiu de Aprovado no portal (está em "${rows[0].status}")`;
     }
   }

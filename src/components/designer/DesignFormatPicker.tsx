@@ -94,6 +94,21 @@ export default function DesignFormatPicker({ value, onChange, disabledKeys = [] 
         </div>
       )}
 
+      {value?.preset === 'story_sequencia' && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Label className="text-xs">Quantos stories?</Label>
+          <Input
+            type="number"
+            min={2}
+            max={10}
+            value={value.slides ?? 3}
+            onChange={(e) => set({ slides: Math.max(2, Math.min(10, Number(e.target.value) || 2)) })}
+            className="h-8 w-20 text-xs"
+          />
+          <span className="text-[11px] text-muted-foreground">1080×1920 cada · saem um depois do outro, na ordem</span>
+        </div>
+      )}
+
       {value?.preset === 'banner' && (
         <div className="space-y-1.5">
           <Label className="text-xs">Tamanho do banner</Label>

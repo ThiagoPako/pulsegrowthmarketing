@@ -405,7 +405,7 @@ export function createTools({ pool, publicUploadsUrl }) {
       input_schema: object({
         cliente_id: CLIENT_ID,
         titulo: str('Título curto do card.'),
-        formato: strEnum(Object.keys(DESIGN_FORMATS), 'feed, story, logomarca, midia_fisica, carrossel, capa ou thumbnail.'),
+        formato: strEnum(Object.keys(DESIGN_FORMATS), 'feed, story, story_sequencia (sequência de story: várias telas que saem uma depois da outra), logomarca, midia_fisica, carrossel, capa ou thumbnail.'),
         prioridade: strEnum(Object.keys(DESIGN_PRIORITIES), 'baixa, media, alta ou urgente.'),
         prazo: DATE('Prazo AAAA-MM-DD (null = sem prazo).'),
         descricao: str('O que a arte precisa ter (detalhes, referências citadas).'),

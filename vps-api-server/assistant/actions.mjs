@@ -27,7 +27,7 @@ export const REPORT_THEME = 'novembro-azul-labovitta';
 export const REPORT_TEMPLATE_PATH = 'clientes/labo-vitta/design/apresentacoes/2026-10-20-novembro-azul';
 
 export const CONTENT_TYPES = { reels: 'Reels', criativo: 'Criativo', story: 'Story', arte: 'Arte', otimizacao: 'Otimização' };
-export const DESIGN_FORMATS = { feed: 'Feed', story: 'Story', logomarca: 'Logomarca', midia_fisica: 'Mídia física', carrossel: 'Carrossel', capa: 'Capa', thumbnail: 'Thumbnail' };
+export const DESIGN_FORMATS = { feed: 'Feed', story: 'Story', story_sequencia: 'Sequência de story', logomarca: 'Logomarca', midia_fisica: 'Mídia física', carrossel: 'Carrossel', capa: 'Capa', thumbnail: 'Thumbnail' };
 export const DESIGN_PRIORITIES = { baixa: 'Baixa', media: 'Média', alta: 'Alta', urgente: 'Urgente' };
 export const CONTENT_COLUMNS = {
   ideias: 'Ideias', captacao: 'Captação', edicao: 'Edição', pre_revisao: 'Pré-revisão', revisao: 'Revisão',

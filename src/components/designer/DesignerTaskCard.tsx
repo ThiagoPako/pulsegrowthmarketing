@@ -27,7 +27,7 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string; dot: strin
 };
 
 const FORMAT_LABELS: Record<string, string> = {
-  feed: '📐 Feed', story: '📱 Story', logomarca: '🎨 Logo', midia_fisica: '🖨 Mídia Física',
+  feed: '📐 Feed', story: '📱 Story', story_sequencia: '🎞 Sequência de story', logomarca: '🎨 Logo', midia_fisica: '🖨 Mídia Física',
 };
 
 const COL_LABELS: Record<string, { label: string; emoji: string }> = {

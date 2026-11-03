@@ -7,7 +7,7 @@
 export type DesignUnit = 'px' | 'cm' | 'mm';
 
 export type DesignFormatPresetKey =
-  | 'feed' | 'quadrado' | 'story' | 'carrossel' | 'capa_destaque' | 'thumbnail'
+  | 'feed' | 'quadrado' | 'story' | 'story_sequencia' | 'carrossel' | 'capa_destaque' | 'thumbnail'
   | 'panfleto_a5' | 'panfleto_a4' | 'banner' | 'outdoor' | 'cartao_visita'
   | 'logomarca' | 'personalizado';
 
@@ -33,6 +33,8 @@ export const DESIGN_FORMAT_PRESETS: DesignFormatPreset[] = [
   { key: 'quadrado', label: 'Quadrado', emoji: '⬛', group: 'digital', width: 1080, height: 1080, unit: 'px', formatType: 'feed' },
   { key: 'story', label: 'Story', emoji: '📱', group: 'digital', width: 1080, height: 1920, unit: 'px', formatType: 'story' },
   { key: 'carrossel', label: 'Carrossel', emoji: '🎠', group: 'digital', width: 1080, height: 1350, unit: 'px', slides: 5, formatType: 'carrossel' },
+  // várias telas de story que saem uma depois da outra (Estúdio de Postagem → sequência de story, 03/11/2026)
+  { key: 'story_sequencia', label: 'Sequência de story', emoji: '🎞', group: 'digital', width: 1080, height: 1920, unit: 'px', slides: 3, formatType: 'story_sequencia', hint: 'Cada tela vira um story; no Estúdio de Postagem elas saem em sequência, na ordem' },
   { key: 'capa_destaque', label: 'Capa de destaque', emoji: '🖼', group: 'digital', width: 1080, height: 1920, unit: 'px', formatType: 'capa' },
   { key: 'thumbnail', label: 'Thumbnail', emoji: '▶️', group: 'digital', width: 1280, height: 720, unit: 'px', formatType: 'thumbnail' },
   { key: 'panfleto_a5', label: 'Panfleto A5', emoji: '📄', group: 'impressao', width: 148, height: 210, unit: 'mm', dpi: 300, bleed_mm: 3, print: true, formatType: 'midia_fisica' },
@@ -69,6 +71,7 @@ export interface DesignDimensions {
 
 const LEGACY_FORMAT_PRESET: Record<string, DesignFormatPresetKey> = {
   feed: 'feed', story: 'story', carrossel: 'carrossel', capa: 'capa_destaque', thumbnail: 'thumbnail', logomarca: 'logomarca',
+  story_sequencia: 'story_sequencia',
 };
 
 export function getFormatPreset(key: string | null | undefined): DesignFormatPreset | undefined {
@@ -153,7 +156,9 @@ export function describeDesignFormat(dimensions: unknown, formatType?: string | 
   const dpi = unit && unit !== 'px' ? (positive(dims.dpi) || base.dpi || 300) : null;
   const bleedMm = unit && unit !== 'px' ? (Number(dims.bleed_mm) >= 0 ? Number(dims.bleed_mm) : (base.bleed_mm ?? 3)) : null;
   const print = unit === 'cm' || unit === 'mm' || !!dims.print;
-  const slides = dims.preset === 'carrossel' ? Math.max(2, Math.min(20, Number(dims.slides) || base.slides || 5)) : null;
+  const slides = dims.preset === 'carrossel' ? Math.max(2, Math.min(20, Number(dims.slides) || base.slides || 5))
+    : dims.preset === 'story_sequencia' ? Math.max(2, Math.min(10, Number(dims.slides) || base.slides || 3)) : null;
+  const slidesWord = dims.preset === 'story_sequencia' ? 'stories' : 'slides';
   const toMm = (v: number) => (unit === 'cm' ? v * 10 : v);
   let pixels: DesignFormatInfo['pixels'] = null;
   let pixelsWithBleed: DesignFormatInfo['pixelsWithBleed'] = null;
@@ -165,12 +170,12 @@ export function describeDesignFormat(dimensions: unknown, formatType?: string | 
   }
   const size = unit && width && height ? `${fmt(width)}×${fmt(height)} ${unit}` : null;
   const label = (size ? `${base.label} · ${size}` : base.label)
-    + (slides ? ` · ${slides} slides` : '')
+    + (slides ? ` · ${slides} ${slidesWord}` : '')
     + (print && dpi ? ` · ${dpi} dpi${bleedMm ? ` + sangria ${fmt(bleedMm)} mm` : ''}` : '');
   const shortSize = unit === 'px' && width && height ? ` ${Math.round(width)}×${Math.round(height)}` : '';
   const short = print
     ? `${base.label}${dims.preset === 'banner' || dims.preset === 'personalizado' ? ` ${size}` : ''} · impressão`
-    : `${base.label}${shortSize}${slides ? ` · ${slides} slides` : ''}`;
+    : `${base.label}${shortSize}${slides ? ` · ${slides} ${slidesWord}` : ''}`;
   return {
     preset: dims.preset, name: base.label, label, short, width, height, unit, slides, dpi, bleedMm, print, pixels, pixelsWithBleed, legacy,
   };

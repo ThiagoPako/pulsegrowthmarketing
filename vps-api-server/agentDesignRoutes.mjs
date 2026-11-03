@@ -1095,7 +1095,7 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
   });
 
   // ── criar arte (chefe e social media) ─────────────────────
-  const NEW_FORMATS = new Set(['feed', 'story', 'carrossel', 'capa', 'midia_fisica']);
+  const NEW_FORMATS = new Set(['feed', 'story', 'story_sequencia', 'carrossel', 'capa', 'midia_fisica']);
   const NEW_PRIORITIES = new Set(['media', 'alta', 'urgente']);
   app.post('/api/agent/design/tasks', async (req, res) => {
     try {

@@ -3,7 +3,7 @@
 // que eu selecionei". O link é a página de conexão da Upload-Post (lib/uploadPost.mjs), só com as redes marcadas.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { CheckCircle2, Copy, Facebook, Instagram, Link2, Linkedin, Loader2, Music2, RefreshCw, Youtube } from 'lucide-react';
+import { CheckCircle2, Copy, Facebook, Instagram, Link2, Linkedin, Loader2, MapPin, Music2, RefreshCw, Youtube } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,8 @@ const NETWORKS = [
   { id: 'tiktok', label: 'TikTok', Icon: Music2 },
   { id: 'linkedin', label: 'LinkedIn', Icon: Linkedin },
   { id: 'youtube', label: 'YouTube', Icon: Youtube },
+  // ficha do Google: postar novidades e responder avaliações (Central Social)
+  { id: 'google_business', label: 'Google (avaliações)', Icon: MapPin },
 ] as const;
 
 interface Info {

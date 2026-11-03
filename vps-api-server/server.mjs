@@ -58,6 +58,7 @@ import { cleanupOldEditVersions } from './lib/versionCleanup.mjs';
 import { createWebVideo, captureVideoUploads, isDerivedVariantName, originalNamesForVariant, WEB_TMP_DIR, resolveUploadFile, webVariantUrl } from './lib/webVideo.mjs';
 import { createInstagramVideo } from './lib/instagramVideo.mjs';
 import { createUploadPost, registerUploadPostRoutes } from './lib/uploadPost.mjs';
+import { createSocialHub, registerSocialHubRoutes } from './lib/socialHub.mjs';
 import { buildProposalRevenueSchedule, stripRevenueMark } from './lib/proposalRevenues.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
@@ -97,7 +98,8 @@ const server = createServer(app);
 app.use(cors());
 // Gzip: o payload do kanban da designer (centenas de cards com textos) cai ~80%.
 app.use(compression({ threshold: 1024 }));
-app.use(express.json({ limit: '10mb' }));
+// o aviso da Upload-Post é assinado sobre o corpo cru: guarda o texto só nessa rota (lib/socialHub.mjs)
+app.use(express.json({ limit: '10mb', verify: (req, _res, buf) => { if (req.url?.startsWith('/api/upload-post/webhook')) req.rawBody = buf.toString('utf8'); } }));
 // Vídeo gravado por qualquer upload ou entrega (multer) que termina bem entra na fila da versão leve
 // (lib/webVideo.mjs; a instância é criada junto das rotas de upload, mais abaixo).
 app.use(captureVideoUploads((filePath) => webVideo.enqueue(filePath, { reason: 'upload' })));
@@ -6272,6 +6274,16 @@ app.post('/api/portal-actions', async (req, res) => {
         [client_id, isTeamCaller]
       );
       return res.json({ contents: rows });
+    }
+
+    // ── Comentários dos posts e avaliações do Google, com as respostas da Ísis e da equipe (02/11/2026) ──
+    if (action === 'get_social_comments') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      return res.json({ comments: await socialHub.listComments({ clientId: client_id, forPortal: !isTeamCaller, limit: 150 }) });
+    }
+    if (action === 'get_google_reviews') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      return res.json({ reviews: await socialHub.listReviews({ clientId: client_id, forPortal: !isTeamCaller }) });
     }
 
     // ── Métricas do Instagram (só se a agência liberou para este cliente) ──
@@ -20440,6 +20452,9 @@ pulsePlus.registerRoutes(app);
 // ─── Agentes de edição (chaves próprias, fila, entrega) ─────
 // ─── Upload-Post: postagem automática pelas redes dos clientes (lib/uploadPost.mjs, 02/11/2026) ──
 registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager });
+// central social (comentários e avaliações do Google com a Ísis; lib/socialHub.mjs, 02/11/2026)
+const socialHub = createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiModel, notifyTeam: notifySocialTeam });
+registerSocialHubRoutes(app, { hub: socialHub, uploadPost, pool, verifySocialManager, verifyAdmin, publicApiUrl: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' });
 
 // ─── Aprovação sem login (/aprovar/<token>): página do vídeo com o jeito do Instagram, aprovar ou pedir ajuste ──
 const portalShare = registerPortalShareRoutes(app, {

@@ -18,7 +18,8 @@
 // A cada 15 min, uma chamada lê todos os perfis e atualiza as contas (o cliente pode ter conectado pelo link).
 
 const BASE = 'https://api.upload-post.com/api';
-export const UP_PLATFORMS = ['instagram', 'facebook', 'tiktok', 'linkedin', 'youtube'];
+// google_business: a ficha do Google (postar novidades e responder avaliações, lib/socialHub.mjs)
+export const UP_PLATFORMS = ['instagram', 'facebook', 'tiktok', 'linkedin', 'youtube', 'google_business'];
 const VIDEO_RE = /\.(mp4|mov|webm|m4v)(\?|#|$)/i;
 
 export const profileName = (clientId) => `pulse-${String(clientId).toLowerCase()}`;
@@ -111,7 +112,7 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     const init = { method, headers: { Authorization: `Apikey ${k}`, ...headers } };
     if (json) { init.headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(json); }
     if (form) init.body = form;
-    const r = await fetchImpl(`${BASE}${path}`, init);
+    const r = await fetchImpl(/^https:\/\//.test(path) ? path : `${BASE}${path}`, init);
     const body = await r.json().catch(() => ({}));
     if (!r.ok || body?.success === false) {
       const msg = body?.message || body?.error || `Upload-Post respondeu ${r.status}`;

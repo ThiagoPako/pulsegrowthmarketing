@@ -31,6 +31,7 @@ import PortalRendimentoBovino from '@/components/portal/PortalRendimentoBovino';
 import PortalEvents from '@/components/portal/PortalEvents';
 import PortalTraining from '@/components/portal/PortalTraining';
 import { PortalInsightsTab } from '@/components/portal/PortalInsightsTab';
+import PortalComments from '@/components/portal/PortalComments';
 import { peekPlayback, resolvePlayback } from '@/lib/playbackUrl';
 import { videoPreviewUrl, videoThumbUrl } from '@/lib/mediaPreview';
 
@@ -79,7 +80,7 @@ interface ClientData {
   client_type?: string;
 }
 
-type TabView = 'library' | 'metrics' | 'insights' | 'criativa' | 'agenda' | 'posts' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento' | 'otimizados' | 'admin';
+type TabView = 'library' | 'comentarios' | 'metrics' | 'insights' | 'criativa' | 'agenda' | 'posts' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento' | 'otimizados' | 'admin';
 
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
@@ -659,6 +660,12 @@ export default function ClientPortal() {
                 📅 Posts
               </button>
               <button
+                onClick={() => setActiveTab('comentarios')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'comentarios' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                💬 Comentários
+              </button>
+              <button
                 onClick={() => setActiveTab('agenda')}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'agenda' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
               >
@@ -793,6 +800,9 @@ export default function ClientPortal() {
         </button>
         <button onClick={() => setActiveTab('posts')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'posts' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'posts' ? { borderColor: `hsl(${clientColor})` } : {}}>
           📅 Posts
+        </button>
+        <button onClick={() => setActiveTab('comentarios')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'comentarios' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'comentarios' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          💬 Comentários
         </button>
         <button onClick={() => setActiveTab('agenda')} className={`flex-none px-4 py-3.5 text-xs font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'agenda' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'agenda' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Gravações
@@ -999,6 +1009,8 @@ export default function ClientPortal() {
           <PortalDesigner clientId={client.id} clientColor={clientColor} />
         ) : activeTab === 'posts' ? (
           <PortalPostCalendar clientId={client.id} clientColor={clientColor} />
+        ) : activeTab === 'comentarios' ? (
+          <PortalComments clientId={client.id} clientColor={clientColor} />
         ) : activeTab === 'agenda' ? (
           <PortalRecordingCalendar clientId={client.id} clientColor={clientColor} />
         ) : activeTab === 'panfletagem' && client.has_vehicle_flyer ? (

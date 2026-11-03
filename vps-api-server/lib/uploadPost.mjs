@@ -43,7 +43,7 @@ export function connectedAccounts(socialAccounts = {}) {
 }
 
 /** Campos do envio para uma rede: tipo de mídia, legenda e Página do Facebook. */
-export function uploadFields({ platform, publishType, media, caption, facebookPageId }) {
+export function uploadFields({ platform, publishType, media, caption, facebookPageId, firstComment = null, collaborators = null }) {
   const urls = media.map((m) => m.url);
   const video = urls.length === 1 && VIDEO_RE.test(urls[0]);
   const story = publishType === 'stories';
@@ -61,6 +61,9 @@ export function uploadFields({ platform, publishType, media, caption, facebookPa
     if (caption) fields.push(['youtube_description', caption]);
   }
   if (platform === 'tiktok') fields.push(['privacy_level', 'PUBLIC_TO_EVERYONE']);
+  // primeiro comentário (link do WhatsApp, hashtags…) e Collab no Instagram; story não leva
+  if (firstComment && !story) fields.push([`${platform}_first_comment`, firstComment]);
+  if (collaborators && platform === 'instagram' && !story) fields.push(['collaborators', collaborators]);
   if (video) fields.push(['video', urls[0]]);
   else for (const u of urls) fields.push(['photos[]', u]);
   return { endpoint: video ? '/upload' : '/upload_photos', fields };
@@ -266,6 +269,7 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     }
     const { endpoint, fields } = uploadFields({
       platform: account.platform, publishType: post.publish_type, media, caption: post.caption || '', facebookPageId: account.facebook_page_id,
+      firstComment: post.first_comment || null, collaborators: post.collaborators || null,
     });
     const requestId = `pulse-${post.id}-${account.platform}-${(post.attempts || 0) + 1}`;
     const form = new FormData();

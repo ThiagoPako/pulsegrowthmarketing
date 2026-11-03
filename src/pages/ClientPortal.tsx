@@ -32,6 +32,7 @@ import PortalEvents from '@/components/portal/PortalEvents';
 import PortalTraining from '@/components/portal/PortalTraining';
 import { PortalInsightsTab } from '@/components/portal/PortalInsightsTab';
 import PortalComments from '@/components/portal/PortalComments';
+import NetworkMetrics from '@/components/social/NetworkMetrics';
 import { peekPlayback, resolvePlayback } from '@/lib/playbackUrl';
 import { videoPreviewUrl, videoThumbUrl } from '@/lib/mediaPreview';
 
@@ -135,6 +136,9 @@ export default function ClientPortal() {
   const [comments, setComments] = useState<PortalComment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [activeTab, setActiveTab] = useState<TabView>('library');
+  // métricas de todas as redes (Upload-Post): só a função muda quando muda o cliente
+  const portalClientId = client?.id;
+  const portalMetricsLoader = useCallback(async () => (portalClientId ? (await portalAction({ action: 'get_social_metrics', client_id: portalClientId }))?.metrics || [] : []), [portalClientId]);
   const [loading, setLoading] = useState(true);
   const [adjustmentNote, setAdjustmentNote] = useState('');
   const [showAdjustment, setShowAdjustment] = useState(false);
@@ -1051,6 +1055,14 @@ export default function ClientPortal() {
         ) : (
           /* ── METRICS TAB ── */
           <motion.div key="metrics" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20 space-y-8">
+            {/* todas as redes conectadas pela Upload-Post (02/11/2026) */}
+            <section className="space-y-4">
+              <div>
+                <h2 className="text-xl font-bold text-white">Suas redes</h2>
+                <p className="text-sm text-white/45">Seguidores, alcance e interações de cada rede, com a variação dos últimos 30 dias.</p>
+              </div>
+              <NetworkMetrics dark accent={`hsl(${clientColor})`} load={portalMetricsLoader} />
+            </section>
             {client.portal_insights_enabled && (
               <section className="space-y-4">
                 <div>

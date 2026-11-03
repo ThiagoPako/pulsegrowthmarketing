@@ -33,6 +33,8 @@ export interface SchedulingPost {
   /** redes do post (Upload-Post, 02/11/2026) e a legenda de cada uma; null nos posts antigos */
   platforms?: Network[] | null;
   captions?: Partial<Record<Network, string>> | null;
+  first_comment?: string | null;
+  collaborators?: string | null;
   publish_type: PublishFormat;
   caption: string;
   media_url: string | null;

@@ -130,6 +130,8 @@ export default function ScheduleDialog({
   const [networks, setNetworks] = useState<Network[]>([]);
   const [captions, setCaptions] = useState<Partial<Record<Network, string>>>({});
   const [activeNet, setActiveNet] = useState<Network>('instagram');
+  const [firstComment, setFirstComment] = useState('');
+  const [collab, setCollab] = useState('');
   const caption = captions[activeNet] ?? '';
   const [captionsTouched, setCaptionsTouched] = useState(false);
   const setCaption = (text: string) => { setCaptionsTouched(true); setCaptions((c) => ({ ...c, [activeNet]: text })); };
@@ -190,6 +192,8 @@ export default function ScheduleDialog({
       for (const n of NETWORK_ORDER) base[n] = initial.captions?.[n] ?? initial.caption;
       setCaptions(base);
       setCaptionsTouched(false);
+      setFirstComment(item.post?.first_comment || '');
+      setCollab(item.post?.collaborators ? item.post.collaborators.split(',').map((u) => `@${u}`).join(', ') : '');
     }
     setStoryLink(initial.storyLink);
     setStoryLinkText(initial.storyLinkText);
@@ -306,6 +310,7 @@ export default function ScheduleDialog({
     && mode === initial.mode && platform === initial.platform && format === initial.format
     && caption === initial.caption && storyLink === initial.storyLink && storyLinkText === initial.storyLinkText
     && networks.join() === initial.networks.join() && !captionsTouched
+    && firstComment === (item.post?.first_comment || '') && collab === (item.post?.collaborators ? item.post.collaborators.split(',').map((u) => `@${u}`).join(', ') : '')
     && mediaUrl === initial.mediaUrl && !repeatOn;
 
   const save = async (allowPast = false) => {
@@ -373,6 +378,8 @@ export default function ScheduleDialog({
         ...(postsAlone && !isStory ? {
           platforms: networks,
           captions: Object.fromEntries(networks.map((n) => [n, captions[n] ?? ''])),
+          first_comment: firstComment.trim() || undefined,
+          collaborators: networks.includes('instagram') ? collab.trim() || undefined : undefined,
         } : postsAlone && isStory ? { platforms: networks.filter((n) => n === 'instagram' || n === 'facebook') } : {}),
         publish_type: format,
         caption: isStory ? '' : postsAlone ? (captions.instagram ?? caption) : caption,
@@ -642,6 +649,21 @@ export default function ScheduleDialog({
                     <Button type="button" variant="ghost" size="sm" onClick={storeCaption} disabled={savingCaption || caption.length > 2200} className="h-6 gap-1 px-2 text-[11px]">
                       {savingCaption ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Salvar só a legenda
                     </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {mode === 'auto' && !isStory && !isSeriesItem && !readOnly && (
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="sched-first-comment" className="text-xs">Primeiro comentário (opcional)</Label>
+                  <Input id="sched-first-comment" value={firstComment} onChange={(e) => setFirstComment(e.target.value)} placeholder="Link do WhatsApp, hashtags…" />
+                </div>
+                {networks.includes('instagram') && (
+                  <div className="space-y-1">
+                    <Label htmlFor="sched-collab" className="text-xs">Collab no Instagram (até 3 perfis)</Label>
+                    <Input id="sched-collab" value={collab} onChange={(e) => setCollab(e.target.value)} placeholder="@parceiro, @fornecedor" />
                   </div>
                 )}
               </div>

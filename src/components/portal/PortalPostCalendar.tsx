@@ -125,7 +125,7 @@ function PostViewer({ post, clientColor, onClose }: { post: CalendarPost; client
   );
 }
 
-export default function PortalPostCalendar({ clientId, clientColor }: { clientId: string; clientColor: string }) {
+export default function PortalPostCalendar({ clientId, clientColor, stateFilter = null }: { clientId: string; clientColor: string; stateFilter?: 'agendado' | 'publicado' | null }) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -154,9 +154,10 @@ export default function PortalPostCalendar({ clientId, clientColor }: { clientId
 
   const byDay = useMemo(() => {
     const map = new Map<string, CalendarPost[]>();
-    for (const p of posts) map.set(p.date, [...(map.get(p.date) || []), p]);
+    // filtro da equipe (Agendados / Postados) no calendário (03/11/2026)
+    for (const p of posts) if (!stateFilter || p.state === stateFilter) map.set(p.date, [...(map.get(p.date) || []), p]);
     return map;
-  }, [posts]);
+  }, [posts, stateFilter]);
 
   const scheduledCount = posts.filter((p) => p.state === 'agendado').length;
   const publishedCount = posts.length - scheduledCount;

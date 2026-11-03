@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 import PortalCompanyAdmin from '@/components/portal/PortalCompanyAdmin';
+import PortalStageFilter, { stageOf, type PortalStage } from '@/components/portal/PortalStageFilter';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -143,6 +144,10 @@ export default function ClientPortal() {
   const [loading, setLoading] = useState(true);
   const [adjustmentNote, setAdjustmentNote] = useState('');
   const [showAdjustment, setShowAdjustment] = useState(false);
+  // revisão interna pela equipe no portal e filtro por etapa (03/11/2026)
+  const [stage, setStage] = useState<PortalStage>('todos');
+  const [teamAdjustOpen, setTeamAdjustOpen] = useState(false);
+  const [teamAdjustNote, setTeamAdjustNote] = useState('');
   // Envio em andamento (aprovar / pedir ajuste / comentar): trava o botão e o Enter
   const [sendingAction, setSendingAction] = useState<null | 'approve' | 'adjustment' | 'comment'>(null);
   // Equipe: mandar o conteúdo aberto no WhatsApp do cliente (grupo ou privado)
@@ -399,6 +404,30 @@ export default function ClientPortal() {
     toast.success(isTeamMember ? 'Conteúdo aprovado em nome do cliente' : 'Conteúdo aprovado com sucesso!');
   };
 
+  // Equipe: aprovar = mostrar ao cliente (vai para o portal e o link segue no grupo do WhatsApp); ajuste = volta ao editor
+  const handleTeamRelease = async () => {
+    if (!selectedContent || !client || sendingAction) return;
+    if (!window.confirm(`Aprovar "${selectedContent.title}"? O vídeo aparece no portal do cliente e o link vai no grupo do WhatsApp para ele aprovar.`)) return;
+    setSendingAction('approve');
+    const result = await portalAction({ action: 'team_release', content_id: selectedContent.id, client_id: client.id, author_name: profile?.name });
+    setSendingAction(null);
+    if (result?.error) { toast.error(`Não foi possível aprovar: ${result.error}`); return; }
+    setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'pendente' } : c));
+    setSelectedContent(prev => prev ? { ...prev, status: 'pendente' } : null);
+    toast.success('Aprovado: o cliente já vê no portal e o link vai no grupo do WhatsApp');
+  };
+
+  const handleTeamAdjust = async () => {
+    if (!selectedContent || !client || sendingAction || teamAdjustNote.trim().length < 3) return;
+    setSendingAction('adjustment');
+    const result = await portalAction({ action: 'team_adjust', content_id: selectedContent.id, client_id: client.id, author_name: profile?.name, message: teamAdjustNote.trim() });
+    setSendingAction(null);
+    if (result?.error) { toast.error(`Não foi possível pedir o ajuste: ${result.error}`); return; }
+    setTeamAdjustOpen(false);
+    setTeamAdjustNote('');
+    toast.success('Ajuste enviado ao editor: o card voltou para Alteração');
+  };
+
   const handleRequestAdjustment = async () => {
     if (!selectedContent || !adjustmentNote.trim() || !client || sendingAction) return;
     const author = getCommentAuthor();
@@ -506,9 +535,19 @@ export default function ClientPortal() {
   };
 
   // Filter: clients can't see 'revisao_interna' content, only team members can
-  const visibleContents = useMemo(() =>
+  const allVisibleContents = useMemo(() =>
     isTeamMember ? contents : contents.filter(c => c.status !== 'revisao_interna'),
     [contents, isTeamMember]
+  );
+  const stageCounts = useMemo(() => {
+    const counts: Partial<Record<PortalStage, number>> = { todos: allVisibleContents.length };
+    for (const c of allVisibleContents) { const s = stageOf(c.status); if (s) counts[s] = (counts[s] || 0) + 1; }
+    return counts;
+  }, [allVisibleContents]);
+  // a equipe filtra por etapa (Em revisão, Aguardando cliente, Aprovados, Agendados, Postados)
+  const visibleContents = useMemo(() =>
+    isTeamMember && stage !== 'todos' ? allVisibleContents.filter(c => stageOf(c.status) === stage) : allVisibleContents,
+    [allVisibleContents, isTeamMember, stage]
   );
 
   // Group contents by type for current season
@@ -951,6 +990,7 @@ export default function ClientPortal() {
 
             {/* ── CONTENT ROWS ── */}
             <div className="max-w-[1400px] mx-auto px-3 sm:px-8 pb-20 space-y-6 sm:space-y-10 mt-2 sm:mt-4">
+              {isTeamMember && <PortalStageFilter value={stage} onChange={setStage} counts={stageCounts} />}
               {seasonContents.length === 0 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-24">
                   <Film size={48} className="mx-auto mb-4 text-white/15" />
@@ -1041,7 +1081,23 @@ export default function ClientPortal() {
         ) : activeTab === 'designer' ? (
           <PortalDesigner clientId={client.id} clientColor={clientColor} />
         ) : activeTab === 'posts' ? (
-          <PortalPostCalendar clientId={client.id} clientColor={clientColor} />
+          <div>
+            {isTeamMember && (
+              <div className="max-w-[1400px] mx-auto px-4 sm:px-8 pt-6"><PortalStageFilter value={stage} onChange={setStage} counts={stageCounts} /></div>
+            )}
+            {isTeamMember && ['revisao', 'cliente', 'aprovado'].includes(stage) ? (
+              <div className="max-w-[1400px] mx-auto px-3 sm:px-8 py-6 pb-20 space-y-4">
+                <p className="text-sm text-white/50">Ainda sem data no calendário. Toque para abrir o vídeo.</p>
+                {visibleContents.length ? (
+                  <ContentRow label={`${visibleContents.length} conteúdo${visibleContents.length > 1 ? 's' : ''}`} items={visibleContents} clientColor={clientColor} onSelect={handleSelectContent} paused={!!selectedContent} />
+                ) : (
+                  <p className="py-16 text-center text-sm text-white/35">Nada nesta etapa.</p>
+                )}
+              </div>
+            ) : (
+              <PortalPostCalendar clientId={client.id} clientColor={clientColor} stateFilter={isTeamMember && (stage === 'agendado' || stage === 'publicado') ? stage : null} />
+            )}
+          </div>
         ) : activeTab === 'comentarios' ? (
           <PortalComments clientId={client.id} clientColor={clientColor} />
         ) : activeTab === 'agenda' ? (
@@ -1433,9 +1489,51 @@ export default function ClientPortal() {
 
                 {/* Actions — em revisão interna o vídeo ainda não foi liberado: sem aprovar/ajuste */}
                 {selectedContent.status === 'revisao_interna' && (
-                  <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white/60 text-sm">
-                    Em revisão interna: o cliente ainda não vê este conteúdo. Libere pelo Kanban.
-                  </div>
+                  isTeamMember ? (
+                    <div className="space-y-3 rounded-2xl border border-violet-400/25 bg-violet-500/[0.07] p-4">
+                      <p className="text-sm text-white/70"><span className="font-semibold text-white">Revisão interna.</span> O cliente ainda não vê este vídeo.</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={handleTeamRelease}
+                          disabled={!!sendingAction}
+                          className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-400 disabled:opacity-50"
+                        >
+                          {sendingAction === 'approve' ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Aprovar e mostrar ao cliente
+                        </button>
+                        <button
+                          onClick={() => setTeamAdjustOpen(v => !v)}
+                          className="inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/15"
+                        >
+                          <MessageSquare size={16} /> Pedir ajuste ao editor
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-white/45">Aprovar coloca o vídeo no portal e manda o link no grupo do WhatsApp do cliente para ele aprovar.</p>
+                      {teamAdjustOpen && (
+                        <div className="space-y-2">
+                          <textarea
+                            value={teamAdjustNote}
+                            onChange={e => setTeamAdjustNote(e.target.value)}
+                            placeholder="O que o editor precisa mudar? Ex.: legenda cobre o rosto em 0:12; trocar a música."
+                            rows={3}
+                            className="w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.06] p-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                          />
+                          <div className="flex justify-end">
+                            <button
+                              onClick={handleTeamAdjust}
+                              disabled={teamAdjustNote.trim().length < 3 || !!sendingAction}
+                              className="inline-flex items-center gap-2 rounded-full bg-violet-500 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-400 disabled:opacity-50"
+                            >
+                              {sendingAction === 'adjustment' ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Enviar ao editor
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white/60 text-sm">
+                      Em revisão interna: o cliente ainda não vê este conteúdo.
+                    </div>
+                  )
                 )}
                 {DECISION_STATUSES.includes(selectedContent.status) && (
                   <div className="flex flex-wrap gap-3">

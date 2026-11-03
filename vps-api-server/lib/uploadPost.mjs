@@ -16,6 +16,16 @@
 //   POST /api/upload-post/clients/:id/connect { networks? }  link de conexão só das redes marcadas (vale 48 h)
 //   POST /api/upload-post/clients/:id/sync       (equipe social) lê as contas conectadas e grava em social_accounts
 // A cada 15 min, uma chamada lê todos os perfis e atualiza as contas (o cliente pode ter conectado pelo link).
+//
+// Conexão com a cara da Pulse (usuário, 02/11/2026: "conexão transparente… dentro da nossa plataforma não mostrar
+// plataforma de terceiros, porque o cliente fica desconfiado"): o link do cliente é nosso (/conectar/<token>, vale 7 dias).
+// A página lista as redes marcadas no cadastro; cada "Conectar" pede à Upload-Post o endereço de login oficial da rede
+// (Connect API: /uploadposts/oauth/<rede>/start) com a volta para a nossa página, que mostra "Conectado".
+//   GET  /api/public/conectar/:token               cliente, redes e o que já está conectado
+//   POST /api/public/conectar/:token/start { rede } → { url } do login oficial da rede
+//   POST /api/upload-post/clients/:id/connect/send  manda o link no WhatsApp do cliente pelo número da Pulse
+
+import crypto from 'node:crypto';
 
 const BASE = 'https://api.upload-post.com/api';
 // google_business: a ficha do Google (postar novidades e responder avaliações, lib/socialHub.mjs)
@@ -23,6 +33,8 @@ export const UP_PLATFORMS = ['instagram', 'facebook', 'tiktok', 'linkedin', 'you
 const VIDEO_RE = /\.(mp4|mov|webm|m4v)(\?|#|$)/i;
 
 export const profileName = (clientId) => `pulse-${String(clientId).toLowerCase()}`;
+// nome da rede na Connect API da Upload-Post (Google com hífen)
+const OAUTH_NAME = { instagram: 'instagram', facebook: 'facebook', tiktok: 'tiktok', linkedin: 'linkedin', youtube: 'youtube', google_business: 'google-business' };
 
 /** Conta conectada de um perfil (social_accounts do perfil): objeto com handle; vazio ou null = não conectada. */
 export function connectedAccounts(socialAccounts = {}) {
@@ -88,6 +100,13 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
           facebook_pages JSONB,
           synced_at TIMESTAMPTZ
         );
+        CREATE TABLE IF NOT EXISTS client_connect_links (
+          token TEXT PRIMARY KEY,
+          client_id UUID NOT NULL,
+          networks TEXT[] NOT NULL,
+          expires_at TIMESTAMPTZ NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
         -- redes que a Pulse cuida do cliente (cadastro do cliente, 02/11/2026): o link pede login só nelas
         ALTER TABLE clients ADD COLUMN IF NOT EXISTS social_networks TEXT[];
       `).catch((error) => { schemaPromise = null; throw error; });
@@ -149,8 +168,9 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
   }
 
   /** Link da página de conexão da Upload-Post (em português, com a Pulse), para a equipe ou o cliente. */
+  /** Link da página de conexão da Pulse (/conectar/<token>, vale 7 dias), só com as redes marcadas no cadastro. */
   async function connectLink(clientId, networks = null) {
-    const { client, username } = await ensureProfile(clientId);
+    await ensureProfile(clientId);
     if (Array.isArray(networks)) {
       const chosen = UP_PLATFORMS.filter((p) => networks.includes(p));
       if (!chosen.length) throw Object.assign(new Error('Marque pelo menos uma rede.'), { status: 400 });
@@ -158,21 +178,52 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     }
     const { rows: [saved] } = await pool.query(`SELECT social_networks FROM clients WHERE id = $1`, [clientId]);
     const platforms = (saved?.social_networks || []).filter((p) => UP_PLATFORMS.includes(p));
-    const name = String(client.company_name || '').trim();
-    const r = await call('POST', '/uploadposts/users/generate-jwt', {
-      json: {
-        username,
-        redirect_url: `${appBase}/`,
-        redirect_button_text: 'Pronto, voltar',
-        logo_image: `${appBase}/pulse-logo.png`,
-        connect_title: `Conecte as redes de ${name}`.slice(0, 120),
-        connect_description: 'Entre em cada rede que a Pulse vai cuidar. É seguro: a gente só publica os conteúdos que você aprovou.',
-        platforms: platforms.length ? platforms : UP_PLATFORMS,
-        show_calendar: false,
-        language: 'pt',
-      },
+    const list = platforms.length ? platforms : ['instagram', 'facebook'];
+    const token = crypto.randomBytes(18).toString('base64url');
+    await pool.query(
+      `INSERT INTO client_connect_links (token, client_id, networks, expires_at) VALUES ($1, $2, $3, now() + interval '7 days')`, [token, clientId, list]
+    );
+    return { url: `${appBase}/conectar/${token}`, expires_days: 7, networks: list };
+  }
+
+  async function linkByToken(token) {
+    if (!/^[A-Za-z0-9_-]{20,40}$/.test(String(token || ''))) throw Object.assign(new Error('Link não encontrado'), { status: 404 });
+    await ensureSchema();
+    const { rows: [l] } = await pool.query(
+      `SELECT l.*, c.company_name, c.logo_url FROM client_connect_links l JOIN clients c ON c.id = l.client_id WHERE l.token = $1`, [token]
+    );
+    if (!l) throw Object.assign(new Error('Link não encontrado'), { status: 404 });
+    if (new Date(l.expires_at) < new Date()) throw Object.assign(new Error('Este link venceu. Peça um novo para a equipe da Pulse.'), { status: 410 });
+    return l;
+  }
+
+  /** O que a página do cliente mostra (lê as contas na hora, para o "Conectado" aparecer assim que ele volta). */
+  async function connectPage(token) {
+    const l = await linkByToken(token);
+    await sync(l.client_id).catch((error) => logger.warn?.('[conectar] leitura:', error.message));
+    const { rows } = await pool.query(
+      `SELECT platform, account_name, username, status FROM social_accounts WHERE client_id = $1 AND api_base = 'upload_post'`, [l.client_id]
+    );
+    return {
+      client: { name: String(l.company_name || '').trim(), logo: l.logo_url || null },
+      networks: l.networks.map((p) => {
+        const acc = rows.find((x) => x.platform === p);
+        return { id: p, connected: !!acc && acc.status === 'connected', reconnect: acc?.status === 'reauth', account: acc ? acc.username || acc.account_name : null };
+      }),
+      expires_at: l.expires_at,
+    };
+  }
+
+  /** Endereço do login oficial da rede, voltando para a nossa página. */
+  async function connectStart(token, platform) {
+    const l = await linkByToken(token);
+    if (!l.networks.includes(platform) || !OAUTH_NAME[platform]) throw Object.assign(new Error('Rede inválida'), { status: 400 });
+    const { username } = await ensureProfile(l.client_id);
+    const r = await call('POST', `/uploadposts/oauth/${OAUTH_NAME[platform]}/start`, {
+      json: { profile: username, redirect_url: `${appBase}/conectar/${token}?rede=${platform}` },
     });
-    return { url: r.access_url, expires_hours: 48, networks: platforms.length ? platforms : UP_PLATFORMS };
+    if (!r.authorize_url) throw Object.assign(new Error('Não deu para abrir o login da rede. Tente de novo.'), { status: 502 });
+    return { url: r.authorize_url };
   }
 
   /** Páginas do Facebook do perfil: com uma só, é ela; com várias, mantém a escolhida antes (ou nenhuma, e avisa). */
@@ -246,11 +297,11 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
   /** Para o cadastro do cliente: redes escolhidas e as contas já conectadas pela Upload-Post. */
   async function clientInfo(clientId) {
     await ensureSchema();
-    const { rows: [c] } = await pool.query(`SELECT social_networks FROM clients WHERE id = $1`, [clientId]);
+    const { rows: [c] } = await pool.query(`SELECT social_networks, whatsapp, responsible_person, company_name FROM clients WHERE id = $1`, [clientId]);
     const { rows: accounts } = await pool.query(
       `SELECT platform, account_name, username, status FROM social_accounts WHERE client_id = $1 AND api_base = 'upload_post' ORDER BY platform`, [clientId]
     );
-    return { networks: c?.social_networks || [], accounts, configured: !!(await apiKey()) };
+    return { networks: c?.social_networks || [], accounts, configured: !!(await apiKey()), whatsapp: c?.whatsapp || null, responsible: c?.responsible_person || null, name: c?.company_name || null };
   }
 
   async function status(key) {
@@ -298,10 +349,10 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     return { id: result.post_id || result.platform_post_id || null, url: result.url || result.post_url || null, provider: 'upload_post' };
   }
 
-  return { ensureSchema, apiKey, saveKey, call, ensureProfile, connectLink, clientInfo, sync, syncAll, status, publish };
+  return { ensureSchema, apiKey, saveKey, call, ensureProfile, connectLink, connectPage, connectStart, clientInfo, sync, syncAll, status, publish };
 }
 
-export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager, scope = null, logger = console }) {
+export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager, scope = null, sendWhatsApp = null, logger = console }) {
   const guard = (req, clientId) => (scope ? scope.guard(req, clientId) : null);
   const fail = (res, error) => {
     const status = Number(error?.status) >= 400 && Number(error?.status) < 600 ? Number(error.status) : /unauthori|login|token/i.test(error?.message || '') ? 401 : /admin|acesso|permiss/i.test(error?.message || '') ? 403 : 500;
@@ -338,6 +389,30 @@ export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifyS
       await guard(req, req.params.id);
       res.json(await uploadPost.connectLink(req.params.id, Array.isArray(req.body?.networks) ? req.body.networks.map(String) : null));
     } catch (error) { fail(res, error); }
+  });
+
+  // a equipe manda o link pelo WhatsApp da Pulse para o número do cliente (o texto vem da tela, com o link)
+  app.post('/api/upload-post/clients/:id/connect/send', async (req, res) => {
+    try {
+      await verifySocialManager(req);
+      await guard(req, req.params.id);
+      if (!sendWhatsApp) throw Object.assign(new Error('WhatsApp indisponível'), { status: 501 });
+      const info = await uploadPost.clientInfo(req.params.id);
+      const to = String(req.body?.to || info.whatsapp || '').replace(/\D/g, '');
+      const message = String(req.body?.message || '').trim().slice(0, 1500);
+      if (to.length < 10) throw Object.assign(new Error('O cliente não tem WhatsApp cadastrado. Coloque o número no cadastro.'), { status: 400 });
+      if (!/\/conectar\/[A-Za-z0-9_-]{20,40}/.test(message)) throw Object.assign(new Error('A mensagem precisa ter o link de conexão'), { status: 400 });
+      await sendWhatsApp(to.length <= 11 ? `55${to}` : to, message, req.params.id);
+      res.json({ ok: true, to: `•••${to.slice(-4)}` });
+    } catch (error) { fail(res, error); }
+  });
+
+  // página pública da Pulse para o cliente conectar as redes (sem login; o token vale 7 dias)
+  app.get('/api/public/conectar/:token', async (req, res) => {
+    try { res.set('Cache-Control', 'no-store'); res.json(await uploadPost.connectPage(req.params.token)); } catch (error) { fail(res, error); }
+  });
+  app.post('/api/public/conectar/:token/start', async (req, res) => {
+    try { res.json(await uploadPost.connectStart(req.params.token, String(req.body?.rede || ''))); } catch (error) { fail(res, error); }
   });
 
   app.get('/api/upload-post/clients/:id', async (req, res) => {

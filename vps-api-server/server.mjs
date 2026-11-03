@@ -20658,8 +20658,19 @@ pulsePlus.registerRoutes(app);
 
 // ─── Agentes de edição (chaves próprias, fila, entrega) ─────
 // ─── Upload-Post: postagem automática pelas redes dos clientes (lib/uploadPost.mjs, 02/11/2026) ──
+// Facebooks da equipe: só o dono (usuário, 03/11/2026: "essa parte deve aparecer apenas para o Thiago")
+const PULSE_OWNER_EMAILS = String(process.env.PULSE_OWNER_EMAILS || 'ag.pulsemkt@gmail.com').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+async function verifyOwner(req) {
+  const ctx = await verifyAdmin(req);
+  if (PULSE_OWNER_EMAILS.includes(String(ctx.user?.email || '').trim().toLowerCase())) return ctx;
+  const { rows: [p] } = await pool.query(
+    `SELECT p.name, EXISTS (SELECT 1 FROM user_roles r WHERE r.user_id = p.id AND r.role = 'admin') AS admin FROM profiles p WHERE p.id = $1`, [ctx.user?.id]
+  ).catch(() => ({ rows: [] }));
+  if (p?.admin && /^thiago/i.test(String(p.name || '').trim())) return ctx;
+  throw Object.assign(new Error('Só o Thiago acessa os Facebooks da equipe'), { status: 403 });
+}
 registerUploadPostRoutes(app, {
-  uploadPost, verifyAdmin, verifySocialManager: verifySocialOrAgent, scope: { guard: (req, id) => socialScope.guard(req, id) },
+  uploadPost, verifyAdmin, verifyOwner, verifySocialManager: verifySocialOrAgent, scope: { guard: (req, id) => socialScope.guard(req, id) },
   // link de conexão das redes no WhatsApp do cliente, pelo número da Pulse (botão no cadastro do cliente)
   sendWhatsApp: (to, body, clientId) => enqueueWhatsApp(pool, { to, body, clientId, purpose: 'aprovacao', triggerType: 'conectar_redes' }),
 });

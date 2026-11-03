@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
 import { cn } from '@/lib/utils';
 import MediaFitNotes from './MediaFitNotes';
+import StoryTrackField, { type StoryTrack } from './StoryTrackField';
 import {
   addDaysKey, brtToIso, formatDayLabel, suggestFormat, todayKey, weekdayIndex,
   NETWORK_LABELS, NETWORK_MAX,
@@ -141,6 +142,7 @@ export default function ScheduleDialog({
   const [mediaUrl, setMediaUrl] = useState('');
   // ordem do carrossel (usuário, 02/11/2026: "possível postar carrossel e organizar a ordem certinha")
   const [order, setOrder] = useState<string[]>([]);
+  const [track, setTrack] = useState<StoryTrack | null>(null);
   const [repeat, setRepeat] = useState<RepeatDraft>(defaultRepeat(''));
   const [scope, setScope] = useState<Scope>('one');
   const [saving, setSaving] = useState(false);
@@ -175,6 +177,7 @@ export default function ScheduleDialog({
       storyLinkText: post?.story_link_text || clientLink?.default_text || DEFAULT_BUTTON_TEXTS[0],
       mediaUrl: post?.media_url || item.media_url || '',
       order: post?.media_items?.length ? post.media_items : item.media_items,
+      track: post?.story_audio_url ? { url: post.story_audio_url, name: post.story_audio_name || null } : null,
       repeat: series ? repeatFromRule(series.rule, series.index) : defaultRepeat(initialDate),
       scope: (item.virtual ? 'following' : 'one') as Scope,
     };
@@ -203,6 +206,7 @@ export default function ScheduleDialog({
     setStoryLinkText(initial.storyLinkText);
     setMediaUrl(initial.mediaUrl);
     setOrder(initial.order);
+    setTrack(initial.track);
     setRepeat(initial.repeat);
     setScope(initial.scope);
     setSaving(false);
@@ -301,6 +305,9 @@ export default function ScheduleDialog({
   };
 
   const postsAlone = mode !== 'manual';
+  const storyMedia = (multiImage ? order[0] : mediaUrl.trim()) || '';
+  // trilha: story de UMA arte postado sozinho, sem repetição (a série não leva trilha)
+  const canTrack = isStory && mode === 'auto' && !repeatOn && !!storyMedia && !/\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(storyMedia);
   const storyFields = () => ({
     client_id: clientId,
     date,
@@ -309,6 +316,8 @@ export default function ScheduleDialog({
     story_mode: mode === 'lembrete' ? 'lembrete' as const : 'auto' as const,
     story_link: mode === 'lembrete' ? storyLink.trim() || null : null,
     story_link_text: mode === 'lembrete' ? storyLinkText.trim() || null : null,
+    story_audio_url: canTrack && track ? track.url : null,
+    story_audio_name: canTrack && track ? track.name : null,
   });
 
   const onlyWhenChanged = scheduled && !isSeriesItem && item.state !== 'erro'
@@ -316,7 +325,7 @@ export default function ScheduleDialog({
     && caption === initial.caption && storyLink === initial.storyLink && storyLinkText === initial.storyLinkText
     && networks.join() === initial.networks.join() && !captionsTouched
     && firstComment === (item.post?.first_comment || '') && collab === (item.post?.collaborators ? item.post.collaborators.split(',').map((u) => `@${u}`).join(', ') : '')
-    && mediaUrl === initial.mediaUrl && order.join() === initial.order.join() && !repeatOn;
+    && mediaUrl === initial.mediaUrl && order.join() === initial.order.join() && (track?.url || '') === (initial.track?.url || '') && !repeatOn;
 
   const save = async (allowPast = false) => {
     const iso = brtToIso(date, time);
@@ -593,6 +602,10 @@ export default function ScheduleDialog({
                 buttonTexts={clientLink?.button_texts}
                 onEditClientLink={onEditClientLink}
               />
+            )}
+
+            {canTrack && (
+              <StoryTrackField value={track} onChange={setTrack} disabled={readOnly} />
             )}
 
             {canRepeat && (

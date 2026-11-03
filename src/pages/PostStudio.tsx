@@ -9,6 +9,7 @@ import {
 } from '@/services/socialPostsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import MediaFitNotes from '@/components/scheduling/MediaFitNotes';
+import StoryTrackField, { type StoryTrack } from '@/components/scheduling/StoryTrackField';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -55,6 +56,7 @@ export default function PostStudio() {
   const [caption, setCaption] = useState('');
   const [firstComment, setFirstComment] = useState('');
   const [collab, setCollab] = useState('');
+  const [track, setTrack] = useState<StoryTrack | null>(null);
   const [storyLink, setStoryLink] = useState('');
   const [storyLinkText, setStoryLinkText] = useState('Saiba mais');
   const [scheduledAt, setScheduledAt] = useState('');
@@ -129,6 +131,7 @@ export default function PostStudio() {
       setCaption('');
       setFirstComment('');
       setCollab('');
+      setTrack(null);
       setStoryLink('');
     }
     lastPostRef.current = null;
@@ -138,6 +141,8 @@ export default function PostStudio() {
   const visibleItems = useMemo(() => items.slice(0, maxItems), [items, maxItems]);
   const filledItems = visibleItems.filter(i => i.url.trim());
   const selectedUrls = filledItems.map(i => i.url.trim());
+  // trilha: story de UMA arte (vídeo já leva o próprio som)
+  const canTrack = publishType === 'stories' && selectedUrls.length === 1 && !/\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(selectedUrls[0]);
 
   const updateItem = (i: number, patch: Partial<PostMediaItem>) =>
     setItems(prev => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -193,6 +198,7 @@ export default function PostStudio() {
     setCaption('');
     setFirstComment('');
     setCollab('');
+    setTrack(null);
     setStoryLink('');
     setScheduledAt('');
   };
@@ -219,6 +225,8 @@ export default function PostStudio() {
       ...(publishType === 'stories' ? {} : { first_comment: firstComment.trim(), collaborators: collab.trim() }),
       story_link: publishType === 'stories' ? storyLink.trim() || null : null,
       story_link_text: publishType === 'stories' ? storyLinkText.trim() || null : null,
+      story_audio_url: canTrack && track ? track.url : null,
+      story_audio_name: canTrack && track ? track.name : null,
     };
     const key = JSON.stringify({ ...input, when: now ? 'agora' : scheduledAt });
 
@@ -477,6 +485,7 @@ export default function PostStudio() {
                     <p className="text-[11px] text-muted-foreground sm:col-span-2">
                       O link só aparece se a conta do cliente tiver permissão de link liberada pela Meta. Se ela recusar, o story é publicado mesmo assim, sem o link.
                     </p>
+                    {canTrack && <div className="sm:col-span-2"><StoryTrackField value={track} onChange={setTrack} /></div>}
                   </div>
                 ) : (
                   <div>

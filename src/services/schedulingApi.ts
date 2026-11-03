@@ -55,6 +55,9 @@ export interface ScheduleInput {
   caption?: string;
   story_link?: string | null;
   story_link_text?: string | null;
+  /** story de arte postado sozinho: a arte vira vídeo de 15 s com esta música */
+  story_audio_url?: string | null;
+  story_audio_name?: string | null;
   /** Story: 'auto' = postar sozinho; 'lembrete' = avisa a equipe, que posta pelo app com o link */
   story_mode?: 'auto' | 'lembrete';
   media_url?: string | null;

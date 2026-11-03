@@ -28,6 +28,7 @@ import { CITY_LABELS, useCity, type CityCode } from '@/contexts/CityContext';
 import { usePulsePlus } from '@/hooks/usePulsePlus';
 import PulsePlusAccessSwitch, { useTeamPulsePlus } from '@/components/team/PulsePlusAccessSwitch';
 import AgentTrainerSwitch, { useAgentTrainers } from '@/components/team/AgentTrainerSwitch';
+import ConexoesAccessSwitch, { useTeamConexoesAccess } from '@/components/team/ConexoesAccessSwitch';
 import ClientTag from '@/components/ClientTag';
 
 const ALL_CITIES: CityCode[] = ['minacu', 'uruacu'];
@@ -143,6 +144,7 @@ export default function Team() {
   const isAdminRole = currentUser?.role === 'admin' || currentUser?.roles?.includes('admin') === true;
   const canGrantPulsePlus = isAdminRole && pulsePlus;
   const { data: pulsePlusMembers } = useTeamPulsePlus(canGrantPulsePlus);
+  const { data: conexoesMembers } = useTeamConexoesAccess(canManageTeam);
   // quem pode treinar os agentes (Treinar agentes / módulo Agentes): o mesmo admin com Pulse Plus marca
   const { data: agentTrainers } = useAgentTrainers(canGrantPulsePlus);
 
@@ -794,6 +796,9 @@ export default function Team() {
                 <div className="flex items-center gap-3">
                   {canGrantPulsePlus && pulsePlusMembers && (
                     <PulsePlusAccessSwitch userId={u.id} name={u.displayName || u.name} members={pulsePlusMembers} />
+                  )}
+                  {canManageTeam && conexoesMembers && (
+                    <ConexoesAccessSwitch userId={u.id} name={u.displayName || u.name} members={conexoesMembers} />
                   )}
                   {canGrantPulsePlus && agentTrainers && (
                     <AgentTrainerSwitch userId={u.id} name={u.displayName || u.name} members={agentTrainers} />

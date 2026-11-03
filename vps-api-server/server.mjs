@@ -8331,8 +8331,44 @@ async function verifySocialManager(req) {
   if (await isAdminUser(ctx.user)) return ctx;
   if (await userHasAssignedRole(ctx.user, 'gestor_projetos')) return ctx;
   if (await userHasAssignedRole(ctx.user, 'revisor_meta')) return ctx;
+  // acesso só à área de Conexões Sociais, liberado pessoa a pessoa na tela Equipe (03/11/2026, pedido do Thiago: Victor)
+  if (await hasConexoesAccess(ctx.user)) return ctx;
   throw new Error('Admin access required');
 }
+
+const CONEXOES_MODULE = 'conexoes_sociais';
+async function hasConexoesAccess(user) {
+  if (!user?.id) return false;
+  const { rows } = await pool.query(`SELECT 1 FROM module_access WHERE module = $1 AND user_id::text = $2 LIMIT 1`, [CONEXOES_MODULE, String(user.id)]).catch(() => ({ rows: [] }));
+  return rows.length > 0;
+}
+
+// ─── Acesso a Conexões Sociais por pessoa (tela Equipe, só admin) ───
+app.get('/api/team/conexoes-access', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+    const { rows } = await pool.query(`SELECT user_id FROM module_access WHERE module = $1`, [CONEXOES_MODULE]).catch(() => ({ rows: [] }));
+    res.json({ members: rows });
+  } catch (error) { res.status(error.message === 'Admin access required' ? 403 : 401).json({ error: error.message }); }
+});
+app.post('/api/team/:userId/conexoes-access', async (req, res) => {
+  try {
+    const { user } = await verifyAdmin(req);
+    if (!UUID_RE.test(String(req.params.userId))) return res.status(400).json({ error: 'Pessoa inválida' });
+    await pool.query(
+      `INSERT INTO module_access (module, user_id, created_by) VALUES ($1, $2, $3) ON CONFLICT (module, user_id) DO NOTHING`,
+      [CONEXOES_MODULE, req.params.userId, String(user?.email || user?.id || '')]
+    );
+    res.json({ ok: true });
+  } catch (error) { res.status(error.message === 'Admin access required' ? 403 : 500).json({ error: error.message }); }
+});
+app.delete('/api/team/:userId/conexoes-access', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+    await pool.query(`DELETE FROM module_access WHERE module = $1 AND user_id::text = $2`, [CONEXOES_MODULE, String(req.params.userId)]);
+    res.json({ ok: true });
+  } catch (error) { res.status(error.message === 'Admin access required' ? 403 : 500).json({ error: error.message }); }
+});
 
 function socialAuthErrorStatus(error) {
   return error?.message === 'Admin access required' ? 403 : 401;

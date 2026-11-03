@@ -481,7 +481,7 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
   return { teamList, teamCreate, teamLogin, teamAssign, teamUnassign, ensureSchema, apiKey, saveKey, call, ensureProfile, connectLink, connectPage, connectStart, clientInfo, sync, syncAll, status, publish };
 }
 
-export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager, scope = null, sendWhatsApp = null, logger = console }) {
+export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifyOwner = verifyAdmin, verifySocialManager, scope = null, sendWhatsApp = null, logger = console }) {
   const guard = (req, clientId) => (scope ? scope.guard(req, clientId) : null);
   const fail = (res, error) => {
     const status = Number(error?.status) >= 400 && Number(error?.status) < 600 ? Number(error.status) : /unauthori|login|token/i.test(error?.message || '') ? 401 : /admin|acesso|permiss/i.test(error?.message || '') ? 403 : 500;
@@ -562,24 +562,24 @@ export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifyS
 
   // Facebooks da equipe (03/11/2026): login com nome e páginas ligadas aos clientes à mão
   app.get('/api/upload-post/team-facebook', async (req, res) => {
-    try { await verifySocialManager(req); res.set('Cache-Control', 'no-store'); res.json({ teams: await uploadPost.teamList() }); } catch (error) { fail(res, error); }
+    try { await verifyOwner(req); res.set('Cache-Control', 'no-store'); res.json({ teams: await uploadPost.teamList() }); } catch (error) { fail(res, error); }
   });
   app.post('/api/upload-post/team-facebook', async (req, res) => {
-    try { const { user } = await verifySocialManager(req); res.json(await uploadPost.teamCreate(req.body?.name, user?.id)); } catch (error) { fail(res, error); }
+    try { const { user } = await verifyOwner(req); res.json(await uploadPost.teamCreate(req.body?.name, user?.id)); } catch (error) { fail(res, error); }
   });
   app.post('/api/upload-post/team-facebook/:id/login', async (req, res) => {
-    try { await verifySocialManager(req); res.json(await uploadPost.teamLogin(req.params.id)); } catch (error) { fail(res, error); }
+    try { await verifyOwner(req); res.json(await uploadPost.teamLogin(req.params.id)); } catch (error) { fail(res, error); }
   });
   app.post('/api/upload-post/team-facebook/:id/assign', async (req, res) => {
     try {
-      await verifySocialManager(req);
+      await verifyOwner(req);
       const clientId = String(req.body?.client_id || '');
       await guard(req, clientId);
       res.json(await uploadPost.teamAssign(req.params.id, String(req.body?.page_id || ''), clientId));
     } catch (error) { fail(res, error); }
   });
   app.post('/api/upload-post/clients/:id/team-facebook/remove', async (req, res) => {
-    try { await verifySocialManager(req); await guard(req, req.params.id); res.json(await uploadPost.teamUnassign(req.params.id)); } catch (error) { fail(res, error); }
+    try { await verifyOwner(req); await guard(req, req.params.id); res.json(await uploadPost.teamUnassign(req.params.id)); } catch (error) { fail(res, error); }
   });
 
   const timer = setInterval(() => uploadPost.syncAll().catch((error) => logger.error('[upload-post] sync geral:', error.message)), 15 * 60_000);

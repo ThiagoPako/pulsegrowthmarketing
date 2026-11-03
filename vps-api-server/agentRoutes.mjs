@@ -222,10 +222,16 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             alvo UUID;
             onde TEXT;
           BEGIN
-            -- só quando a urgência acaba de ser ligada, ou o card urgente muda de coluna (ex.: entregue → Análise)
-            IF NEW.urgent_at IS NULL
-               OR (OLD.urgent_at IS NOT NULL AND OLD.kanban_column IS NOT DISTINCT FROM NEW.kanban_column) THEN
+            -- só quando a urgência acaba de ser ligada, ou o card urgente muda de coluna (ex.: entregue → Análise).
+            -- Card que já nasce urgente (INSERT) também avisa (03/11/2026: o 🔥 da NiqTurbo criado pela triagem ficou
+            -- horas sem dono porque só o UPDATE disparava este aviso).
+            IF NEW.urgent_at IS NULL THEN
               RETURN NULL;
+            END IF;
+            IF TG_OP = 'UPDATE' THEN
+              IF OLD.urgent_at IS NOT NULL AND OLD.kanban_column IS NOT DISTINCT FROM NEW.kanban_column THEN
+                RETURN NULL;
+              END IF;
             END IF;
             SELECT k.user_id INTO chefe FROM agent_keys k JOIN profiles p ON p.id = k.user_id
               WHERE k.revoked_at IS NULL AND k.role = 'chefe' AND p.name NOT ILIKE 'severino%'
@@ -243,6 +249,19 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
               SELECT user_id INTO alvo FROM agent_keys WHERE revoked_at IS NULL AND role = 'editor'
                 AND user_id IN (NEW.assigned_to, NEW.edited_by)
                 ORDER BY (user_id IS NOT DISTINCT FROM NEW.assigned_to) DESC LIMIT 1;
+              -- urgente sem dono: vai na hora para o editor agente com menos cards em Edição/Alteração
+              -- (regra "🔥 = atribuir dono na hora", 31/10/2026)
+              IF alvo IS NULL AND NEW.assigned_to IS NULL AND NEW.kanban_column = 'edicao' THEN
+                SELECT k.user_id INTO alvo FROM agent_keys k
+                  WHERE k.revoked_at IS NULL AND k.role = 'editor'
+                  ORDER BY (SELECT count(*) FROM content_tasks t WHERE t.assigned_to = k.user_id
+                              AND t.kanban_column IN ('edicao', 'alteracao') AND t.waiting_material_at IS NULL),
+                           k.created_at
+                  LIMIT 1;
+                IF alvo IS NOT NULL THEN
+                  UPDATE content_tasks SET assigned_to = alvo WHERE id = NEW.id AND assigned_to IS NULL;
+                END IF;
+              END IF;
               IF alvo IS NOT NULL THEN
                 INSERT INTO agent_messages (from_user, to_user, body) VALUES (chefe, alvo,
                   '🔥 URGENTE em ' || onde || ' (prioridade total, marcado pela equipe): "' || NEW.title || '" · card ' || NEW.id ||
@@ -252,7 +271,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             IF chefe IS NOT NULL AND chefe IS DISTINCT FROM alvo THEN
               INSERT INTO agent_messages (from_user, to_user, body) VALUES (NULL, chefe,
                 '🔥 URGENTE em ' || onde || ': "' || NEW.title || '" · card ' || NEW.id ||
-                CASE WHEN alvo IS NULL THEN '. Nenhum agente com o card: atribua agora.' ELSE '. O agente do card já foi avisado.' END);
+                CASE WHEN alvo IS NULL THEN '. Nenhum agente com o card: atribua agora.' ELSE '. Já está com um editor, que foi avisado.' END);
             END IF;
             RETURN NULL;
           EXCEPTION WHEN OTHERS THEN
@@ -262,7 +281,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         `);
         await pool.query(`DROP TRIGGER IF EXISTS trg_content_tasks_urgencia_avisa ON content_tasks`);
         await pool.query(`
-          CREATE TRIGGER trg_content_tasks_urgencia_avisa AFTER UPDATE OF urgent_at, kanban_column, immediate_alteration ON content_tasks
+          CREATE TRIGGER trg_content_tasks_urgencia_avisa AFTER INSERT OR UPDATE OF urgent_at, kanban_column, immediate_alteration ON content_tasks
             FOR EACH ROW EXECUTE FUNCTION pulse_urgencia_avisa()
         `);
         // 📦 Ficha do bruto (31/10/2026, "usa o Severino mesmo"): card de vídeo que entra em Edição com o link dos

@@ -603,10 +603,12 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
   }
 
   // ── listas ──
-  async function listComments({ clientId, status, platform, limit = 100, forPortal = false }) {
+  async function listComments({ clientId, status, platform, limit = 100, forPortal = false, city = null }) {
     await ensureSchema();
     const where = ['c.commented_at > now() - interval \'60 days\''];
     const params = [];
+    // cidade ativa (Minaçu/Uruaçu): clientes dela e os globais (trabalho em conjunto, sem cidade)
+    if (city) { params.push(city); where.push(`(cl.city IS NULL OR lower(cl.city) = $${params.length})`); }
     if (clientId) { params.push(clientId); where.push(`c.client_id = $${params.length}`); }
     if (status) { params.push(status); where.push(`c.status = $${params.length}`); }
     if (platform) { params.push(platform); where.push(`c.platform = $${params.length}`); }
@@ -623,20 +625,20 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
     return rows;
   }
 
-  async function listReviews({ clientId, forPortal = false }) {
+  async function listReviews({ clientId, forPortal = false, city = null }) {
     // removal_status e a auditoria vão para a equipe; o cliente vê só avaliação e resposta
     await ensureSchema();
     const { rows } = await pool.query(
       `SELECT r.id, r.client_id, cl.company_name AS client_name, r.reviewer, r.rating, r.comment, r.reviewed_at, r.status,
               ${forPortal ? 'NULL AS isis_draft, NULL AS isis_reason, NULL AS removal_reason, NULL AS removal_status,' : 'r.isis_draft, r.isis_reason, r.removal_reason, r.removal_status,'} r.reply_text, r.reply_by, r.replied_at
          FROM google_reviews r LEFT JOIN clients cl ON cl.id = r.client_id
-        WHERE ($1::uuid IS NULL OR r.client_id = $1)
-        ORDER BY (r.status IN ('escalado', 'rascunho', 'aguardando_cliente')) DESC, r.reviewed_at DESC NULLS LAST LIMIT 200`, [clientId || null]
+        WHERE ($1::uuid IS NULL OR r.client_id = $1) AND ($2::text IS NULL OR cl.city IS NULL OR lower(cl.city) = $2)
+        ORDER BY (r.status IN ('escalado', 'rascunho', 'aguardando_cliente')) DESC, r.reviewed_at DESC NULLS LAST LIMIT 200`, [clientId || null, city || null]
     );
     return rows;
   }
 
-  async function overview() {
+  async function overview(city = null) {
     await ensureSchema();
     const { rows } = await pool.query(
       `SELECT cl.id AS client_id, cl.company_name AS client_name,
@@ -648,7 +650,8 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
          JOIN (SELECT DISTINCT client_id FROM social_accounts WHERE api_base = 'upload_post') a ON a.client_id = cl.id
          LEFT JOIN social_comments c ON c.client_id = cl.id
          LEFT JOIN social_hub_settings s ON s.client_id = cl.id
-        GROUP BY cl.id, cl.company_name, s.isis_mode ORDER BY cl.company_name`
+        WHERE ($1::text IS NULL OR cl.city IS NULL OR lower(cl.city) = $1)
+        GROUP BY cl.id, cl.company_name, s.isis_mode ORDER BY cl.company_name`, [city || null]
     );
     return rows;
   }
@@ -671,7 +674,16 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
   };
 }
 
-export function registerSocialHubRoutes(app, { hub, uploadPost, pool, verifySocialManager, verifyAdmin, flows = null, publicApiUrl = 'https://agenciapulse.tech', logger = console }) {
+export function registerSocialHubRoutes(app, { hub, uploadPost, pool, verifySocialManager, verifyAdmin, flows = null, scope = null, publicApiUrl = 'https://agenciapulse.tech', logger = console }) {
+  // cidade (Minaçu/Uruaçu): scope.city(req) dá a cidade ativa (null = sem filtro, ex.: a Ísis); scope.guard confere o cliente
+  const cityOf = (req) => (scope ? scope.city(req) : null);
+  const guard = (req, clientId) => (scope ? scope.guard(req, clientId) : null);
+  const guardItem = async (req, table, id) => {
+    const { rows: [r] } = await pool.query(`SELECT client_id FROM ${table} WHERE id = $1`, [id]);
+    if (!r) throw Object.assign(new Error('Não encontrado'), { status: 404 });
+    await guard(req, r.client_id);
+  };
+
   const fail = (res, error) => {
     const status = Number(error?.status) >= 400 && Number(error?.status) < 600 ? Number(error.status) : /unauthori|login|token/i.test(error?.message || '') ? 401 : /admin|acesso|permiss/i.test(error?.message || '') ? 403 : 500;
     if (status >= 500) logger.error('[central-social]', error?.message);
@@ -689,23 +701,27 @@ export function registerSocialHubRoutes(app, { hub, uploadPost, pool, verifySoci
     } catch (error) { fail(res, error); }
   };
 
-  app.get('/api/social-hub/overview', team(async () => ({ clients: await hub.overview() })));
-  app.get('/api/social-hub/comments', team(async (req) => ({
-    comments: await hub.listComments({ clientId: req.query.client_id || null, status: req.query.status || null, platform: req.query.platform || null }),
-  })));
-  app.post('/api/social-hub/comments/:id/reply', team(async (req, user) => hub.replyComment(req.params.id, req.body?.text, await nameOf(user))));
-  app.post('/api/social-hub/comments/:id/ignore', team(async (req) => { await hub.setCommentStatus(req.params.id, 'ignorado'); return { ok: true }; }));
-  app.post('/api/social-hub/comments/:id/hide', team(async (req) => { await hub.hideComment(req.params.id); return { ok: true }; }));
-  app.post('/api/social-hub/comments/:id/draft', team(async (req) => hub.redraft(req.params.id)));
-  app.get('/api/social-hub/reviews', team(async (req) => ({ reviews: await hub.listReviews({ clientId: req.query.client_id || null }) })));
-  app.post('/api/social-hub/reviews/:id/reply', team(async (req, user) => hub.replyReview(req.params.id, req.body?.text, await nameOf(user))));
-  app.get('/api/social-hub/settings/:clientId', team(async (req) => hub.settingsOf(req.params.clientId)));
-  app.get('/api/social-hub/review-monitor/:clientId', team(async (req) => hub.monitorOf(req.params.clientId)));
-  app.get('/api/social-hub/metrics/:clientId', team(async (req) => ({ metrics: await hub.metricsOf(req.params.clientId, req.query.days) })));
-  app.post('/api/social-hub/metrics/:clientId/refresh', team(async (req) => ({ saved: await hub.snapshotMetrics(req.params.clientId), metrics: await hub.metricsOf(req.params.clientId) })));
-  app.put('/api/social-hub/review-monitor/:clientId', team(async (req) => hub.saveMonitor(req.params.clientId, req.body || {})));
-  app.get('/api/social-hub/reviews/:id/audit', team(async (req) => ({ audit: await hub.audit(req.params.id) })));
-  app.post('/api/social-hub/reviews/:id/removal-requested', team(async (req) => hub.markRemovalRequested(req.params.id)));
+  app.get('/api/social-hub/overview', team(async (req) => ({ clients: await hub.overview(await cityOf(req)) })));
+  app.get('/api/social-hub/comments', team(async (req) => {
+    if (req.query.client_id) await guard(req, req.query.client_id);
+    return { comments: await hub.listComments({ clientId: req.query.client_id || null, status: req.query.status || null, platform: req.query.platform || null, city: await cityOf(req) }) };
+  }));
+  app.post('/api/social-hub/comments/:id/reply', team(async (req, user) => { await guardItem(req, 'social_comments', req.params.id); return hub.replyComment(req.params.id, req.body?.text, await nameOf(user)); }));
+  app.post('/api/social-hub/comments/:id/ignore', team(async (req) => { await guardItem(req, 'social_comments', req.params.id); await hub.setCommentStatus(req.params.id, 'ignorado'); return { ok: true }; }));
+  app.post('/api/social-hub/comments/:id/hide', team(async (req) => { await guardItem(req, 'social_comments', req.params.id); await hub.hideComment(req.params.id); return { ok: true }; }));
+  app.post('/api/social-hub/comments/:id/draft', team(async (req) => { await guardItem(req, 'social_comments', req.params.id); return hub.redraft(req.params.id); }));
+  app.get('/api/social-hub/reviews', team(async (req) => {
+    if (req.query.client_id) await guard(req, req.query.client_id);
+    return { reviews: await hub.listReviews({ clientId: req.query.client_id || null, city: await cityOf(req) }) };
+  }));
+  app.post('/api/social-hub/reviews/:id/reply', team(async (req, user) => { await guardItem(req, 'google_reviews', req.params.id); return hub.replyReview(req.params.id, req.body?.text, await nameOf(user)); }));
+  app.get('/api/social-hub/settings/:clientId', team(async (req) => { await guard(req, req.params.clientId); return hub.settingsOf(req.params.clientId); }));
+  app.get('/api/social-hub/review-monitor/:clientId', team(async (req) => { await guard(req, req.params.clientId); return hub.monitorOf(req.params.clientId); }));
+  app.get('/api/social-hub/metrics/:clientId', team(async (req) => { await guard(req, req.params.clientId); return { metrics: await hub.metricsOf(req.params.clientId, req.query.days) }; }));
+  app.post('/api/social-hub/metrics/:clientId/refresh', team(async (req) => { await guard(req, req.params.clientId); return { saved: await hub.snapshotMetrics(req.params.clientId), metrics: await hub.metricsOf(req.params.clientId) }; }));
+  app.put('/api/social-hub/review-monitor/:clientId', team(async (req) => { await guard(req, req.params.clientId); return hub.saveMonitor(req.params.clientId, req.body || {}); }));
+  app.get('/api/social-hub/reviews/:id/audit', team(async (req) => { await guardItem(req, 'google_reviews', req.params.id); return { audit: await hub.audit(req.params.id) }; }));
+  app.post('/api/social-hub/reviews/:id/removal-requested', team(async (req) => { await guardItem(req, 'google_reviews', req.params.id); return hub.markRemovalRequested(req.params.id); }));
 
   // página da Pulse para o cliente aprovar a resposta da avaliação (sem login; um link por WhatsApp cadastrado)
   app.get('/api/public/avaliacao/:token', async (req, res) => {
@@ -714,8 +730,8 @@ export function registerSocialHubRoutes(app, { hub, uploadPost, pool, verifySoci
   app.post('/api/public/avaliacao/:token', async (req, res) => {
     try { res.json(await hub.publicDecide(req.params.token, req.body || {})); } catch (error) { fail(res, error); }
   });
-  app.put('/api/social-hub/settings/:clientId', team(async (req) => hub.saveSettings(req.params.clientId, req.body || {})));
-  app.post('/api/social-hub/sync/:clientId', team(async (req) => ({
+  app.put('/api/social-hub/settings/:clientId', team(async (req) => { await guard(req, req.params.clientId); return hub.saveSettings(req.params.clientId, req.body || {}); }));
+  app.post('/api/social-hub/sync/:clientId', team(async (req) => (await guard(req, req.params.clientId), {
     comments: await hub.syncComments(req.params.clientId), reviews: await hub.syncReviews(req.params.clientId),
   })));
 

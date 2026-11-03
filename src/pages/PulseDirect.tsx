@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
+import { useCity, CITY_LABELS } from '@/contexts/CityContext';
 import FlowEditor from '@/components/pulse-direct/FlowEditor';
 import DirectInbox from '@/components/pulse-direct/DirectInbox';
 import AutomationsPanel from '@/components/social/AutomationsPanel';
@@ -80,6 +81,8 @@ function ContactsPanel({ clientId }: { clientId: string }) {
 }
 
 export default function PulseDirect() {
+  // a lista segue a cidade escolhida no topo (Minaçu/Uruaçu) e os clientes globais (trabalho em conjunto)
+  const { activeCity } = useCity();
   const [clients, setClients] = useState<ClientOpt[]>([]);
   const [clientId, setClientId] = useState<string>('');
   const [tab, setTab] = useState<'funis' | 'inbox' | 'contatos' | 'rapidas' | 'google'>('funis');
@@ -87,14 +90,15 @@ export default function PulseDirect() {
   const [editing, setEditing] = useState<Flow | null>(null);
 
   useEffect(() => {
+    setClientId('');
     api<{ clients: ClientOpt[] }>('social-posts/accounts-overview', { method: 'GET' })
       .then((d) => {
         // todos os clientes ativos: o Google e a conexão das redes também ficam aqui (quem ainda não conectou vê como conectar)
         const withUp = d.clients;
         setClients(withUp);
-        if (withUp[0]) setClientId((cur) => cur || withUp[0].id);
+        if (withUp[0]) setClientId(withUp[0].id);
       }).catch((err) => toast.error(err.message));
-  }, []);
+  }, [activeCity]);
 
   const loadFlows = async () => {
     if (!clientId) return;
@@ -129,7 +133,7 @@ export default function PulseDirect() {
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold"><Zap size={22} className="text-primary" /> Pulse Direct</h1>
-          <p className="text-sm text-muted-foreground">Funis no direct do Instagram: botões de link e de resposta, perguntas que guardam o contato e a equipe entrando quando precisa.</p>
+          <p className="text-sm text-muted-foreground">{CITY_LABELS[activeCity]} · Funis no direct do Instagram: botões de link e de resposta, perguntas que guardam o contato e a equipe entrando quando precisa.</p>
         </div>
         <Select value={clientId} onValueChange={setClientId}>
           <SelectTrigger className="w-64"><SelectValue placeholder="Escolha o cliente" /></SelectTrigger>

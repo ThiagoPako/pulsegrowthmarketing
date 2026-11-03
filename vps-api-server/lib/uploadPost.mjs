@@ -301,7 +301,8 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
   return { ensureSchema, apiKey, saveKey, call, ensureProfile, connectLink, clientInfo, sync, syncAll, status, publish };
 }
 
-export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager, logger = console }) {
+export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager, scope = null, logger = console }) {
+  const guard = (req, clientId) => (scope ? scope.guard(req, clientId) : null);
   const fail = (res, error) => {
     const status = Number(error?.status) >= 400 && Number(error?.status) < 600 ? Number(error.status) : /unauthori|login|token/i.test(error?.message || '') ? 401 : /admin|acesso|permiss/i.test(error?.message || '') ? 403 : 500;
     if (status >= 500) logger.error('[upload-post]', error?.message);
@@ -334,6 +335,7 @@ export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifyS
   app.post('/api/upload-post/clients/:id/connect', async (req, res) => {
     try {
       await verifySocialManager(req);
+      await guard(req, req.params.id);
       res.json(await uploadPost.connectLink(req.params.id, Array.isArray(req.body?.networks) ? req.body.networks.map(String) : null));
     } catch (error) { fail(res, error); }
   });
@@ -341,6 +343,7 @@ export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifyS
   app.get('/api/upload-post/clients/:id', async (req, res) => {
     try {
       await verifySocialManager(req);
+      await guard(req, req.params.id);
       res.json(await uploadPost.clientInfo(req.params.id));
     } catch (error) { fail(res, error); }
   });
@@ -348,6 +351,7 @@ export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifyS
   app.post('/api/upload-post/clients/:id/sync', async (req, res) => {
     try {
       await verifySocialManager(req);
+      await guard(req, req.params.id);
       res.json(await uploadPost.sync(req.params.id));
     } catch (error) { fail(res, error); }
   });

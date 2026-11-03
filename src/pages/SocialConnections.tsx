@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLang, tr } from '@/lib/i18n';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
+import { useCity } from '@/contexts/CityContext';
 import { setPortalInsightsEnabled, diagnoseClientConnection, type ConnectedSocialAccount, type DiagnosticCheck } from '@/services/socialPostsApi';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +34,7 @@ const EXTRA_PLATFORMS = [
 interface UploadPostStatus { configured: boolean; key_end?: string; plan?: string | null; limit?: number | null; used?: number; error?: string }
 
 export default function SocialConnections() {
+  const { activeCity } = useCity();
   const { t } = useLang();
   const [clients, setClients] = useState<ClientConnection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -188,7 +190,9 @@ export default function SocialConnections() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  // a lista segue a cidade escolhida no topo (o servidor filtra pela cidade e os clientes globais)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [activeCity]);
 
   // Após autorizar na Meta (outra aba/janela), atualiza a lista sozinho ao voltar.
   useEffect(() => {

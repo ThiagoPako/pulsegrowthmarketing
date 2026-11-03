@@ -110,6 +110,16 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
         );
         -- redes que a Pulse cuida do cliente (cadastro do cliente, 02/11/2026): o link pede login só nelas
         ALTER TABLE clients ADD COLUMN IF NOT EXISTS social_networks TEXT[];
+        -- Facebooks da equipe (03/11/2026): um perfil da Upload-Post por login de Facebook da Pulse, com nome; as páginas
+        -- dele são ligadas aos clientes à mão, e o post do cliente sai por esse perfil com o facebook_page_id da página
+        CREATE TABLE IF NOT EXISTS upload_post_team_profiles (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          name TEXT NOT NULL,
+          username TEXT NOT NULL UNIQUE,
+          created_by UUID,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        ALTER TABLE client_upload_post ADD COLUMN IF NOT EXISTS facebook_team_profile TEXT;
       `).catch((error) => { schemaPromise = null; throw error; });
     }
     return schemaPromise;
@@ -240,8 +250,10 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
 
   /** Grava as contas conectadas de um perfil em social_accounts (api_base = 'upload_post'). */
   async function applyProfile(clientId, username, socialAccounts) {
-    const accounts = connectedAccounts(socialAccounts);
-    const { rows: [saved] } = await pool.query(`SELECT facebook_page_id FROM client_upload_post WHERE client_id = $1`, [clientId]);
+    const { rows: [saved] } = await pool.query(`SELECT facebook_page_id, facebook_team_profile FROM client_upload_post WHERE client_id = $1`, [clientId]);
+    // Facebook ligado por um Facebook da equipe: fica como está (a página foi escolhida à mão)
+    const teamFacebook = !!saved?.facebook_team_profile;
+    const accounts = connectedAccounts(socialAccounts).filter((a) => !(teamFacebook && a.platform === 'facebook'));
     let fb = { pages: [], chosen: null };
     if (accounts.some((a) => a.platform === 'facebook')) fb = await facebookPage(username, saved?.facebook_page_id);
     const db = await pool.connect();
@@ -250,7 +262,7 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
       // rede desconectada na Upload-Post: a linha dela sai
       await db.query(
         `DELETE FROM social_accounts WHERE client_id = $1 AND api_base = 'upload_post' AND NOT (platform = ANY($2::text[]))`,
-        [clientId, accounts.map((a) => a.platform)]
+        [clientId, [...accounts.map((a) => a.platform), ...(teamFacebook ? ['facebook'] : [])]]
       );
       for (const a of accounts) {
         // uma conta por rede: a conexão da Upload-Post substitui a da Meta naquela rede
@@ -261,7 +273,8 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
           [clientId, a.platform, a.platform === 'facebook' ? fb.chosen : null, a.name, a.handle, a.picture, a.reauth ? 'reauth' : 'connected']
         );
       }
-      await db.query(
+      if (teamFacebook) await db.query(`UPDATE client_upload_post SET synced_at = now() WHERE client_id = $1`, [clientId]);
+      else await db.query(
         `UPDATE client_upload_post SET facebook_page_id = $2, facebook_pages = $3, synced_at = now() WHERE client_id = $1`,
         [clientId, fb.chosen, JSON.stringify(fb.pages)]
       );
@@ -318,7 +331,7 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
    * ~59 s: acompanha pelo request_id por até 10 min). Idempotency-Key por post e rede: nova tentativa não duplica.
    */
   async function publish(account, post, media, { maxWaitMs = 10 * 60_000 } = {}) {
-    const { rows: [cp] } = await pool.query(`SELECT username FROM client_upload_post WHERE client_id = $1`, [post.client_id]);
+    const { rows: [cp] } = await pool.query(`SELECT username, facebook_team_profile FROM client_upload_post WHERE client_id = $1`, [post.client_id]);
     if (!cp) throw new Error('Cliente sem perfil na Upload-Post. Conecte as redes em Conexões Sociais.');
     if (account.platform === 'facebook' && !account.facebook_page_id) {
       throw new Error('Facebook conectado sem Página escolhida. Em Conexões Sociais, clique em Atualizar no cliente.');
@@ -329,7 +342,7 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     });
     const requestId = `pulse-${post.id}-${account.platform}-${(post.attempts || 0) + 1}`;
     const form = new FormData();
-    form.append('user', cp.username);
+    form.append('user', account.platform === 'facebook' && cp.facebook_team_profile ? cp.facebook_team_profile : cp.username);
     for (const [k, v] of fields) form.append(k, v);
     form.append('request_id', requestId);
     form.append('external_id', String(post.id));
@@ -353,7 +366,106 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     return { id: result.post_id || result.platform_post_id || null, url: result.url || result.post_url || null, provider: 'upload_post' };
   }
 
-  return { ensureSchema, apiKey, saveKey, call, ensureProfile, connectLink, connectPage, connectStart, clientInfo, sync, syncAll, status, publish };
+  // ── Facebooks da equipe ──
+  async function teamRow(id) {
+    await ensureSchema();
+    const { rows: [t] } = await pool.query(`SELECT * FROM upload_post_team_profiles WHERE id = $1`, [id]);
+    if (!t) throw Object.assign(new Error('Facebook da equipe não encontrado'), { status: 404 });
+    return t;
+  }
+
+  /** Cada Facebook da equipe: se o login está feito, as páginas dele e a que cliente cada página está ligada. */
+  async function teamList() {
+    await ensureSchema();
+    const { rows: teams } = await pool.query(`SELECT id, name, username, created_at FROM upload_post_team_profiles ORDER BY created_at`);
+    const { rows: links } = await pool.query(
+      `SELECT u.client_id, u.facebook_team_profile, u.facebook_page_id, c.company_name
+         FROM client_upload_post u JOIN clients c ON c.id = u.client_id WHERE u.facebook_team_profile IS NOT NULL`
+    );
+    const out = [];
+    for (const t of teams) {
+      let connected = false; let reauth = false; let account = null; let pages = [];
+      try {
+        const r = await call('GET', `/uploadposts/users/${encodeURIComponent(t.username)}`);
+        const fb = connectedAccounts(r.profile?.social_accounts || {}).find((a) => a.platform === 'facebook');
+        if (fb) { connected = true; reauth = !!fb.reauth; account = fb.name || fb.handle || null; pages = (await facebookPage(t.username, null)).pages; }
+      } catch (error) { logger.warn?.('[upload-post] Facebook da equipe:', t.username, error.message); }
+      out.push({
+        id: t.id, name: t.name, connected, reauth, account,
+        pages: pages.map((pg) => {
+          const l = links.find((x) => x.facebook_team_profile === t.username && String(x.facebook_page_id) === pg.id);
+          return { ...pg, client_id: l?.client_id || null, client_name: l ? String(l.company_name || '').trim() : null };
+        }),
+      });
+    }
+    return out;
+  }
+
+  /** Novo Facebook da equipe (um perfil próprio na Upload-Post, com o nome dado). */
+  async function teamCreate(name, userId) {
+    await ensureSchema();
+    const label = String(name || '').trim().slice(0, 60);
+    if (label.length < 2) throw Object.assign(new Error('Dê um nome ao Facebook (ex.: Facebook Thiago)'), { status: 400 });
+    const username = `pulse-equipe-${crypto.randomBytes(4).toString('hex')}`;
+    await call('POST', '/uploadposts/users', { json: { username, display_name: `Equipe · ${label}` } });
+    const { rows: [t] } = await pool.query(
+      `INSERT INTO upload_post_team_profiles (name, username, created_by) VALUES ($1, $2, $3) RETURNING id, name`, [label, username, userId || null]
+    );
+    return t;
+  }
+
+  /** Login do Facebook desse perfil (abre na tela da Meta e volta para Conexões Sociais). */
+  async function teamLogin(id) {
+    const t = await teamRow(id);
+    const r = await call('POST', '/uploadposts/oauth/facebook/start', {
+      json: { profile: t.username, redirect_url: `${appBase}/conexoes-sociais?facebook_equipe=${t.id}` },
+    });
+    if (!r.authorize_url) throw Object.assign(new Error('Não deu para abrir o login do Facebook. Tente de novo.'), { status: 502 });
+    return { url: r.authorize_url };
+  }
+
+  /** Liga uma página do Facebook da equipe a um cliente (a página sai de quem a tinha antes). */
+  async function teamAssign(id, pageId, clientId) {
+    const t = await teamRow(id);
+    const { pages } = await facebookPage(t.username, null);
+    const page = pages.find((pg) => pg.id === String(pageId));
+    if (!page) throw Object.assign(new Error('Essa página não está nesse Facebook. Faça o login de novo e marque a página.'), { status: 400 });
+    await ensureProfile(clientId);
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      const { rows: before } = await db.query(
+        `UPDATE client_upload_post SET facebook_team_profile = NULL, facebook_page_id = NULL
+          WHERE facebook_team_profile = $1 AND facebook_page_id = $2 AND client_id <> $3 RETURNING client_id`, [t.username, page.id, clientId]
+      );
+      for (const b of before) await db.query(`DELETE FROM social_accounts WHERE client_id = $1 AND platform = 'facebook' AND api_base = 'upload_post'`, [b.client_id]);
+      await db.query(`UPDATE client_upload_post SET facebook_team_profile = $2, facebook_page_id = $3 WHERE client_id = $1`, [clientId, t.username, page.id]);
+      await db.query(`DELETE FROM social_accounts WHERE client_id = $1 AND platform = 'facebook'`, [clientId]);
+      await db.query(
+        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, account_name, username, profile_picture_url, access_token, status, api_base)
+         VALUES ($1, 'facebook', $2, $3, $4, NULL, '', 'connected', 'upload_post')`,
+        [clientId, page.id, page.name, t.name]
+      );
+      await db.query('COMMIT');
+    } catch (error) {
+      await db.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      db.release();
+    }
+    return { ok: true, page };
+  }
+
+  /** Desliga o Facebook da equipe do cliente (volta a valer o Facebook que o próprio cliente conectar). */
+  async function teamUnassign(clientId) {
+    await ensureSchema();
+    await pool.query(`UPDATE client_upload_post SET facebook_team_profile = NULL, facebook_page_id = NULL WHERE client_id = $1`, [clientId]);
+    await pool.query(`DELETE FROM social_accounts WHERE client_id = $1 AND platform = 'facebook' AND api_base = 'upload_post'`, [clientId]);
+    await sync(clientId).catch(() => {});
+    return { ok: true };
+  }
+
+  return { teamList, teamCreate, teamLogin, teamAssign, teamUnassign, ensureSchema, apiKey, saveKey, call, ensureProfile, connectLink, connectPage, connectStart, clientInfo, sync, syncAll, status, publish };
 }
 
 export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager, scope = null, sendWhatsApp = null, logger = console }) {
@@ -433,6 +545,28 @@ export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifyS
       await guard(req, req.params.id);
       res.json(await uploadPost.sync(req.params.id));
     } catch (error) { fail(res, error); }
+  });
+
+  // Facebooks da equipe (03/11/2026): login com nome e páginas ligadas aos clientes à mão
+  app.get('/api/upload-post/team-facebook', async (req, res) => {
+    try { await verifySocialManager(req); res.set('Cache-Control', 'no-store'); res.json({ teams: await uploadPost.teamList() }); } catch (error) { fail(res, error); }
+  });
+  app.post('/api/upload-post/team-facebook', async (req, res) => {
+    try { const { user } = await verifySocialManager(req); res.json(await uploadPost.teamCreate(req.body?.name, user?.id)); } catch (error) { fail(res, error); }
+  });
+  app.post('/api/upload-post/team-facebook/:id/login', async (req, res) => {
+    try { await verifySocialManager(req); res.json(await uploadPost.teamLogin(req.params.id)); } catch (error) { fail(res, error); }
+  });
+  app.post('/api/upload-post/team-facebook/:id/assign', async (req, res) => {
+    try {
+      await verifySocialManager(req);
+      const clientId = String(req.body?.client_id || '');
+      await guard(req, clientId);
+      res.json(await uploadPost.teamAssign(req.params.id, String(req.body?.page_id || ''), clientId));
+    } catch (error) { fail(res, error); }
+  });
+  app.post('/api/upload-post/clients/:id/team-facebook/remove', async (req, res) => {
+    try { await verifySocialManager(req); await guard(req, req.params.id); res.json(await uploadPost.teamUnassign(req.params.id)); } catch (error) { fail(res, error); }
   });
 
   const timer = setInterval(() => uploadPost.syncAll().catch((error) => logger.error('[upload-post] sync geral:', error.message)), 15 * 60_000);

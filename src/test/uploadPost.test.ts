@@ -61,6 +61,25 @@ describe('Upload-Post · contas e perfis', () => {
     expect((calls[0].init.body as FormData).get('user')).toBe('pulse-c1');
   });
 
+  it('Facebook ligado por um Facebook da equipe sai pelo perfil da equipe, na página ligada; Instagram pelo do cliente', async () => {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const fetchImpl = async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({ success: true, results: { facebook: { post_id: '9' }, instagram: { post_id: '8' } } }), { status: 200 });
+    };
+    const pool = {
+      query: async (sql: string) => (/api_key/.test(sql) ? { rows: [{ api_key: 'chave-de-teste-123456' }] }
+        : /client_upload_post/.test(sql) ? { rows: [{ username: 'pulse-c1', facebook_team_profile: 'pulse-equipe-ab12' }] } : { rows: [] }),
+    };
+    const up = createUploadPost({ pool, fetchImpl: fetchImpl as unknown as typeof fetch });
+    const post = { id: 'p3', client_id: 'c1', publish_type: 'reels', caption: 'Oi', attempts: 0 };
+    await up.publish({ platform: 'facebook', facebook_page_id: '555' }, post, video);
+    expect((calls[0].init.body as FormData).get('user')).toBe('pulse-equipe-ab12');
+    expect((calls[0].init.body as FormData).get('facebook_page_id')).toBe('555');
+    await up.publish({ platform: 'instagram' }, post, video);
+    expect((calls[1].init.body as FormData).get('user')).toBe('pulse-c1');
+  });
+
   it('erro da rede vira erro do post (e Facebook sem Página nem chega a enviar)', async () => {
     const fetchImpl = async () => new Response(JSON.stringify({ success: true, results: { instagram: { error: 'mídia recusada' } } }), { status: 200 });
     const pool = { query: async (sql: string) => (/api_key/.test(sql) ? { rows: [{ api_key: 'chave-de-teste-123456' }] } : { rows: [{ username: 'pulse-c1' }] }) };

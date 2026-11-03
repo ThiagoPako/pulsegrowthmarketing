@@ -73,7 +73,7 @@ const QR_TIMEOUT_MS = 3 * 60 * 1000;
 const MEDIA_MAX_BYTES = 32 * 1024 * 1024;
 const VIDEO_MAX_BYTES = 100 * 1024 * 1024; // vídeo vai por streaming (não carrega o arquivo inteiro na memória)
 // 03/11/2026: o Thiago punha o número do PULSE num grupo e o grupo não aparecia para setar o cliente (era 30 min)
-const GROUPS_REFRESH_MS = 10 * 60 * 1000;
+const GROUPS_REFRESH_MS = 30 * 60 * 1000;
 const VOICE_MAX_SECONDS = 300; // comando por áudio no número do PULSE: até 5 min
 const VOICE_MAX_BYTES = 8 * 1024 * 1024;
 // material encaminhado ao PULSE (brutos e roteiros de cliente, assistant/materials.mjs): até 1,5 GB por arquivo
@@ -302,13 +302,11 @@ class Connection {
       sock.ev.on('connection.update', (u) => this.onUpdate(sock, u).catch((e) => log(this.name, 'update:', e.message)));
       sock.ev.on('messages.upsert', (m) => this.onMessages(sock, m).catch((e) => log(this.name, 'recebida:', e.message)));
       // entrou/saiu de grupo ou mudou o nome: atualiza a lista
-      const resyncGroups = () => {
-        clearTimeout(this.groupsTimer);
-        this.groupsTimer = setTimeout(() => this.syncGroups().catch(() => {}), 10_000);
-      };
-      sock.ev.on('groups.upsert', resyncGroups);
-      sock.ev.on('groups.update', resyncGroups);
-      sock.ev.on('group-participants.update', resyncGroups);
+      // 03/11/2026: reler a lista inteira a cada evento dava "rate-overlimit" no WhatsApp e a lista parava. Agora o
+      // grupo do evento entra (ou é atualizado) sozinho; a lista inteira fica para a releitura espaçada.
+      sock.ev.on('groups.upsert', (list) => { for (const g of list || []) this.upsertGroup(g).catch(() => {}); });
+      sock.ev.on('groups.update', (list) => { for (const g of list || []) if (g?.id) this.addGroupByJid(g.id).catch(() => {}); });
+      sock.ev.on('group-participants.update', (u) => { if (u?.id) this.addGroupByJid(u.id).catch(() => {}); });
     } catch (error) {
       this.sock = null;
       this.state = 'parada';
@@ -359,6 +357,7 @@ class Connection {
       this.phone = jidDecode(me.id)?.user || null;
       log(this.name, 'conectada como', this.phone);
       setTimeout(() => this.syncGroups().catch((e) => log(this.name, 'grupos:', e.message)), 5000);
+      setTimeout(() => this.linkInviteGroups().catch((e) => log(this.name, 'grupo por link:', e.message)), 25_000);
     }
 
     if (connection === 'close') {
@@ -449,9 +448,8 @@ class Connection {
 
   async onMessages(sock, { messages, type }) {
     // mensagem (ou o aviso "você foi adicionado") de um grupo que ainda não está na lista: relê os grupos
-    if ((messages || []).some((m) => String(m.key?.remoteJid || '').endsWith('@g.us') && !this.knownGroups?.has(m.key.remoteJid))) {
-      clearTimeout(this.groupsTimer);
-      this.groupsTimer = setTimeout(() => this.syncGroups().catch(() => {}), 5_000);
+    for (const jid of new Set((messages || []).map((m) => String(m.key?.remoteJid || '')).filter((j) => j.endsWith('@g.us')))) {
+      if (!this.knownGroups?.has(jid)) this.addGroupByJid(jid).catch((e) => log(this.name, 'grupo novo:', e.message));
     }
     if (type !== 'notify') return;
     for (const msg of messages) {
@@ -571,12 +569,46 @@ class Connection {
   }
 
   // grupos em que este número está → wa_groups (a fila usa para mandar no grupo pelo número que está nele)
+  /** Um grupo só (metadados de um evento): grava sem pedir a lista inteira. */
+  async upsertGroup(g) {
+    if (!g?.id || !String(g.id).endsWith('@g.us')) return;
+    this.knownGroups ||= new Set();
+    this.knownGroups.add(g.id);
+    await pool.query(
+      `INSERT INTO wa_groups (connection_id, jid, subject, size, updated_at) VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (connection_id, jid) DO UPDATE SET subject = COALESCE(EXCLUDED.subject, wa_groups.subject), size = COALESCE(EXCLUDED.size, wa_groups.size), updated_at = now()`,
+      [this.id, g.id, g.subject || null, Array.isArray(g.participants) ? g.participants.length : (g.size ?? null)]
+    );
+    await this.linkInviteGroups().catch(() => {});
+  }
+
+  /** Grupo que apareceu por uma mensagem ou aviso: uma consulta só (groupMetadata), uma vez por grupo a cada 10 min. */
+  async addGroupByJid(jid) {
+    if (!this.sock || this.state !== 'conectada' || !String(jid).endsWith('@g.us')) return;
+    this.groupLookups ||= new Map();
+    if (Date.now() - (this.groupLookups.get(jid) || 0) < 10 * 60_000) return;
+    this.groupLookups.set(jid, Date.now());
+    const meta = await this.sock.groupMetadata(jid);
+    if (!meta?.id) return;
+    this.knownGroups ||= new Set();
+    this.knownGroups.add(meta.id);
+    await pool.query(
+      `INSERT INTO wa_groups (connection_id, jid, subject, size, updated_at) VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (connection_id, jid) DO UPDATE SET subject = EXCLUDED.subject, size = EXCLUDED.size, updated_at = now()`,
+      [this.id, meta.id, meta.subject || null, Array.isArray(meta.participants) ? meta.participants.length : null]
+    );
+    log(this.name, `grupo na lista: ${meta.subject || jid}`);
+  }
+
   async syncGroups() {
     if (!this.sock || this.state !== 'conectada') return;
+    // depois de um "rate-overlimit", espera 30 min antes de pedir a lista inteira de novo
+    if (this.groupsBlockedUntil && Date.now() < this.groupsBlockedUntil) return;
     this.groupsSyncedAt = Date.now();
     // o erro da releitura fica gravado (03/11/2026: a lista parou de atualizar sem ninguém ver o motivo)
     try { await this.syncGroupsOnce(); await pool.query(`UPDATE wa_connections SET groups_error = NULL, groups_synced_at = now() WHERE id = $1`, [this.id]).catch(() => {}); }
     catch (error) {
+      if (/rate-overlimit|429/i.test(String(error?.message || ''))) this.groupsBlockedUntil = Date.now() + 30 * 60_000;
       await pool.query(`UPDATE wa_connections SET groups_error = $2, groups_tried_at = now() WHERE id = $1`, [this.id, String(error?.message || error).slice(0, 300)]).catch(() => {});
       throw error;
     }
@@ -609,7 +641,8 @@ class Connection {
   // Cliente com o link de convite no cadastro e este número já no grupo: troca o link pelo grupo (03/11/2026: o número
   // estava no grupo da LaboVitta e o cadastro não mostrava, porque o grupo estava salvo como link)
   async linkInviteGroups() {
-    if (!this.knownGroups?.size) return;
+    if (!this.sock || this.state !== 'conectada') return;
+    this.knownGroups ||= new Set();
     const { rows } = await pool.query(
       `SELECT id, whatsapp_group FROM clients WHERE whatsapp_group ~* 'chat\.whatsapp\.com/' LIMIT 60`
     );
@@ -628,6 +661,8 @@ class Connection {
         cached = { jid: info.id };
         await new Promise((r) => setTimeout(r, 1500)); // sem rajada de consultas ao WhatsApp
       }
+      // ainda não está na lista: confere só esse grupo (o número precisa ser participante)
+      if (!this.knownGroups.has(cached.jid)) await this.addGroupByJid(cached.jid).catch(() => {});
       if (this.knownGroups.has(cached.jid)) {
         await pool.query(`UPDATE clients SET whatsapp_group = $2 WHERE id = $1 AND whatsapp_group = $3`, [c.id, cached.jid, c.whatsapp_group]);
         log(this.name, `grupo do cliente ${c.id} ligado pelo link de convite`);

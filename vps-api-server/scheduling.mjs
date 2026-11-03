@@ -227,7 +227,7 @@ export function seriesInfo(series, slotAt) {
  * Período em dias de Brasília (from/to inclusivos).
  */
 export function buildMaterials(rows, { from, to, publicAppUrl, now = Date.now() } = {}) {
-  const { tasks = [], designs = [], portals = [], deliveries = [], posts = [], scripts = [], series = [], captions = [] } = rows;
+  const { tasks = [], designs = [], portals = [], deliveries = [], posts = [], scripts = [], series = [], captions = [], creatives = [] } = rows;
   const savedCaption = new Map(captions.map((c) => [`${c.kind}:${c.material_id}`, c.caption || '']));
   const media = makeMediaHelpers(publicAppUrl);
   const inRange = (when) => !!when && when.date >= from && when.date <= to;
@@ -419,6 +419,33 @@ export function buildMaterials(rows, { from, to, publicAppUrl, now = Date.now() 
     pushGhost(base, cancelled);
   }
 
+  // ── Criativos aprovados ainda não usados: ao agendar, viram um card próprio (o criativo segue no Tráfego) ──
+  for (const c of creatives) {
+    const id = String(c.id);
+    const portal = portalByTask.get(id) || null;
+    const portalFile = media.absolute(portal?.file_url);
+    const mediaUrl = portalFile && media.kindOf(portalFile) ? portalFile : media.absolute(c.edited_video_link);
+    if (!mediaUrl) continue;
+    unscheduled.push({
+      key: `conteudo:${id}`,
+      kind: 'conteudo',
+      id,
+      title: c.title || 'Criativo',
+      content_type: 'criativo',
+      type: 'story',
+      column: 'criativo',
+      approved_at: c.approved_at || null,
+      thumb_url: media.absolute(portal?.thumbnail_url) || media.thumbFor(mediaUrl),
+      media_url: mediaUrl,
+      media_kind: media.kindOf(mediaUrl) || 'video',
+      media_items: [mediaUrl],
+      caption: savedCaption.get(`conteudo:${id}`) || scriptCaption.get(String(c.script_id)) || '',
+      platform_label: null,
+      creative: true,
+      state: 'nao_agendado',
+    });
+  }
+
   // ── Conteúdos aprovados no portal sem card (enviados direto no portal) ──
   const taskTitles = new Set(tasks.map((t) => String(t.title || '').trim().toLowerCase()));
   const designTitles = new Set(designs.map((d) => `arte: ${String(d.title || '').trim().toLowerCase()}`));
@@ -592,6 +619,8 @@ export function registerSchedulingRoutes(app, deps) {
 
   async function createSchema() {
     await ensureSocialPostsSchema();
+    // criativo usado no agendamento (03/11/2026): o post sai de um card próprio, o criativo fica intacto no Tráfego
+    await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS source_creative_id UUID`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS module_access (
         module TEXT NOT NULL,
@@ -931,7 +960,7 @@ export function registerSchedulingRoutes(app, deps) {
   async function loadMaterialRows(clientId, from, to) {
     const fromIso = brtToIso(from, '00:00');
     const toIso = brtToIso(to, '23:59');
-    const [tasks, designs, portals] = await Promise.all([
+    const [tasks, designs, portals, creatives] = await Promise.all([
       pool.query(
         `SELECT id, title, content_type, kanban_column, approved_at, posting_at, scheduled_recording_date,
                 scheduled_recording_time, edited_video_link, script_id, updated_at
@@ -969,11 +998,21 @@ export function registerSchedulingRoutes(app, deps) {
           ORDER BY pc.created_at DESC`,
         [clientId, fromIso]
       ),
+      // criativos aprovados (03/11/2026: "alguns criativos podemos usar para story"), ainda não usados num post
+      pool.query(
+        `SELECT c.id, c.title, c.content_type, c.approved_at, c.edited_video_link, c.script_id, c.updated_at
+           FROM content_tasks c
+          WHERE c.client_id = $1 AND c.content_type = 'criativo' AND c.approved_at IS NOT NULL
+            AND c.approved_at >= now() - interval '180 days' AND coalesce(c.edited_video_link, '') <> ''
+            AND NOT EXISTS (SELECT 1 FROM content_tasks d WHERE d.source_creative_id = c.id)
+          ORDER BY c.approved_at DESC LIMIT 60`,
+        [clientId]
+      ).catch(() => ({ rows: [] })),
     ]);
     const taskIds = tasks.rows.map((t) => t.id);
     const designIds = designs.rows.map((d) => d.id);
     const portalIds = portals.rows.map((p) => p.id);
-    const scriptIds = [...new Set(tasks.rows.map((t) => t.script_id).filter(Boolean))];
+    const scriptIds = [...new Set([...tasks.rows, ...creatives.rows].map((t) => t.script_id).filter(Boolean))];
     const [deliveries, posts, scripts, series, captions] = await Promise.all([
       taskIds.length
         ? pool.query(
@@ -1004,7 +1043,7 @@ export function registerSchedulingRoutes(app, deps) {
       pool.query(`SELECT kind, material_id, caption FROM scheduling_captions WHERE client_id = $1`, [clientId]).catch(() => ({ rows: [] })),
     ]);
     return {
-      tasks: tasks.rows, designs: designs.rows, portals: portals.rows,
+      tasks: tasks.rows, designs: designs.rows, portals: portals.rows, creatives: creatives.rows,
       deliveries: deliveries.rows, posts: posts.rows, scripts: scripts.rows, series: series.rows, captions: captions.rows,
     };
   }
@@ -1043,6 +1082,36 @@ export function registerSchedulingRoutes(app, deps) {
       sendError(res, error, logger);
     }
   });
+
+  /**
+   * Criativo no agendamento (03/11/2026): o post sai de um card de postagem próprio, ligado ao criativo por
+   * source_creative_id; o criativo não muda de coluna e segue no Tráfego. Não sendo criativo, devolve o próprio id.
+   */
+  async function cardFromCreative(db, id, clientId, user, publishType) {
+    const { rows: [c] } = await db.query(
+      `SELECT id, title, content_type, approved_at, edited_video_link, drive_link, script_id, recording_id, description
+         FROM content_tasks WHERE id = $1 AND client_id = $2 FOR UPDATE`,
+      [id, clientId]
+    );
+    if (!c || c.content_type !== 'criativo') return id;
+    if (!c.approved_at) throw httpError(409, 'Este criativo ainda não foi aprovado.', { code: 'not_ready' });
+    const { rows: [made] } = await db.query(
+      `SELECT id FROM content_tasks WHERE source_creative_id = $1 ORDER BY created_at DESC LIMIT 1`, [c.id]
+    );
+    if (made) return made.id;
+    const story = publishType === 'stories';
+    const { rows: [card] } = await db.query(
+      `INSERT INTO content_tasks
+         (client_id, title, content_type, kanban_column, description, edited_video_link, drive_link, script_id,
+          recording_id, approved_at, created_by, source_creative_id, position)
+       VALUES ($1, $2, $3, 'agendamentos', $4, $5, $6, $7, $8, now(), $9, $10, 0)
+       RETURNING id`,
+      [clientId, `${story ? 'Story' : 'Post'} · ${c.title || 'Criativo'}`, story ? 'story' : 'reels',
+        `Postagem feita a partir do criativo "${c.title || ''}" pelo agendamento.`, c.edited_video_link, c.drive_link || null,
+        c.script_id || null, c.recording_id || null, user?.id || null, c.id]
+    );
+    return card.id;
+  }
 
   // ── Escrita (transação: material e posts travados até o fim) ──
   function readTarget(body) {
@@ -1295,7 +1364,8 @@ export function registerSchedulingRoutes(app, deps) {
       const { user, city } = await requireModule(req);
       const body = req.body || {};
       const client = await loadClient(body.client_id, city);
-      const { kind, id } = readTarget(body);
+      const target = readTarget(body);
+      const { kind } = target;
       const date = String(body.date || '');
       const time = String(body.time || '');
       const whenIso = brtToIso(date, time);
@@ -1316,6 +1386,7 @@ export function registerSchedulingRoutes(app, deps) {
       }
 
       const result = await withTransaction(async (db) => {
+        const id = kind === 'conteudo' ? await cardFromCreative(db, target.id, client.id, user, body.publish_type) : target.id;
         const material = await lockMaterial(db, kind, id, client.id);
         if (kind === 'post' && material.story_series_id) {
           throw httpError(409, 'Este story faz parte de uma repetição: mude pela própria data.', { code: 'series_post' });

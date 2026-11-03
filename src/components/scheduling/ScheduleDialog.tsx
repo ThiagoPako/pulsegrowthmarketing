@@ -736,6 +736,11 @@ export default function ScheduleDialog({
                 )}
               </div>
             )}
+            {item.creative && !readOnly && (
+              <p className="rounded-lg border border-purple-500/25 bg-purple-500/5 px-3 py-2 text-[11px] text-muted-foreground">
+                Criativo de anúncio: ao agendar, vira um card de postagem próprio. O criativo continua no Tráfego, sem mudar nada.
+              </p>
+            )}
             {/* o usuário procurou o colaborador e não achou (03/11/2026): diz por que não aparece */}
             {!readOnly && !isSeriesItem && (isStory || mode !== 'auto') && (
               <p className="flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">

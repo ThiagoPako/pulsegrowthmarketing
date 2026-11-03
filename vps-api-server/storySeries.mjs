@@ -338,6 +338,9 @@ export function registerStoryRoutes(app, deps) {
   }
 
   function assertMaterialReady(kind, material) {
+    if (kind === 'conteudo' && material.content_type === 'criativo') {
+      throw httpError(409, 'Criativo não repete direto: agende o primeiro story e repita pelo card de postagem que ele cria.', { code: 'creative_series' });
+    }
     if (kind === 'conteudo' && !['agendamentos', 'acompanhamento'].includes(material.kanban_column)) {
       throw httpError(409, `O card não está aprovado para agendar (está em "${material.kanban_column}").`, { code: 'not_ready' });
     }

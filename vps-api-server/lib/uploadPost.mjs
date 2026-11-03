@@ -361,7 +361,19 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
 
   async function status(key) {
     const r = await call('GET', '/uploadposts/users', { key });
-    return { plan: r.plan || null, limit: r.limit ?? null, used: (r.profiles || []).length };
+    const profiles = r.profiles || [];
+    // de onde vêm os perfis do plano (03/11/2026: "incluir o nosso plano e quantos clientes já colocamos no plano")
+    await ensureSchema();
+    const names = new Set(profiles.map((p) => p.username));
+    const { rows: cl } = await pool.query(`SELECT username FROM client_upload_post`).catch(() => ({ rows: [] }));
+    const { rows: tm } = await pool.query(`SELECT username FROM upload_post_team_profiles`).catch(() => ({ rows: [] }));
+    const clients = cl.filter((x) => names.has(x.username)).length;
+    const team = tm.filter((x) => names.has(x.username)).length;
+    const withNetwork = profiles.filter((p) => cl.some((x) => x.username === p.username) && connectedAccounts(p.social_accounts || {}).length > 0).length;
+    return {
+      plan: r.plan || null, limit: r.limit ?? null, used: profiles.length,
+      breakdown: { clients, clients_connected: withNetwork, team, other: Math.max(0, profiles.length - clients - team) },
+    };
   }
 
   /**

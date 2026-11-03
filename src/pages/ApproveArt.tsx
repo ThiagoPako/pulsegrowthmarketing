@@ -3,7 +3,7 @@
 // stories (passa um por um). Com duas opções (A e B), escolhe a que quer. Embaixo: Aprovar ou Pedir ajuste.
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Check, Loader2, Pencil } from 'lucide-react';
+import { Check, Download, Loader2, Pencil } from 'lucide-react';
 import NetworkPreview, { type PreviewFormat } from '@/components/social/NetworkPreview';
 import logo from '@/assets/pulse-logo-branco.png';
 
@@ -169,6 +169,18 @@ export default function ApproveArt() {
                   {sending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} {data.options.length > 1 ? `Aprovar opção ${current?.key}` : 'Aprovar'}
                 </button>
               </div>
+            )}
+            {/* baixar a arte (03/11/2026): uma imagem de cada vez, todas da opção escolhida */}
+            {current && current.images.length > 0 && (
+              <button type="button" onClick={() => {
+                current.images.forEach((url, i) => setTimeout(() => {
+                  const a = document.createElement('a');
+                  a.href = url; a.download = ''; a.target = '_blank'; a.rel = 'noreferrer';
+                  document.body.appendChild(a); a.click(); a.remove();
+                }, i * 400));
+              }} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/15 py-3 text-sm font-semibold text-white/85 transition-colors hover:bg-white/5">
+                <Download size={16} /> {current.images.length > 1 ? `Baixar as ${current.images.length} imagens${data.options.length > 1 ? ` da opção ${current.key}` : ''}` : 'Baixar a arte'}
+              </button>
             )}
             {error && data && <p className="text-center text-xs text-red-300">{error}</p>}
           </>

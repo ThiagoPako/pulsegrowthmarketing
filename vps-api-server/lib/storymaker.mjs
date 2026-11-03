@@ -342,7 +342,8 @@ export function registerStorymakerRoutes(app, {
 }) {
   const send = (res, error) => {
     const code = Number(error?.status || error?.statusCode);
-    const status = code >= 400 && code < 600 ? code : 500;
+    const msg = String(error?.message || '');
+    const status = code >= 400 && code < 600 ? code : /unauthori|login|token/i.test(msg) ? 401 : /admin|acesso|permiss/i.test(msg) ? 403 : 500;
     if (status >= 500) logger.error('[storymaker]', error?.message);
     res.status(status).json({ error: error?.message || 'Erro' });
   };

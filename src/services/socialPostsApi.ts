@@ -175,6 +175,8 @@ export interface ClientMediaAsset {
   source: string;
   tag?: string | null;
   date?: string | null;
+  /** designer da arte */
+  author?: string | null;
 }
 
 /** Artes e vídeos já cadastrados no sistema para o cliente. */

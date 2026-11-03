@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
 import { cn } from '@/lib/utils';
 import MediaFitNotes from './MediaFitNotes';
+import NetworkPreview from '@/components/social/NetworkPreview';
 import StoryTrackField, { type StoryTrack } from './StoryTrackField';
 import {
   addDaysKey, brtParts, brtToIso, formatDayLabel, suggestFormat, todayKey, weekdayIndex,
@@ -317,6 +318,9 @@ export default function ScheduleDialog({
   };
 
   const postsAlone = mode !== 'manual';
+  // redes da prévia: as marcadas para postar sozinho; no manual e no lembrete, a rede escolhida
+  const previewNets: string[] = postsAlone && mode === 'auto' && networks.length ? networks
+    : platform === 'both' ? ['instagram', 'facebook'] : [platform];
   const storyMedia = (multiImage ? order[0] : mediaUrl.trim()) || '';
   // trilha: story de UMA arte postado sozinho, sem repetição (a série não leva trilha)
   const canTrack = isStory && mode === 'auto' && !repeatOn && !!storyMedia && !/\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(storyMedia);
@@ -509,7 +513,7 @@ export default function ScheduleDialog({
   return (
     <>
       <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
-        <DialogContent className="max-h-[92vh] max-w-xl gap-0 overflow-y-auto p-0">
+        <DialogContent className="max-h-[92vh] max-w-xl gap-0 overflow-y-auto p-0 lg:max-w-5xl">
           <DialogHeader className="space-y-0 border-b border-border p-4 pr-12">
             <div className="flex items-start gap-3">
               <MaterialThumb item={item} videoFrame className="h-16 w-16 rounded-lg" />
@@ -534,6 +538,7 @@ export default function ScheduleDialog({
             </div>
           </DialogHeader>
 
+          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-4 p-4">
             {((item.post?.last_error && (item.state === 'erro' || item.ghost)) || series?.last_error) && (
               <div className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-2.5 text-xs text-destructive">
@@ -759,6 +764,26 @@ export default function ScheduleDialog({
             {postsAlone && !readOnly && !isSeriesItem && (
               <MediaFitNotes urls={format === 'carousel' ? order : [multiImage ? order[0] : mediaUrl.trim()].filter(Boolean)} publishType={format} onBlock={setMediaBlocked} />
             )}
+          </div>
+          {/* prévia em cada rede (usuário, 03/11/2026: "que simule o Instagram e o Facebook e qualquer rede social que vá publicar") */}
+          <aside className="border-t border-border bg-muted/30 p-4 lg:border-l lg:border-t-0">
+            <div className="lg:sticky lg:top-0">
+              <p className="mb-2 text-center text-xs font-semibold text-muted-foreground">Como vai ficar</p>
+              <NetworkPreview
+                networks={previewNets}
+                format={format}
+                media={format === 'carousel' ? order : [multiImage ? order[0] : mediaUrl.trim() || item.media_url || ''].filter(Boolean)}
+                captions={postsAlone ? captions : Object.fromEntries(previewNets.map((n) => [n, caption]))}
+                accounts={accounts.map((a) => ({ platform: a.platform, name: a.account_name, username: a.username, picture: a.profile_picture_url }))}
+                fallbackName={accounts[0]?.account_name || 'Cliente'}
+                firstComment={firstComment}
+                collaborators={networks.includes('instagram') ? collab : ''}
+                storyLink={mode === 'lembrete' && storyLink ? { url: storyLink, text: storyLinkText } : null}
+                active={postsAlone && networks.includes(activeNet) ? activeNet : undefined}
+                onActiveChange={(n) => { if (networks.includes(n as Network)) setActiveNet(n as Network); }}
+              />
+            </div>
+          </aside>
           </div>
 
           <DialogFooter className="flex-row flex-wrap items-center gap-2 border-t border-border p-4 sm:justify-between">

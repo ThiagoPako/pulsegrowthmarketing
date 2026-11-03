@@ -17,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { InstagramPreview } from '@/components/social/InstagramPreview';
+import NetworkPreview from '@/components/social/NetworkPreview';
 import { MediaLibraryPicker } from '@/components/social/MediaLibraryPicker';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -534,13 +534,16 @@ export default function PostStudio() {
             <Card className="lg:sticky lg:top-4">
               <CardHeader className="pb-3"><CardTitle className="text-base">Prévia da postagem</CardTitle></CardHeader>
               <CardContent>
-                <InstagramPreview
-                  accountName={accountName}
-                  publishType={publishType}
-                  items={filledItems}
-                  caption={caption}
-                  storyLink={storyLink}
-                  storyLinkText={storyLinkText}
+                <NetworkPreview
+                  networks={platform === 'both' ? ['instagram', 'facebook'] : [platform]}
+                  format={publishType}
+                  media={selectedUrls}
+                  captions={{ instagram: caption, facebook: caption }}
+                  accounts={(client?.accounts || []).map(a => ({ platform: a.platform, name: a.account_name, username: a.username, picture: a.profile_picture_url }))}
+                  fallbackName={accountName || client?.name || 'Cliente'}
+                  firstComment={publishType === 'stories' ? '' : firstComment}
+                  collaborators={publishType === 'stories' || platform === 'facebook' ? '' : collab}
+                  storyLink={publishType === 'stories' && storyLink ? { url: storyLink, text: storyLinkText } : null}
                 />
               </CardContent>
             </Card>

@@ -105,6 +105,8 @@ export interface SchedulingItem {
   media_items: string[];
   caption: string;
   platform_label: string | null;
+  /** designer da arte (filtro do Estúdio de Postagem) */
+  author?: string | null;
   state: SchedulingState;
   when?: SchedulingWhen | null;
   mode?: 'auto' | 'manual';

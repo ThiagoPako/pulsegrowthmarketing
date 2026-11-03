@@ -128,11 +128,12 @@ export function createAutomations({ pool, uploadPost, logger = console }) {
     }
   }
 
-  async function list(clientId) {
+  async function list(clientId, city = null) {
     await ensureSchema();
     const { rows } = await pool.query(
       `SELECT a.*, cl.company_name AS client_name FROM social_automations a LEFT JOIN clients cl ON cl.id = a.client_id
-        WHERE ($1::uuid IS NULL OR a.client_id = $1) ORDER BY (a.status = 'ativa') DESC, a.created_at DESC`, [clientId || null]
+        WHERE ($1::uuid IS NULL OR a.client_id = $1) AND ($2::text IS NULL OR cl.city IS NULL OR lower(cl.city) = $2)
+        ORDER BY (a.status = 'ativa') DESC, a.created_at DESC`, [clientId || null, city || null]
     );
     return rows;
   }
@@ -171,7 +172,17 @@ export function createAutomations({ pool, uploadPost, logger = console }) {
   return { ensureSchema, create, control, renew, refresh, list, logs, posts, conversations, sendDm };
 }
 
-export function registerAutomationRoutes(app, { automations, verifySocialManager, logger = console }) {
+export function registerAutomationRoutes(app, { automations, verifySocialManager, pool = null, scope = null, logger = console }) {
+  // cidade: só os clientes da cidade ativa e os globais (ver registerSocialHubRoutes)
+  const cityOf = (req) => (scope ? scope.city(req) : null);
+  const guard = (req, clientId) => (scope ? scope.guard(req, clientId) : null);
+  const guardItem = async (req, id) => {
+    if (!pool) return;
+    const { rows: [r] } = await pool.query(`SELECT client_id FROM social_automations WHERE id = $1`, [id]);
+    if (!r) throw Object.assign(new Error('Não encontrado'), { status: 404 });
+    await guard(req, r.client_id);
+  };
+
   const fail = (res, error) => {
     const status = Number(error?.status) >= 400 && Number(error?.status) < 600 ? Number(error.status) : /unauthori|login|token/i.test(error?.message || '') ? 401 : /acesso|permiss/i.test(error?.message || '') ? 403 : 500;
     if (status >= 500) logger.error('[automacoes]', error?.message);
@@ -184,11 +195,15 @@ export function registerAutomationRoutes(app, { automations, verifySocialManager
     } catch (error) { fail(res, error); }
   };
   app.get('/api/automations/templates', team(async () => ({ templates: MODELOS })));
-  app.get('/api/automations', team(async (req) => { await automations.refresh().catch(() => {}); return { automations: await automations.list(req.query.client_id || null) }; }));
-  app.post('/api/automations/:clientId', team(async (req, user) => automations.create(req.params.clientId, req.body || {}, user?.id)));
-  app.post('/api/automations/item/:id/:action', team(async (req, user) => (req.params.action === 'renew' ? automations.renew(req.params.id, user?.id) : automations.control(req.params.id, req.params.action))));
-  app.get('/api/automations/item/:id/logs', team(async (req) => automations.logs(req.params.id)));
-  app.get('/api/automations/posts/:clientId', team(async (req) => ({ posts: await automations.posts(req.params.clientId, String(req.query.platform || 'instagram')) })));
-  app.get('/api/automations/inbox/:clientId', team(async (req) => ({ conversations: await automations.conversations(req.params.clientId) })));
-  app.post('/api/automations/inbox/:clientId/send', team(async (req) => automations.sendDm(req.params.clientId, req.body?.recipient_id, req.body?.message)));
+  app.get('/api/automations', team(async (req) => {
+    if (req.query.client_id) await guard(req, req.query.client_id);
+    await automations.refresh().catch(() => {});
+    return { automations: await automations.list(req.query.client_id || null, await cityOf(req)) };
+  }));
+  app.post('/api/automations/:clientId', team(async (req, user) => { await guard(req, req.params.clientId); return automations.create(req.params.clientId, req.body || {}, user?.id); }));
+  app.post('/api/automations/item/:id/:action', team(async (req, user) => { await guardItem(req, req.params.id); return req.params.action === 'renew' ? automations.renew(req.params.id, user?.id) : automations.control(req.params.id, req.params.action); }));
+  app.get('/api/automations/item/:id/logs', team(async (req) => { await guardItem(req, req.params.id); return automations.logs(req.params.id); }));
+  app.get('/api/automations/posts/:clientId', team(async (req) => { await guard(req, req.params.clientId); return { posts: await automations.posts(req.params.clientId, String(req.query.platform || 'instagram')) }; }));
+  app.get('/api/automations/inbox/:clientId', team(async (req) => { await guard(req, req.params.clientId); return { conversations: await automations.conversations(req.params.clientId) }; }));
+  app.post('/api/automations/inbox/:clientId/send', team(async (req) => { await guard(req, req.params.clientId); return automations.sendDm(req.params.clientId, req.body?.recipient_id, req.body?.message); }));
 }

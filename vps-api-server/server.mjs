@@ -9558,12 +9558,14 @@ app.get('/api/social-posts/accounts/:clientId', async (req, res) => {
 // Visão geral de conexões de TODOS os clientes (sem expor tokens)
 app.get('/api/social-posts/accounts-overview', async (req, res) => {
   try {
-    await verifySocialManager(req);
+    const { user } = await verifySocialManager(req);
     await ensureSocialPostsSchema();
     await ensureSocialInsightsSchema();
+    // só a cidade ativa (conferida contra as cidades da pessoa) e os clientes globais (trabalho em conjunto), 02/11/2026
+    const activeCity = normalizeCityValue(await resolveActiveCity(req, user.id, user));
     const { rows: clients } = await pool.query(
       `SELECT id, company_name AS name, city, COALESCE(portal_insights_enabled, false) AS portal_insights_enabled
-       FROM clients WHERE COALESCE(status,'ativo') <> 'inativo' ORDER BY company_name`
+       FROM clients WHERE COALESCE(status,'ativo') <> 'inativo' AND (city IS NULL OR lower(city) = $1) ORDER BY company_name`, [activeCity]
     );
     const { rows: accounts } = await pool.query(
       `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, token_expiration, status, api_base
@@ -20463,7 +20465,7 @@ pulsePlus.registerRoutes(app);
 
 // ─── Agentes de edição (chaves próprias, fila, entrega) ─────
 // ─── Upload-Post: postagem automática pelas redes dos clientes (lib/uploadPost.mjs, 02/11/2026) ──
-registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager: verifySocialOrAgent });
+registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager: verifySocialOrAgent, scope: { guard: (req, id) => socialScope.guard(req, id) } });
 // central social (comentários e avaliações do Google com a Ísis; lib/socialHub.mjs, 02/11/2026)
 const socialHub = createSocialHub({
   pool, uploadPost, resolveAiConfig, resolveAiModel, notifyTeam: notifySocialTeam,
@@ -20480,12 +20482,29 @@ async function verifySocialOrAgent(req) {
   }
   return verifySocialManager(req);
 }
+// Cidade (usuário, 02/11/2026: "quem não tem acesso na área equipe à Pulse Uruaçu não precisa ter acesso de nada da Pulse
+// Uruaçu, a não ser cliente que eu marque — trabalho em conjunto"): a cidade ativa vem do x-pulse-city, conferido contra
+// as cidades da pessoa (resolveActiveCity); cliente global (sem cidade) aparece nas duas. A Ísis pela chave vê tudo.
+const socialScope = {
+  async city(req) {
+    if (String(req.headers.authorization || '').startsWith('Agent ')) return null;
+    const { user } = await verifySocialManager(req);
+    return normalizeCityValue(await resolveActiveCity(req, user.id, user));
+  },
+  async guard(req, clientId) {
+    const city = await socialScope.city(req);
+    if (!city) return;
+    const { rows: [c] } = await pool.query('SELECT city FROM clients WHERE id = $1', [clientId]);
+    if (!c) throw Object.assign(new Error('Cliente não encontrado'), { status: 404 });
+    if (c.city && normalizeCityValue(c.city) !== city) throw Object.assign(new Error('Este cliente é de outra cidade'), { status: 403 });
+  },
+};
 // automações estilo ManyChat (palavra-chave → direct) e caixa de direct (lib/socialAutomations.mjs, 02/11/2026)
-registerAutomationRoutes(app, { automations: createAutomations({ pool, uploadPost }), verifySocialManager: verifySocialOrAgent });
+registerAutomationRoutes(app, { automations: createAutomations({ pool, uploadPost }), verifySocialManager: verifySocialOrAgent, pool, scope: socialScope });
 // Pulse Direct: funis no direct estilo ManyChat (lib/socialFlows.mjs, 02/11/2026)
 const pulseDirect = createFlows({ pool, uploadPost, notifyTeam: notifySocialTeam });
-registerFlowRoutes(app, { flows: pulseDirect, pool, verifySocialManager: verifySocialOrAgent });
-registerSocialHubRoutes(app, { flows: pulseDirect, hub: socialHub, uploadPost, pool, verifySocialManager: verifySocialOrAgent, verifyAdmin, publicApiUrl: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' });
+registerFlowRoutes(app, { flows: pulseDirect, pool, verifySocialManager: verifySocialOrAgent, scope: socialScope });
+registerSocialHubRoutes(app, { flows: pulseDirect, hub: socialHub, uploadPost, pool, verifySocialManager: verifySocialOrAgent, verifyAdmin, scope: socialScope, publicApiUrl: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' });
 
 // ─── Aprovação sem login (/aprovar/<token>): página do vídeo com o jeito do Instagram, aprovar ou pedir ajuste ──
 const portalShare = registerPortalShareRoutes(app, {

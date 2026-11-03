@@ -99,3 +99,27 @@ describe('Pulse Direct · motor', () => {
     expect(sent[0].quick_replies).toEqual([{ title: 'Sim', payload: 'f:f1:b' }, { title: 'Agora não', payload: 'f:f1:d' }]);
   });
 });
+
+describe('Pulse Direct · cidade', () => {
+  it('quem está em Minaçu não abre a conversa de cliente de Uruaçu; cliente global abre', async () => {
+    const { registerFlowRoutes } = await import('../../vps-api-server/lib/socialFlows.mjs');
+    const routes: Record<string, (req: unknown, res: unknown) => Promise<void>> = {};
+    const app = new Proxy({}, { get: (_t, method: string) => (path: string, fn: (req: unknown, res: unknown) => Promise<void>) => { routes[`${method} ${path}`] = fn; } });
+    const clientCity: Record<string, string | null> = { cu: 'uruacu', cg: null };
+    const pool = { query: async (sql: string, p: unknown[] = []) => (/FROM social_contacts WHERE id/.test(sql) ? { rows: [{ client_id: p[0] === 'k-uru' ? 'cu' : 'cg' }] } : { rows: [] }) };
+    const scope = {
+      city: async () => 'minacu',
+      guard: async (_req: unknown, id: string) => { const c = clientCity[id]; if (c && c !== 'minacu') throw Object.assign(new Error('Este cliente é de outra cidade'), { status: 403 }); },
+    };
+    const flows = { messages: async () => [{ id: 1 }] };
+    registerFlowRoutes(app, { flows, pool, verifySocialManager: async () => ({ user: { id: 'u' } }), scope });
+    const call = async (id: string) => {
+      let status = 200; let body: unknown;
+      const res = { status(s: number) { status = s; return this; }, json(b: unknown) { body = b; } };
+      await routes['get /api/flows/contact/:id/messages']({ params: { id }, query: {}, headers: {} }, res);
+      return { status, body };
+    };
+    expect((await call('k-uru')).status).toBe(403);
+    expect((await call('k-global')).body).toEqual({ messages: [{ id: 1 }] });
+  });
+});

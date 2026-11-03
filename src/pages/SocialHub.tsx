@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
+import { useCity } from '@/contexts/CityContext';
 import { useCallback } from 'react';
 import NetworkMetrics, { type NetworkMetric } from '@/components/social/NetworkMetrics';
 
@@ -51,6 +52,8 @@ function ReplyBox({ draft, onSend, busy }: { draft: string | null; onSend: (text
 }
 
 export default function SocialHub() {
+  // segue a cidade escolhida no topo (Minaçu/Uruaçu) e os clientes globais
+  const { activeCity } = useCity();
   const [tab, setTab] = useState<'escalado' | 'rascunho' | 'todos' | 'google' | 'metricas' | 'clientes'>('escalado');
   const [clientId, setClientId] = useState<string>('todos');
   const [clients, setClients] = useState<HubClient[]>([]);
@@ -81,7 +84,8 @@ export default function SocialHub() {
     }
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [tab, clientId]);
+  useEffect(() => { load(); }, [tab, clientId, activeCity]);
+  useEffect(() => { setClientId('todos'); }, [activeCity]);
   useEffect(() => {
     if (!cid) { setSettings(null); return; }
     api<{ isis_mode: string; notes: string }>(`social-hub/settings/${cid}`, { method: 'GET' }).then(setSettings).catch(() => setSettings(null));

@@ -294,11 +294,12 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, log
   }
 
   // ── equipe ──
-  async function list(clientId) {
+  async function list(clientId, city = null) {
     await ensureSchema();
     const { rows } = await pool.query(
       `SELECT f.*, cl.company_name AS client_name FROM social_flows f LEFT JOIN clients cl ON cl.id = f.client_id
-        WHERE ($1::uuid IS NULL OR f.client_id = $1) ORDER BY f.active DESC, f.updated_at DESC`, [clientId || null]
+        WHERE ($1::uuid IS NULL OR f.client_id = $1) AND ($2::text IS NULL OR cl.city IS NULL OR lower(cl.city) = $2)
+        ORDER BY f.active DESC, f.updated_at DESC`, [clientId || null, city || null]
     );
     return rows;
   }
@@ -389,7 +390,16 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, log
   return { ensureSchema, handleComment, handleDm, list, save, remove, contacts, messages, teamSend, setPaused, updateContact, test };
 }
 
-export function registerFlowRoutes(app, { flows, pool, verifySocialManager, logger = console }) {
+export function registerFlowRoutes(app, { flows, pool, verifySocialManager, scope = null, logger = console }) {
+  // cidade: só os clientes da cidade ativa e os globais (ver registerSocialHubRoutes)
+  const cityOf = (req) => (scope ? scope.city(req) : null);
+  const guard = (req, clientId) => (scope ? scope.guard(req, clientId) : null);
+  const guardItem = async (req, table, id) => {
+    const { rows: [r] } = await pool.query(`SELECT client_id FROM ${table} WHERE id = $1`, [id]);
+    if (!r) throw Object.assign(new Error('Não encontrado'), { status: 404 });
+    await guard(req, r.client_id);
+  };
+
   const fail = (res, error) => {
     const status = Number(error?.status) >= 400 && Number(error?.status) < 600 ? Number(error.status) : /unauthori|login|token/i.test(error?.message || '') ? 401 : /acesso|permiss/i.test(error?.message || '') ? 403 : 500;
     if (status >= 500) logger.error('[funis]', error?.message);
@@ -406,14 +416,17 @@ export function registerFlowRoutes(app, { flows, pool, verifySocialManager, logg
       res.json(await fn(req, user));
     } catch (error) { fail(res, error); }
   };
-  app.get('/api/flows', team(async (req) => ({ flows: await flows.list(req.query.client_id || null) })));
-  app.post('/api/flows/:clientId', team(async (req, user) => flows.save(req.params.clientId, req.body || {}, user?.id)));
-  app.put('/api/flows/:clientId/:id', team(async (req, user) => flows.save(req.params.clientId, req.body || {}, user?.id, req.params.id)));
-  app.delete('/api/flows/item/:id', team(async (req) => flows.remove(req.params.id)));
-  app.post('/api/flows/item/:id/test', team(async (req) => flows.test(req.params.id, req.body?.contact_id)));
-  app.get('/api/flows/contacts/:clientId', team(async (req) => ({ contacts: await flows.contacts(req.params.clientId, { tag: req.query.tag || null, q: req.query.q || null }) })));
-  app.get('/api/flows/contact/:id/messages', team(async (req) => ({ messages: await flows.messages(req.params.id) })));
-  app.post('/api/flows/contact/:id/send', team(async (req, user) => flows.teamSend(req.params.id, req.body || {}, await nameOf(user))));
-  app.post('/api/flows/contact/:id/pause', team(async (req) => flows.setPaused(req.params.id, !!req.body?.paused)));
-  app.put('/api/flows/contact/:id', team(async (req) => flows.updateContact(req.params.id, req.body || {})));
+  app.get('/api/flows', team(async (req) => {
+    if (req.query.client_id) await guard(req, req.query.client_id);
+    return { flows: await flows.list(req.query.client_id || null, await cityOf(req)) };
+  }));
+  app.post('/api/flows/:clientId', team(async (req, user) => { await guard(req, req.params.clientId); return flows.save(req.params.clientId, req.body || {}, user?.id); }));
+  app.put('/api/flows/:clientId/:id', team(async (req, user) => { await guard(req, req.params.clientId); return flows.save(req.params.clientId, req.body || {}, user?.id, req.params.id); }));
+  app.delete('/api/flows/item/:id', team(async (req) => { await guardItem(req, 'social_flows', req.params.id); return flows.remove(req.params.id); }));
+  app.post('/api/flows/item/:id/test', team(async (req) => { await guardItem(req, 'social_flows', req.params.id); return flows.test(req.params.id, req.body?.contact_id); }));
+  app.get('/api/flows/contacts/:clientId', team(async (req) => { await guard(req, req.params.clientId); return { contacts: await flows.contacts(req.params.clientId, { tag: req.query.tag || null, q: req.query.q || null }) }; }));
+  app.get('/api/flows/contact/:id/messages', team(async (req) => { await guardItem(req, 'social_contacts', req.params.id); return { messages: await flows.messages(req.params.id) }; }));
+  app.post('/api/flows/contact/:id/send', team(async (req, user) => { await guardItem(req, 'social_contacts', req.params.id); return flows.teamSend(req.params.id, req.body || {}, await nameOf(user)); }));
+  app.post('/api/flows/contact/:id/pause', team(async (req) => { await guardItem(req, 'social_contacts', req.params.id); return flows.setPaused(req.params.id, !!req.body?.paused); }));
+  app.put('/api/flows/contact/:id', team(async (req) => { await guardItem(req, 'social_contacts', req.params.id); return flows.updateContact(req.params.id, req.body || {}); }));
 }

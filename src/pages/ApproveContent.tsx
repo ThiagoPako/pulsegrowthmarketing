@@ -5,7 +5,7 @@
 // post quando já existe, e os botões Aprovar e Pedir alteração. Depois, o convite para a Área do Cliente.
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Bookmark, Check, Heart, Loader2, MessageCircle, Mic, MoreHorizontal, Music2, Pencil, Play, Send, Square, Trash2, Volume2, VolumeX } from 'lucide-react';
+import { Bookmark, Check, Download, Heart, Loader2, MessageCircle, Mic, MoreHorizontal, Music2, Pencil, Play, Send, Square, Trash2, Volume2, VolumeX } from 'lucide-react';
 import logo from '@/assets/pulse-logo-branco.png';
 
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
@@ -294,6 +294,13 @@ export default function ApproveContent() {
                   {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Check className="h-5 w-5" /> {data.team ? 'Aprovar e enviar' : 'Aprovar'}</>}
                 </button>
               </div>
+            )}
+            {/* baixar o vídeo (03/11/2026, pedido do Thiago: "coloque também um botão de download") */}
+            {data.file_url && (
+              <a href={data.file_url} download target="_blank" rel="noreferrer"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 px-4 py-3 text-sm font-semibold text-white/85 active:scale-[0.98]">
+                <Download className="h-4 w-4" /> Baixar o vídeo
+              </a>
             )}
             {actionError && <p className="mt-3 text-center text-sm text-[#FF8A8A]" aria-live="polite">{actionError}</p>}
 

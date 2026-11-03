@@ -28,7 +28,7 @@ import {
   weekKeys, withMovedDate, type SchedulingItem, type SchedulingMaterials, type SchedulingType,
 } from '@/lib/postingSchedule';
 import {
-  fetchBestTimes, fetchSchedulingClients, fetchSchedulingMaterials, rescheduleMaterial, type SchedulingApiError,
+  fetchBestTimes, fetchCalendarEvents, fetchSchedulingClients, fetchSchedulingMaterials, rescheduleMaterial, type SchedulingApiError,
 } from '@/services/schedulingApi';
 import { lastUsedTime } from '@/lib/storySeries';
 
@@ -108,6 +108,14 @@ export default function Scheduling() {
     retry: false,
   });
   const bestSlots = bestQuery.data?.slots ?? [];
+  // feriados e aniversário das cidades das unidades (03/11/2026)
+  const eventsQuery = useQuery({
+    queryKey: ['scheduling-calendar-events', clientId, range.from, range.to],
+    queryFn: () => fetchCalendarEvents(clientId as string, range.from, range.to),
+    enabled: !!client,
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
   const scheduled = useMemo(() => data?.scheduled ?? [], [data]);
   const unscheduled = useMemo(() => data?.unscheduled ?? [], [data]);
   const counts = monthCounts(scheduled, monthKey, unscheduled.length);
@@ -286,6 +294,7 @@ export default function Scheduling() {
           onItemClick={openItem}
           onShowWeek={(day) => { setAnchor(day); setView('week'); }}
           bestSlots={bestSlots}
+          events={eventsQuery.data}
           onBestPick={(day, time) => setBestPick({ day, time })}
         />
       )}

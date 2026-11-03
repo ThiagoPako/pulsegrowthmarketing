@@ -101,3 +101,11 @@ export interface BestTimeSlot { weekday: number; hour: number; score: number; re
 export async function fetchBestTimes(clientId: string): Promise<{ slots: BestTimeSlot[]; sources: string[] }> {
   return call<{ slots: BestTimeSlot[]; sources: string[] }>('scheduling/best-times', { method: 'GET', body: { client_id: clientId } });
 }
+
+/** Feriados e aniversário das cidades das unidades do cliente (vps-api-server/lib/calendarEvents.mjs). */
+export interface CalendarHoliday { date: string; name: string; kind: 'feriado' | 'facultativo' }
+export interface CityAnniversary { date: string; city: string; years: number | null; units: string[]; art: { id: string | null; column: string | null } | null }
+export interface CalendarEvents { holidays: CalendarHoliday[]; anniversaries: CityAnniversary[] }
+export async function fetchCalendarEvents(clientId: string, from: string, to: string): Promise<CalendarEvents> {
+  return call<CalendarEvents>('scheduling/calendar-events', { method: 'GET', body: { client_id: clientId, from, to } });
+}

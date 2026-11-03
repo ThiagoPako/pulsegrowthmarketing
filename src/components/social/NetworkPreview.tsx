@@ -6,8 +6,8 @@
 // reels em 9:16. A legenda corta onde a rede corta ("mais", "Ver mais").
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Bookmark, ChevronLeft, ChevronRight, Facebook, Globe2, Heart, Instagram, Linkedin, Link2, MapPin, MessageCircle, MoreHorizontal,
-  Music2, Repeat2, Send, Share2, ThumbsUp, Youtube,
+  Bookmark, ChevronLeft, ChevronRight, Clapperboard, Facebook, Globe2, Heart, Home, Instagram, Linkedin, Link2, MapPin, MessageCircle, MoreHorizontal,
+  Music2, PlusSquare, Repeat2, Search, Send, Share2, ThumbsUp, Youtube,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -113,15 +113,40 @@ interface ViewProps {
 }
 
 /** Tela cheia 9:16 (story, reels, TikTok, Shorts): a mídia ocupa tudo e os botões ficam por cima. */
-function FullScreen({ url, children }: { url?: string; children: React.ReactNode }) {
+function FullScreen({ url, children, nav }: { url?: string; children: React.ReactNode; nav?: React.ReactNode }) {
   return (
-    <div className="relative aspect-[9/16] w-full overflow-hidden bg-black text-white">
-      <Media url={url} cover />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/60" />
-      <div className="absolute inset-0">{children}</div>
+    <div className="bg-black text-white">
+      <div className="relative aspect-[9/16] w-full overflow-hidden">
+        <Media url={url} cover />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/45 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
+        <div className="absolute inset-0">{children}</div>
+      </div>
+      {nav}
     </div>
   );
 }
+
+/** Barra de baixo do app (o vídeo fica em cima dela, como no celular). */
+const IgNav = () => (
+  <div className="flex items-center justify-around border-t border-white/10 bg-black py-2 text-white">
+    <Home size={18} /><Search size={18} /><PlusSquare size={18} /><Clapperboard size={18} /><span className="h-[18px] w-[18px] rounded-full bg-white/80" />
+  </div>
+);
+
+/** Ações da lateral (curtir, comentar…), acima da legenda, como nos apps. */
+function SideActions({ items }: { items: { Icon: typeof Heart; label?: string }[] }) {
+  return (
+    <div className="absolute bottom-[104px] right-2.5 flex flex-col items-center gap-3.5 text-[10px] font-semibold drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+      {items.map(({ Icon, label }, i) => (
+        <span key={i} className="flex flex-col items-center gap-0.5"><Icon size={23} strokeWidth={1.9} />{label}</span>
+      ))}
+    </div>
+  );
+}
+
+/** Legenda de tela cheia: só a primeira linha, cortada, com o "mais" (como o Reels mostra). */
+const firstLine = (t: string) => t.trim().split('\n').find((l) => l.trim()) || '';
 
 function StoryView({ media, account, storyLink, accent }: ViewProps & { accent: 'instagram' | 'facebook' }) {
   return (
@@ -147,22 +172,19 @@ function StoryView({ media, account, storyLink, accent }: ViewProps & { accent: 
 
 function ReelsView({ media, caption, account, label, follow }: ViewProps & { label: string; follow: string }) {
   return (
-    <FullScreen url={media[0]}>
-      <p className="px-3 pt-3 text-sm font-bold">{label}</p>
-      <div className="absolute bottom-16 right-2 flex flex-col items-center gap-4 text-[10px]">
-        <span className="flex flex-col items-center"><Heart size={22} />—</span>
-        <span className="flex flex-col items-center"><MessageCircle size={22} />—</span>
-        <span className="flex flex-col items-center"><Send size={22} /></span>
-        <MoreHorizontal size={18} />
-      </div>
-      <div className="absolute inset-x-0 bottom-0 space-y-1.5 p-3 pr-12 text-xs">
+    <FullScreen url={media[0]} nav={<IgNav />}>
+      <p className="px-3 pt-3 text-[15px] font-bold tracking-tight">{label}</p>
+      <SideActions items={[{ Icon: Heart }, { Icon: MessageCircle }, { Icon: Send }, { Icon: MoreHorizontal }]} />
+      <div className="absolute inset-x-0 bottom-0 space-y-1.5 px-3 pb-3 pr-14 text-xs">
         <div className="flex items-center gap-2">
-          <Avatar src={account.picture} name={account.name} size={24} />
-          <b>{account.username || account.name}</b>
-          <span className="rounded-md border border-white/70 px-2 py-0.5 text-[10px] font-semibold">{follow}</span>
+          <Avatar src={account.picture} name={account.name} size={26} />
+          <b className="truncate">{account.username || account.name}</b>
+          <span className="shrink-0 rounded-lg border border-white/70 px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm">{follow}</span>
         </div>
-        <Clamp text={caption} max={60} more="mais" />
-        <p className="flex items-center gap-1 text-[11px] text-white/85"><Music2 size={11} /> Áudio original</p>
+        <p className="line-clamp-1 text-[12px] leading-snug text-white/95">
+          {firstLine(caption)}{caption.trim().includes('\n') || firstLine(caption).length > 48 ? <span className="text-white/60"> … mais</span> : null}
+        </p>
+        <p className="flex w-fit items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] backdrop-blur-sm"><Music2 size={10} /> Áudio original</p>
       </div>
     </FullScreen>
   );
@@ -250,16 +272,13 @@ function TikTokView({ media, caption, account }: ViewProps) {
     <FullScreen url={s.url}>
       {s.arrows}
       <p className="pt-3 text-center text-[12px] font-semibold"><span className="text-white/60">Seguindo</span>  <span className="border-b-2 border-white pb-0.5">Para você</span></p>
-      <div className="absolute bottom-16 right-2 flex flex-col items-center gap-4 text-[10px]">
+      <div className="absolute bottom-[104px] right-2.5 flex flex-col items-center gap-3.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
         <Avatar src={account.picture} name={account.name} size={34} />
-        <span className="flex flex-col items-center"><Heart size={24} fill="white" />0</span>
-        <span className="flex flex-col items-center"><MessageCircle size={24} />0</span>
-        <span className="flex flex-col items-center"><Bookmark size={22} />0</span>
-        <span className="flex flex-col items-center"><Share2 size={22} />0</span>
+        <Heart size={24} fill="white" /><MessageCircle size={24} /><Bookmark size={22} /><Share2 size={22} />
       </div>
-      <div className="absolute inset-x-0 bottom-0 space-y-1 p-3 pr-14 text-xs">
+      <div className="absolute inset-x-0 bottom-0 space-y-1 px-3 pb-3 pr-14 text-xs">
         <b>@{account.username || account.name}</b>
-        <Clamp text={caption} max={80} more="mais" />
+        <p className="line-clamp-2 text-[12px] leading-snug">{caption.trim()}</p>
         <p className="flex items-center gap-1 text-[11px]"><Music2 size={11} /> som original - {account.username || account.name}</p>
         {photos && <Dots n={media.length} i={s.i} light />}
       </div>
@@ -301,11 +320,7 @@ function YouTubeView({ media, caption, account }: ViewProps) {
   return (
     <FullScreen url={video}>
       <p className="px-3 pt-3 text-sm font-bold">Shorts</p>
-      <div className="absolute bottom-16 right-2 flex flex-col items-center gap-4 text-[10px]">
-        <span className="flex flex-col items-center"><ThumbsUp size={22} />Gostei</span>
-        <span className="flex flex-col items-center"><MessageCircle size={22} />0</span>
-        <span className="flex flex-col items-center"><Share2 size={22} />Compartilhar</span>
-      </div>
+      <SideActions items={[{ Icon: ThumbsUp, label: 'Gostei' }, { Icon: MessageCircle }, { Icon: Share2, label: 'Compartilhar' }]} />
       <div className="absolute inset-x-0 bottom-0 space-y-1.5 p-3 pr-14 text-xs">
         <div className="flex items-center gap-2">
           <Avatar src={account.picture} name={account.name} size={24} />
@@ -386,12 +401,12 @@ export default function NetworkPreview({
         </div>
       )}
       {/* celular */}
-      <div className="mx-auto w-full max-w-[300px] rounded-[2.2rem] border-[7px] border-neutral-900 bg-neutral-900 shadow-2xl">
+      <div className="mx-auto w-full max-w-[300px] rounded-[2.4rem] border-[7px] border-neutral-900 bg-neutral-900 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.06)]">
         <div className="relative overflow-hidden rounded-[1.7rem] bg-white">
           <div className="flex items-center justify-between bg-white px-5 pb-1 pt-2 text-[10px] font-semibold text-neutral-900">
             <span>9:41</span><span className="h-4 w-16 rounded-full bg-neutral-900" /><span>100%</span>
           </div>
-          <div className="max-h-[560px] overflow-y-auto">
+          <div key={`${current}-${format}`} className="max-h-[600px] overflow-y-auto duration-300 animate-in fade-in zoom-in-[0.985] motion-reduce:animate-none">
             {story ? <div className="grid aspect-[9/16] place-items-center bg-neutral-900 p-6 text-center text-xs text-white/70">Story só sai no Instagram e no Facebook.</div>
               : <View format={format} media={media} caption={caption} account={account} firstComment={firstComment} collaborators={collaborators} storyLink={storyLink} />}
           </div>

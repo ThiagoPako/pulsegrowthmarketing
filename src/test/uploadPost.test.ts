@@ -125,3 +125,9 @@ describe('Upload-Post · primeiro comentário e Collab', () => {
     expect(get(uploadFields({ platform: 'instagram', publishType: 'stories', media: video, caption: '', firstComment: 'Oi' }).fields, 'instagram_first_comment')).toEqual([]);
   });
 });
+
+describe('Upload-Post · título obrigatório', () => {
+  it('post sem legenda ainda manda o title', () => {
+    expect(get(uploadFields({ platform: 'instagram', publishType: 'reels', media: video, caption: '' }).fields, 'title')).toEqual([' ']);
+  });
+});

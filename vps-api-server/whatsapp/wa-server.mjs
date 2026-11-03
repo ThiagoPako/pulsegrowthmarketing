@@ -594,6 +594,36 @@ class Connection {
     } finally {
       client.release();
     }
+    await this.linkInviteGroups().catch((e) => log(this.name, 'grupo por link:', e.message));
+  }
+
+  // Cliente com o link de convite no cadastro e este número já no grupo: troca o link pelo grupo (03/11/2026: o número
+  // estava no grupo da LaboVitta e o cadastro não mostrava, porque o grupo estava salvo como link)
+  async linkInviteGroups() {
+    if (!this.knownGroups?.size) return;
+    const { rows } = await pool.query(
+      `SELECT id, whatsapp_group FROM clients WHERE whatsapp_group ~* 'chat\.whatsapp\.com/' LIMIT 60`
+    );
+    for (const c of rows) {
+      const code = String(c.whatsapp_group).match(/chat\.whatsapp\.com\/([A-Za-z0-9]+)/)?.[1];
+      if (!code) continue;
+      const key = `grupo:${code}`;
+      let { rows: [cached] } = await pool.query('SELECT jid FROM wa_jid_cache WHERE number = $1', [key]);
+      if (!cached?.jid) {
+        const info = await this.sock.groupGetInviteInfo(code).catch(() => null);
+        if (!info?.id) continue;
+        await pool.query(
+          `INSERT INTO wa_jid_cache (number, jid, on_whatsapp) VALUES ($1, $2, true)
+           ON CONFLICT (number) DO UPDATE SET jid = EXCLUDED.jid, on_whatsapp = true, checked_at = now()`, [key, info.id]
+        );
+        cached = { jid: info.id };
+        await new Promise((r) => setTimeout(r, 1500)); // sem rajada de consultas ao WhatsApp
+      }
+      if (this.knownGroups.has(cached.jid)) {
+        await pool.query(`UPDATE clients SET whatsapp_group = $2 WHERE id = $1 AND whatsapp_group = $3`, [c.id, cached.jid, c.whatsapp_group]);
+        log(this.name, `grupo do cliente ${c.id} ligado pelo link de convite`);
+      }
+    }
   }
 
   // número/grupo do destino → jid do WhatsApp (com e sem o 9º dígito no Brasil)

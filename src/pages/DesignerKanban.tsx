@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect, DragEvent } from 'react';
+import { DesignAbAdminButton, MadeByBadge, useDesignAbSettings } from '@/components/designer/DesignAbControls';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCity } from '@/contexts/CityContext';
@@ -313,8 +314,12 @@ export default function DesignerKanban() {
 
   const hasDateFilters = !!(createdFrom || createdTo || dueFrom || dueTo || overdueOnly || (pulsePlus && aiOnly) || incompleteOnly);
 
+  // arte humana × IA: o card da IA em teste só para admin (o servidor já filtra; aqui vale o caminho antigo)
+  const { data: abSettings } = useDesignAbSettings();
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
+      if ((t.kanban_column as string) === 'descartada') return false;
+      if (t.made_by === 'agente' && t.twin_id && abSettings?.agent_admin_only !== false && !abSettings?.is_admin) return false;
       if (filterClient !== 'all' && t.client_id !== filterClient) return false;
       // Data de criação
       const created = dateOnly(t.created_at);
@@ -331,7 +336,7 @@ export default function DesignerKanban() {
       if (incompleteOnly && (['aprovado', 'postado'].includes(t.kanban_column) || getDesignBriefMissing(t).length === 0)) return false;
       return true;
     });
-  }, [tasks, filterClient, createdFrom, createdTo, dueFrom, dueTo, overdueOnly, aiOnly, incompleteOnly, pulsePlus, isAgentTask]);
+  }, [tasks, filterClient, createdFrom, createdTo, dueFrom, dueTo, overdueOnly, aiOnly, incompleteOnly, pulsePlus, isAgentTask, abSettings]);
 
   const clearDateFilters = () => {
     setCreatedFrom('');
@@ -761,6 +766,7 @@ export default function DesignerKanban() {
               {isisPendentes > 0 && <span className="rounded-full bg-fuchsia-500 px-1.5 text-[10px] font-bold text-white">{isisPendentes}</span>}
             </Button>
           )}
+          <DesignAbAdminButton />
           {(currentUser?.role === 'admin' || currentUser?.role === 'social_media' || currentUser?.role === 'designer') && (
             <Button size="sm" onClick={() => setCreateOpen(true)}>
               <Plus size={16} className="mr-1" /> Nova Tarefa
@@ -1534,6 +1540,7 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
     >
       {/* Agente de IA: criando / em correção / parada / Análise IA */}
       <DesignAgentBadge task={task} agents={agents} className="-mx-3 !-mt-3 mb-1 rounded-t-xl" />
+      {task.made_by && <MadeByBadge madeBy={task.made_by} abTest={task.ab_test} abResult={task.ab_result} />}
 
       {/* Posição na fila */}
       {queueIndex != null && (

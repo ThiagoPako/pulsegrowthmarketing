@@ -433,6 +433,8 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
               -- a que já está com o agente
               OR (dt.kanban_column IN ('executando', 'ajustes') AND dt.assigned_to = $1 AND dt.agent_step IS NOT NULL)
             )
+            -- arte humana × IA (03/11/2026): card marcado para a equipe humana não vai para os agentes
+            AND dt.made_by IS DISTINCT FROM 'humano'
             AND ${CITY_MATCH('dt.city', '$2')}`}
           ORDER BY (dt.assigned_to = $1 AND dt.agent_step IS NOT NULL) DESC,
                    (dt.kanban_column = 'ajustes') DESC,
@@ -495,6 +497,7 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
             updated_at = now()
           WHERE id = $1
             AND (assigned_to IS NULL OR assigned_to = $2)
+            AND made_by IS DISTINCT FROM 'humano'
             AND (
               kanban_column = 'nova_tarefa'
               OR (kanban_column = 'ajustes' AND designed_by = $2)

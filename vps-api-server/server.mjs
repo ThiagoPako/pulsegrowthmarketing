@@ -56,6 +56,7 @@ import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/share
 import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOption } from './lib/portalSession.mjs';
 import { createPortalAdmin } from './lib/portalAdmin.mjs';
 import { createPlanAddons } from './lib/planAddons.mjs';
+import { createDesignAb } from './lib/designAb.mjs';
 import { cleanupOldEditVersions } from './lib/versionCleanup.mjs';
 import { createWebVideo, captureVideoUploads, isDerivedVariantName, originalNamesForVariant, WEB_TMP_DIR, resolveUploadFile, webVariantUrl } from './lib/webVideo.mjs';
 import { createInstagramVideo } from './lib/instagramVideo.mjs';
@@ -5877,7 +5878,7 @@ app.post('/api/client-portal-auth', async (req, res) => {
       if (!contentsClientId) return res.status(400).json({ error: 'client_id required' });
       // 'revisao_interna' (vídeo ainda não liberado) só vai para a equipe.
       const { rows } = await pool.query(
-        `SELECT * FROM client_portal_contents WHERE client_id = $1 AND ($2::boolean OR status <> 'revisao_interna') ORDER BY created_at DESC`,
+        `SELECT * FROM client_portal_contents WHERE client_id = $1 AND status <> 'descartado' AND ($2::boolean OR status <> 'revisao_interna') ORDER BY created_at DESC`,
         [contentsClientId, caller?.kind === 'team']
       );
       return res.json({ contents: rows || [] });
@@ -6365,7 +6366,7 @@ app.post('/api/portal-actions', async (req, res) => {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
       // 'revisao_interna' (vídeo ainda não liberado) só vai para a equipe.
       const { rows } = await pool.query(
-        `SELECT * FROM client_portal_contents WHERE client_id = $1 AND ($2::boolean OR status <> 'revisao_interna') ORDER BY created_at DESC`,
+        `SELECT * FROM client_portal_contents WHERE client_id = $1 AND status <> 'descartado' AND ($2::boolean OR status <> 'revisao_interna') ORDER BY created_at DESC`,
         [client_id, isTeamCaller]
       );
       return res.json({ contents: rows });
@@ -12917,6 +12918,14 @@ app.get('/api/design-tasks/fast', async (req, res) => {
       params.push(activeCity);
       paramIdx++;
     }
+    // arte humana × IA (03/11/2026): o gêmeo do agente só para admin enquanto a chave estiver ligada; a perdedora sai
+    const ab = await designAb.settings().catch(() => null);
+    if (ab) {
+      where.push(`dt.kanban_column IS DISTINCT FROM 'descartada'`);
+      if (ab.agent_admin_only && !(await isStrictAdminUser(user).catch(() => false))) {
+        where.push(`NOT (dt.made_by IS NOT DISTINCT FROM 'agente' AND dt.twin_id IS NOT NULL)`);
+      }
+    }
 
     params.push(limit);
 
@@ -12925,7 +12934,7 @@ app.get('/api/design-tasks/fast', async (req, res) => {
     const dtColumns = await getExistingColumns('design_tasks').catch(() => null);
     // Brief estruturado, formato/dimensão, materiais e agentes de design (agentDesignRoutes.mjs)
     const AGENT_DESIGN_COLUMNS = ['copy_brief', 'dimensions', 'materials_link', 'designed_by', 'agent_step', 'agent_heartbeat_at',
-      'references_drive_link', 'references_archived_at'];
+      'references_drive_link', 'references_archived_at', 'made_by', 'ab_test', 'twin_id', 'ab_result'];
     const extraSelect = [
       dtColumns?.has('checklist') ? 'dt.checklist' : null,
       dtColumns?.has('collaborator_id') ? 'dt.collaborator_id' : null,
@@ -20903,6 +20912,30 @@ const pixReceipts = registerPixReceiptRoutes(app, {
 });
 
 // ─── Cobranças da Ísis pelo Assistente PULSE (Financeiro → Cobranças; desligado = a cobrança antiga segue igual) ──
+// ─── Arte humana × arte da IA (lib/designAb.mjs, 03/11/2026) ───
+const designAb = createDesignAb({ pool });
+designAb.ensureSchema().catch(() => {});
+app.get('/api/design-ab/settings', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    res.json({ ...(await designAb.settings()), is_admin: await isStrictAdminUser(user).catch(() => false) });
+  } catch (error) { res.status(401).json({ error: error.message }); }
+});
+app.put('/api/design-ab/settings', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    if (!(await isStrictAdminUser(user).catch(() => false))) return res.status(403).json({ error: 'Só admin muda o teste humano × IA' });
+    res.json(await designAb.saveSettings(req.body || {}, user?.id));
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.get('/api/design-ab/scoreboard', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    if (!(await isStrictAdminUser(user).catch(() => false))) return res.status(403).json({ error: 'Só admin' });
+    res.json(await designAb.scoreboard());
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
 // ─── Upgrade de redes no plano do cliente (lib/planAddons.mjs, 03/11/2026) ───
 const planAddons = createPlanAddons({ pool });
 const planAddonsFail = (res, error) => {

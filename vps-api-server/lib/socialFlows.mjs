@@ -12,6 +12,11 @@
 // Comentário: a 1ª mensagem vai como resposta privada ao comentário (o Instagram só deixa uma por comentário e só com
 // botões de link); as respostas rápidas aparecem na mensagem seguinte, quando a pessoa responder. Opcional: uma
 // resposta pública no comentário ("Te mandei no direct! 💌").
+// Só para seguidores (usuário, 02/11/2026: "um botão para ativar a função de apenas para seguidores e caso a pessoa
+// não estiver seguindo ela recebe uma mensagem amigável falando pra seguir que libera para ela o link ou presente"):
+// com trigger.followers_only, o comentário recebe primeiro o pedido para seguir (trigger.follow_message) e o funil só
+// começa quando a pessoa responde "JÁ SIGO" (ou toca no botão). A Upload-Post não diz se a pessoa segue o perfil; o
+// isFollower (opcional) entra quando houver acesso direto à Meta (is_user_follow_business). Sem ele, vale a palavra.
 // Contatos: cada pessoa que conversa vira um contato do cliente, com etiquetas, campos e a conversa guardada. A equipe
 // pode "assumir a conversa" (o robô pausa) e responder pela caixa de direct.
 
@@ -24,6 +29,13 @@ const FIELD_CHECK = {
   nome: (v) => (String(v).trim().length >= 2 ? clean(v, 80) : null),
   texto: (v) => (String(v).trim() ? clean(v, 500) : null),
 };
+export const FOLLOW_DEFAULT = 'Oi, {primeiro_nome}! 😊 Esse presente é só para quem segue a gente. Segue o perfil e me responde JÁ SIGO aqui que eu te mando na hora 💛';
+export const FOLLOW_CONFIRM = 'Já sigo ✅';
+const FOLLOW_STEP = '__seguir';
+const FOLLOW_NOT_YET = 'Ainda não te achei entre os seguidores 🥺 Segue o perfil e toca em "Já sigo" de novo que eu libero pra você!';
+const FOLLOW_REMINDER = 'Pra liberar, é só seguir o perfil e tocar em "Já sigo" 👇';
+/** A pessoa disse que já segue? ("já sigo", "segui", "pronto", "to seguindo"…) */
+export const saysFollows = (text) => /(^| )(sigo|segui|seguindo|pronto|feito)( |$)/.test(norm(text));
 export const FIELD_RETRY = {
   telefone: 'Não entendi o número 🙈 Pode mandar com DDD? Ex.: 62 99999-9999',
   email: 'Esse e-mail não parece certo. Pode mandar de novo? 🙏',
@@ -64,7 +76,12 @@ export function normalizeFlow(body) {
   });
   return {
     name, active: body?.active !== false,
-    trigger: { type, keywords, post_ids: postIds },
+    trigger: {
+      type, keywords, post_ids: postIds,
+      ...(type === 'comment_keyword' && body?.trigger?.followers_only
+        ? { followers_only: true, follow_message: clean(body.trigger.follow_message, 1000) || FOLLOW_DEFAULT }
+        : {}),
+    },
     public_reply: type === 'comment_keyword' ? clean(body?.public_reply, 300) || null : null,
     steps,
   };
@@ -88,7 +105,7 @@ export function fillVars(text, contact) {
   return String(text || '').replace(/\{nome\}/g, name).replace(/\{primeiro_nome\}/g, String(name).split(/\s+/)[0] || '').replace(/\s{2,}/g, ' ').trim();
 }
 
-export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, logger = console }) {
+export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, isFollower = async () => null, logger = console }) {
   let schemaPromise = null;
   function ensureSchema() {
     if (!schemaPromise) {
@@ -165,6 +182,12 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, log
   }
 
   const payloadOf = (flowId, stepId) => `f:${flowId}:${stepId}`;
+  async function dmFollowButton(profile, contact, flowId, message) {
+    await uploadPost.call('POST', '/uploadposts/dms/send', {
+      json: { platform: 'instagram', user: profile, recipient_id: contact.ext_id, message, quick_replies: [{ title: FOLLOW_CONFIRM, payload: payloadOf(flowId, FOLLOW_STEP) }] },
+    });
+    await log(contact.id, 'out', message, { flow_id: flowId, step_id: FOLLOW_STEP, replies: [FOLLOW_CONFIRM] }, 'Automação');
+  }
   const replyLine = (step) => (step.replies?.length ? `\n\nResponda: ${step.replies.map((r) => r.title).join(' · ')}` : '');
 
   /** Manda uma etapa (e as seguintes encadeadas por "seguir direto", até 5). */
@@ -220,7 +243,17 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, log
     if (!flow || !from.id) return null;
     const contact = await upsertContact(cp.client_id, 'instagram', from.id, from.username);
     await log(contact.id, 'in', payload.comment.text, { comment_id: payload.comment.id, post_id: payload.post?.id });
-    await sendStep({ profile: payload.profile_username, contact, flow, step: flow.steps[0], viaComment: payload.comment.id });
+    if (flow.trigger?.followers_only) {
+      // só para seguidores: primeiro o pedido para seguir; o funil começa quando a pessoa responder "JÁ SIGO"
+      const text = fillVars(flow.trigger.follow_message || FOLLOW_DEFAULT, contact);
+      await uploadPost.call('POST', '/uploadposts/comments/reply', {
+        json: { platform: 'instagram', user: payload.profile_username, comment_id: payload.comment.id, message: text },
+      });
+      await log(contact.id, 'out', text, { flow_id: flow.id, step_id: FOLLOW_STEP }, 'Automação');
+      await pool.query(`UPDATE social_contacts SET flow_id = $2, step_id = $3, awaiting = NULL WHERE id = $1`, [contact.id, flow.id, FOLLOW_STEP]);
+    } else {
+      await sendStep({ profile: payload.profile_username, contact, flow, step: flow.steps[0], viaComment: payload.comment.id });
+    }
     if (flow.public_reply) {
       await uploadPost.call('POST', '/uploadposts/comments/public-reply', {
         json: { platform: 'instagram', user: payload.profile_username, comment_id: payload.comment.id, message: flow.public_reply },
@@ -254,8 +287,27 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, log
       return true;
     };
 
-    // 1) botão de resposta rápida
     const qp = String(payload.message?.quick_reply_payload || '');
+    // 0) só para seguidores: esperando o "JÁ SIGO" (escrito ou no botão)
+    if (contact.flow_id && String(contact.step_id || '').startsWith(FOLLOW_STEP)) {
+      const { rows: [flow] } = await pool.query(`SELECT * FROM social_flows WHERE id = $1 AND client_id = $2`, [contact.flow_id, cp.client_id]);
+      const tapped = qp === `f:${contact.flow_id}:${FOLLOW_STEP}`;
+      if (flow?.steps?.length && (tapped || saysFollows(text))) {
+        const follows = await isFollower({ profile: payload.profile_username, contact }).catch(() => null);
+        if (follows === false) {
+          await dmFollowButton(payload.profile_username, contact, flow.id, FOLLOW_NOT_YET);
+          return true;
+        }
+        return go(flow.id, flow.steps[0].id);
+      }
+      if (flow?.steps?.length && contact.step_id === FOLLOW_STEP) {
+        // 1ª resposta que não é "já sigo": lembra uma vez, com o botão; depois deixa a conversa seguir normal
+        await dmFollowButton(payload.profile_username, contact, flow.id, FOLLOW_REMINDER);
+        await pool.query(`UPDATE social_contacts SET step_id = $2 WHERE id = $1`, [contact.id, `${FOLLOW_STEP}2`]);
+        return true;
+      }
+    }
+    // 1) botão de resposta rápida
     if (qp.startsWith('f:')) {
       const [, flowId, stepId] = qp.split(':');
       if (await go(flowId, stepId)) return true;

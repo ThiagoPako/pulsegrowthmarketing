@@ -31,6 +31,12 @@ export default function InstagramPreview({ flow, accountName, focusStepId }: { f
         {flow.trigger.type === 'comment_keyword' && (
           <p className="text-center text-[10px] text-neutral-400">Ana comentou “{flow.trigger.keywords[0] || 'qualquer coisa'}” no seu post</p>
         )}
+        {flow.trigger.type === 'comment_keyword' && flow.trigger.followers_only && (
+          <div className="space-y-1.5">
+            <div className="w-fit max-w-[80%] rounded-2xl bg-neutral-100 px-3 py-2 dark:bg-neutral-800"><p className="whitespace-pre-wrap">{fill(flow.trigger.follow_message || '') || '…'}</p></div>
+            <div className="ml-auto w-fit max-w-[75%] rounded-2xl bg-[#3797F0] px-3 py-1.5 text-white">JÁ SIGO</div>
+          </div>
+        )}
         {path.map(({ step, userSaid }, i) => (
           <div key={`${step.id}-${i}`} className="space-y-1.5">
             {userSaid && <div className="ml-auto w-fit max-w-[75%] rounded-2xl bg-[#3797F0] px-3 py-1.5 text-white">{userSaid}</div>}

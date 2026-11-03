@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, Zap, CalendarCheck2, CalendarClock, Check, Copy, Facebook, Instagram, Linkedin, Loader2, Music2, Repeat2, Sparkles, Trash2, Youtube } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -217,6 +217,14 @@ export default function ScheduleDialog({
     setSavedCaption(initial.caption);
   }, [initial]);
 
+  // "Postar agora": depois que o horário de agora entra no estado, salva (o save mais novo fica no ref)
+  const saveRef = useRef<((allowPast?: boolean) => Promise<void>) | null>(null);
+  useEffect(() => {
+    if (!postNowPending) return;
+    setPostNowPending(false);
+    saveRef.current?.(false);
+  }, [postNowPending, date, time]);
+
   const generate = async () => {
     if (!item) return;
     setGenerating(true);
@@ -331,13 +339,6 @@ export default function ScheduleDialog({
     && firstComment === (item.post?.first_comment || '') && collab === (item.post?.collaborators ? item.post.collaborators.split(',').map((u) => `@${u}`).join(', ') : '')
     && mediaUrl === initial.mediaUrl && order.join() === initial.order.join() && (track?.url || '') === (initial.track?.url || '') && !repeatOn;
 
-  useEffect(() => {
-    if (!postNowPending) return;
-    setPostNowPending(false);
-    save(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [postNowPending, date, time]);
-
   const askPostNow = () => setConfirm({
     title: 'Postar agora?',
     description: 'Sai em menos de 1 minuto, nas redes marcadas.',
@@ -437,6 +438,7 @@ export default function ScheduleDialog({
       setSaving(false);
     }
   };
+  saveRef.current = save;
 
   const whenLabel = `${item.title}${item.when ? ` · ${formatDayLabel(item.when.date)}${item.when.time ? ` às ${item.when.time}` : ''}` : ''}`;
   // Postagem manual feita (01/11/2026): carimba o material como postado; aparece no portal do cliente e no Kanban

@@ -173,7 +173,7 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
   }
 
   /** Comentário vindo do aviso em tempo real (comment_received). */
-  async function ingestWebhookComment(payload) {
+  async function ingestWebhookComment(payload, { handledBy = null } = {}) {
     await ensureSchema();
     const { rows: [cp] } = await pool.query(`SELECT client_id FROM client_upload_post WHERE username = $1`, [payload.profile_username]);
     if (!cp || !payload.comment?.id) return false;
@@ -181,7 +181,10 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
       client_id: cp.client_id, platform: payload.platform, comment_id: payload.comment.id, post_id: payload.post?.id, parent_id: payload.comment.parent_id,
       author_id: payload.comment.from?.id, author_username: payload.comment.from?.username, text: payload.comment.text, commented_at: payload.created_at ? new Date(payload.created_at) : null,
     });
-    if (saved?.inserted) await processNew(cp.client_id).catch((error) => logger.error('[central-social] Ísis:', error.message));
+    if (saved?.inserted && handledBy) {
+      // o funil do Pulse Direct já respondeu no direct: a Ísis não responde de novo
+      await pool.query(`UPDATE social_comments SET status = 'respondido', reply_by = $2, reply_text = 'Respondido no direct pelo funil', replied_at = now() WHERE id = $1`, [saved.id, `Pulse Direct · ${handledBy}`]);
+    } else if (saved?.inserted) await processNew(cp.client_id).catch((error) => logger.error('[central-social] Ísis:', error.message));
     return true;
   }
 
@@ -460,7 +463,7 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
   };
 }
 
-export function registerSocialHubRoutes(app, { hub, uploadPost, pool, verifySocialManager, verifyAdmin, publicApiUrl = 'https://agenciapulse.tech', logger = console }) {
+export function registerSocialHubRoutes(app, { hub, uploadPost, pool, verifySocialManager, verifyAdmin, flows = null, publicApiUrl = 'https://agenciapulse.tech', logger = console }) {
   const fail = (res, error) => {
     const status = Number(error?.status) >= 400 && Number(error?.status) < 600 ? Number(error.status) : /unauthori|login|token/i.test(error?.message || '') ? 401 : /admin|acesso|permiss/i.test(error?.message || '') ? 403 : 500;
     if (status >= 500) logger.error('[central-social]', error?.message);
@@ -510,8 +513,14 @@ export function registerSocialHubRoutes(app, { hub, uploadPost, pool, verifySoci
       if (!ok) return res.status(401).json({ error: 'assinatura inválida' });
       res.json({ ok: true }); // responde logo (a Upload-Post espera 10 s e não tenta de novo)
       const event = req.body?.event || req.headers['x-upload-post-event'];
-      if (event === 'comment_received') await hub.ingestWebhookComment(req.body);
-      else if (/^social_account_/.test(String(event))) {
+      if (event === 'comment_received') {
+        // funil do Pulse Direct primeiro (palavra no comentário → direct); senão, a Ísis
+        const flowName = flows ? await flows.handleComment(req.body).catch((error) => { logger.error('[pulse-direct] comentário:', error.message); return null; }) : null;
+        await hub.ingestWebhookComment(req.body, { handledBy: flowName });
+      } else if (event === 'dm_received') {
+        if (flows) await flows.handleDm(req.body).catch((error) => logger.error('[pulse-direct] direct:', error.message));
+      }
+      if (/^social_account_/.test(String(event))) {
         const { rows: [cp] } = await pool.query(`SELECT client_id FROM client_upload_post WHERE username = $1`, [req.body?.profile_username]);
         if (cp) await uploadPost.sync(cp.client_id);
       }

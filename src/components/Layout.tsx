@@ -15,7 +15,7 @@ import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
-  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Cpu, MessageCircle, Workflow, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon, Gauge, Flame, Pin, PinOff, Database, Link2, Images
+  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Cpu, MessageCircle, Workflow, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon, Gauge, Flame, Pin, PinOff, Database, Link2, Images, Zap
   , Sparkles, Thermometer, Wallpaper, type LucideIcon,
 } from 'lucide-react';
 
@@ -72,6 +72,7 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/conexoes-sociais', label: 'Conexões Sociais', icon: Plug, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
       { path: '/central-social', label: 'Central Social', icon: MessageCircle, roles: ['admin', 'social_media', 'gestor_projetos'] },
+      { path: '/pulse-direct', label: 'Pulse Direct', icon: Zap, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/estudio-postagem', label: 'Estúdio de Postagem', icon: Images, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
       { path: '/agendamentos', label: 'Agendamentos', icon: CalendarClock, roles: ['admin'], module: 'pulse_plus' },
       { path: '/desempenho-social', label: 'Desempenho Social', icon: TrendingUp, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },

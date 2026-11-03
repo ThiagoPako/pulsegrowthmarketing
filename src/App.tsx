@@ -39,6 +39,7 @@ const InternalReports = lazy(() => import("@/pages/InternalReports"));
 const SocialMediaDeliveries = lazy(() => import("@/pages/SocialMediaDeliveries"));
 const SocialConnections = lazy(() => import("@/pages/SocialConnections"));
 const SocialHub = lazy(() => import("@/pages/SocialHub"));
+const PulseDirect = lazy(() => import("@/pages/PulseDirect"));
 const SocialConnectInvite = lazy(() => import("@/pages/SocialConnectInvite"));
 
 const SocialInsights = lazy(() => import("@/pages/SocialInsights"));
@@ -336,6 +337,7 @@ function AppRoutes() {
         <Route path="/entregas-social" element={<ProtectedRoute><SocialMediaDeliveries /></ProtectedRoute>} />
         <Route path="/conexoes-sociais" element={<ProtectedRoute><SocialConnections /></ProtectedRoute>} />
         <Route path="/central-social" element={<ProtectedRoute><SocialHub /></ProtectedRoute>} />
+        <Route path="/pulse-direct" element={<ProtectedRoute><PulseDirect /></ProtectedRoute>} />
         <Route path="/conectar-social/:token" element={<SocialConnectInvite />} />
         <Route path="/estudio-postagem" element={<ProtectedRoute><PostStudio /></ProtectedRoute>} />
         <Route path="/agendamentos" element={<ProtectedRoute><RequireModuleAccess module="pulse_plus"><Scheduling /></RequireModuleAccess></ProtectedRoute>} />

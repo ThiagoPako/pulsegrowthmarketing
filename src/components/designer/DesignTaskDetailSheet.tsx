@@ -16,6 +16,8 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useDesignTasks, useDesignAgents, DESIGN_COLUMNS, DesignTask, DesignTaskColumn, stopTimerFields, hasOpenTimer, getConflictingExecutingTasks, formatDueDate } from '@/hooks/useDesignTasks';
 import { useQuery } from '@tanstack/react-query';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
+import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
+import { useQueryClient } from '@tanstack/react-query';
 import DesignAgentBadge, { isDesignAgentWorking } from '@/components/designer/DesignAgentBadge';
 import { usePulsePlus } from '@/hooks/usePulsePlus';
 import DesignFormatPicker from '@/components/designer/DesignFormatPicker';
@@ -151,6 +153,29 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [movingAction, setMovingAction] = useState<string | null>(null);
   // Envio ao cliente em andamento: trava o botão (o clique repetido mandava a arte duas vezes)
   const [sendingToClient, setSendingToClient] = useState(false);
+  const queryClient = useQueryClient();
+  const [sendingLink, setSendingLink] = useState(false);
+  // Link de aprovação no formato do Instagram (03/11/2026): manda no grupo do cliente com o tema da arte
+  const handleSendApprovalLink = async () => {
+    if (sendingLink) return;
+    if (!window.confirm(`Mandar "${task.title}" para o cliente aprovar? Vai o link no grupo do WhatsApp dele, com o tema da arte.`)) return;
+    setSendingLink(true);
+    try {
+      let res = await invokeVpsFunction(`design-tasks/${task.id}/send-approval`, { body: { target: 'grupo' } });
+      const err = res.data?.error || res.error?.message || '';
+      if (/grupo de WhatsApp/i.test(err) && window.confirm('O cliente não tem grupo cadastrado. Mandar no WhatsApp privado dele?')) {
+        res = await invokeVpsFunction(`design-tasks/${task.id}/send-approval`, { body: { target: 'privado' } });
+      }
+      if (res.error || res.data?.error) throw new Error(res.data?.error || res.error?.message || 'Não deu para enviar');
+      try { await navigator.clipboard.writeText(res.data.url); } catch { /* sem área de transferência */ }
+      toast.success(res.data.target === 'grupo' ? 'Link de aprovação na fila para o grupo do cliente (copiado também)' : 'Link de aprovação na fila para o WhatsApp do cliente (copiado também)');
+      await queryClient.invalidateQueries({ queryKey: ['design-tasks'] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSendingLink(false);
+    }
+  };
   const [stageAnimKey, setStageAnimKey] = useState(0);
   const [showRocketFlyby, setShowRocketFlyby] = useState(false);
   const [dueDate, setDueDate] = useState(task.due_date || '');
@@ -648,12 +673,16 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
       actions.push({ key: 'em_analise', label: 'LIBERAR P/ REVISÃO', color: 'hsl(262 83% 58%)', icon: Eye, onClick: handleReleaseFromAiReview });
       actions.push({ key: 'ajustes', label: 'PEDIR AJUSTES', color: 'hsl(0 72% 51%)', icon: RotateCcw, onClick: () => setShowAdjustmentForm(true) });
     }
+    if (task.kanban_column === 'em_analise' && isSocialMedia && task.client_id) {
+      actions.push({ key: 'link_aprovacao' as DesignTaskColumn, label: sendingLink ? 'ENVIANDO…' : 'APROVAÇÃO NO GRUPO', color: 'hsl(330 81% 56%)', icon: Link2, onClick: handleSendApprovalLink });
+    }
     if (task.kanban_column === 'em_analise' && isSocialMedia) {
       actions.push({ key: 'enviar_cliente', label: 'APROVAR ARTE', color: 'hsl(142 71% 45%)', icon: CheckCircle, onClick: handleApprove });
       // antes "ENVIAR PARA REVISÃO": o botão pede ajustes ao designer
       actions.push({ key: 'ajustes', label: 'PEDIR AJUSTES', color: 'hsl(0 72% 51%)', icon: RotateCcw, onClick: () => setShowAdjustmentForm(true) });
     }
     if (task.kanban_column === 'enviar_cliente' && isSocialMedia) {
+      if (task.client_id) actions.push({ key: 'link_aprovacao' as DesignTaskColumn, label: sendingLink ? 'ENVIANDO…' : 'APROVAÇÃO NO GRUPO', color: 'hsl(330 81% 56%)', icon: Link2, onClick: handleSendApprovalLink });
       actions.push({ key: 'enviar_cliente', label: 'ENVIAR VIA WHATSAPP', color: 'hsl(142 71% 45%)', icon: Send, onClick: handleSendToClient });
       actions.push({ key: 'aprovado', label: 'MARCAR APROVADO', color: 'hsl(217 91% 60%)', icon: CheckCircle, onClick: handleClientApproval });
     }

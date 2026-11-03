@@ -20453,15 +20453,29 @@ pulsePlus.registerRoutes(app);
 
 // ─── Agentes de edição (chaves próprias, fila, entrega) ─────
 // ─── Upload-Post: postagem automática pelas redes dos clientes (lib/uploadPost.mjs, 02/11/2026) ──
-registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager });
+registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager: verifySocialOrAgent });
 // central social (comentários e avaliações do Google com a Ísis; lib/socialHub.mjs, 02/11/2026)
-const socialHub = createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiModel, notifyTeam: notifySocialTeam });
+const socialHub = createSocialHub({
+  pool, uploadPost, resolveAiConfig, resolveAiModel, notifyTeam: notifySocialTeam,
+  appBase: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech',
+  // monitoramento de avaliações negativas: o link de aprovação no WhatsApp de cada número do cliente
+  sendWhatsApp: (to, body, clientId) => enqueueWhatsApp(pool, { to, body, clientId, purpose: 'aprovacao', triggerType: 'monitor_avaliacao' }),
+});
+// a Ísis (agente social_media) e a chefe usam a Central Social e o Pulse Direct pela chave de agente (02/11/2026: "essas funções são dela")
+async function verifySocialOrAgent(req) {
+  if (String(req.headers.authorization || '').startsWith('Agent ')) {
+    const agent = await agentApi.verifyAgent(req);
+    if (!['social_media', 'chefe'].includes(agent.role)) throw Object.assign(new Error('Só a Ísis e a chefe usam a Central Social'), { status: 403 });
+    return { user: { id: agent.userId }, agent };
+  }
+  return verifySocialManager(req);
+}
 // automações estilo ManyChat (palavra-chave → direct) e caixa de direct (lib/socialAutomations.mjs, 02/11/2026)
-registerAutomationRoutes(app, { automations: createAutomations({ pool, uploadPost }), verifySocialManager });
+registerAutomationRoutes(app, { automations: createAutomations({ pool, uploadPost }), verifySocialManager: verifySocialOrAgent });
 // Pulse Direct: funis no direct estilo ManyChat (lib/socialFlows.mjs, 02/11/2026)
 const pulseDirect = createFlows({ pool, uploadPost, notifyTeam: notifySocialTeam });
-registerFlowRoutes(app, { flows: pulseDirect, pool, verifySocialManager });
-registerSocialHubRoutes(app, { flows: pulseDirect, hub: socialHub, uploadPost, pool, verifySocialManager, verifyAdmin, publicApiUrl: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' });
+registerFlowRoutes(app, { flows: pulseDirect, pool, verifySocialManager: verifySocialOrAgent });
+registerSocialHubRoutes(app, { flows: pulseDirect, hub: socialHub, uploadPost, pool, verifySocialManager: verifySocialOrAgent, verifyAdmin, publicApiUrl: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' });
 
 // ─── Aprovação sem login (/aprovar/<token>): página do vídeo com o jeito do Instagram, aprovar ou pedir ajuste ──
 const portalShare = registerPortalShareRoutes(app, {

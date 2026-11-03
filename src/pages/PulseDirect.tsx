@@ -4,7 +4,7 @@
 // Servidor: vps-api-server/lib/socialFlows.mjs (funis, contatos, conversas) e lib/socialAutomations.mjs (rápidas).
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Download, Loader2, MessagesSquare, Pencil, Plus, Trash2, Users, Workflow, Zap } from 'lucide-react';
+import { Download, Loader2, MapPin, MessagesSquare, Pencil, Plus, Trash2, Users, Workflow, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,7 @@ import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import FlowEditor from '@/components/pulse-direct/FlowEditor';
 import DirectInbox from '@/components/pulse-direct/DirectInbox';
 import AutomationsPanel from '@/components/social/AutomationsPanel';
+import GooglePanel from '@/components/pulse-direct/GooglePanel';
 import { flowTemplates, type Contact, type Flow } from '@/components/pulse-direct/types';
 
 interface ClientOpt { id: string; name: string; accounts: { platform: string; username?: string | null; api_base?: string }[] }
@@ -81,14 +82,15 @@ function ContactsPanel({ clientId }: { clientId: string }) {
 export default function PulseDirect() {
   const [clients, setClients] = useState<ClientOpt[]>([]);
   const [clientId, setClientId] = useState<string>('');
-  const [tab, setTab] = useState<'funis' | 'inbox' | 'contatos' | 'rapidas'>('funis');
+  const [tab, setTab] = useState<'funis' | 'inbox' | 'contatos' | 'rapidas' | 'google'>('funis');
   const [flows, setFlows] = useState<Flow[] | null>(null);
   const [editing, setEditing] = useState<Flow | null>(null);
 
   useEffect(() => {
     api<{ clients: ClientOpt[] }>('social-posts/accounts-overview', { method: 'GET' })
       .then((d) => {
-        const withUp = d.clients.filter((c) => c.accounts.some((a) => a.api_base === 'upload_post' && a.platform === 'instagram'));
+        // todos os clientes ativos: o Google e a conexão das redes também ficam aqui (quem ainda não conectou vê como conectar)
+        const withUp = d.clients;
         setClients(withUp);
         if (withUp[0]) setClientId((cur) => cur || withUp[0].id);
       }).catch((err) => toast.error(err.message));
@@ -136,7 +138,7 @@ export default function PulseDirect() {
       </header>
 
       {!clients.length ? (
-        <Card><CardContent className="p-8 text-center text-muted-foreground">Nenhum cliente com o Instagram conectado pela Upload-Post ainda. Conecte no cadastro do cliente → Redes sociais.</CardContent></Card>
+        <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
       ) : (
         <>
           <div className="flex flex-wrap gap-1">
@@ -144,11 +146,13 @@ export default function PulseDirect() {
             {tabBtn('inbox', 'Caixa de entrada', MessagesSquare)}
             {tabBtn('contatos', 'Contatos', Users)}
             {tabBtn('rapidas', 'Automações rápidas', Zap)}
+            {tabBtn('google', 'Google e avaliações', MapPin)}
           </div>
 
           {tab === 'inbox' && clientId && <DirectInbox clientId={clientId} />}
           {tab === 'contatos' && clientId && <ContactsPanel clientId={clientId} />}
           {tab === 'rapidas' && <AutomationsPanel clientId={clientId || undefined} />}
+          {tab === 'google' && clientId && <GooglePanel clientId={clientId} />}
           {tab === 'funis' && (editing ? (
             <FlowEditor clientId={clientId} accountName={igName} initial={editing} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); loadFlows(); }} />
           ) : (

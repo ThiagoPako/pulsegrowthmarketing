@@ -108,6 +108,7 @@ const CommercialProposal = lazy(() => import("@/pages/CommercialProposal"));
 const ProposalViewer = lazy(() => import("@/pages/ProposalViewer"));
 const PayBilling = lazy(() => import("@/pages/PayBilling"));
 const ApproveContent = lazy(() => import("@/pages/ApproveContent"));
+const ReviewApproval = lazy(() => import("@/pages/ReviewApproval"));
 const RecordingControl = lazy(() => import("@/pages/RecordingControl"));
 const EditingControl = lazy(() => import("@/pages/EditingControl"));
 const AvulsoApproval = lazy(() => import("@/pages/AvulsoApproval"));
@@ -408,6 +409,7 @@ function AppRoutes() {
         <Route path="/proposta/:token" element={<ProposalViewer />} />
         <Route path="/pagar/:token" element={<Suspense fallback={<PageLoader />}><PayBilling /></Suspense>} />
         <Route path="/aprovar/:token" element={<Suspense fallback={<PageLoader />}><ApproveContent /></Suspense>} />
+        <Route path="/avaliacao/:token" element={<Suspense fallback={<PageLoader />}><ReviewApproval /></Suspense>} />
         <Route path="/avulso/:taskId" element={<AvulsoApproval />} />
         <Route path="/video-avulso/:taskId" element={<AvulsoApproval />} />
         <Route path="/feedback" element={<ClientFeedback />} />

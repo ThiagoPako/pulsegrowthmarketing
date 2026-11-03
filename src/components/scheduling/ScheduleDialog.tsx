@@ -353,6 +353,7 @@ export default function ScheduleDialog({
     onConfirm: () => {
       const now = brtParts(Date.now());
       if (!now) return;
+      if (mode !== 'auto') setMode('auto');
       setDate(now.date);
       setTime(now.time);
       setPostNowPending(true);
@@ -542,7 +543,8 @@ export default function ScheduleDialog({
           </DialogHeader>
 
           <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="space-y-4 p-4">
+          {/* a legenda cresce até o fim da coluna (usuário, 03/11/2026: "caixa pequena com espaço sobrando") */}
+          <div className="flex flex-col gap-4 p-4">
             {((item.post?.last_error && (item.state === 'erro' || item.ghost)) || series?.last_error) && (
               <div className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-2.5 text-xs text-destructive">
                 <AlertTriangle size={14} className="mt-px shrink-0" />
@@ -647,8 +649,8 @@ export default function ScheduleDialog({
             )}
 
             {!isSeriesItem && !isStory && (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between gap-2">
+              <div className="flex min-h-[300px] flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-sm focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/15">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/40 px-3 py-2">
                   {mode === 'auto' && networks.length > 1 ? (
                     <div className="flex flex-wrap gap-1" role="tablist" aria-label="Legenda de cada rede">
                       {networks.map((n) => (
@@ -659,7 +661,7 @@ export default function ScheduleDialog({
                       ))}
                     </div>
                   ) : (
-                    <Label htmlFor="sched-caption" className="text-xs">Legenda{mode === 'auto' && networks.length === 1 ? ` · ${NETWORK_LABELS[networks[0]]}` : ''}</Label>
+                    <Label htmlFor="sched-caption" className="text-xs font-semibold">Legenda{mode === 'auto' && networks.length === 1 ? ` · ${NETWORK_LABELS[networks[0]]}` : ''}</Label>
                   )}
                   <div className="flex items-center gap-1">
                     {caption && (
@@ -688,16 +690,16 @@ export default function ScheduleDialog({
                   id="sched-caption"
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
-                  rows={6}
+                  rows={10}
                   disabled={readOnly || generating}
                   placeholder="Escreva a legenda ou clique em Gerar com IA"
-                  className={cn('text-sm', generating && 'animate-pulse')}
+                  className={cn('min-h-[220px] flex-1 resize-none rounded-none border-0 bg-transparent px-3 py-3 text-[15px] leading-relaxed shadow-none focus-visible:ring-0 focus-visible:ring-offset-0', generating && 'animate-pulse')}
                 />
                 {generating && (
-                  <p className="text-[11px] text-muted-foreground">Lendo o roteiro ou assistindo ao vídeo… pode levar até 1 minuto.</p>
+                  <p className="px-3 pb-2 text-[11px] text-muted-foreground">Lendo o roteiro ou assistindo ao vídeo… pode levar até 1 minuto.</p>
                 )}
                 {!readOnly && savedCaption !== null && caption !== savedCaption && (
-                  <div className="flex justify-end">
+                  <div className="flex justify-end border-t border-border px-2 py-1">
                     <Button type="button" variant="ghost" size="sm" onClick={storeCaption} disabled={savingCaption || caption.length > 2200} className="h-6 gap-1 px-2 text-[11px]">
                       {savingCaption ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Salvar só a legenda
                     </Button>
@@ -808,10 +810,15 @@ export default function ScheduleDialog({
                 </Button>
               )}
               <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={saving}>Fechar</Button>
-              {!readOnly && postsAlone && mode === 'auto' && !repeatOn && !isSeriesItem && (
-                <Button type="button" variant="secondary" size="sm" onClick={askPostNow} disabled={saving || mediaBlocked} className="gap-1.5">
+              {/* sempre à vista (usuário, 03/11/2026: "o botão de publicar agora não apareceu"); sem rede conectada fica travado e diz por quê */}
+              {!readOnly && !repeatOn && !isSeriesItem && (
+                <Button type="button" variant="secondary" size="sm" onClick={askPostNow} disabled={saving || !hasAccounts || (mode === 'auto' && mediaBlocked)} className="gap-1.5"
+                  title={hasAccounts ? 'Publica nas redes marcadas em menos de 1 minuto' : 'Conecte o Instagram ou o Facebook do cliente em Conexões Sociais para postar agora'}>
                   <Zap size={14} /> Postar agora
                 </Button>
+              )}
+              {!readOnly && !repeatOn && !isSeriesItem && !hasAccounts && (
+                <p className="w-full text-[11px] text-muted-foreground sm:order-last">Para postar agora, conecte as redes do cliente em Conexões Sociais.</p>
               )}
               {!readOnly && (
                 <Button type="button" size="sm" onClick={() => save(false)} disabled={saving || !date || !time || (postsAlone && mediaBlocked)} className="gap-1.5">

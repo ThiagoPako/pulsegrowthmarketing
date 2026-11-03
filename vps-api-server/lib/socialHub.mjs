@@ -18,6 +18,7 @@
 
 import crypto from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
+import { VOZ_DA_MARCA_COMENTARIO } from './brandVoice.mjs';
 
 export const HUB_PLATFORMS = ['instagram', 'facebook', 'tiktok', 'youtube', 'linkedin'];
 const STARS = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 };
@@ -52,6 +53,7 @@ Para cada comentário (ou avaliação) decida:
 - "ignorar": spam, golpe, propaganda de outra conta, ofensa sem relação, comentário vazio.
 
 Regras:
+- ${VOZ_DA_MARCA_COMENTARIO}
 - Nunca invente preço, horário, endereço, promoção, prazo ou resultado. Pergunta de preço, agenda ou orçamento: convide para o WhatsApp ou o direct (use o contato das orientações do cliente quando houver).
 - Nunca prometa resultado (saúde, estética, crédito). Nunca discuta em público.
 - Em avaliação do Google: agradeça pelo nome; nota boa = agradecimento e convite para voltar; nota baixa = desculpas, sem justificar, e convite para conversar no privado.

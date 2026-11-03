@@ -19,3 +19,12 @@ describe('legenda na voz da empresa', () => {
     expect(src).toContain('- ${VOZ_DA_MARCA}');
   });
 });
+
+describe('resposta a comentário na voz da empresa', () => {
+  it('entra no system da Ísis nos comentários', async () => {
+    const { VOZ_DA_MARCA_COMENTARIO } = await import('../../vps-api-server/lib/brandVoice.mjs');
+    expect(VOZ_DA_MARCA_COMENTARIO).toMatch(/você É a empresa/);
+    const src = fs.readFileSync(path.resolve(process.cwd(), 'vps-api-server/lib/socialHub.mjs'), 'utf8');
+    expect(src).toContain('- ${VOZ_DA_MARCA_COMENTARIO}');
+  });
+});

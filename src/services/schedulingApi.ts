@@ -109,3 +109,18 @@ export interface CalendarEvents { holidays: CalendarHoliday[]; anniversaries: Ci
 export async function fetchCalendarEvents(clientId: string, from: string, to: string): Promise<CalendarEvents> {
   return call<CalendarEvents>('scheduling/calendar-events', { method: 'GET', body: { client_id: clientId, from, to } });
 }
+
+/** Visão geral do Estúdio (todos os clientes da cidade): próximos posts, números e o que precisa de alguém. */
+export interface StudioOverviewPost {
+  id: string; client_id: string; client: string; logo_url: string | null; type: string; platform: string;
+  reminder?: boolean; at?: string; when: SchedulingWhen | null; thumb_url?: string | null; caption?: string; error?: string;
+}
+export interface StudioOverview {
+  stats: { today: number; week: number; published_month: number; errors: number };
+  next: StudioOverviewPost[];
+  errors: StudioOverviewPost[];
+  reauth: { client_id: string; client: string; logo_url: string | null; platform: string }[];
+}
+export async function fetchStudioOverview(): Promise<StudioOverview> {
+  return call<StudioOverview>('scheduling/overview', { method: 'GET' });
+}

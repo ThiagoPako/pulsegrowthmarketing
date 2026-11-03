@@ -4,9 +4,10 @@
 // as duas; as redes entram em sequência; cada conexão vira "Conectado" com um brilho; tudo pronto, uma comemoração.
 // Respeita "reduzir movimento" do aparelho. Servidor: lib/uploadPost.mjs (/api/public/conectar).
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion, type Transition } from 'framer-motion';
-import { Check, Facebook, Instagram, Linkedin, Loader2, Lock, MapPin, Music2, ShieldCheck, Youtube } from 'lucide-react';
+import { ArrowUpRight, AtSign, Check, Facebook, Instagram, Linkedin, Loader2, Lock, MapPin, MessageCircle, Music2, Pin, ShieldCheck, Twitter, Youtube } from 'lucide-react';
+import { pulseWhatsapp } from '@/lib/pulseContato';
 import logo from '@/assets/pulse-logo-branco.png';
 
 const API = 'https://agenciapulse.tech/api';
@@ -19,9 +20,12 @@ const NETWORKS: Record<string, { label: string; bg: string; glow: string; Icon: 
   linkedin: { label: 'LinkedIn', bg: '#0A66C2', glow: '#0A66C2', Icon: Linkedin, help: 'O perfil ou a página da empresa' },
   youtube: { label: 'YouTube', bg: '#FF0000', glow: '#FF0000', Icon: Youtube, help: 'O canal da empresa' },
   google_business: { label: 'Google', bg: 'conic-gradient(from 200deg,#4285F4,#34A853,#FBBC05,#EA4335,#4285F4)', glow: '#34A853', Icon: MapPin, help: 'A ficha da empresa, com as avaliações' },
+  threads: { label: 'Threads', bg: '#101010', glow: '#9A9A9A', Icon: AtSign, help: 'A conta da empresa (a mesma do Instagram)' },
+  x: { label: 'X', bg: '#000', glow: '#7A7A7A', Icon: Twitter, help: 'A conta da empresa' },
+  pinterest: { label: 'Pinterest', bg: '#E60023', glow: '#E60023', Icon: Pin, help: 'A conta da empresa' },
 };
 
-interface Data { client: { name: string; logo: string | null }; networks: { id: string; connected: boolean; reconnect: boolean; account: string | null }[] }
+interface Data { client: { name: string; logo: string | null }; networks: { id: string; in_plan?: boolean; connected: boolean; reconnect: boolean; account: string | null }[] }
 
 function Mark({ data }: { data: Data }) {
   return data.client.logo
@@ -79,8 +83,12 @@ export default function ConnectNetworks() {
     } catch (e) { setError((e as Error).message); setBusy(null); }
   };
 
-  const total = data?.networks.length || 0;
-  const done = data ? data.networks.filter((n) => n.connected).length : 0;
+  // as do plano para conectar; as outras aparecem apagadas, com convite para ampliar o plano (usuário, 02/11/2026)
+  const plan = data ? data.networks.filter((n) => n.in_plan !== false && NETWORKS[n.id]) : [];
+  const others = data ? data.networks.filter((n) => n.in_plan === false && NETWORKS[n.id]) : [];
+  const total = plan.length;
+  const done = plan.filter((n) => n.connected).length;
+  const more = data ? `/redes?cliente=${encodeURIComponent(data.client.name)}` : '/redes';
   const all = total > 0 && done === total;
 
   return (
@@ -132,7 +140,7 @@ export default function ConnectNetworks() {
             </div>
 
             <ul className="mt-5 space-y-3">
-              {data.networks.map((n, i) => {
+              {plan.map((n, i) => {
                 const meta = NETWORKS[n.id];
                 if (!meta) return null;
                 return (
@@ -164,6 +172,38 @@ export default function ConnectNetworks() {
                 );
               })}
             </ul>
+
+            {others.length > 0 && (
+              <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: still ? 0 : 0.6, delay: still ? 0 : 1.5 + plan.length * 0.12 }} className="mt-9">
+                <p className="text-sm font-semibold text-white/80">Outras redes que a Pulse gerencia</p>
+                <p className="mt-0.5 text-xs text-white/50">Não estão no seu plano atual. Toque para saber como cuidamos de cada uma.</p>
+                <ul className="mt-3 grid grid-cols-3 gap-2">
+                  {others.map((n) => {
+                    const meta = NETWORKS[n.id];
+                    return (
+                      <li key={n.id}>
+                        <Link to={`${more}#${n.id}`} className="group flex flex-col items-center gap-1.5 rounded-2xl border border-white/5 bg-white/[0.02] px-2 py-3 text-center transition hover:border-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#F15A24]">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-xl text-white opacity-40 grayscale transition group-hover:opacity-80 group-hover:grayscale-0" style={{ background: meta.bg }}>
+                            <meta.Icon className="h-5 w-5" />
+                          </span>
+                          <span className="text-xs font-medium text-white/45 group-hover:text-white/80">{meta.label}</span>
+                          <span className="flex items-center gap-0.5 text-[10px] text-white/30"><Lock className="h-2.5 w-2.5" /> fora do plano</span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="mt-4 rounded-3xl border border-[#F15A24]/30 bg-gradient-to-br from-[#F15A24]/15 to-transparent p-4">
+                  <p className="text-sm font-semibold">Quer a Pulse cuidando de mais redes?</p>
+                  <p className="mt-1 text-xs leading-relaxed text-white/65">Cada rede tem uma linguagem e um público. Fale com a nossa equipe para ampliar o seu plano.</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Link to={more} className="flex items-center justify-center gap-1 rounded-2xl border border-white/20 px-3 py-2.5 text-sm font-semibold">Saiba mais <ArrowUpRight className="h-4 w-4" /></Link>
+                    <a href={pulseWhatsapp(`Olá! Vim da página de conexão das redes de ${data.client.name} e quero saber como ampliar o plano para gerenciar mais redes sociais.`)} target="_blank" rel="noreferrer"
+                      className="flex items-center justify-center gap-1.5 whitespace-nowrap rounded-2xl px-2 py-2.5 text-[13px] font-bold" style={{ background: ORANGE }}><MessageCircle className="h-4 w-4 shrink-0" /> Falar com a equipe</a>
+                  </div>
+                </div>
+              </motion.section>
+            )}
 
             <AnimatePresence>
               {all && (

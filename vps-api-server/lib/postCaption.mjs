@@ -21,6 +21,7 @@ import crypto from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { resolveUploadFile, runProcess } from './webVideo.mjs';
 import { whisperConfig, whisperAvailable } from '../assistant/transcribe.mjs';
+import { VOZ_DA_MARCA } from './brandVoice.mjs';
 
 const VIDEO_RE = /\.(mp4|mov|webm|m4v)$/i;
 const IMAGE_RE = /\.(png|jpe?g|webp|gif)$/i;
@@ -235,6 +236,7 @@ export function createPostCaption({ resolveAiConfig, resolveAiModel, uploadRoots
       system: `Você é social media sênior de uma agência de marketing do interior de Goiás e escreve legendas de Instagram em português do Brasil para os clientes da agência.
 
 Regras da legenda:
+- ${VOZ_DA_MARCA}
 - Fale do que o post realmente mostra: use o roteiro, a fala e os quadros do vídeo ou a arte. Não invente preço, endereço, telefone, promoção, data ou resultado que não apareça no material.
 - Tom profissional e próximo, adequado ao nicho do cliente e à linha editorial dele. Sem exageros, sem clichês de coach, sem prometer resultado (atenção redobrada em saúde, estética, odontologia e finanças: nada de antes/depois garantido).
 - Estrutura: primeira linha forte que prende a atenção (aparece antes do "mais"); 2 a 4 parágrafos curtos com quebras de linha; uma chamada para ação no fim (comentar, salvar, chamar no direct/WhatsApp, agendar), coerente com o post.

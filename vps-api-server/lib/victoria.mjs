@@ -2,6 +2,8 @@
 // Monta o pedido ao Claude (cliente, editorial, roteiros já gravados, aprendizados) e lê a resposta.
 // Usadas por victoriaRoutes.mjs e pelos testes (src/test/victoria.test.ts).
 
+import { VOZ_DA_MARCA } from './brandVoice.mjs';
+
 export const VICTORIA_FORMATS = {
   reels: 'Reels orgânico (vídeo vertical de 30 a 90 s): dica, retenção, CTA para comentar, seguir ou salvar.',
   story: 'Story (vídeo vertical de 15 a 60 s, conversa direta e próxima; pode ser sequência curta de 2 a 4 stories).',
@@ -77,7 +79,7 @@ RECADO: uma frase sua para quem pediu, no seu jeito alegre (ex.: o que você pen
 TÍTULO: título curto do roteiro
 ROTEIRO:
 o roteiro completo, com quebras de linha
-LEGENDA: legenda do post (reels e criativo: até 300 caracteres, com CTA, sem hashtags; no story deixe vazio)
+LEGENDA: legenda do post (reels e criativo: até 300 caracteres, com CTA, sem hashtags; no story deixe vazio). ${VOZ_DA_MARCA}
 OBSERVAÇÕES: o que a pessoa precisa saber ou preencher (curto; vazio se nada)
 APRENDIZADOS:
 - [cliente] regra curta e reaproveitável

@@ -9,7 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
-import { FIELD_LABELS, type Contact, type DmMessage } from './types';
+import { FIELD_LABELS, type Contact, type DmMessage, type LinkButton } from './types';
+import ButtonEditor from './ButtonEditor';
+import { formatPhone } from './theme';
 
 async function api<T>(path: string, options?: { body?: unknown; method?: string }): Promise<T> {
   const { data, error } = await invokeVpsFunction(path, options as { body?: Record<string, unknown>; method?: string });
@@ -29,7 +31,9 @@ export default function DirectInbox({ clientId }: { clientId: string }) {
   const [msgs, setMsgs] = useState<DmMessage[]>([]);
   const [q, setQ] = useState('');
   const [text, setText] = useState('');
-  const [btn, setBtn] = useState<{ title: string; url: string } | null>(null);
+  const [btns, setBtns] = useState<LinkButton[]>([]);
+  const [showBtns, setShowBtns] = useState(false);
+  const [filter, setFilter] = useState<'todas' | 'nao_lidas' | 'equipe' | 'whatsapp'>('todas');
   const [quick, setQuick] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [newTag, setNewTag] = useState('');
@@ -54,15 +58,16 @@ export default function DirectInbox({ clientId }: { clientId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sel?.id]);
 
-  const shown = useMemo(() => (contacts || []).filter((c) => !q || (c.username || '').toLowerCase().includes(q.toLowerCase()) || (c.tags || []).some((t) => t.toLowerCase().includes(q.toLowerCase()))), [contacts, q]);
+  const shown = useMemo(() => (contacts || []).filter((c) => (!q || (c.username || '').toLowerCase().includes(q.toLowerCase()) || (c.tags || []).some((t) => t.toLowerCase().includes(q.toLowerCase())))
+    && (filter === 'todas' || (filter === 'nao_lidas' && c.unread > 0) || (filter === 'equipe' && paused(c)) || (filter === 'whatsapp' && !!c.fields?.telefone))), [contacts, q, filter]);
   const windowOpen = sel?.last_in_at ? Date.now() - new Date(sel.last_in_at).getTime() < 24 * 3600_000 : false;
 
   const send = async () => {
     if (!sel || !text.trim()) return;
     setBusy(true);
     try {
-      await api(`flows/contact/${sel.id}/send`, { body: { message: text.trim(), buttons: btn?.title && btn.url ? [btn] : [], quick_replies: quick.filter(Boolean) } });
-      setText(''); setBtn(null); setQuick([]);
+      await api(`flows/contact/${sel.id}/send`, { body: { message: text.trim(), buttons: btns.filter((b) => b.title && /^https?:\/\/\S+\.\S+/.test(b.url)), quick_replies: quick.filter(Boolean) } });
+      setText(''); setBtns([]); setShowBtns(false); setQuick([]);
       await loadMsgs(sel);
       setSel({ ...sel, paused_until: new Date(Date.now() + 24 * 3600_000).toISOString() });
     } catch (err) { toast.error((err as Error).message); } finally { setBusy(false); }
@@ -93,6 +98,12 @@ export default function DirectInbox({ clientId }: { clientId: string }) {
           <div className="flex items-center gap-1 border-b p-2">
             <div className="relative flex-1"><Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input className="h-8 pl-7 text-xs" placeholder="Buscar @ ou etiqueta" value={q} onChange={(e) => setQ(e.target.value)} /></div>
             <Button size="sm" variant="ghost" className="h-8" onClick={loadContacts}><RefreshCw size={13} /></Button>
+          </div>
+          <div className="flex flex-wrap gap-1 border-b px-2 py-1.5">
+            {([['todas', 'Todas'], ['nao_lidas', 'Não lidas'], ['equipe', 'Equipe'], ['whatsapp', 'WhatsApp']] as const).map(([v, label]) => (
+              <button key={v} type="button" aria-pressed={filter === v} onClick={() => setFilter(v)}
+                className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-medium', filter === v ? 'bg-[#3797F0] text-white' : 'text-muted-foreground hover:bg-muted')}>{label}</button>
+            ))}
           </div>
           <div className="flex-1 overflow-y-auto">
             {shown.length === 0 && <p className="p-4 text-center text-xs text-muted-foreground">Nenhuma conversa ainda. Quando alguém escrever no direct ou cair num funil, aparece aqui.</p>}
@@ -135,13 +146,7 @@ export default function DirectInbox({ clientId }: { clientId: string }) {
               </div>
               <div className="space-y-2 border-t p-2">
                 {!windowOpen && <p className="text-[11px] text-amber-600">Passou de 24 h desde a última mensagem da pessoa: o Instagram não deixa responder até ela escrever de novo.</p>}
-                {btn && (
-                  <div className="flex gap-1">
-                    <Input className="h-8 w-32 text-xs" maxLength={20} placeholder="Texto do botão" value={btn.title} onChange={(e) => setBtn({ ...btn, title: e.target.value })} />
-                    <Input className="h-8 text-xs" placeholder="https://…" value={btn.url} onChange={(e) => setBtn({ ...btn, url: e.target.value })} />
-                    <Button size="sm" variant="ghost" className="h-8" onClick={() => setBtn(null)}><X size={12} /></Button>
-                  </div>
-                )}
+                {showBtns && <ButtonEditor value={btns} onChange={setBtns} />}
                 {quick.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {quick.map((qq, k) => <Input key={k} className="h-7 w-28 text-xs" maxLength={20} value={qq} placeholder="Resposta" onChange={(e) => setQuick(quick.map((x, j) => (j === k ? e.target.value : x)))} />)}
@@ -149,7 +154,7 @@ export default function DirectInbox({ clientId }: { clientId: string }) {
                   </div>
                 )}
                 <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" className="h-9" title="Botão de link" onClick={() => setBtn(btn || { title: '', url: 'https://' })}><Link2 size={15} /></Button>
+                  <Button size="sm" variant={showBtns ? 'secondary' : 'ghost'} className="h-9" title="Botões de link ou WhatsApp" aria-label="Botões de link ou WhatsApp" onClick={() => setShowBtns(!showBtns)}><Link2 size={15} /></Button>
                   <Button size="sm" variant="ghost" className="h-9" title="Respostas rápidas" onClick={() => setQuick(quick.length < 13 ? [...quick, ''] : quick)}><MessageSquareReply size={15} /></Button>
                   <Input className="h-9" placeholder="Mensagem…" value={text} disabled={!windowOpen} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
                   <Button size="sm" className="h-9" disabled={busy || !text.trim() || !windowOpen} onClick={send}>{busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}</Button>
@@ -181,7 +186,7 @@ export default function DirectInbox({ clientId }: { clientId: string }) {
                   <Input className="h-7 text-xs" defaultValue={sel.fields?.[k] || ''} onBlur={(e) => { if (e.target.value !== (sel.fields?.[k] || '')) saveContact({ fields: { ...(sel.fields || {}), [k]: e.target.value } }); }} />
                 </div>
               ))}
-              {sel.fields?.telefone && <a className="text-xs text-primary underline" target="_blank" rel="noreferrer" href={`https://wa.me/55${sel.fields.telefone.replace(/\D/g, '').replace(/^55/, '')}`}>Chamar no WhatsApp</a>}
+              {sel.fields?.telefone && <a className="inline-flex items-center gap-1 rounded-full bg-[#25D366] px-3 py-1 text-xs font-semibold text-white" target="_blank" rel="noreferrer" href={`https://wa.me/55${sel.fields.telefone.replace(/\D/g, '').replace(/^55/, '')}`}>Chamar {formatPhone(sel.fields.telefone)} no WhatsApp</a>}
             </div>
           </div>
         )}

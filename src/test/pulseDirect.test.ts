@@ -123,3 +123,15 @@ describe('Pulse Direct · cidade', () => {
     expect((await call('k-global')).body).toEqual({ messages: [{ id: 1 }] });
   });
 });
+
+describe('Pulse Direct · botão de WhatsApp pelo número', () => {
+  it('número em qualquer formato vira link wa.me com 55; e o link volta a ser número', async () => {
+    const { whatsappLink, parseWhatsapp, formatPhone } = await import('../components/pulse-direct/theme');
+    expect(whatsappLink('(62) 99999-1234')).toBe('https://wa.me/5562999991234');
+    expect(whatsappLink('+55 62 3333-1234', 'Quero pedir')).toBe('https://wa.me/556233331234?text=Quero%20pedir');
+    expect(whatsappLink('9999')).toBeNull();
+    expect(parseWhatsapp('https://wa.me/5562999991234?text=Oi%20tudo')).toEqual({ number: '(62) 99999-1234', message: 'Oi tudo' });
+    expect(parseWhatsapp('https://loja.com')).toBeNull();
+    expect(formatPhone('556233331234')).toBe('(62) 3333-1234');
+  });
+});

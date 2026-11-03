@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
+import ButtonEditor from '@/components/pulse-direct/ButtonEditor';
+import type { LinkButton } from '@/components/pulse-direct/types';
 
 interface Automation {
   id: string; client_name: string | null; name: string; platform: string; post_url: string | null; trigger_keywords: string[] | null;
@@ -34,7 +36,8 @@ export default function AutomationsPanel({ clientId }: { clientId: string | unde
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: '', post_url: '', keywords: 'EU QUERO', message: '', button_title: 'Ver agora', button_url: '' });
+  const [form, setForm] = useState({ name: '', post_url: '', keywords: 'EU QUERO', message: '' });
+  const [buttons, setButtons] = useState<LinkButton[]>([]);
 
   const load = async () => {
     setLoading(true);
@@ -56,7 +59,11 @@ export default function AutomationsPanel({ clientId }: { clientId: string | unde
     catch (err) { toast.error((err as Error).message); setPosts([]); }
   };
 
-  const applyTemplate = (t: Template) => setForm((f) => ({ ...f, name: t.nome, keywords: t.palavras.join(', '), message: t.mensagem, button_title: t.botao }));
+  const applyTemplate = (t: Template) => {
+    setForm((f) => ({ ...f, name: t.nome, keywords: t.palavras.join(', '), message: t.mensagem }));
+    // "Agendar pelo WhatsApp" já abre o botão de WhatsApp (só falta o número); os outros, um botão de link
+    setButtons([{ title: t.botao, url: t.id === 'agendar' ? 'https://wa.me/' : 'https://' }]);
+  };
 
   const create = async () => {
     if (!clientId) return;
@@ -65,7 +72,7 @@ export default function AutomationsPanel({ clientId }: { clientId: string | unde
       await api(`automations/${clientId}`, {
         body: {
           name: form.name, platform: 'instagram', post_url: form.post_url, trigger_keywords: form.keywords,
-          reply_message: form.message, buttons: form.button_url ? [{ title: form.button_title, url: form.button_url }] : [],
+          reply_message: form.message, buttons: buttons.filter((b) => b.title && /^https?:\/\/\S+\.\S+/.test(b.url)),
         },
       });
       toast.success('Automação ligada! Quem comentar a palavra recebe o direct em segundos.');
@@ -112,10 +119,7 @@ export default function AutomationsPanel({ clientId }: { clientId: string | unde
           </div>
           <Input placeholder="Palavras-chave, separadas por vírgula (vazio = responde todo mundo)" value={form.keywords} onChange={(e) => setForm({ ...form, keywords: e.target.value })} />
           <Textarea rows={3} placeholder="Mensagem que a pessoa recebe no direct" value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
-          <div className="grid gap-2 md:grid-cols-[140px_1fr]">
-            <Input placeholder="Texto do botão" maxLength={20} value={form.button_title} onChange={(e) => setForm({ ...form, button_title: e.target.value })} />
-            <Input placeholder="Link do botão (https://… ou wa.me/…)" value={form.button_url} onChange={(e) => setForm({ ...form, button_url: e.target.value })} />
-          </div>
+          <ButtonEditor value={buttons} onChange={setButtons} />
           <Button disabled={busy === 'create' || !form.post_url || form.message.trim().length < 3} onClick={create} className="gap-1">
             {busy === 'create' ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />} Ligar automação
           </Button>

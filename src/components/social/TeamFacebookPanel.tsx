@@ -13,7 +13,7 @@ import { nameMatch, normalizeName } from '@/lib/pageMatch';
 // páginas dele; tocando no cartão aparecem os clientes ligados a ele e as páginas ainda sem cliente, com a sugestão do
 // cliente pelo nome da página. O post do Facebook do cliente sai por esse login, na página ligada.
 
-interface TeamPage { id: string; name: string; picture?: string | null; client_id: string | null; client_name: string | null }
+interface TeamPage { id: string; name: string; picture?: string | null; instagram?: string | boolean | null; client_id: string | null; client_name: string | null }
 interface TeamFacebook { id: string; name: string; connected: boolean; reauth: boolean; account: string | null; pages: TeamPage[] }
 interface ClientLite { id: string; name: string; logo_url?: string | null }
 
@@ -38,6 +38,7 @@ export default function TeamFacebookPanel({ clients }: { clients: ClientLite[] }
   const [query, setQuery] = useState('');
   const [picking, setPicking] = useState<TeamPage | null>(null);
   const [pickQuery, setPickQuery] = useState('');
+  const [showOthers, setShowOthers] = useState(false);
 
   const load = useCallback(async () => {
     const { data, error } = await invokeVpsFunction('upload-post/team-facebook', { method: 'GET' });
@@ -58,10 +59,16 @@ export default function TeamFacebookPanel({ clients }: { clients: ClientLite[] }
     for (const t of teams || []) for (const pg of t.pages) if (pg.client_id) m.set(pg.client_id, { team: t.name, page: pg.name });
     return m;
   }, [teams]);
+  // só a página de cliente aparece (usuário, 03/11/2026): ligada a um cliente, ou com Instagram e com nome de um cliente.
+  // Página que a Upload-Post diz não ter Instagram, ou sem cliente parecido, fica em "outras páginas", recolhida.
+  const isClientPage = useCallback((pg: TeamPage) => !!pg.client_id
+    || (pg.instagram !== false && clients.some((c) => nameMatch(pg.name, c.name) >= 0.5)), [clients]);
   const selected = teams?.find((t) => t.id === selectedId) || null;
   const q = norm(query);
   const linked = (selected?.pages || []).filter((pg) => pg.client_id && (!q || norm(`${pg.name} ${pg.client_name}`).includes(q)));
-  const free = (selected?.pages || []).filter((pg) => !pg.client_id && (!q || norm(pg.name).includes(q)));
+  const freeAll = (selected?.pages || []).filter((pg) => !pg.client_id && (!q || norm(pg.name).includes(q)));
+  const free = freeAll.filter(isClientPage);
+  const others = freeAll.filter((pg) => !isClientPage(pg));
 
   const suggestionFor = useCallback((page: TeamPage): ClientLite | null => {
     let best: ClientLite | null = null; let score = 0;
@@ -142,7 +149,7 @@ export default function TeamFacebookPanel({ clients }: { clients: ClientLite[] }
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {teams.map((t) => {
-              const n = t.pages.length; const m = t.pages.filter((pg) => pg.client_id).length;
+              const n = t.pages.filter(isClientPage).length; const m = t.pages.filter((pg) => pg.client_id).length;
               const on = t.id === selectedId;
               return (
                 <button
@@ -163,7 +170,7 @@ export default function TeamFacebookPanel({ clients }: { clients: ClientLite[] }
                     {t.connected && !t.reauth ? <><CheckCircle2 size={12} /> {t.account || 'Conectado'}</> : <><AlertTriangle size={12} /> {t.reauth ? 'Login venceu' : 'Falta o login'}</>}
                   </p>
                   <div className="mt-3 flex items-end justify-between gap-2">
-                    <span className="text-2xl font-bold tabular-nums">{n}<span className="ml-1 text-xs font-medium text-muted-foreground">página{n === 1 ? '' : 's'}</span></span>
+                    <span className="text-2xl font-bold tabular-nums">{n}<span className="ml-1 text-xs font-medium text-muted-foreground">página{n === 1 ? '' : 's'} de cliente</span></span>
                     <span className="text-xs tabular-nums text-muted-foreground">{m} com cliente</span>
                   </div>
                   {n > 0 && (
@@ -239,6 +246,9 @@ export default function TeamFacebookPanel({ clients }: { clients: ClientLite[] }
                   )}
                 </section>
 
+                {free.length === 0 && others.length > 0 && linked.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Nenhuma página com cara de cliente neste Facebook.</p>
+                )}
                 {free.length > 0 && (
                   <section className="space-y-2">
                     <h4 className="text-xs font-semibold text-muted-foreground">Páginas sem cliente · {free.length}</h4>
@@ -250,6 +260,7 @@ export default function TeamFacebookPanel({ clients }: { clients: ClientLite[] }
                             <div className="flex items-center gap-2.5">
                               <Avatar src={pg.picture} name={pg.name} className="h-9 w-9" />
                               <p className="min-w-0 flex-1 truncate text-sm font-medium">{pg.name}</p>
+                              {typeof pg.instagram === 'string' && pg.instagram !== 'true' && <span className="truncate text-[10px] text-pink-600 dark:text-pink-400">@{pg.instagram}</span>}
                             </div>
                             <div className="flex gap-1.5">
                               {sug && (
@@ -265,6 +276,27 @@ export default function TeamFacebookPanel({ clients }: { clients: ClientLite[] }
                         );
                       })}
                     </div>
+                  </section>
+                )}
+
+                {others.length > 0 && (
+                  <section className="space-y-2">
+                    <button type="button" onClick={() => setShowOthers((v) => !v)} className="text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+                      {showOthers ? 'Esconder' : 'Mostrar'} outras {others.length} página{others.length === 1 ? '' : 's'} (sem Instagram ou sem cliente parecido)
+                    </button>
+                    {showOthers && (
+                      <div className="grid gap-2 opacity-80 sm:grid-cols-2 xl:grid-cols-3">
+                        {others.map((pg) => (
+                          <div key={pg.id} className="flex items-center gap-2.5 rounded-xl border border-dashed border-border bg-card p-2.5">
+                            <Avatar src={pg.picture} name={pg.name} className="h-7 w-7" />
+                            <p className="min-w-0 flex-1 truncate text-xs">{pg.name}</p>
+                            <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[11px]" onClick={() => { setPicking(pg); setPickQuery(''); }}>
+                              <Link2 size={11} /> Ligar
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </section>
                 )}
               </>

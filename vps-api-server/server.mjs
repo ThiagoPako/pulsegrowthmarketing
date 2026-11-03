@@ -20659,7 +20659,7 @@ pulsePlus.registerRoutes(app);
 // ─── Agentes de edição (chaves próprias, fila, entrega) ─────
 // ─── Upload-Post: postagem automática pelas redes dos clientes (lib/uploadPost.mjs, 02/11/2026) ──
 // Facebooks da equipe: só o dono (usuário, 03/11/2026: "essa parte deve aparecer apenas para o Thiago")
-const PULSE_OWNER_EMAILS = String(process.env.PULSE_OWNER_EMAILS || 'ag.pulsemkt@gmail.com').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+const PULSE_OWNER_EMAILS = String(process.env.PULSE_OWNER_EMAILS || 'admin@pulse.com,ag.pulsemkt@gmail.com').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
 async function verifyOwner(req) {
   const ctx = await verifyAdmin(req);
   if (PULSE_OWNER_EMAILS.includes(String(ctx.user?.email || '').trim().toLowerCase())) return ctx;

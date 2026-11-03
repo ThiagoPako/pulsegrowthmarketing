@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
 import { savePortalSession } from '@/lib/portalApi';
-import { Lock, User, Eye, EyeOff, UserPlus, Users, ArrowLeft, CheckCircle2, AlertCircle, Rocket } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, UserPlus, Users, ArrowLeft, CheckCircle2, AlertCircle, Rocket, Crown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 
 export default function ClientPortalRegister() {
   const { clientId } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
+  // convite de admin da empresa (03/11/2026): /portal-registro/<cliente>?convite=<token>
+  const [searchParams] = useSearchParams();
+  const convite = searchParams.get('convite') || '';
+  const [invite, setInvite] = useState<'checking' | 'valid' | 'invalid' | null>(convite ? 'checking' : null);
   const [displayName, setDisplayName] = useState('');
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
@@ -35,6 +39,13 @@ export default function ClientPortalRegister() {
     });
   }, [clientId]);
 
+  useEffect(() => {
+    if (!clientId || !convite) return;
+    supabase.functions.invoke('client-portal-auth', {
+      body: { action: 'invite_info', client_id: clientId, convite },
+    }).then(({ data }) => setInvite(data?.valid ? 'valid' : 'invalid'));
+  }, [clientId, convite]);
+
   // Auto-sync display name with login
   useEffect(() => {
     if (displayName && !login) {
@@ -55,7 +66,7 @@ export default function ClientPortalRegister() {
     setLoading(true);
 
     const { data, error } = await supabase.functions.invoke('client-portal-auth', {
-      body: { action: 'register', client_id: clientId, login: login.trim(), password, display_name: displayName.trim() },
+      body: { action: 'register', client_id: clientId, login: login.trim(), password, display_name: displayName.trim(), ...(invite === 'valid' ? { convite } : {}) },
     });
 
     if (error || !data?.success) {
@@ -104,7 +115,7 @@ export default function ClientPortalRegister() {
                   <CheckCircle2 size={40} style={{ color: `hsl(${clientColor})` }} />
                 </div>
               </motion.div>
-              <h2 className="text-xl font-bold text-white">Conta criada! 🚀</h2>
+              <h2 className="text-xl font-bold text-white">{invite === 'valid' ? 'Você é o admin do portal!' : 'Conta criada! 🚀'}</h2>
               <p className="text-sm text-white/40 mt-2">Bem-vindo(a), {displayName}!</p>
               <p className="text-xs text-white/30 mt-1">Redirecionando para o portal...</p>
               <div className="mt-4">
@@ -129,7 +140,7 @@ export default function ClientPortalRegister() {
                     {clientName?.charAt(0) || 'P'}
                   </div>
                 )}
-                <h1 className="text-lg font-bold text-white mt-4">Criar conta</h1>
+                <h1 className="text-lg font-bold text-white mt-4">{invite === 'valid' ? 'Acesso de admin' : 'Criar conta'}</h1>
                 <p className="text-xs text-white/40 mt-1">{clientName || 'Pulse Club'}</p>
                 {registeredUsers > 0 && (
                   <div className="flex items-center justify-center gap-1 mt-2 text-xs text-white/30">
@@ -139,6 +150,21 @@ export default function ClientPortalRegister() {
                 )}
               </div>
 
+              {invite === 'valid' && (
+                <div className="mb-5 rounded-xl border p-3 text-xs leading-relaxed text-white/70" style={{ background: `hsl(${clientColor} / 0.1)`, borderColor: `hsl(${clientColor} / 0.3)` }}>
+                  <p className="flex items-center gap-1.5 font-semibold text-white"><Crown size={13} style={{ color: `hsl(${clientColor})` }} /> Convite de admin da empresa</p>
+                  <p className="mt-1">Crie seu login e você entra no portal como admin da empresa: além de tudo o que o portal mostra, você decide quem da sua equipe tem acesso.</p>
+                  <button onClick={() => navigate(`/portal-login/${clientId}?convite=${encodeURIComponent(convite)}`)} className="mt-2 font-semibold underline underline-offset-2" style={{ color: `hsl(${clientColor})` }}>
+                    Já tenho login no portal
+                  </button>
+                </div>
+              )}
+              {invite === 'invalid' && (
+                <div className="mb-5 flex gap-2 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-100/80">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0 text-amber-300" />
+                  <span>Este convite de admin venceu ou já foi usado. Peça um link novo à equipe Pulse; se criar a conta aqui, ela entra como colaborador.</span>
+                </div>
+              )}
               <div className="space-y-3">
                 {/* Name */}
                 <div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
 import { hasPortalSession, savePortalSession } from '@/lib/portalApi';
 import { Lock, User, Eye, EyeOff, LogIn, UserPlus, Rocket } from 'lucide-react';
@@ -9,6 +9,9 @@ import { toast } from 'sonner';
 export default function ClientPortalLogin() {
   const { clientId: paramSlug } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
+  // convite de admin aberto por quem já tem login (vem do cadastro com ?convite=)
+  const [searchParams] = useSearchParams();
+  const convite = searchParams.get('convite') || '';
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -21,7 +24,7 @@ export default function ClientPortalLogin() {
   // Check if already logged in
   useEffect(() => {
     const storedClientId = sessionStorage.getItem('portal_client_id');
-    if (storedClientId && hasPortalSession()) {
+    if (storedClientId && hasPortalSession() && !convite) {
       navigate(`/portal/${storedClientId}`, { replace: true });
       return;
     }
@@ -64,7 +67,7 @@ export default function ClientPortalLogin() {
     setLoading(true);
 
     const { data, error } = await supabase.functions.invoke('client-portal-auth', {
-      body: { action: 'login', login: login.trim(), password },
+      body: { action: 'login', login: login.trim(), password, ...(convite ? { convite } : {}) },
     });
 
     if (error || !data?.success) {
@@ -89,7 +92,8 @@ export default function ClientPortalLogin() {
       token: data.portal_token,
     });
 
-    toast.success(`Bem-vindo, ${data.display_name || data.company_name}! 🚀`);
+    if (convite && !data.invite_used) toast.error('O convite de admin não valeu para este login (venceu, já foi usado ou é de outra empresa).');
+    toast.success(data.invite_used ? `Pronto, ${data.display_name}: agora você é admin do portal.` : `Bem-vindo, ${data.display_name || data.company_name}! 🚀`);
     navigate(`/portal/${data.client_id}`);
   };
 

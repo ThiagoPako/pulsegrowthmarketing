@@ -54,6 +54,7 @@ import { registerAssistant } from './assistant/index.mjs';
 import { recordPortalAccess } from './assistant/temperature.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
 import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOption } from './lib/portalSession.mjs';
+import { createPortalAdmin } from './lib/portalAdmin.mjs';
 import { cleanupOldEditVersions } from './lib/versionCleanup.mjs';
 import { createWebVideo, captureVideoUploads, isDerivedVariantName, originalNamesForVariant, WEB_TMP_DIR, resolveUploadFile, webVariantUrl } from './lib/webVideo.mjs';
 import { createInstagramVideo } from './lib/instagramVideo.mjs';
@@ -5407,8 +5408,16 @@ const portalSession = createPortalSession({
   expiresIn: process.env.PORTAL_JWT_EXPIRES_IN || '7d',
 });
 
-function resolvePortalCaller(req) {
-  return portalSession.resolveCaller(req, verifyUser);
+const portalAdmin = createPortalAdmin({ pool });
+
+async function resolvePortalCaller(req) {
+  const caller = await portalSession.resolveCaller(req, verifyUser);
+  // login que o admin da empresa tirou perde o acesso na hora (o token dele ainda não expirou)
+  if (caller?.kind === 'client' && caller.portalUserId) {
+    const { rows: [alive] } = await pool.query('SELECT 1 FROM client_portal_users WHERE id = $1 AND client_id = $2', [caller.portalUserId, caller.clientId]).catch(() => ({ rows: [{}] }));
+    if (!alive) return null;
+  }
+  return caller;
 }
 
 /** Sem sessão do portal nem da equipe. Devolve true quando já respondeu 401 (a rota para aí). */
@@ -5747,7 +5756,7 @@ async function requestDesignAdjustmentFromPortal(taskId, scopeClientId, note, te
 
 app.post('/api/client-portal-auth', async (req, res) => {
   try {
-    const { action, login, password, client_id, slug, display_name } = req.body;
+    const { action, login, password, client_id, slug, display_name, convite } = req.body;
 
     if (action === 'login') {
       if (!login || !password) return res.status(400).json({ error: 'Login e senha obrigatórios' });
@@ -5761,7 +5770,7 @@ app.post('/api/client-portal-auth', async (req, res) => {
       };
       // Search in client_portal_users first, fallback to clients table
       const { rows: [portalUser] } = await pool.query(
-        `SELECT cpu.id as user_id, cpu.client_id, cpu.username, cpu.display_name, cpu.password_hash, c.company_name, c.color, c.logo_url
+        `SELECT cpu.id as user_id, cpu.client_id, cpu.username, cpu.display_name, cpu.password_hash, cpu.role, c.company_name, c.color, c.logo_url
          FROM client_portal_users cpu
          JOIN clients c ON c.id = cpu.client_id
          WHERE cpu.username = $1`,
@@ -5776,7 +5785,9 @@ app.post('/api/client-portal-auth', async (req, res) => {
           await pool.query('UPDATE client_portal_users SET password_hash = $1 WHERE id = $2', [upgraded, portalUser.user_id])
             .catch((error) => console.warn('[portal-login] falha ao migrar hash para bcrypt:', error?.message || error));
         }
-        return res.json({ success: true, client_id: portalUser.client_id, company_name: portalUser.company_name, color: portalUser.color, logo_url: portalUser.logo_url, display_name: portalUser.display_name, portal_user_id: portalUser.user_id, portal_token: portalSession.sign({ clientId: portalUser.client_id, portalUserId: portalUser.user_id }) });
+        // convite de admin aberto por quem já tinha login: o login vira admin (só se o convite é desta empresa)
+        const invitedRole = convite ? await portalAdmin.consumeInvite(convite, portalUser.client_id, portalUser.user_id).catch(() => null) : null;
+        return res.json({ success: true, client_id: portalUser.client_id, company_name: portalUser.company_name, color: portalUser.color, logo_url: portalUser.logo_url, display_name: portalUser.display_name, portal_user_id: portalUser.user_id, role: invitedRole || portalUser.role || 'membro', invite_used: !!invitedRole, portal_token: portalSession.sign({ clientId: portalUser.client_id, portalUserId: portalUser.user_id }) });
       }
       // Fallback: legacy login on clients table
       const { rows: [client] } = await pool.query(
@@ -5791,6 +5802,10 @@ app.post('/api/client-portal-auth', async (req, res) => {
 
     if (action === 'register') {
       if (!client_id || !login || !password) return res.status(400).json({ error: 'Dados incompletos' });
+      if (!UUID_RE.test(String(client_id))) return res.status(404).json({ error: 'Cliente não encontrado' });
+      await portalAdmin.ensureSchema();
+      // convite de admin: confere antes de criar o login (convite vencido não cria conta comum sem avisar)
+      if (convite && !(await portalAdmin.inviteInfo(convite, client_id))) return res.status(410).json({ error: 'Este convite de admin venceu ou já foi usado. Peça um novo à equipe Pulse.' });
       // Check client exists
       const { rows: [clientRow] } = await pool.query(`SELECT id, company_name FROM clients WHERE id = $1`, [client_id]);
       if (!clientRow) return res.status(404).json({ error: 'Cliente não encontrado' });
@@ -5804,7 +5819,15 @@ app.post('/api/client-portal-auth', async (req, res) => {
         `INSERT INTO client_portal_users (client_id, username, display_name, password_hash) VALUES ($1, $2, $3, $4) RETURNING id`,
         [client_id, login.trim(), name, passwordHash]
       );
-      return res.json({ success: true, client_id, company_name: clientRow.company_name, display_name: name, portal_token: portalSession.sign({ clientId: clientRow.id, portalUserId: newPortalUser?.id }) });
+      const invitedRole = convite ? await portalAdmin.consumeInvite(convite, clientRow.id, newPortalUser?.id).catch(() => null) : null;
+      return res.json({ success: true, client_id, company_name: clientRow.company_name, display_name: name, role: invitedRole || 'membro', invite_used: !!invitedRole, portal_token: portalSession.sign({ clientId: clientRow.id, portalUserId: newPortalUser?.id }) });
+    }
+
+    if (action === 'invite_info') {
+      // tela do convite: diz se o link ainda vale (sem revelar mais nada)
+      if (!client_id || !convite || !UUID_RE.test(String(client_id))) return res.json({ valid: false });
+      const info = await portalAdmin.inviteInfo(convite, client_id).catch(() => null);
+      return res.json(info ? { valid: true, role: info.role, expires_at: info.expires_at } : { valid: false });
     }
 
     if (action === 'get_info') {
@@ -6204,6 +6227,47 @@ app.post('/api/public-proposal', async (req, res) => {
   } catch (error) {
     console.error('[public-proposal] error:', error);
     return res.status(500).json({ error: error.message || 'Internal error' });
+  }
+});
+
+// ─── Admin da empresa no portal (03/11/2026) ───
+// equipe: gera o convite de admin e gerencia os logins; admin da empresa: gerencia os logins da própria empresa.
+app.post('/api/portal-admin', async (req, res) => {
+  try {
+    const caller = await resolvePortalCaller(req);
+    if (!caller) return res.status(401).json({ error: 'Sua sessão do portal expirou. Entre de novo.', code: 'portal_session_required' });
+    const { action, client_id: bodyClientId, user_id: userId, role } = req.body || {};
+    const clientId = effectiveClientId(caller, bodyClientId);
+    if (!clientId || !UUID_RE.test(String(clientId))) return res.status(400).json({ error: 'client_id required' });
+    const isTeam = caller.kind === 'team';
+    const myRole = isTeam ? 'equipe' : (await portalAdmin.roleOf(caller.portalUserId, clientId)) || 'membro';
+
+    if (action === 'me') return res.json({ role: myRole, portal_user_id: caller.portalUserId || null });
+
+    if (action === 'create_invite') {
+      // só a equipe Pulse gera o link de admin
+      if (!isTeam) return res.status(403).json({ error: 'Só a equipe Pulse gera o convite de admin' });
+      const { rows: [client] } = await pool.query('SELECT id FROM clients WHERE id = $1', [clientId]);
+      if (!client) return res.status(404).json({ error: 'Cliente não encontrado' });
+      const invite = await portalAdmin.createInvite({ clientId, createdBy: caller.user?.id || null, role: 'admin' });
+      return res.json({ path: `/portal-registro/${clientId}?convite=${invite.token}`, expires_at: invite.expires_at });
+    }
+
+    if (!isTeam && myRole !== 'admin') return res.status(403).json({ error: 'Só o admin da empresa pode fazer isso' });
+    if (action === 'users') return res.json({ users: await portalAdmin.listUsers(clientId), me: caller.portalUserId || null });
+    if (!UUID_RE.test(String(userId || ''))) return res.status(400).json({ error: 'user_id required' });
+    if (action === 'set_role') {
+      const out = await portalAdmin.setRole(clientId, userId, role);
+      return out.error ? res.status(400).json(out) : res.json(out);
+    }
+    if (action === 'remove_user') {
+      const out = await portalAdmin.removeUser(clientId, userId, caller.portalUserId || null);
+      return out.error ? res.status(400).json(out) : res.json(out);
+    }
+    return res.status(400).json({ error: 'Invalid action' });
+  } catch (err) {
+    console.error('[portal-admin]', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

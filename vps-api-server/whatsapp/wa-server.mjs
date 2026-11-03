@@ -72,7 +72,8 @@ const GROUP_INVITE_PERMANENT = new Set([400, 401, 403, 404, 406, 410]);
 const QR_TIMEOUT_MS = 3 * 60 * 1000;
 const MEDIA_MAX_BYTES = 32 * 1024 * 1024;
 const VIDEO_MAX_BYTES = 100 * 1024 * 1024; // vídeo vai por streaming (não carrega o arquivo inteiro na memória)
-const GROUPS_REFRESH_MS = 30 * 60 * 1000;
+// 03/11/2026: o Thiago punha o número do PULSE num grupo e o grupo não aparecia para setar o cliente (era 30 min)
+const GROUPS_REFRESH_MS = 10 * 60 * 1000;
 const VOICE_MAX_SECONDS = 300; // comando por áudio no número do PULSE: até 5 min
 const VOICE_MAX_BYTES = 8 * 1024 * 1024;
 // material encaminhado ao PULSE (brutos e roteiros de cliente, assistant/materials.mjs): até 1,5 GB por arquivo
@@ -447,6 +448,11 @@ class Connection {
   }
 
   async onMessages(sock, { messages, type }) {
+    // mensagem (ou o aviso "você foi adicionado") de um grupo que ainda não está na lista: relê os grupos
+    if ((messages || []).some((m) => String(m.key?.remoteJid || '').endsWith('@g.us') && !this.knownGroups?.has(m.key.remoteJid))) {
+      clearTimeout(this.groupsTimer);
+      this.groupsTimer = setTimeout(() => this.syncGroups().catch(() => {}), 5_000);
+    }
     if (type !== 'notify') return;
     for (const msg of messages) {
       const jid = msg.key?.remoteJid || '';
@@ -570,6 +576,7 @@ class Connection {
     this.groupsSyncedAt = Date.now();
     const all = await this.sock.groupFetchAllParticipating();
     const groups = Object.values(all || {});
+    this.knownGroups = new Set(groups.map((g) => g.id));
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -915,8 +922,11 @@ async function housekeeping() {
     const ids = [...connections.values()].filter((c) => c.state === 'conectada').map((c) => c.id);
     if (ids.length) await pool.query('UPDATE wa_connections SET last_seen_at = now() WHERE id = ANY($1)', [ids]);
   }
+  // "Atualizar grupos" no cadastro do cliente: relê na hora os grupos de todos os números
+  const { rows: [eng] } = await pool.query(`SELECT groups_refresh_at FROM wa_engine WHERE id = 1`).catch(() => ({ rows: [] }));
+  const asked = eng?.groups_refresh_at ? Date.parse(eng.groups_refresh_at) : 0;
   for (const c of connections.values()) {
-    if (c.state === 'conectada' && (!c.groupsSyncedAt || Date.now() - c.groupsSyncedAt > GROUPS_REFRESH_MS)) {
+    if (c.state === 'conectada' && (!c.groupsSyncedAt || Date.now() - c.groupsSyncedAt > GROUPS_REFRESH_MS || asked > c.groupsSyncedAt)) {
       c.syncGroups().catch((e) => log(c.name, 'grupos:', e.message));
     }
   }

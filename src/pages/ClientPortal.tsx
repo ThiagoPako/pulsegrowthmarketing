@@ -1078,7 +1078,7 @@ export default function ClientPortal() {
               Acessos da {client.company_name}
             </h2>
             <p className="text-sm text-white/50 mb-6">Quem da empresa entra no portal e quem é admin.</p>
-            <PortalCompanyAdmin clientId={client.id} clientColor={clientColor} isTeamMember={isTeamMember} />
+            <PortalCompanyAdmin clientId={client.id} clientColor={clientColor} isTeamMember={isTeamMember} companyName={client.company_name} />
           </motion.div>
         ) : activeTab === 'admin' && isTeamMember ? (
           <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[800px] mx-auto px-4 sm:px-8 py-8 pb-20">

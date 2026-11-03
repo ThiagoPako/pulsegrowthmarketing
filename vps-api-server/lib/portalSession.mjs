@@ -18,9 +18,10 @@ export function isUuid(value) {
 export function createPortalSession({ jwt, secret, expiresIn = '7d' }) {
   if (!jwt || !secret) throw new Error('portalSession: jwt e secret são obrigatórios');
 
-  function sign({ clientId, portalUserId = null }) {
+  // adminLinkId: sessão aberta pelo link fixo de admin da empresa (03/11/2026); o servidor confere se o link ainda vale
+  function sign({ clientId, portalUserId = null, adminLinkId = null }) {
     if (!isUuid(String(clientId || ''))) throw new Error('portalSession: client_id inválido');
-    return jwt.sign({ typ: 'portal', cid: String(clientId), puid: portalUserId || null }, secret, { expiresIn });
+    return jwt.sign({ typ: 'portal', cid: String(clientId), puid: portalUserId || null, ...(adminLinkId ? { alk: String(adminLinkId) } : {}) }, secret, { expiresIn });
   }
 
   /** { clientId, portalUserId } ou null quando o token falta, expirou ou não é do portal. */
@@ -29,7 +30,7 @@ export function createPortalSession({ jwt, secret, expiresIn = '7d' }) {
     try {
       const decoded = jwt.verify(rawToken, secret);
       if (!decoded || decoded.typ !== 'portal' || decoded.sub || !isUuid(decoded.cid)) return null;
-      return { clientId: decoded.cid, portalUserId: decoded.puid || null };
+      return { clientId: decoded.cid, portalUserId: decoded.puid || null, ...(decoded.alk ? { adminLinkId: decoded.alk } : {}) };
     } catch {
       return null;
     }

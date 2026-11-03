@@ -18,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon, MonitorPlay, Loader2, UserMinus, Sparkles, Palette, Users as UsersIcon, Megaphone, Lightbulb, Camera, Award, Layers, MoveHorizontal, ArrowRightLeft, Save, Crown } from 'lucide-react';
-import { portalAdmin } from '@/lib/portalApi';
+import { copyPortalAdminLink } from '@/lib/portalApi';
 import { TransferClientDialog } from '@/components/TransferClientDialog';
 import FacebookPagePickerDialog, { type FacebookPageOption } from '@/components/social/FacebookPagePickerDialog';
 import { Badge } from '@/components/ui/badge';
@@ -2849,14 +2849,12 @@ export default function Clients() {
                       }}>
                       <KeyRound size={15} />
                     </Button>
-                    {/* convite de admin da empresa no portal (03/11/2026): uso único, 7 dias */}
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-violet-500" title="Link de admin do portal (para o dono da empresa)"
+                    {/* link fixo de admin do portal (03/11/2026): o dono da empresa entra como admin, sem senha */}
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-violet-500" title="Copiar link admin do portal (só para o dono da empresa)"
                       onClick={async () => {
-                        const data = await portalAdmin({ action: 'create_invite', client_id: c.id });
-                        if (data?.error) { toast.error(data.error); return; }
-                        const link = `${window.location.origin}${data.path}`;
-                        try { await navigator.clipboard.writeText(link); toast.success('Link de admin copiado! Vale 7 dias, para uma pessoa só.'); }
-                        catch { window.prompt('Copie o link de admin:', link); }
+                        const r = await copyPortalAdminLink(c.id, c.companyName);
+                        if (r.ok) toast.success('Link admin copiado, já com o aviso para não compartilhar');
+                        else toast.error(r.error || 'Não foi possível copiar');
                       }}>
                       <Crown size={15} />
                     </Button>

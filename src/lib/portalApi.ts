@@ -101,6 +101,16 @@ export async function portalAdmin(body: Record<string, any>): Promise<any> {
   }
 }
 
+/** Copia o link fixo de admin do portal do cliente, já com o aviso para não compartilhar (só a equipe). */
+export async function copyPortalAdminLink(clientId: string, companyName: string, renew = false): Promise<{ ok: boolean; error?: string }> {
+  const data = await portalAdmin({ action: 'admin_link', client_id: clientId, renew });
+  if (data?.error) return { ok: false, error: data.error };
+  const link = `${window.location.origin}${data.path}`;
+  const text = `Este é o link de admin do portal da ${companyName}. Não compartilhe com ninguém: quem tiver este link entra como admin, sem senha.\n\n${link}`;
+  try { await navigator.clipboard.writeText(text); } catch { window.prompt('Copie o link de admin:', link); }
+  return { ok: true };
+}
+
 /** Agenda do portal (/api/portal-recordings) — mesmo formato de retorno do invokeVpsFunction. */
 export async function portalRecordings(body: Record<string, any>): Promise<{ data: any; error: { message: string } | null }> {
   try {

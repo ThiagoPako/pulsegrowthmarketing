@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Upload, Film, Image, Palette, Video, Trash2, ExternalLink, Eye, Loader2, Play, Grid3X3, Sparkles, Copy, KeyRound, X, CheckCircle, FileUp } from 'lucide-react';
+import { Upload, Film, Image, Palette, Video, Trash2, ExternalLink, Eye, Loader2, Play, Grid3X3, Sparkles, Copy, KeyRound, X, CheckCircle, FileUp, Crown } from 'lucide-react';
+import { copyPortalAdminLink } from '@/lib/portalApi';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { motion } from 'framer-motion';
@@ -506,6 +507,19 @@ export default function ContentManager() {
                       }}
                     >
                       <KeyRound size={14} />
+                    </button>
+                    {/* link fixo de admin do portal (03/11/2026): o cliente entra como admin, sem senha */}
+                    <button
+                      className="p-1.5 rounded-lg hover:bg-accent text-violet-500 hover:text-violet-600"
+                      title="Copiar link admin (só para o dono da empresa)"
+                      onClick={async e => {
+                        e.stopPropagation();
+                        const r = await copyPortalAdminLink(c.id, c.company_name);
+                        if (r.ok) toast.success('Link admin copiado, já com o aviso para não compartilhar');
+                        else toast.error(r.error || 'Não foi possível copiar');
+                      }}
+                    >
+                      <Crown size={14} />
                     </button>
                   </div>
                 </button>

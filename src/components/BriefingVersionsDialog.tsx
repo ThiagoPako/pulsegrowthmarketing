@@ -10,6 +10,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { generateBriefingPdf } from '@/lib/briefingPdf';
 import { BRIEFING_FIELD_LABELS, formatBriefingValue, getBriefingFieldLabel } from '@/lib/briefingLabels';
+import ClientTag from '@/components/ClientTag';
 
 const VERSIONS_API = 'https://agenciapulse.tech/api/briefing-versions';
 
@@ -115,7 +116,7 @@ export default function BriefingVersionsDialog({ open, onOpenChange, clientId, c
       <DialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <History size={18} /> Histórico de versões — {companyName}
+            <History size={18} /> Histórico de versões — <ClientTag name={companyName} />
           </DialogTitle>
         </DialogHeader>
 

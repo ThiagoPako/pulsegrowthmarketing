@@ -25,6 +25,7 @@ import {
   regenerateWallpaperLink, removeWallpaperDevice, scheduleWallpaper, updateWallpaperAccount, wallpaperLinkUrl,
   type WallpaperAccountDetail, type WallpaperCoverage, type WallpaperFit, type WallpaperImage,
 } from '@/services/wallpaperApi';
+import ClientTag from '@/components/ClientTag';
 
 const logoProps = (c: { company_name: string; logo_url: string | null; color: string | null }) => ({
   companyName: c.company_name, logoUrl: c.logo_url ?? undefined, color: c.color ?? '',
@@ -120,7 +121,7 @@ function NewAccountDialog({ open, onClose, onCreated }: { open: boolean; onClose
             <Select value={clientId} onValueChange={setClientId} disabled={isLoading}>
               <SelectTrigger><SelectValue placeholder={isLoading ? 'Carregando…' : 'Selecione o cliente'} /></SelectTrigger>
               <SelectContent>
-                {available.map((c) => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                {available.map((c) => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.company_name} /></SelectItem>)}
                 {!isLoading && available.length === 0 && <div className="px-3 py-2 text-sm text-muted-foreground">Todos os clientes já têm cadastro</div>}
               </SelectContent>
             </Select>

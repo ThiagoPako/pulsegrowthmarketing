@@ -2,6 +2,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import ClientTag from '@/components/ClientTag';
 
 export interface BulkBillingItem {
   clientId: string;
@@ -42,7 +43,7 @@ export default function BulkBillingConfirmDialog({ open, onOpenChange, title, it
         <div className="max-h-64 overflow-y-auto rounded-md border divide-y text-sm">
           {toSend.map(i => (
             <div key={i.clientId} className="flex items-center justify-between gap-3 px-3 py-2">
-              <span className="truncate">{i.clientName}</span>
+              <span className="truncate"><ClientTag name={i.clientName} /></span>
               <span className="shrink-0 tabular-nums text-muted-foreground">
                 {i.count > 1 ? `${i.count} cobranças • ` : ''}{fmt(i.total)}
               </span>

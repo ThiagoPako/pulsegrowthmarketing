@@ -35,6 +35,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useIsMobile } from '@/hooks/use-mobile';
+import ClientTag from '@/components/ClientTag';
 
 interface LiveEditorTask {
   id: string;
@@ -542,7 +543,7 @@ export default function Dashboard() {
             {contractAlerts.map((alert, i) => (
               <motion.div key={i} whileTap={{ scale: 0.97 }} className={`flex items-center justify-between p-2 sm:p-3 rounded-lg border ${alert.daysLeft <= 30 ? 'bg-destructive/10 border-destructive/30' : 'bg-warning/10 border-warning/30'}`}>
                 <div className="min-w-0">
-                  <p className="text-xs sm:text-sm font-medium truncate">{alert.clientName}</p>
+                  <p className="text-xs sm:text-sm font-medium truncate"><ClientTag name={alert.clientName} /></p>
                   <p className="text-[10px] text-muted-foreground">{alert.daysLeft < 0 ? 'Venceu' : 'Vence'} {alert.endDate}</p>
                 </div>
                 <Badge variant={alert.daysLeft <= 30 ? 'destructive' : 'outline'} className="text-[10px] shrink-0 ml-1">

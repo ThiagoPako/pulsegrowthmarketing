@@ -27,6 +27,7 @@ import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_CONTENT_FORMAT_LABELS } from '@/types'
 import SentScriptsDialog from '@/components/copy/SentScriptsDialog';
 import VictoriaDialog from '@/components/copy/VictoriaDialog';
 import { sanitizeScriptHtml } from '@/lib/highlightQuotes';
+import ClientTag from '@/components/ClientTag';
 
 interface PendingTask {
   id: string;
@@ -1714,7 +1715,7 @@ export default function Copy() {
                   {clients
                     .filter(c => ((c as any).status || 'ativo') !== 'cancelado')
                     .sort((a, b) => a.companyName.localeCompare(b.companyName))
-                    .map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+                    .map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -1800,7 +1801,7 @@ export default function Copy() {
                   <Select value={requestForm.clientId} onValueChange={(v) => setRequestForm(f => ({ ...f, clientId: v }))}>
                     <SelectTrigger><SelectValue placeholder="Selecione o cliente..." /></SelectTrigger>
                     <SelectContent>
-                      {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+                      {clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}
                     </SelectContent>
                   </Select>
                   <p className="text-[11px] text-muted-foreground mt-1.5">Para qual cliente é este roteiro?</p>

@@ -30,6 +30,7 @@ import {
   sendRecordingCancelledNotification,
   sendBackupInviteNotification,
 } from '@/services/whatsappService';
+import ClientTag from '@/components/ClientTag';
 
 // Endomarketing brand color (magenta/fuchsia)
 const ENDO_COLOR = '292 84% 61%';
@@ -1617,7 +1618,7 @@ export default function Schedule() {
                         <div className="truncate">
                           {evt.type === 'endomarketing' && <Sparkles size={7} className="inline mr-0.5" style={{ color: `hsl(${ENDO_COLOR})` }} />}
                           {evt.type === 'event' && <MapPin size={7} className="inline mr-0.5 text-orange-500" />}
-                          <span className="font-medium">{evt.clientName}</span>
+                          <span className="font-medium"><ClientTag name={evt.clientName} /></span>
                           <span className="text-muted-foreground ml-1">{evt.startTime}</span>
                           {active && <span className="inline ml-0.5 text-primary font-bold">●</span>}
                           {evt.type === 'recording' && evt.recording?.status === 'concluida' && <Check size={8} className="inline ml-0.5 text-success" />}
@@ -1978,7 +1979,7 @@ export default function Schedule() {
                                 {ec.company_name?.charAt(0) || '?'}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm truncate">{ec.company_name}</p>
+                                <p className="font-medium text-sm truncate"><ClientTag id={ec?.id} name={ec.company_name} /></p>
                                 <p className="text-xs text-muted-foreground">{ec.packageName || ec.category || 'Endomarketing'}</p>
                               </div>
                               <Badge className="text-[10px] bg-fuchsia-500/20 text-fuchsia-600 border-fuchsia-500/30 shrink-0">
@@ -2187,7 +2188,7 @@ export default function Schedule() {
               <Label>Cliente</Label>
               <Select value={editForm.clientId} onValueChange={v => setEditForm({ ...editForm, clientId: v })}>
                 <SelectTrigger><SelectValue placeholder={editingRec && !editingRec.clientId ? 'Sem cliente (avulso)' : 'Selecione'} /></SelectTrigger>
-                <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
+                <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}</SelectContent>
               </Select>
             </div>
             {editingRec && !editingRec.clientId && !editForm.clientId && (
@@ -2731,7 +2732,7 @@ export default function Schedule() {
                 <Label>Cliente *</Label>
                 <Select value={eventForm.clientId} onValueChange={v => setEventForm({ ...eventForm, clientId: v })}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
+                  <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
@@ -2789,7 +2790,7 @@ export default function Schedule() {
                 <Label>Cliente</Label>
                 <Select value={eventForm.clientId} onValueChange={v => setEventForm({ ...eventForm, clientId: v })}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
+                  <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
@@ -2876,7 +2877,7 @@ export default function Schedule() {
                   {previewByClient.map(group => (
                     <div key={group.clientId} className="p-3">
                       <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-                        <span className="font-medium">{group.clientName}</span>
+                        <span className="font-medium"><ClientTag name={group.clientName} /></span>
                         <div className="flex gap-1.5 flex-wrap">
                           {group.existingCount > 0 && (
                             <Badge variant="outline" className="text-[10px]">

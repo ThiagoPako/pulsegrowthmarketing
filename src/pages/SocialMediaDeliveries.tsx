@@ -33,6 +33,7 @@ import AutoPostScheduleForm, { type AutoPostFormValue } from '@/components/socia
 import AutoPostQueue from '@/components/social/AutoPostQueue';
 import { createScheduledPost, suggestPublishType, cancelLinkedScheduledPosts, fetchScheduledPosts, moveStoryReminder, storyManagedBySchedule, type ScheduledPost } from '@/services/socialPostsApi';
 import type { AutoPostInfo } from '@/components/social/SocialMediaKanban';
+import ClientTag from '@/components/ClientTag';
 
 interface SocialDelivery {
   id: string;
@@ -1829,7 +1830,7 @@ export default function SocialMediaDeliveries() {
               <Label>Cliente *</Label>
               <Select value={formClientId} onValueChange={setFormClientId}>
                 <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
-                <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
+                <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">

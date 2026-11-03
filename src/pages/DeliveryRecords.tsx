@@ -13,6 +13,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, ClipboardList } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
+import ClientTag from '@/components/ClientTag';
 
 interface DeliveryRecord {
   id: string;
@@ -166,7 +167,7 @@ export default function DeliveryRecords() {
           <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os clientes</SelectItem>
-            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+            {clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -259,7 +260,7 @@ export default function DeliveryRecords() {
                 <Label>Cliente *</Label>
                 <Select value={form.client_id} onValueChange={v => setField('client_id', v)}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
+                  <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">

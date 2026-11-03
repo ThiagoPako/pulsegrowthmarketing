@@ -16,6 +16,7 @@ import { supabase } from '@/lib/vpsDb';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { todayLocal } from '@/lib/financialCalc';
+import ClientTag from '@/components/ClientTag';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destructive' | 'secondary' | 'outline' }> = {
   ativo: { label: 'Ativo', variant: 'default' },
@@ -110,7 +111,7 @@ export default function FinancialContracts() {
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     {(editingId ? clients : clientsWithoutContract).map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                      <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

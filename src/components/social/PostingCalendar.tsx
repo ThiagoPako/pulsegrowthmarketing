@@ -10,6 +10,7 @@ import { ChevronLeft, ChevronRight, Film, Megaphone, Image, Palette, Clock, Chec
 import { motion, AnimatePresence } from 'framer-motion';
 import ClientLogo from '@/components/ClientLogo';
 import type { Client } from '@/types';
+import ClientTag from '@/components/ClientTag';
 
 interface SocialDelivery {
   id: string;
@@ -186,7 +187,7 @@ export default function PostingCalendar({ deliveries: loadedDeliveries, clients,
               <SelectContent>
                 <SelectItem value="all">Todos os clientes</SelectItem>
                 {activeClients.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                  <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>
                 ))}
               </SelectContent>
             </Select>

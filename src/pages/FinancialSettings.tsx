@@ -15,6 +15,7 @@ import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { generateDeliveryReport } from '@/lib/billingReport';
+import ClientTag from '@/components/ClientTag';
 
 const TEMPLATE_VARS = [
   { var: '{nome_cliente}', desc: 'Nome da empresa' },
@@ -320,7 +321,7 @@ export default function FinancialSettings() {
                   </SelectTrigger>
                   <SelectContent>
                     {clientsWithContract.map(c => (
-                      <SelectItem key={c.id} value={c.id} className="text-xs">{c.companyName}</SelectItem>
+                      <SelectItem key={c.id} value={c.id} className="text-xs"><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

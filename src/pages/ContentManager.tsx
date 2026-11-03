@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import PlaybackVideo from '@/components/media/PlaybackVideo';
+import ClientTag from '@/components/ClientTag';
 
 const CONTENT_TYPES = [
   { value: 'reel', label: 'Reel', icon: Film },
@@ -481,7 +482,7 @@ export default function ContentManager() {
                     {c.company_name.charAt(0)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{c.company_name}</p>
+                    <p className="text-sm font-medium text-foreground truncate"><ClientTag id={c?.id} name={c.company_name} /></p>
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
@@ -547,7 +548,7 @@ export default function ContentManager() {
               <Select value={clientId} onValueChange={setClientId}>
                 <SelectTrigger><SelectValue placeholder="Selecionar cliente" /></SelectTrigger>
                 <SelectContent>
-                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                  {clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.company_name} /></SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -632,7 +633,7 @@ export default function ContentManager() {
               <SelectTrigger className="w-[200px]"><SelectValue placeholder="Filtrar por cliente" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os clientes</SelectItem>
-                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                {clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.company_name} /></SelectItem>)}
               </SelectContent>
             </Select>
           </div>

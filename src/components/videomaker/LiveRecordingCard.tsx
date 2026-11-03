@@ -14,6 +14,7 @@ import {
   formatWaitDuration,
   type WaitSession,
 } from '@/lib/recordingWait';
+import ClientTag from '@/components/ClientTag';
 
 interface LiveRecordingCardProps {
   clientName: string;
@@ -293,7 +294,7 @@ export default function LiveRecordingCard({
                   className="w-2.5 h-2.5 rounded-full shrink-0"
                   style={{ backgroundColor: `hsl(${clientColor})` }}
                 />
-                <span className="text-sm font-medium">{clientName}</span>
+                <span className="text-sm font-medium"><ClientTag name={clientName} /></span>
                 <Badge variant="outline" className="text-[10px]">
                   <FileText size={10} className="mr-0.5" />
                   {scriptsCount} roteiro{scriptsCount !== 1 ? 's' : ''}

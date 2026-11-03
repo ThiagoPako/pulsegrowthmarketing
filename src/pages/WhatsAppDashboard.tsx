@@ -33,6 +33,7 @@ import {
   type WhatsAppMessage,
   type WhatsAppConfirmation,
 } from '@/services/whatsappService';
+import ClientTag from '@/components/ClientTag';
 
 /**
  * Central de WhatsApp: confirmações, histórico, modelos de mensagem e, para o admin, conexões e automações.
@@ -359,7 +360,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
               <SelectTrigger className="w-[200px]"><SelectValue placeholder="Filtrar cliente" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os clientes</SelectItem>
-                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+                {clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterStatus} onValueChange={setFilterStatus}>

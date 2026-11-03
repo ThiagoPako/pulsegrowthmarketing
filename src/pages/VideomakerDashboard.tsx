@@ -35,6 +35,7 @@ import { ptBR } from 'date-fns/locale';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import EditorDashboard from '@/pages/EditorDashboard';
 import EditorKanban from '@/pages/EditorKanban';
+import ClientTag from '@/components/ClientTag';
 
 /** Cronômetro com estado próprio: só ele re-renderiza a cada segundo, não o painel inteiro.
  *  compute recebe o "agora" (ms) e devolve os segundos a mostrar. */
@@ -1544,7 +1545,7 @@ export default function VideomakerDashboard() {
                 <SelectContent>
                   <SelectItem value="prospect">👤 Cliente Avulso</SelectItem>
                   {clients.map(client => (
-                    <SelectItem key={client.id} value={client.id}>🏢 {client.companyName}</SelectItem>
+                    <SelectItem key={client.id} value={client.id}>🏢 <ClientTag id={client.id} name={client.companyName} logo={client?.logoUrl} /></SelectItem>
                   ))}
                 </SelectContent>
               </Select>

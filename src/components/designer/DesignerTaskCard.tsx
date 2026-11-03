@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { downloadSingleArt, downloadArtsAsPdf } from '@/lib/designerDownload';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import ClientTag from '@/components/ClientTag';
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; dot: string; slaHours: number }> = {
   baixa: { label: 'Baixa', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300', dot: 'bg-emerald-500', slaHours: 72 },
@@ -370,7 +371,7 @@ export default function DesignerTaskCard({ task, index, onOpenDetail, updateTask
               </span>
             </div>
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-              <span className="truncate">{task.clients?.company_name}</span>
+              <span className="truncate"><ClientTag name={task.clients?.company_name} /></span>
               <span className="text-pink-300">•</span>
               <span>{FORMAT_LABELS[task.format_type] || task.format_type}</span>
               {task.version > 1 && (

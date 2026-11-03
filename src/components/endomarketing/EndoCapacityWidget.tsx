@@ -7,6 +7,7 @@ import { format, startOfWeek, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import type { EndoContract, EndoTask } from '@/hooks/useEndomarketing';
+import ClientTag from '@/components/ClientTag';
 
 const MAX_HOURS_PER_DAY = 8;
 const WEEKDAYS = 5;
@@ -164,7 +165,7 @@ export default function EndoCapacityWidget({ contracts, tasks }: Props) {
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-2 h-5 rounded-full shrink-0" style={{ backgroundColor: `hsl(${cb.color})` }} />
-                      <span className="text-xs font-medium truncate">{cb.clientName}</span>
+                      <span className="text-xs font-medium truncate"><ClientTag name={cb.clientName} /></span>
                       <Badge variant="outline" className="text-[9px] px-1 shrink-0">{cb.packageName}</Badge>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

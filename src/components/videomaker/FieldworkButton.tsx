@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Camera, Square, Clock } from 'lucide-react';
 import type { Client } from '@/types';
+import ClientTag from '@/components/ClientTag';
 
 interface FieldworkActivity {
   id: string;
@@ -186,7 +187,7 @@ export default function FieldworkButton({ videomakerId, clients }: Props) {
                 </SelectTrigger>
                 <SelectContent>
                   {clients.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>
                   ))}
                 </SelectContent>
               </Select>

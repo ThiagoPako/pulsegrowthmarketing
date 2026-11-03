@@ -19,6 +19,7 @@ import ProfessionalDialog from '@/components/clientdb/ProfessionalDialog';
 import UnitDialog, { UNIT_TYPES } from '@/components/clientdb/UnitDialog';
 import CollaboratorDialog from '@/components/clientdb/CollaboratorDialog';
 import { useClientDatabase, type ClientCollaborator, type ClientDatabaseTable, type ClientProfessional, type ClientUnit } from '@/hooks/useClientDatabase';
+import ClientTag from '@/components/ClientTag';
 
 /**
  * Banco de Dados de Clientes Pulse.
@@ -190,7 +191,7 @@ export default function ClientDatabase() {
               <SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger>
               <SelectContent>
                 {sortedClients.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>{client.companyName}</SelectItem>
+                  <SelectItem key={client.id} value={client.id}><ClientTag id={client.id} name={client.companyName} logo={client?.logoUrl} /></SelectItem>
                 ))}
               </SelectContent>
             </Select>

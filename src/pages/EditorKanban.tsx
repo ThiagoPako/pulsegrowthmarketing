@@ -67,6 +67,7 @@ const SEND_TO_CLIENT_DESCRIPTION = (
 );
 
 import { Undo2, Pin, PinOff } from 'lucide-react';
+import ClientTag from '@/components/ClientTag';
 
 interface EditorTask {
   id: string;
@@ -1036,7 +1037,7 @@ export default function EditorKanban() {
             <SelectTrigger className="h-8 flex-1 min-w-[130px] sm:flex-none sm:w-36 text-sm"><SelectValue placeholder="Cliente" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos Clientes</SelectItem>
-              {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+              {clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={filterOwner} onValueChange={v => setFilterOwner(v as OwnerFilter)}>

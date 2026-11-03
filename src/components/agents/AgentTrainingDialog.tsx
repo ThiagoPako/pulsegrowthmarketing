@@ -15,6 +15,7 @@ import {
   MAX_TRAINING_ATTACHMENTS, MAX_TRAINING_FILE_BYTES, MAX_TRAINING_TEXT, attachmentKind, fetchTrainingMessages, formatBytes,
   sendTrainingMessage, trainingUploadFolder, type AttachmentKind, type TrainingAttachment, type TrainingMessage,
 } from '@/lib/agentTraining';
+import ClientTag from '@/components/ClientTag';
 
 const NO_CLIENT = '__sem_cliente__';
 const ACCEPT = 'image/*,video/*,application/pdf,audio/*,text/plain,.md,.txt,.csv,.srt,.doc,.docx';
@@ -195,7 +196,7 @@ export function AgentTrainingDialog({ agentId, agentName, open, onOpenChange }: 
               <SelectContent>
                 <SelectItem value={NO_CLIENT}>Vale para todos os clientes</SelectItem>
                 {sortedClients.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>{client.companyName}</SelectItem>
+                  <SelectItem key={client.id} value={client.id}><ClientTag id={client.id} name={client.companyName} logo={client?.logoUrl} /></SelectItem>
                 ))}
               </SelectContent>
             </Select>

@@ -40,6 +40,7 @@ import { useClientTemperatures } from '@/hooks/useClientTemperatures';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BRIEFING_FIELD_LABELS, formatBriefingValue, getBriefingFieldLabel } from '@/lib/briefingLabels';
+import ClientTag from '@/components/ClientTag';
 
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
@@ -2551,7 +2552,7 @@ export default function Clients() {
         <p className="text-sm font-semibold">Resumo do Cadastro</p>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <span className="text-muted-foreground">Empresa:</span>
-          <span className="font-medium">{form.companyName}</span>
+          <span className="font-medium"><ClientTag name={form.companyName} logo={form?.logoUrl} /></span>
           <span className="text-muted-foreground">Nicho:</span>
           <span className="font-medium">{NICHE_OPTIONS.find(n => n.value === form.niche)?.label || '—'}</span>
           <span className="text-muted-foreground">Videomaker:</span>
@@ -2901,7 +2902,7 @@ export default function Clients() {
           {sendWaClient && (
             <div className="space-y-4">
               <div className="p-3 rounded-lg bg-secondary/50">
-                <p className="font-medium text-sm">{sendWaClient.companyName}</p>
+                <p className="font-medium text-sm"><ClientTag name={sendWaClient.companyName} logo={sendWaClient?.logoUrl} /></p>
                 <p className="text-xs text-muted-foreground">{sendWaClient.whatsapp}</p>
               </div>
               <div className="space-y-1">
@@ -2945,7 +2946,7 @@ export default function Clients() {
           {briefingSendClient && (
             <div className="space-y-4">
               <div className="p-3 rounded-lg bg-secondary/50">
-                <p className="font-medium text-sm">{briefingSendClient.companyName}</p>
+                <p className="font-medium text-sm"><ClientTag name={briefingSendClient.companyName} logo={briefingSendClient?.logoUrl} /></p>
                 <p className="text-xs text-muted-foreground">{briefingSendClient.whatsapp || 'Sem WhatsApp'}</p>
               </div>
 
@@ -3074,7 +3075,7 @@ export default function Clients() {
           {cancelClient && (
             <div className="space-y-4">
               <div className="p-3 rounded-lg bg-secondary/50">
-                <p className="font-medium text-sm">{cancelClient.companyName}</p>
+                <p className="font-medium text-sm"><ClientTag name={cancelClient.companyName} logo={cancelClient?.logoUrl} /></p>
                 <p className="text-xs text-muted-foreground">{cancelClient.responsiblePerson}</p>
               </div>
               <div className="space-y-1">

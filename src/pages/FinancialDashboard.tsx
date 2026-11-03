@@ -41,6 +41,7 @@ import { findImportedStatementLines, BANK_IMPORT_DEFAULT_DESCRIPTION, type BankI
 import FinancialStartImport from '@/components/financial/FinancialStartImport';
 import { supabase } from '@/lib/vpsDb';
 import PiggyBankWidget from '@/components/financial/PiggyBankWidget';
+import ClientTag from '@/components/ClientTag';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -978,7 +979,7 @@ export default function FinancialDashboard() {
                 <div key={cp.clientId} className="flex items-center justify-between p-2 rounded-lg bg-secondary/50">
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-bold text-muted-foreground w-6">#{i + 1}</span>
-                    <span className="text-sm font-medium">{cp.clientName}</span>
+                    <span className="text-sm font-medium"><ClientTag name={cp.clientName} /></span>
                   </div>
                   <div className="flex items-center gap-4 text-sm">
                     <span className="text-muted-foreground">Fat: {fmt(cp.faturamento)}</span>
@@ -1086,7 +1087,7 @@ export default function FinancialDashboard() {
             <div className="space-y-2">
               {clientsComPrejuizo.map(cp => (
                 <div key={cp.clientId} className="flex items-center justify-between p-2 rounded-lg bg-red-500/10">
-                  <span className="text-sm font-medium">{cp.clientName}</span>
+                  <span className="text-sm font-medium"><ClientTag name={cp.clientName} /></span>
                   <div className="flex items-center gap-3 text-sm">
                     <span>Contrato: {fmt(cp.faturamento)}</span>
                     <span>Custo: {fmt(cp.custo)}</span>

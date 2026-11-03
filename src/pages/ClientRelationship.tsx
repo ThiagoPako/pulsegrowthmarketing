@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
+import ClientTag from '@/components/ClientTag';
 
 interface SpecialRequest {
   id: string;
@@ -225,7 +226,7 @@ export default function ClientRelationship() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <div className="flex items-center gap-1.5">
                             <Building2 size={14} className="text-primary" />
-                            <span className="font-semibold text-sm">{req.company_name}</span>
+                            <span className="font-semibold text-sm"><ClientTag name={req.company_name} /></span>
                           </div>
                           {getStatusBadge(req.status)}
                         </div>

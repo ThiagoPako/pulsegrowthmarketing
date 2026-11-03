@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Target, Film, Megaphone, Image as ImageIcon, Palette, DollarSign, Calculator, Check, Timer } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths, differenceInCalendarMonths } from 'date-fns';
+import ClientTag from '@/components/ClientTag';
 
 interface DeliveryRecord {
   client_id: string | null;
@@ -885,7 +886,7 @@ export default function CostByContentType() {
               <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
-                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+                {clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -1262,7 +1263,7 @@ export default function CostByContentType() {
                 )}
                 {data.recordingStats.map((s, i) => (
                   <tr key={s.clientId} className={`border-t border-border/50 transition-colors hover:bg-muted/40 ${i % 2 === 0 ? 'bg-muted/20' : ''} ${s.avgWaitSec >= 1800 ? 'border-l-4 border-l-red-500' : s.avgWaitSec >= 900 ? 'border-l-4 border-l-amber-500' : 'border-l-4 border-l-emerald-500'}`}>
-                    <td className="px-3 py-2 font-medium">{s.clientName}</td>
+                    <td className="px-3 py-2 font-medium"><ClientTag name={s.clientName} /></td>
                     <td className="px-3 py-2 text-right">{s.sessions}</td>
                     <td className="px-3 py-2 text-right">{s.videos}</td>
                     <td className="px-3 py-2 text-right">{s.avgVideos.toFixed(1)}</td>

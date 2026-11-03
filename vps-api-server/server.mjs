@@ -64,6 +64,7 @@ import { createAutomations, registerAutomationRoutes } from './lib/socialAutomat
 import { createFlows, registerFlowRoutes } from './lib/socialFlows.mjs';
 import { registerAgentClientLogoRoutes } from './lib/agentClientLogo.mjs';
 import { createStorymaker, registerStorymakerRoutes } from './lib/storymaker.mjs';
+import { createBestTimes, registerBestTimesRoutes } from './lib/bestTimes.mjs';
 import { buildProposalRevenueSchedule, stripRevenueMark } from './lib/proposalRevenues.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
@@ -20573,6 +20574,8 @@ const pulseDirect = createFlows({ pool, uploadPost, notifyTeam: notifySocialTeam
 // logo dos clientes pelos agentes (Severino cuida; a Nina faz quando a do Drive não serve), 02/11/2026
 registerAgentClientLogoRoutes(app, { pool, verifyAgent: (req) => agentApi.verifyAgent(req), uploadRoot: UPLOAD_ROOT, appBase: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' });
 registerFlowRoutes(app, { flows: pulseDirect, pool, verifySocialManager: verifySocialOrAgent, scope: socialScope });
+// melhor dia e horário para postar, no calendário do Estúdio (lib/bestTimes.mjs, 03/11/2026)
+registerBestTimesRoutes(app, { bestTimes: createBestTimes({ pool, uploadPost }), verifySocialManager, scope: socialScope });
 // storymaker de evento: link público para postar story em tempo real (lib/storymaker.mjs, 03/11/2026)
 registerStorymakerRoutes(app, {
   storymaker: createStorymaker({ pool, prepareScheduledPost, ensureSocialPostsSchema, appBase: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' }),

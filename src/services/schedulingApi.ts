@@ -95,3 +95,9 @@ export type CaptionSource = 'roteiro' | 'video' | 'arte' | 'titulo';
 export async function generateCaption(input: { client_id: string; kind: SchedulingKind; id: string; network?: string }): Promise<{ caption: string; fonte: CaptionSource }> {
   return call('scheduling/caption/generate', { body: input });
 }
+
+/** Melhor dia e horário do perfil (vps-api-server/lib/bestTimes.mjs): só vem quando a rede tem dado de verdade. */
+export interface BestTimeSlot { weekday: number; hour: number; score: number; reason: string }
+export async function fetchBestTimes(clientId: string): Promise<{ slots: BestTimeSlot[]; sources: string[] }> {
+  return call<{ slots: BestTimeSlot[]; sources: string[] }>('scheduling/best-times', { method: 'GET', body: { client_id: clientId } });
+}

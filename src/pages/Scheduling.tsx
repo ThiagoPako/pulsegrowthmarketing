@@ -16,6 +16,7 @@ import SchedulingCalendar from '@/components/scheduling/SchedulingCalendar';
 import UnscheduledPanel from '@/components/scheduling/UnscheduledPanel';
 import ScheduleDialog from '@/components/scheduling/ScheduleDialog';
 import ClientStoryLinkDialog from '@/components/scheduling/ClientStoryLinkDialog';
+import BestTimePicker from '@/components/scheduling/BestTimePicker';
 import UnscheduledStrip from '@/components/scheduling/UnscheduledStrip';
 import SchedulingClientPicker, { AccountIcons } from '@/components/scheduling/SchedulingClientPicker';
 import { TYPE_STYLES, clientLogoProps } from '@/components/scheduling/schedulingStyles';
@@ -27,7 +28,7 @@ import {
   weekKeys, withMovedDate, type SchedulingItem, type SchedulingMaterials, type SchedulingType,
 } from '@/lib/postingSchedule';
 import {
-  fetchSchedulingClients, fetchSchedulingMaterials, rescheduleMaterial, type SchedulingApiError,
+  fetchBestTimes, fetchSchedulingClients, fetchSchedulingMaterials, rescheduleMaterial, type SchedulingApiError,
 } from '@/services/schedulingApi';
 import { lastUsedTime } from '@/lib/storySeries';
 
@@ -66,6 +67,8 @@ export default function Scheduling() {
   const [selectedDay, setSelectedDay] = useState<string | null>(today);
   const [dialog, setDialog] = useState<{ item: SchedulingItem; presetDate?: string | null; presetTime?: string | null } | null>(null);
   const [linkDialog, setLinkDialog] = useState(false);
+  // melhor horário: o dia/hora tocado no calendário, esperando o material
+  const [bestPick, setBestPick] = useState<{ day: string; time: string } | null>(null);
   // Material da lista: abre o agendamento com a hora padrão (a última usada)
   const pickMaterial = (item: SchedulingItem, day?: string) => setDialog({ item, presetDate: day || null, presetTime: lastUsedTime() });
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
@@ -96,6 +99,15 @@ export default function Scheduling() {
     staleTime: 30_000,
   });
   const data = materialsQuery.data && materialsQuery.data.client.id === clientId ? materialsQuery.data : null;
+  // melhor dia e horário (só quando a rede do cliente tem dado; erro ou sem dado = nada no calendário)
+  const bestQuery = useQuery({
+    queryKey: ['scheduling-best-times', clientId],
+    queryFn: () => fetchBestTimes(clientId as string),
+    enabled: !!client,
+    staleTime: 30 * 60_000,
+    retry: false,
+  });
+  const bestSlots = bestQuery.data?.slots ?? [];
   const scheduled = useMemo(() => data?.scheduled ?? [], [data]);
   const unscheduled = useMemo(() => data?.unscheduled ?? [], [data]);
   const counts = monthCounts(scheduled, monthKey, unscheduled.length);
@@ -273,6 +285,8 @@ export default function Scheduling() {
           onSelectDay={setSelectedDay}
           onItemClick={openItem}
           onShowWeek={(day) => { setAnchor(day); setView('week'); }}
+          bestSlots={bestSlots}
+          onBestPick={(day, time) => setBestPick({ day, time })}
         />
       )}
     </div>
@@ -439,6 +453,12 @@ export default function Scheduling() {
           onSaved={onSaved}
         />
       )}
+      <BestTimePicker
+        pick={bestPick}
+        items={unscheduled}
+        onClose={() => setBestPick(null)}
+        onPick={(item) => { const p = bestPick; setBestPick(null); if (p) setDialog({ item, presetDate: p.day, presetTime: p.time }); }}
+      />
       {linkDialog && (
         <ClientStoryLinkDialog
           clientId={client.id}

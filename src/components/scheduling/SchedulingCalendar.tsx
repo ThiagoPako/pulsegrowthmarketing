@@ -2,8 +2,10 @@ import { useMemo } from 'react';
 import { Draggable, Droppable, type DraggableProvided } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
 import {
-  canDrag, formatDayLabel, groupByDate, isWeekendKey, monthGridKeys, sameMonth, weekKeys, type SchedulingItem,
+  brtParts, canDrag, formatDayLabel, groupByDate, isWeekendKey, monthGridKeys, sameMonth, weekKeys, weekdayIndex, type SchedulingItem,
 } from '@/lib/postingSchedule';
+import type { BestTimeSlot } from '@/services/schedulingApi';
+import BestTimeBadge, { PulseMark, slotTime } from './BestTimeBadge';
 import SchedulingItemChip from './SchedulingItemChip';
 import { TYPE_STYLES } from './schedulingStyles';
 
@@ -21,6 +23,9 @@ interface Props {
   onSelectDay: (day: string) => void;
   onItemClick: (item: SchedulingItem) => void;
   onShowWeek: (day: string) => void;
+  /** melhor dia e horário do perfil (só quando a rede tem dado) e o agendar dali */
+  bestSlots?: BestTimeSlot[];
+  onBestPick?: (day: string, time: string) => void;
 }
 
 type ChipVariant = 'compact' | 'card' | 'tile';
@@ -77,9 +82,17 @@ function DayNumber({ day, today }: { day: string; today: string }) {
 }
 
 export default function SchedulingCalendar({
-  view, anchor, today, items, compact, selectedDay, onSelectDay, onItemClick, onShowWeek,
+  view, anchor, today, items, compact, selectedDay, onSelectDay, onItemClick, onShowWeek, bestSlots = [], onBestPick,
 }: Props) {
   const byDate = useMemo(() => groupByDate(items), [items]);
+  // melhor horário do dia: só de hoje em diante (hoje, só se a hora ainda não passou)
+  const nowHour = Number((brtParts(Date.now())?.time || '00:00').slice(0, 2));
+  const bestFor = (day: string) => {
+    if (!onBestPick || day < today) return null;
+    const slot = bestSlots.find((s) => s.weekday === weekdayIndex(day));
+    if (!slot || (day === today && slot.hour <= nowHour)) return null;
+    return slot;
+  };
   const byKey = useMemo(() => new Map(items.map((i) => [i.key, i])), [items]);
 
   if (view === 'week') {
@@ -117,6 +130,7 @@ export default function SchedulingCalendar({
                       snapshot.isDraggingOver && 'rounded-b-xl bg-primary/10',
                     )}
                   >
+                    {(() => { const slot = bestFor(day); return slot && <BestTimeBadge slot={slot} onSchedule={() => onBestPick?.(day, slotTime(slot))} />; })()}
                     {list.map((item, index) => (
                       <DraggableItem key={item.key} item={item} index={index} variant={compact ? 'card' : 'tile'} onItemClick={onItemClick} />
                     ))}
@@ -165,6 +179,7 @@ export default function SchedulingCalendar({
                     )}
                   >
                     <DayNumber day={day} today={today} />
+                    {bestFor(day) && <span className="absolute right-0.5 top-0.5"><PulseMark size={14} /></span>}
                     <div className="flex flex-wrap justify-center gap-0.5">
                       {list.slice(0, 4).map((item) => (
                         <span
@@ -183,6 +198,7 @@ export default function SchedulingCalendar({
         {selectedDay && (
           <div className="space-y-1.5 rounded-xl border border-border bg-card p-2">
             <div className="px-1 text-xs font-semibold capitalize text-muted-foreground">{formatDayLabel(selectedDay)}</div>
+            {(() => { const slot = bestFor(selectedDay); return slot && <BestTimeBadge slot={slot} onSchedule={() => onBestPick?.(selectedDay, slotTime(slot))} />; })()}
             {dayItems.length === 0 ? (
               <div className="px-1 py-3 text-center text-xs text-muted-foreground">—</div>
             ) : (
@@ -229,6 +245,7 @@ export default function SchedulingCalendar({
                     <DayNumber day={day} today={today} />
                     {list.length > 0 && <span className="text-[10px] tabular-nums text-muted-foreground">{list.length}</span>}
                   </div>
+                  {!outside && (() => { const slot = bestFor(day); return slot && <BestTimeBadge slot={slot} compact={list.length >= MONTH_VISIBLE} onSchedule={() => onBestPick?.(day, slotTime(slot))} />; })()}
                   {list.slice(0, MONTH_VISIBLE).map((item, index) => (
                     <DraggableItem key={item.key} item={item} index={index} variant="compact" onItemClick={onItemClick} />
                   ))}

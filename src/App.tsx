@@ -43,8 +43,7 @@ const PulseDirect = lazy(() => import("@/pages/PulseDirect"));
 const SocialConnectInvite = lazy(() => import("@/pages/SocialConnectInvite"));
 
 const SocialInsights = lazy(() => import("@/pages/SocialInsights"));
-const PostStudio = lazy(() => import("@/pages/PostStudio"));
-const Scheduling = lazy(() => import("@/pages/Scheduling"));
+const PostingStudio = lazy(() => import("@/pages/PostingStudio"));
 const Wallpaper = lazy(() => import("@/pages/Wallpaper"));
 const WallpaperConnect = lazy(() => import("@/pages/WallpaperConnect"));
 const StoryReminder = lazy(() => import("@/pages/StoryReminder"));
@@ -266,6 +265,12 @@ function ProtectedRoute({
   );
 }
 
+/** O antigo Agendamentos virou a aba Calendário do Estúdio de Postagem (mantém ?cliente=). */
+function AgendamentosRedirect() {
+  const location = useLocation();
+  return <Navigate to={`/estudio-postagem${location.search}`} replace />;
+}
+
 function AppRoutes() {
   const { user, loading } = useAuth();
   const { currentUser } = useApp();
@@ -342,8 +347,9 @@ function AppRoutes() {
         <Route path="/central-social" element={<ProtectedRoute><SocialHub /></ProtectedRoute>} />
         <Route path="/pulse-direct" element={<ProtectedRoute><PulseDirect /></ProtectedRoute>} />
         <Route path="/conectar-social/:token" element={<SocialConnectInvite />} />
-        <Route path="/estudio-postagem" element={<ProtectedRoute><PostStudio /></ProtectedRoute>} />
-        <Route path="/agendamentos" element={<ProtectedRoute><RequireModuleAccess module="pulse_plus"><Scheduling /></RequireModuleAccess></ProtectedRoute>} />
+        {/* Estúdio de Postagem: calendário (antigo Agendamentos) + postagem avulsa; /agendamentos leva para lá */}
+        <Route path="/estudio-postagem" element={<ProtectedRoute><PostingStudio /></ProtectedRoute>} />
+        <Route path="/agendamentos" element={<AgendamentosRedirect />} />
         {/* Lembrete de story com link: quem posta os stories do cliente (o servidor confere), sem Pulse Plus */}
         <Route path="/lembrete-story/:id" element={<ProtectedRoute><StoryReminder /></ProtectedRoute>} />
 

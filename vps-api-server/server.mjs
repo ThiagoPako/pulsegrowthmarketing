@@ -57,6 +57,7 @@ import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOp
 import { cleanupOldEditVersions } from './lib/versionCleanup.mjs';
 import { createWebVideo, captureVideoUploads, isDerivedVariantName, originalNamesForVariant, WEB_TMP_DIR, resolveUploadFile, webVariantUrl } from './lib/webVideo.mjs';
 import { createInstagramVideo } from './lib/instagramVideo.mjs';
+import { createImageFit } from './lib/imageFit.mjs';
 import { createUploadPost, registerUploadPostRoutes } from './lib/uploadPost.mjs';
 import { createSocialHub, registerSocialHubRoutes } from './lib/socialHub.mjs';
 import { createAutomations, registerAutomationRoutes } from './lib/socialAutomations.mjs';
@@ -8749,6 +8750,8 @@ async function ensureSocialPostsSchema() {
       ON scheduled_posts (story_series_id, series_slot_at) WHERE story_series_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_scheduled_posts_reminder
       ON scheduled_posts (scheduled_at) WHERE story_mode = 'lembrete' AND status = 'agendado';
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_audio_url TEXT;
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_audio_name TEXT;
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS access_token TEXT NOT NULL DEFAULT '';
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS token_expiration TIMESTAMPTZ;
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS api_base TEXT NOT NULL DEFAULT 'facebook';
@@ -8931,6 +8934,12 @@ async function publishIgContainer(base, igId, containerId, token, maxTries = 12)
 
 
 const IS_VIDEO_RE = /\.(mp4|mov|webm|m4v)(\?|$)/i;
+
+/** Quantas mídias vêm em media_items (0 = o post usa só media_url). */
+function postMediaUrlsCount(post) {
+  const raw = post.media_items;
+  try { return (Array.isArray(raw) ? raw : (typeof raw === 'string' && raw ? JSON.parse(raw) : [])).length; } catch { return 0; }
+}
 
 /** Normaliza a lista de mídias do post (carrossel usa media_items, os demais usam media_url). */
 function postMediaList(post) {
@@ -9370,6 +9379,31 @@ async function runScheduledPostNow(post, { manual = false } = {}) {
     }
     mediaFallback = choice?.fallback || null;
     if (mediaFallback) console.warn(`[video-instagram] post ${post.id}: ${mediaFallback}`);
+  }
+
+  // Imagem no formato da rede (lib/imageFit.mjs): proporção que a Meta aceita, carrossel todo igual à 1ª, story
+  // 9:16 e JPEG, sem cortar (fundo desfocado). Só a URL enviada muda; erro no ajuste = segue com o original.
+  {
+    const media = postMediaList(publishPost);
+    const fit = await imageFit.fitMedia(media, publishPost.publish_type);
+    if (fit.changed.length) {
+      console.log(`[imagem-instagram] post ${post.id}: ${fit.changed.map((c) => `#${c.index + 1} ${c.action} ${c.from}→${c.to}`).join(', ')}`);
+      const hadItems = postMediaUrlsCount(publishPost) > 0;
+      publishPost = { ...publishPost, media_url: fit.media[0].url, media_items: hadItems ? fit.media : publishPost.media_items };
+    }
+  }
+
+  // Story de arte com trilha: a imagem (já em 9:16) vira vídeo de 15 s com a música. Falhou: posta a arte sem música.
+  if (publishPost.publish_type === 'stories' && post.story_audio_url) {
+    const media = postMediaList(publishPost);
+    if (media.length === 1 && !IS_VIDEO_RE.test(media[0].url)) {
+      try {
+        const videoUrl = await imageFit.storyVideo(media[0].url, post.story_audio_url);
+        publishPost = { ...publishPost, media_url: videoUrl, media_items: postMediaUrlsCount(publishPost) > 0 ? [{ url: videoUrl }] : publishPost.media_items };
+      } catch (err) {
+        console.error(`[story-trilha] post ${post.id}: vídeo com trilha falhou, vai a arte sem música:`, err?.message || err);
+      }
+    }
   }
 
   const results = [];
@@ -10010,10 +10044,12 @@ app.get('/api/social-posts/media-library', async (req, res) => {
     if (!clientId) return res.status(400).json({ error: 'client_id é obrigatório' });
 
     const isVideo = (u) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(u || '');
+    const appBase = String(process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech').replace(/\/+$/, '');
+    const absolute = (u) => { const v = String(u || '').trim(); return v.startsWith('/uploads/') ? `${appBase}${v}` : v; };
     const items = [];
     const seen = new Set();
     const push = (item) => {
-      const url = (item.url || '').trim();
+      const url = absolute(item.url);
       if (!/^https?:\/\//i.test(url) || seen.has(url)) return;
       seen.add(url);
       items.push({ ...item, url, kind: item.kind || (isVideo(url) ? 'video' : 'image') });
@@ -10021,7 +10057,7 @@ app.get('/api/social-posts/media-library', async (req, res) => {
 
     const [designs, portal, contents] = await Promise.all([
       pool.query(
-        `SELECT id, title, mockup_url, attachment_url, format_type, updated_at
+        `SELECT id, title, mockup_url, attachment_url, attachment_urls, format_type, updated_at
            FROM design_tasks WHERE client_id = $1 ORDER BY updated_at DESC LIMIT 120`,
         [clientId]
       ).catch(() => ({ rows: [] })),
@@ -10038,8 +10074,17 @@ app.get('/api/social-posts/media-library', async (req, res) => {
       ).catch(() => ({ rows: [] })),
     ]);
 
+    // Arte: todas as imagens entregues (carrossel inteiro, na ordem do designer); sem arquivo, o mockup
     for (const d of designs.rows) {
-      push({ id: `design-${d.id}`, title: d.title || 'Arte', url: d.mockup_url || d.attachment_url, thumbnail: d.mockup_url || d.attachment_url, source: 'Design', tag: d.format_type, date: d.updated_at });
+      let files = [];
+      try { files = Array.isArray(d.attachment_urls) ? d.attachment_urls : JSON.parse(d.attachment_urls || '[]'); } catch { files = []; }
+      files = [...new Set([...files.filter((u) => typeof u === 'string' && u.trim()), d.attachment_url].filter(Boolean))];
+      if (!files.length && d.mockup_url) files = [d.mockup_url];
+      files.forEach((url, i) => push({
+        id: `design-${d.id}${files.length > 1 ? `-${i + 1}` : ''}`,
+        title: `${d.title || 'Arte'}${files.length > 1 ? ` · ${i + 1}/${files.length}` : ''}`,
+        url, thumbnail: isVideo(url) ? null : absolute(url), source: 'Design', tag: d.format_type, date: d.updated_at,
+      }));
     }
     for (const c of portal.rows) {
       push({ id: `portal-${c.id}`, title: c.title || 'Conteúdo', url: c.file_url, thumbnail: c.thumbnail_url || (isVideo(c.file_url) ? null : c.file_url), source: 'Portal', tag: c.content_type, date: c.created_at });
@@ -10293,6 +10338,17 @@ async function prepareScheduledPost(input = {}, { requireAccounts = true, apiPub
   if (instagramApi) igVideo.scanSoon();
 
   const firstComment = String(input.first_comment || '').trim().slice(0, 1000) || null;
+  // Trilha do story de arte (lib/imageFit.mjs storyVideo): só story de UMA imagem, áudio nas nossas pastas
+  let storyAudio = null;
+  if (input.story_audio_url) {
+    const audioUrl = String(input.story_audio_url).trim();
+    if (publish_type !== 'stories') fail('Trilha só vale para story.');
+    if (urls.length !== 1 || IS_VIDEO_RE.test(urls[0])) fail('A trilha entra em story de imagem (arte). Vídeo já leva o próprio som.');
+    if (!/^https:\/\/\S+\.(mp3|m4a|aac|wav|ogg)(\?|$)/i.test(audioUrl) || !MEDIA_ALLOWED_ORIGINS.some((o) => audioUrl.startsWith(`${o}/uploads/`))) {
+      fail('A trilha precisa ser um áudio (mp3, m4a, wav) enviado pelo sistema.');
+    }
+    storyAudio = { url: audioUrl, name: String(input.story_audio_name || '').trim().slice(0, 120) || null };
+  }
   const collaborators = String(input.collaborators || '').split(/[,\s]+/).map((u) => u.replace(/^@/, '').trim()).filter((u) => /^[A-Za-z0-9._]{1,30}$/.test(u)).slice(0, 3).join(',') || null;
   const storedPlatform = !platforms ? platform
     : platforms.length === 1 ? platforms[0]
@@ -10302,6 +10358,7 @@ async function prepareScheduledPost(input = {}, { requireAccounts = true, apiPub
     caption: platforms ? (captions.instagram ?? captions[platforms[0]] ?? caption) : caption, when,
     story_link: story_link || null, story_link_text: story_link_text || null,
     first_comment: publish_type === 'stories' ? null : firstComment, collaborators: publish_type === 'stories' ? null : collaborators,
+    story_audio_url: storyAudio?.url || null, story_audio_name: storyAudio?.name || null,
   };
 }
 
@@ -10336,12 +10393,13 @@ app.post('/api/social-posts', async (req, res) => {
       await pool.query(`UPDATE scheduled_posts SET status='cancelado', updated_at=now() WHERE delivery_id=$1 AND status IN ('agendado','erro')`, [delivery_id]);
     }
     const { rows } = await pool.query(
-      `INSERT INTO scheduled_posts (client_id, delivery_id, content_task_id, platform, publish_type, media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      `INSERT INTO scheduled_posts (client_id, delivery_id, content_task_id, platform, publish_type, media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text, first_comment, collaborators, story_audio_url, story_audio_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
       [
         post.client_id, delivery_id || null, content_task_id || null, post.platform, post.publish_type,
         post.urls[0], post.items.length ? JSON.stringify(post.items) : null, post.caption, post.when.toISOString(), user?.id || null,
-        post.story_link, post.story_link_text,
+        post.story_link, post.story_link_text, post.first_comment || null, post.collaborators || null,
+        post.story_audio_url, post.story_audio_name,
       ]
     );
     res.json({ success: true, post: rows[0] });
@@ -19205,6 +19263,8 @@ webVideo.start();
 const igVideo = createInstagramVideo({ pool, webVideo, allowedOrigins: MEDIA_ALLOWED_ORIGINS });
 // postagem pela Upload-Post (lib/uploadPost.mjs): publishToClientAccount desvia para ela nas contas api_base = 'upload_post'
 const uploadPost = createUploadPost({ pool, appBase: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' });
+// imagem ajustada ao formato da rede antes de postar (lib/imageFit.mjs)
+const imageFit = createImageFit({ uploadRoots, publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL || 'https://agenciapulse.tech/uploads', allowedOrigins: MEDIA_ALLOWED_ORIGINS });
 igVideo.start();
 
 // Busca REAL de empresas via OpenStreetMap (Overpass API) — sem chave de API.

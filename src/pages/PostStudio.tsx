@@ -8,6 +8,7 @@ import {
   type SocialPlatformTarget, type SocialPublishType,
 } from '@/services/socialPostsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import MediaFitNotes from '@/components/scheduling/MediaFitNotes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,6 +53,8 @@ export default function PostStudio() {
   const [publishType, setPublishType] = useState<SocialPublishType>('carousel');
   const [items, setItems] = useState<PostMediaItem[]>([emptyItem(), emptyItem()]);
   const [caption, setCaption] = useState('');
+  const [firstComment, setFirstComment] = useState('');
+  const [collab, setCollab] = useState('');
   const [storyLink, setStoryLink] = useState('');
   const [storyLinkText, setStoryLinkText] = useState('Saiba mais');
   const [scheduledAt, setScheduledAt] = useState('');
@@ -124,6 +127,8 @@ export default function PostStudio() {
     if (clientId) {
       setItems([emptyItem(), emptyItem()]);
       setCaption('');
+      setFirstComment('');
+      setCollab('');
       setStoryLink('');
     }
     lastPostRef.current = null;
@@ -186,6 +191,8 @@ export default function PostStudio() {
   const reset = () => {
     setItems([emptyItem(), emptyItem()]);
     setCaption('');
+    setFirstComment('');
+    setCollab('');
     setStoryLink('');
     setScheduledAt('');
   };
@@ -209,6 +216,7 @@ export default function PostStudio() {
       publish_type: publishType,
       media_items: filledItems.map(i => ({ url: i.url.trim(), label: i.label?.trim() || undefined })),
       caption: publishType === 'stories' ? '' : caption,
+      ...(publishType === 'stories' ? {} : { first_comment: firstComment.trim(), collaborators: collab.trim() }),
       story_link: publishType === 'stories' ? storyLink.trim() || null : null,
       story_link_text: publishType === 'stories' ? storyLinkText.trim() || null : null,
     };
@@ -267,10 +275,10 @@ export default function PostStudio() {
       <header className="overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-card to-card p-5">
         <h1 className="flex items-center gap-2 text-2xl font-bold">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/15 text-primary"><Images size={18} /></span>
-          {t('Estúdio de Postagem', 'Publishing Studio')}
+          {t('Postagem avulsa', 'Publishing Studio')}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {t('Escolha o cliente, selecione as artes e vídeos que já estão no sistema e veja a prévia igual ao Instagram antes de publicar.', 'Choose the client, pick media, write the caption, set date/time and preview exactly how it will look on Instagram.')}
+          {t('Escolha o cliente, selecione as artes e vídeos que já estão no sistema, ponha o carrossel na ordem certa e veja a prévia igual ao Instagram antes de publicar.', 'Choose the client, pick media, write the caption, set date/time and preview exactly how it will look on Instagram.')}
         </p>
       </header>
 
@@ -455,6 +463,7 @@ export default function PostStudio() {
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">3. Legenda, link e horário</CardTitle></CardHeader>
               <CardContent className="space-y-4">
+                <MediaFitNotes urls={selectedUrls} publishType={publishType} />
                 {publishType === 'stories' ? (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
@@ -476,6 +485,18 @@ export default function PostStudio() {
                       <span className={caption.length > 2200 ? 'text-[11px] text-destructive' : 'text-[11px] text-muted-foreground'}>{caption.length}/2200</span>
                     </div>
                     <Textarea value={caption} onChange={e => setCaption(e.target.value)} rows={5} placeholder="Legenda com hashtags…" />
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <Label className="text-xs">Primeiro comentário (opcional)</Label>
+                        <Input value={firstComment} onChange={e => setFirstComment(e.target.value)} placeholder="Link do WhatsApp, hashtags…" />
+                      </div>
+                      {platform !== 'facebook' && (
+                        <div>
+                          <Label className="text-xs">Collab no Instagram (até 3 perfis)</Label>
+                          <Input value={collab} onChange={e => setCollab(e.target.value)} placeholder="@parceiro, @fornecedor" />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 

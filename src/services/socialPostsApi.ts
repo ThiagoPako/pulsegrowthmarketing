@@ -69,6 +69,9 @@ export interface CreateScheduledPostInput {
   story_link?: string | null;
   story_link_text?: string | null;
   caption?: string;
+  /** primeiro comentário e Collab no Instagram (até 3 @perfis); não valem para story */
+  first_comment?: string;
+  collaborators?: string;
   /** ISO datetime */
   scheduled_at: string;
 }

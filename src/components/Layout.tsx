@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { ROLE_LABELS } from '@/types';
 import { useMyPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
 import { useModuleAccess } from '@/hooks/useModuleAccess';
-import { CalendarClock, GraduationCap } from 'lucide-react';
+import { GraduationCap } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import pulseLogo from '@/assets/pulse_logo.png';
 import { Input } from '@/components/ui/input';
@@ -74,7 +74,6 @@ const navCategories: NavCategory[] = [
       { path: '/central-social', label: 'Central Social', icon: MessageCircle, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/pulse-direct', label: 'Pulse Direct', icon: Zap, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/estudio-postagem', label: 'Estúdio de Postagem', icon: Images, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
-      { path: '/agendamentos', label: 'Agendamentos', icon: CalendarClock, roles: ['admin'], module: 'pulse_plus' },
       { path: '/desempenho-social', label: 'Desempenho Social', icon: TrendingUp, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
     ],
   },

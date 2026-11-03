@@ -22,6 +22,8 @@
 
 const clean = (v, max) => String(v ?? '').trim().slice(0, max);
 // sem acento, minúsculo e sem pontuação: "Eu quero!!" = "eu quero"
+import { sharedLimiter, varyPublicReply } from './socialSafety.mjs';
+
 export const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9@#]+/g, ' ').trim();
 const FIELD_CHECK = {
   telefone: (v) => (String(v).replace(/\D/g, '').length >= 10 ? String(v).replace(/\D/g, '') : null),
@@ -105,7 +107,13 @@ export function fillVars(text, contact) {
   return String(text || '').replace(/\{nome\}/g, name).replace(/\{primeiro_nome\}/g, String(name).split(/\s+/)[0] || '').replace(/\s{2,}/g, ' ').trim();
 }
 
-export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, isFollower = async () => null, logger = console }) {
+export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, isFollower = async () => null, logger = console, limiter = sharedLimiter }) {
+  // teto de mensagens automáticas por conta (auditoria anti-bloqueio, 03/11/2026)
+  const canSend = (profile, kind = 'dm') => {
+    const ok = limiter.take(kind, profile);
+    if (!ok) logger.warn?.(`[funis] ${profile}: teto de ${kind === 'dm' ? 'mensagens' : 'respostas públicas'} por hora, não mandou`);
+    return ok;
+  };
   let schemaPromise = null;
   function ensureSchema() {
     if (!schemaPromise) {
@@ -158,7 +166,11 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, isF
   }
 
   async function clientByProfile(profile) {
-    const { rows: [cp] } = await pool.query(`SELECT client_id, username FROM client_upload_post WHERE username = $1`, [profile]);
+    const { rows: [cp] } = await pool.query(
+      `SELECT u.client_id, u.username AS profile,
+              (SELECT a.username FROM social_accounts a WHERE a.client_id = u.client_id AND a.platform = 'instagram' AND a.username IS NOT NULL LIMIT 1) AS username
+         FROM client_upload_post u WHERE u.username = $1`, [profile]
+    );
     return cp || null;
   }
   async function profileOf(clientId) {
@@ -194,6 +206,7 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, isF
   async function sendStep({ profile, contact, flow, step, viaComment = null, depth = 0 }) {
     const text = fillVars(step.text, contact);
     const quick = (step.replies || []).filter((r) => r.next).map((r) => ({ title: r.title, payload: payloadOf(flow.id, r.next) }));
+    if (!canSend(profile)) return;
     if (viaComment) {
       // 1ª mensagem do comentário: resposta privada (só texto + botões de link); as respostas rápidas viram texto
       await uploadPost.call('POST', '/uploadposts/comments/reply', {
@@ -241,8 +254,18 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, isF
     if (from.username && cp.username && norm(from.username) === norm(cp.username)) return null;
     const flow = (await activeFlows(cp.client_id, 'comment_keyword')).find((f) => matchesTrigger(f, payload.comment.text, payload.post?.id));
     if (!flow || !from.id) return null;
+    // o mesmo comentário chegando de novo (aviso repetido) não gera outra mensagem
+    const { rows: [seen] } = await pool.query(`SELECT 1 FROM social_dm_messages WHERE meta->>'comment_id' = $1 LIMIT 1`, [String(payload.comment.id)]);
+    if (seen) return null;
     const contact = await upsertContact(cp.client_id, 'instagram', from.id, from.username);
     await log(contact.id, 'in', payload.comment.text, { comment_id: payload.comment.id, post_id: payload.post?.id });
+    // a mesma pessoa comentando a palavra de novo: o funil manda uma vez a cada 24 h (o resto vira spam para o Instagram)
+    const { rows: [recent] } = await pool.query(
+      `SELECT 1 FROM social_dm_messages WHERE contact_id = $1 AND direction = 'out' AND meta->>'flow_id' = $2 AND created_at > now() - interval '24 hours' LIMIT 1`,
+      [contact.id, String(flow.id)]
+    );
+    if (recent) return null;
+    if (flow.trigger?.followers_only && !canSend(payload.profile_username)) return null;
     if (flow.trigger?.followers_only) {
       // só para seguidores: primeiro o pedido para seguir; o funil começa quando a pessoa responder "JÁ SIGO"
       const text = fillVars(flow.trigger.follow_message || FOLLOW_DEFAULT, contact);
@@ -254,9 +277,10 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, isF
     } else {
       await sendStep({ profile: payload.profile_username, contact, flow, step: flow.steps[0], viaComment: payload.comment.id });
     }
-    if (flow.public_reply) {
+    // resposta pública nunca igual (com o @ da pessoa e as versões separadas por "|") e com teto por hora
+    if (flow.public_reply && canSend(payload.profile_username, 'public_reply')) {
       await uploadPost.call('POST', '/uploadposts/comments/public-reply', {
-        json: { platform: 'instagram', user: payload.profile_username, comment_id: payload.comment.id, message: flow.public_reply },
+        json: { platform: 'instagram', user: payload.profile_username, comment_id: payload.comment.id, message: varyPublicReply(flow.public_reply, from.username) },
       }).catch((error) => logger.warn?.('[funis] resposta pública:', error.message));
     }
     await pool.query(`UPDATE social_flows SET runs = runs + 1 WHERE id = $1`, [flow.id]);
@@ -266,12 +290,20 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, isF
   /** Mensagem no direct (aviso em tempo real). */
   async function handleDm(payload) {
     if (payload?.platform !== 'instagram' || !payload.sender?.id) return false;
+    // mensagem da própria conta (eco) nunca dispara a automação: evita a conta responder a si mesma em loop
+    if (payload.message?.is_echo) return false;
     const cp = await clientByProfile(payload.profile_username);
     if (!cp) return false;
+    if (cp.username && payload.sender.username && norm(payload.sender.username) === norm(cp.username)) return false;
     await ensureSchema();
+    const mid = payload.message?.mid || payload.message?.id || null;
+    if (mid) {
+      const { rows: [dup] } = await pool.query(`SELECT 1 FROM social_dm_messages WHERE meta->>'mid' = $1 LIMIT 1`, [String(mid)]);
+      if (dup) return true;
+    }
     let contact = await upsertContact(cp.client_id, 'instagram', payload.sender.id, payload.sender.username);
     const text = payload.message?.text || '';
-    await log(contact.id, 'in', text || '(anexo)', { quick_reply_payload: payload.message?.quick_reply_payload || null, attachments: payload.message?.attachments?.length || 0 });
+    await log(contact.id, 'in', text || '(anexo)', { mid, quick_reply_payload: payload.message?.quick_reply_payload || null, attachments: payload.message?.attachments?.length || 0 });
     await pool.query(`UPDATE social_contacts SET last_in_at = now(), last_message = $2, unread = unread + 1 WHERE id = $1`, [contact.id, (text || '(anexo)').slice(0, 200)]);
     contact = { ...contact, last_in_at: new Date() };
     if (contact.paused_until && new Date(contact.paused_until) > new Date()) return true; // a equipe assumiu
@@ -318,6 +350,16 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, isF
       const { rows: [flow] } = await pool.query(`SELECT * FROM social_flows WHERE id = $1`, [contact.flow_id]);
       const step = flow?.steps?.find((s) => s.id === contact.step_id);
       if (!value) {
+        // pede de novo no máximo 2 vezes; depois para de perguntar (insistir vira spam)
+        const { rows: tries } = await pool.query(
+          `SELECT count(*)::int AS n FROM social_dm_messages WHERE contact_id = $1 AND direction = 'out' AND text = $2 AND created_at > now() - interval '1 hour'`,
+          [contact.id, FIELD_RETRY[contact.awaiting]]
+        );
+        const n = tries[0]?.n ?? 0;
+        if (n >= 2 || !canSend(payload.profile_username)) {
+          await pool.query(`UPDATE social_contacts SET awaiting = NULL WHERE id = $1`, [contact.id]);
+          return true;
+        }
         await uploadPost.call('POST', '/uploadposts/dms/send', { json: { platform: 'instagram', user: payload.profile_username, recipient_id: contact.ext_id, message: FIELD_RETRY[contact.awaiting] } });
         await log(contact.id, 'out', FIELD_RETRY[contact.awaiting], null, 'Automação');
         return true;
@@ -405,7 +447,8 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, isF
     if (!c) throw Object.assign(new Error('Contato não encontrado'), { status: 404 });
     const text = clean(message, 1000);
     if (!text) throw Object.assign(new Error('Escreva a mensagem'), { status: 400 });
-    if (c.last_in_at && Date.now() - new Date(c.last_in_at).getTime() > 24 * 3600_000) {
+    // sem mensagem da pessoa no direct (só comentou), o Instagram não deixa mandar: a resposta privada já foi a única
+    if (!c.last_in_at || Date.now() - new Date(c.last_in_at).getTime() > 24 * 3600_000) {
       throw Object.assign(new Error('O Instagram só deixa responder até 24 h depois da última mensagem da pessoa.'), { status: 409 });
     }
     const btns = (buttons || []).map((b) => ({ title: clean(b?.title, 20), url: clean(b?.url, 500) })).filter((b) => b.title && /^https?:\/\//.test(b.url)).slice(0, 3);

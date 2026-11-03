@@ -41,7 +41,7 @@ function fakeDb(flow: Record<string, unknown>) {
   const pool = {
     query: async (sql: string, p: unknown[] = []) => {
       if (/CREATE TABLE/.test(sql)) return { rows: [] };
-      if (/FROM client_upload_post WHERE username/.test(sql)) return { rows: [{ client_id: 'c1', username: 'loja' }] };
+      if (/FROM client_upload_post (u )?WHERE (u\.)?username/.test(sql)) return { rows: [{ client_id: 'c1', username: 'loja' }] };
       if (/INSERT INTO social_contacts/.test(sql)) {
         const key = String(p[2]);
         contacts[key] = contacts[key] || { id: `k-${key}`, client_id: 'c1', platform: 'instagram', ext_id: key, username: p[3], tags: [], fields: {} };
@@ -71,7 +71,7 @@ describe('Pulse Direct · motor', () => {
     expect(name).toBe('Captura');
     expect(sent[0]).toMatchObject({ path: '/uploadposts/comments/reply', comment_id: 'cm1' });
     expect(String(sent[0].message)).toContain('Responda: Sim · Agora não');
-    expect(sent[1]).toMatchObject({ path: '/uploadposts/comments/public-reply', message: 'Te mandei no direct!' });
+    expect(sent[1]).toMatchObject({ path: '/uploadposts/comments/public-reply', message: '@ana Te mandei no direct!' });
   });
 
   it('botão de resposta → pergunta → telefone inválido pede de novo → válido guarda e avisa a equipe', async () => {

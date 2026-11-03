@@ -12,8 +12,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
-import AutomationsPanel from '@/components/social/AutomationsPanel';
-import InboxPanel from '@/components/social/InboxPanel';
 
 interface HubComment {
   id: string; client_id: string; client_name: string | null; platform: string; post_permalink: string | null; post_caption: string | null;
@@ -51,8 +49,7 @@ function ReplyBox({ draft, onSend, busy }: { draft: string | null; onSend: (text
 }
 
 export default function SocialHub() {
-  const [tab, setTab] = useState<'escalado' | 'rascunho' | 'todos' | 'google' | 'automacoes' | 'direct' | 'clientes'>('escalado');
-  const [igUser, setIgUser] = useState<string | null>(null);
+  const [tab, setTab] = useState<'escalado' | 'rascunho' | 'todos' | 'google' | 'clientes'>('escalado');
   const [clientId, setClientId] = useState<string>('todos');
   const [clients, setClients] = useState<HubClient[]>([]);
   const [comments, setComments] = useState<HubComment[]>([]);
@@ -82,12 +79,6 @@ export default function SocialHub() {
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [tab, clientId]);
-  // @ do Instagram do cliente (para separar as mensagens dele no direct)
-  useEffect(() => {
-    if (!cid) { setIgUser(null); return; }
-    api<{ accounts: { platform: string; username: string | null }[] }>(`upload-post/clients/${cid}`, { method: 'GET' })
-      .then((d) => setIgUser(d.accounts.find((a) => a.platform === 'instagram')?.username || null)).catch(() => setIgUser(null));
-  }, [cid]);
   useEffect(() => {
     if (!cid) { setSettings(null); return; }
     api<{ isis_mode: string; notes: string }>(`social-hub/settings/${cid}`, { method: 'GET' }).then(setSettings).catch(() => setSettings(null));
@@ -140,16 +131,10 @@ export default function SocialHub() {
         {tabBtn('rascunho', 'Rascunhos da Ísis', totals.ras)}
         {tabBtn('todos', 'Todos')}
         {tabBtn('google', 'Google', reviews.filter((r) => r.status !== 'respondido').length)}
-        {tabBtn('automacoes', '⚡ Automações')}
-        {tabBtn('direct', 'Direct')}
         {tabBtn('clientes', 'Ísis por cliente')}
       </div>
 
-      {tab === 'automacoes' ? (
-        <AutomationsPanel clientId={cid} />
-      ) : tab === 'direct' ? (
-        <InboxPanel clientId={cid} accountUsername={igUser} />
-      ) : loading ? (
+      {loading ? (
         <div className="flex justify-center py-16"><Loader2 className="animate-spin" /></div>
       ) : tab === 'clientes' ? (
         <div className="space-y-3">

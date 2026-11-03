@@ -3,7 +3,8 @@
 // que eu selecionei". O link é a página de conexão da Upload-Post (lib/uploadPost.mjs), só com as redes marcadas.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { CheckCircle2, Copy, Facebook, Instagram, Link2, Linkedin, Loader2, MapPin, Music2, RefreshCw, Youtube } from 'lucide-react';
+import { CheckCircle2, Copy, ExternalLink, Facebook, Instagram, Link2, Linkedin, Loader2, MapPin, MessageCircle, Music2, RefreshCw, Send, Youtube } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -23,13 +24,18 @@ interface Info {
   networks: string[];
   accounts: { platform: string; account_name: string; username: string | null; status: string }[];
   configured: boolean;
+  whatsapp?: string | null;
+  responsible?: string | null;
+  name?: string | null;
 }
 
 export default function ClientSocialNetworks({ clientId, whatsapp }: { clientId: string; whatsapp?: string }) {
   const [info, setInfo] = useState<Info | null>(null);
   const [chosen, setChosen] = useState<string[]>([]);
-  const [busy, setBusy] = useState<'link' | 'sync' | null>(null);
+  const [busy, setBusy] = useState<'link' | 'sync' | 'send' | null>(null);
   const [link, setLink] = useState('');
+  const [message, setMessage] = useState('');
+  const [phone, setPhone] = useState('');
 
   const load = async () => {
     const { data, error } = await invokeVpsFunction(`upload-post/clients/${clientId}`, { method: 'GET' });
@@ -48,7 +54,11 @@ export default function ClientSocialNetworks({ clientId, whatsapp }: { clientId:
       const { data, error } = await invokeVpsFunction(`upload-post/clients/${clientId}/connect`, { body: { networks: chosen } });
       if (error || data?.error || !data?.url) throw new Error(data?.error || error?.message || 'Não deu para gerar o link.');
       setLink(data.url);
-      try { await navigator.clipboard.writeText(data.url); toast.success('Link gerado e copiado. Vale por 48 horas.'); } catch { toast.success('Link gerado. Vale por 48 horas.'); }
+      const first = String(info?.responsible || '').trim().split(/\s+/)[0];
+      const labels = chosen.map((c) => NETWORKS.find((n) => n.id === c)?.label).filter(Boolean).join(', ');
+      setMessage(`Olá${first ? `, ${first}` : ''}! 😊\n\nPara a Pulse publicar os seus conteúdos automaticamente, toque no link e conecte as suas redes (${labels}). Leva menos de um minuto e é seguro: a gente só publica o que você aprovar.\n\n${data.url}`);
+      setPhone(info?.whatsapp || whatsapp || '');
+      toast.success('Link pronto. Vale por 7 dias.');
       load();
     } catch (err) {
       toast.error((err as Error).message);
@@ -73,9 +83,24 @@ export default function ClientSocialNetworks({ clientId, whatsapp }: { clientId:
 
   if (!info) return null;
   const connected = (id: string) => info.accounts.find((a) => a.platform === id);
-  const message = link
-    ? `Olá! 😊 Para a Pulse publicar os seus conteúdos automaticamente, entre neste link e faça login nas suas redes (${chosen.map((c) => NETWORKS.find((n) => n.id === c)?.label).join(', ')}). É rápido e seguro: a gente só publica o que você aprovar.\n\n${link}`
-    : '';
+  const digits = phone.replace(/\D/g, '');
+  const waDigits = digits.length === 10 || digits.length === 11 ? `55${digits}` : digits;
+  const copy = async (text: string, ok: string) => {
+    try { await navigator.clipboard.writeText(text); toast.success(ok); } catch { toast.error('Não deu para copiar: selecione e copie à mão.'); }
+  };
+  /** Manda pelo WhatsApp da Pulse (o sistema envia a mensagem ao número do cliente). */
+  const sendByPulse = async () => {
+    setBusy('send');
+    try {
+      const { data, error } = await invokeVpsFunction(`upload-post/clients/${clientId}/connect/send`, { body: { to: digits, message } });
+      if (error || data?.error) throw new Error(data?.error || error?.message || 'Não deu para enviar.');
+      toast.success(`Enviado para o WhatsApp do cliente (${data?.to || ''}).`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
     <div className="p-4 rounded-xl border space-y-3">
@@ -88,7 +113,7 @@ export default function ClientSocialNetworks({ clientId, whatsapp }: { clientId:
           {busy === 'sync' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
         </Button>
       </div>
-      {!info.configured && <p className="text-[11px] text-destructive">A chave da Upload-Post ainda não foi colada (Conexões Sociais).</p>}
+      {!info.configured && <p className="text-[11px] text-destructive">A chave da integração de redes ainda não foi colada (Conexões Sociais).</p>}
       <div className="flex flex-wrap gap-1.5">
         {NETWORKS.map(({ id, label, Icon }) => {
           const on = chosen.includes(id);
@@ -112,21 +137,30 @@ export default function ClientSocialNetworks({ clientId, whatsapp }: { clientId:
         {busy === 'link' ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />} Gerar link para o cliente
       </Button>
       {link && (
-        <div className="space-y-2">
+        <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
           <div className="flex gap-2">
-            <Input readOnly value={link} onFocus={(e) => e.currentTarget.select()} className="text-xs" />
-            <Button type="button" size="sm" variant="outline" className="gap-1 shrink-0" onClick={async () => {
-              try { await navigator.clipboard.writeText(message); toast.success('Mensagem com o link copiada'); } catch { toast.error('Copie o link acima.'); }
-            }}>
-              <Copy size={13} /> Copiar mensagem
-            </Button>
+            <Input readOnly value={link} onFocus={(e) => e.currentTarget.select()} className="h-9 text-xs" aria-label="Link de conexão" />
+            <Button type="button" size="sm" variant="outline" className="h-9 shrink-0 gap-1" onClick={() => copy(link, 'Link copiado')}><Copy size={13} /> Copiar link</Button>
           </div>
-          {whatsapp && (
-            <a className="text-xs text-primary underline" target="_blank" rel="noreferrer"
-              href={`https://wa.me/${whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`}>
-              Abrir no WhatsApp do cliente
-            </a>
-          )}
+          <div className="space-y-1">
+            <p className="text-xs font-medium">Mensagem para o cliente</p>
+            <Textarea rows={5} value={message} onChange={(e) => setMessage(e.target.value)} className="text-sm" />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input className="h-9 w-48" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="WhatsApp do cliente" aria-label="WhatsApp do cliente" />
+            <Button type="button" size="sm" className="h-9 gap-1.5 bg-[#25D366] text-white hover:bg-[#1ebe5b]" disabled={busy === 'send' || digits.length < 10 || !message.includes(link)} onClick={sendByPulse}>
+              {busy === 'send' ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Enviar pelo WhatsApp da Pulse
+            </Button>
+            {digits.length >= 10 ? (
+              <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5" asChild>
+                <a href={`https://wa.me/${waDigits}?text=${encodeURIComponent(message)}`} target="_blank" rel="noreferrer"><MessageCircle size={14} className="text-[#25D366]" /> Abrir no meu WhatsApp <ExternalLink size={11} /></a>
+              </Button>
+            ) : (
+              <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5" disabled><MessageCircle size={14} /> Abrir no meu WhatsApp</Button>
+            )}
+            <Button type="button" size="sm" variant="ghost" className="h-9 gap-1" onClick={() => copy(message, 'Mensagem com o link copiada')}><Copy size={13} /> Copiar mensagem</Button>
+          </div>
+          {digits.length < 10 && <p className="text-[11px] text-muted-foreground">Coloque o WhatsApp do cliente com DDD para enviar.</p>}
         </div>
       )}
     </div>

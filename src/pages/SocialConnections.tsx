@@ -526,7 +526,7 @@ export default function SocialConnections() {
           <DialogHeader>
             <DialogTitle>Conectar as redes · {upLink?.client.name}</DialogTitle>
             <DialogDescription>
-              Abra o link e entre em cada rede do cliente, ou mande o link para ele fazer sozinho. Vale por 48 horas.
+              Abra o link e conecte cada rede do cliente, ou mande o link para ele fazer sozinho. A página é da Pulse e vale por 7 dias.
               Ao fechar esta janela, as contas conectadas aparecem no cartão do cliente.
             </DialogDescription>
           </DialogHeader>

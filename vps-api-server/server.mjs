@@ -20465,7 +20465,11 @@ pulsePlus.registerRoutes(app);
 
 // ─── Agentes de edição (chaves próprias, fila, entrega) ─────
 // ─── Upload-Post: postagem automática pelas redes dos clientes (lib/uploadPost.mjs, 02/11/2026) ──
-registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager: verifySocialOrAgent, scope: { guard: (req, id) => socialScope.guard(req, id) } });
+registerUploadPostRoutes(app, {
+  uploadPost, verifyAdmin, verifySocialManager: verifySocialOrAgent, scope: { guard: (req, id) => socialScope.guard(req, id) },
+  // link de conexão das redes no WhatsApp do cliente, pelo número da Pulse (botão no cadastro do cliente)
+  sendWhatsApp: (to, body, clientId) => enqueueWhatsApp(pool, { to, body, clientId, purpose: 'aprovacao', triggerType: 'conectar_redes' }),
+});
 // central social (comentários e avaliações do Google com a Ísis; lib/socialHub.mjs, 02/11/2026)
 const socialHub = createSocialHub({
   pool, uploadPost, resolveAiConfig, resolveAiModel, notifyTeam: notifySocialTeam,

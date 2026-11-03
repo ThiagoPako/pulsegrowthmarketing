@@ -10336,12 +10336,12 @@ app.post('/api/social-posts', async (req, res) => {
       await pool.query(`UPDATE scheduled_posts SET status='cancelado', updated_at=now() WHERE delivery_id=$1 AND status IN ('agendado','erro')`, [delivery_id]);
     }
     const { rows } = await pool.query(
-      `INSERT INTO scheduled_posts (client_id, delivery_id, content_task_id, platform, publish_type, media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      `INSERT INTO scheduled_posts (client_id, delivery_id, content_task_id, platform, publish_type, media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text, first_comment, collaborators)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
       [
         post.client_id, delivery_id || null, content_task_id || null, post.platform, post.publish_type,
         post.urls[0], post.items.length ? JSON.stringify(post.items) : null, post.caption, post.when.toISOString(), user?.id || null,
-        post.story_link, post.story_link_text,
+        post.story_link, post.story_link_text, post.first_comment || null, post.collaborators || null,
       ]
     );
     res.json({ success: true, post: rows[0] });

@@ -52,6 +52,8 @@ export default function PostStudio() {
   const [publishType, setPublishType] = useState<SocialPublishType>('carousel');
   const [items, setItems] = useState<PostMediaItem[]>([emptyItem(), emptyItem()]);
   const [caption, setCaption] = useState('');
+  const [firstComment, setFirstComment] = useState('');
+  const [collab, setCollab] = useState('');
   const [storyLink, setStoryLink] = useState('');
   const [storyLinkText, setStoryLinkText] = useState('Saiba mais');
   const [scheduledAt, setScheduledAt] = useState('');
@@ -124,6 +126,8 @@ export default function PostStudio() {
     if (clientId) {
       setItems([emptyItem(), emptyItem()]);
       setCaption('');
+      setFirstComment('');
+      setCollab('');
       setStoryLink('');
     }
     lastPostRef.current = null;
@@ -186,6 +190,8 @@ export default function PostStudio() {
   const reset = () => {
     setItems([emptyItem(), emptyItem()]);
     setCaption('');
+    setFirstComment('');
+    setCollab('');
     setStoryLink('');
     setScheduledAt('');
   };
@@ -209,6 +215,7 @@ export default function PostStudio() {
       publish_type: publishType,
       media_items: filledItems.map(i => ({ url: i.url.trim(), label: i.label?.trim() || undefined })),
       caption: publishType === 'stories' ? '' : caption,
+      ...(publishType === 'stories' ? {} : { first_comment: firstComment.trim(), collaborators: collab.trim() }),
       story_link: publishType === 'stories' ? storyLink.trim() || null : null,
       story_link_text: publishType === 'stories' ? storyLinkText.trim() || null : null,
     };
@@ -476,6 +483,18 @@ export default function PostStudio() {
                       <span className={caption.length > 2200 ? 'text-[11px] text-destructive' : 'text-[11px] text-muted-foreground'}>{caption.length}/2200</span>
                     </div>
                     <Textarea value={caption} onChange={e => setCaption(e.target.value)} rows={5} placeholder="Legenda com hashtags…" />
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <Label className="text-xs">Primeiro comentário (opcional)</Label>
+                        <Input value={firstComment} onChange={e => setFirstComment(e.target.value)} placeholder="Link do WhatsApp, hashtags…" />
+                      </div>
+                      {platform !== 'facebook' && (
+                        <div>
+                          <Label className="text-xs">Collab no Instagram (até 3 perfis)</Label>
+                          <Input value={collab} onChange={e => setCollab(e.target.value)} placeholder="@parceiro, @fornecedor" />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 

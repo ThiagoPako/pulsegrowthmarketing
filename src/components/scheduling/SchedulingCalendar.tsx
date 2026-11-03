@@ -4,8 +4,8 @@ import { cn } from '@/lib/utils';
 import {
   brtParts, canDrag, formatDayLabel, groupByDate, isWeekendKey, monthGridKeys, sameMonth, weekKeys, weekdayIndex, type SchedulingItem,
 } from '@/lib/postingSchedule';
-import type { BestTimeSlot } from '@/services/schedulingApi';
-import BestTimeBadge, { PulseMark, slotTime } from './BestTimeBadge';
+import type { BestTimeSlot, CalendarEvents } from '@/services/schedulingApi';
+import BestTimeBadge, { DayMark, PulseMark, slotTime } from './BestTimeBadge';
 import SchedulingItemChip from './SchedulingItemChip';
 import { TYPE_STYLES } from './schedulingStyles';
 
@@ -26,6 +26,8 @@ interface Props {
   /** melhor dia e horário do perfil (só quando a rede tem dado) e o agendar dali */
   bestSlots?: BestTimeSlot[];
   onBestPick?: (day: string, time: string) => void;
+  /** feriados e aniversário das cidades das unidades */
+  events?: CalendarEvents;
 }
 
 type ChipVariant = 'compact' | 'card' | 'tile';
@@ -82,7 +84,7 @@ function DayNumber({ day, today }: { day: string; today: string }) {
 }
 
 export default function SchedulingCalendar({
-  view, anchor, today, items, compact, selectedDay, onSelectDay, onItemClick, onShowWeek, bestSlots = [], onBestPick,
+  view, anchor, today, items, compact, selectedDay, onSelectDay, onItemClick, onShowWeek, bestSlots = [], onBestPick, events,
 }: Props) {
   const byDate = useMemo(() => groupByDate(items), [items]);
   // melhor horário do dia: só de hoje em diante (hoje, só se a hora ainda não passou)
@@ -93,6 +95,22 @@ export default function SchedulingCalendar({
     if (!slot || (day === today && slot.hour <= nowHour)) return null;
     return slot;
   };
+  const marksFor = (day: string) => {
+    const h = (events?.holidays || []).filter((x) => x.date === day);
+    const a = (events?.anniversaries || []).filter((x) => x.date === day);
+    if (!h.length && !a.length) return null;
+    return (
+      <div className="flex flex-col gap-0.5">
+        {h.map((x) => <DayMark key={x.name} tone={x.kind} title={x.kind === 'facultativo' ? 'Ponto facultativo' : 'Feriado nacional'}>{x.name}</DayMark>)}
+        {a.map((x) => (
+          <DayMark key={x.city} tone="cidade" title={`Aniversário de ${x.city}${x.years ? ` (${x.years} anos)` : ''} · unidade: ${x.units.join(', ')}${x.art ? ' · arte já pedida ao Design' : ''}`}>
+            🎂 {x.city}{x.years ? ` ${x.years} anos` : ''}{x.art ? ' · arte ✓' : ''}
+          </DayMark>
+        ))}
+      </div>
+    );
+  };
+  const hasMark = (day: string) => (events?.holidays || []).some((x) => x.date === day) || (events?.anniversaries || []).some((x) => x.date === day);
   const byKey = useMemo(() => new Map(items.map((i) => [i.key, i])), [items]);
 
   if (view === 'week') {
@@ -130,6 +148,7 @@ export default function SchedulingCalendar({
                       snapshot.isDraggingOver && 'rounded-b-xl bg-primary/10',
                     )}
                   >
+                    {marksFor(day)}
                     {(() => { const slot = bestFor(day); return slot && <BestTimeBadge slot={slot} onSchedule={() => onBestPick?.(day, slotTime(slot))} />; })()}
                     {list.map((item, index) => (
                       <DraggableItem key={item.key} item={item} index={index} variant={compact ? 'card' : 'tile'} onItemClick={onItemClick} />
@@ -180,6 +199,7 @@ export default function SchedulingCalendar({
                   >
                     <DayNumber day={day} today={today} />
                     {bestFor(day) && <span className="absolute right-0.5 top-0.5"><PulseMark size={14} /></span>}
+                    {hasMark(day) && <span className="absolute left-1 top-1 h-1.5 w-1.5 rounded-full bg-[#8134AF]" />}
                     <div className="flex flex-wrap justify-center gap-0.5">
                       {list.slice(0, 4).map((item) => (
                         <span
@@ -198,6 +218,7 @@ export default function SchedulingCalendar({
         {selectedDay && (
           <div className="space-y-1.5 rounded-xl border border-border bg-card p-2">
             <div className="px-1 text-xs font-semibold capitalize text-muted-foreground">{formatDayLabel(selectedDay)}</div>
+            {marksFor(selectedDay)}
             {(() => { const slot = bestFor(selectedDay); return slot && <BestTimeBadge slot={slot} onSchedule={() => onBestPick?.(selectedDay, slotTime(slot))} />; })()}
             {dayItems.length === 0 ? (
               <div className="px-1 py-3 text-center text-xs text-muted-foreground">—</div>
@@ -245,6 +266,7 @@ export default function SchedulingCalendar({
                     <DayNumber day={day} today={today} />
                     {list.length > 0 && <span className="text-[10px] tabular-nums text-muted-foreground">{list.length}</span>}
                   </div>
+                  {!outside && marksFor(day)}
                   {!outside && (() => { const slot = bestFor(day); return slot && <BestTimeBadge slot={slot} compact={list.length >= MONTH_VISIBLE} onSchedule={() => onBestPick?.(day, slotTime(slot))} />; })()}
                   {list.slice(0, MONTH_VISIBLE).map((item, index) => (
                     <DraggableItem key={item.key} item={item} index={index} variant="compact" onItemClick={onItemClick} />

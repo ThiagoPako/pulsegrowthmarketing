@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, Zap, CalendarCheck2, CalendarClock, Check, Copy, Facebook, Instagram, Linkedin, Loader2, Music2, Repeat2, Sparkles, Trash2, Youtube } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -70,8 +71,10 @@ function Segmented<T extends string>({ value, options, onChange, disabled, label
   disabled?: boolean;
   label?: string;
 }) {
+  // a marcação desliza até a opção tocada (usuário, 03/11/2026: "quero motion, bem feito e sofisticado")
+  const group = useId();
   return (
-    <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={label}>
+    <div className="inline-flex max-w-full flex-wrap gap-0.5 rounded-xl border border-border/70 bg-muted/40 p-1" role="radiogroup" aria-label={label}>
       {options.map((o) => {
         const Icon = o.icon;
         const active = value === o.value;
@@ -84,12 +87,18 @@ function Segmented<T extends string>({ value, options, onChange, disabled, label
             disabled={disabled || o.disabled}
             onClick={() => onChange(o.value)}
             className={cn(
-              'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50',
-              active ? 'border-primary bg-primary/10 text-primary shadow-sm' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
+              'relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-40',
+              active ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            {Icon && <Icon size={13} aria-hidden="true" />}
-            {o.label}
+            {active && (
+              <motion.span layoutId={`seg-${group}`} transition={{ type: 'spring', stiffness: 520, damping: 38 }}
+                className="absolute inset-0 rounded-lg bg-primary shadow-[0_4px_14px_-4px_hsl(var(--primary)/0.6),inset_0_1px_0_hsl(0_0%_100%/0.25)]" />
+            )}
+            <span className="relative flex items-center gap-1.5">
+              {Icon && <Icon size={13} aria-hidden="true" />}
+              {o.label}
+            </span>
           </button>
         );
       })}
@@ -802,8 +811,13 @@ export default function ScheduleDialog({
               <Button type="button" variant="ghost" size="sm" onClick={askCancel} disabled={saving} className="gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive">
                 <Trash2 size={14} /> {isSeriesItem ? (following ? 'Cancelar as próximas' : 'Cancelar data') : 'Cancelar agendamento'}
               </Button>
+            ) : !readOnly && !repeatOn && !isSeriesItem && !hasAccounts ? (
+              <p className="flex max-w-[16rem] items-center gap-1.5 text-[11px] leading-snug text-muted-foreground">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                Para postar agora, conecte as redes do cliente em Conexões Sociais.
+              </p>
             ) : <span />}
-            <div className="ml-auto flex gap-2">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
               {canMarkPosted && (
                 <Button type="button" size="sm" onClick={askPosted} disabled={saving} className="hidden gap-1.5 bg-emerald-600 text-white hover:bg-emerald-600/90 sm:inline-flex">
                   <CalendarCheck2 size={14} /> Marcar como postado
@@ -812,16 +826,14 @@ export default function ScheduleDialog({
               <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={saving}>Fechar</Button>
               {/* sempre à vista (usuário, 03/11/2026: "o botão de publicar agora não apareceu"); sem rede conectada fica travado e diz por quê */}
               {!readOnly && !repeatOn && !isSeriesItem && (
-                <Button type="button" variant="secondary" size="sm" onClick={askPostNow} disabled={saving || !hasAccounts || (mode === 'auto' && mediaBlocked)} className="gap-1.5"
+                <Button type="button" variant="outline" size="sm" onClick={askPostNow} disabled={saving || !hasAccounts || (mode === 'auto' && mediaBlocked)} className="gap-1.5 border-primary/40 text-primary transition hover:bg-primary/10 hover:text-primary active:scale-[0.97]"
                   title={hasAccounts ? 'Publica nas redes marcadas em menos de 1 minuto' : 'Conecte o Instagram ou o Facebook do cliente em Conexões Sociais para postar agora'}>
                   <Zap size={14} /> Postar agora
                 </Button>
               )}
-              {!readOnly && !repeatOn && !isSeriesItem && !hasAccounts && (
-                <p className="w-full text-[11px] text-muted-foreground sm:order-last">Para postar agora, conecte as redes do cliente em Conexões Sociais.</p>
-              )}
               {!readOnly && (
-                <Button type="button" size="sm" onClick={() => save(false)} disabled={saving || !date || !time || (postsAlone && mediaBlocked)} className="gap-1.5">
+                <Button type="button" size="sm" onClick={() => save(false)} disabled={saving || !date || !time || (postsAlone && mediaBlocked)}
+                  className="gap-1.5 bg-gradient-to-b from-primary to-primary/85 px-4 shadow-[0_8px_20px_-8px_hsl(var(--primary)/0.7),inset_0_1px_0_hsl(0_0%_100%/0.25)] transition hover:brightness-110 active:scale-[0.97]">
                   {saving ? <Loader2 size={14} className="animate-spin" /> : repeatOn ? <Repeat2 size={14} /> : <CalendarClock size={14} />}
                   {saveLabel}
                 </Button>

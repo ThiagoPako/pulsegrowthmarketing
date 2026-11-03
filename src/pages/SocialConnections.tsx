@@ -46,7 +46,10 @@ function clientNetworks(c: { social_networks?: string[] | null; accounts: Connec
   return NETWORKS.map((n) => n.id).filter((id) => plan.includes(id) || c.accounts.some((a) => a.platform === id));
 }
 
-interface UploadPostStatus { configured: boolean; key_end?: string; plan?: string | null; limit?: number | null; used?: number; error?: string }
+interface UploadPostStatus {
+  configured: boolean; key_end?: string; plan?: string | null; limit?: number | null; used?: number; error?: string;
+  breakdown?: { clients: number; clients_connected: number; team: number; other: number };
+}
 
 export default function SocialConnections() {
   const { activeCity } = useCity();
@@ -254,11 +257,45 @@ export default function SocialConnections() {
                 <p className="text-sm font-semibold">Upload-Post · postagem automática</p>
                 <p className="text-xs text-muted-foreground">
                   {up.configured
-                    ? `Chave ativa (final ${up.key_end}).${up.used != null ? ` Perfis usados: ${up.used}${up.limit ? ` de ${up.limit}` : ''}.` : ''}${up.plan ? ` Plano: ${up.plan}.` : ''}${up.error ? ` Aviso: ${up.error}` : ''}`
+                    ? `Chave ativa (final ${up.key_end}).${up.error ? ` Aviso: ${up.error}` : ''}`
                     : 'Cole a chave da API (Upload-Post → API Keys) para os clientes conectarem Instagram, Facebook, TikTok, LinkedIn e YouTube.'}
                 </p>
               </div>
             </div>
+            {/* o plano contratado e quanto dele já está em uso (03/11/2026) */}
+            {up.configured && up.used != null && (() => {
+              const limit = up.limit || 0;
+              const pct = limit ? Math.min(100, Math.round((up.used / limit) * 100)) : 0;
+              const b = up.breakdown;
+              const free = limit ? Math.max(0, limit - up.used) : null;
+              return (
+                <div className="rounded-xl border border-border bg-muted/30 p-3">
+                  <div className="flex flex-wrap items-end justify-between gap-2">
+                    <div>
+                      <p className="text-[11px] font-medium text-muted-foreground">Plano contratado</p>
+                      <p className="text-lg font-semibold capitalize leading-tight">{up.plan || '—'}</p>
+                    </div>
+                    <p className="text-right">
+                      <span className="text-2xl font-semibold tabular-nums">{up.used}</span>
+                      {limit > 0 && <span className="text-sm text-muted-foreground"> de {limit} perfis</span>}
+                      {free != null && <span className={`block text-[11px] ${free <= 3 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>{free} livre{free === 1 ? '' : 's'}</span>}
+                    </p>
+                  </div>
+                  {limit > 0 && (
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={up.used} aria-valuemin={0} aria-valuemax={limit}>
+                      <div className={`h-full rounded-full transition-all ${pct >= 90 ? 'bg-amber-500' : 'bg-primary'}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  )}
+                  {b && (
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-lg bg-background/70 p-2"><p className="text-base font-semibold tabular-nums">{b.clients}</p><p className="text-[10px] text-muted-foreground">clientes no plano</p></div>
+                      <div className="rounded-lg bg-background/70 p-2"><p className="text-base font-semibold tabular-nums">{b.clients_connected}</p><p className="text-[10px] text-muted-foreground">com rede conectada</p></div>
+                      <div className="rounded-lg bg-background/70 p-2"><p className="text-base font-semibold tabular-nums">{b.team + b.other}</p><p className="text-[10px] text-muted-foreground">da equipe e outros</p></div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             <div className="flex gap-2">
               <Input type="password" autoComplete="off" value={upKey} onChange={e => setUpKey(e.target.value)}
                 placeholder={up.configured ? 'Trocar a chave' : 'Chave da API da Upload-Post'} />

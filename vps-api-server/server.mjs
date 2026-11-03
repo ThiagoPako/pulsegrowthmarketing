@@ -59,6 +59,7 @@ import { createWebVideo, captureVideoUploads, isDerivedVariantName, originalName
 import { createInstagramVideo } from './lib/instagramVideo.mjs';
 import { createUploadPost, registerUploadPostRoutes } from './lib/uploadPost.mjs';
 import { createSocialHub, registerSocialHubRoutes } from './lib/socialHub.mjs';
+import { createAutomations, registerAutomationRoutes } from './lib/socialAutomations.mjs';
 import { buildProposalRevenueSchedule, stripRevenueMark } from './lib/proposalRevenues.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
@@ -20454,6 +20455,8 @@ pulsePlus.registerRoutes(app);
 registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifySocialManager });
 // central social (comentários e avaliações do Google com a Ísis; lib/socialHub.mjs, 02/11/2026)
 const socialHub = createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiModel, notifyTeam: notifySocialTeam });
+// automações estilo ManyChat (palavra-chave → direct) e caixa de direct (lib/socialAutomations.mjs, 02/11/2026)
+registerAutomationRoutes(app, { automations: createAutomations({ pool, uploadPost }), verifySocialManager });
 registerSocialHubRoutes(app, { hub: socialHub, uploadPost, pool, verifySocialManager, verifyAdmin, publicApiUrl: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' });
 
 // ─── Aprovação sem login (/aprovar/<token>): página do vídeo com o jeito do Instagram, aprovar ou pedir ajuste ──

@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, Share2, Copy, Stethoscope, XCircle, Music2, Linkedin, Youtube, KeyRound, Link2 } from 'lucide-react';
+import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, Share2, Copy, Stethoscope, XCircle, Music2, Linkedin, Youtube, KeyRound, Link2, MapPin } from 'lucide-react';
 
 interface ClientConnection {
   id: string;
@@ -27,6 +27,7 @@ const EXTRA_PLATFORMS = [
   { id: 'tiktok', label: 'TikTok', Icon: Music2 },
   { id: 'linkedin', label: 'LinkedIn', Icon: Linkedin },
   { id: 'youtube', label: 'YouTube', Icon: Youtube },
+  { id: 'google_business', label: 'Google', Icon: MapPin },
 ] as const;
 
 interface UploadPostStatus { configured: boolean; key_end?: string; plan?: string | null; limit?: number | null; used?: number; error?: string }
@@ -291,6 +292,15 @@ export default function SocialConnections() {
                 {upSaving ? <Loader2 size={14} className="animate-spin" /> : 'Salvar'}
               </Button>
             </div>
+            {up.configured && (
+              <Button variant="outline" size="sm" className="gap-1" onClick={async () => {
+                const { data, error } = await invokeVpsFunction('social-hub/webhook/register', { body: {} });
+                if (error || data?.error) toast.error(data?.error || error?.message || 'Não deu para ligar os avisos.');
+                else toast.success(data?.secret_saved ? 'Avisos em tempo real ligados (comentários, direct e contas).' : 'Avisos ligados, mas a Upload-Post não devolveu a chave de assinatura: confira no painel deles.');
+              }}>
+                <Link2 size={14} /> Ligar avisos em tempo real
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}

@@ -71,6 +71,7 @@ const navCategories: NavCategory[] = [
     color: 'blue',
     items: [
       { path: '/conexoes-sociais', label: 'Conexões Sociais', icon: Plug, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
+      { path: '/central-social', label: 'Central Social', icon: MessageCircle, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/estudio-postagem', label: 'Estúdio de Postagem', icon: Images, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
       { path: '/agendamentos', label: 'Agendamentos', icon: CalendarClock, roles: ['admin'], module: 'pulse_plus' },
       { path: '/desempenho-social', label: 'Desempenho Social', icon: TrendingUp, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },

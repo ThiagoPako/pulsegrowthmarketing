@@ -17,7 +17,7 @@ export interface PostMediaItem {
 export interface ConnectedSocialAccount {
   id: string;
   /** tiktok, linkedin e youtube só pela Upload-Post (02/11/2026) */
-  platform: 'instagram' | 'facebook' | 'tiktok' | 'linkedin' | 'youtube';
+  platform: 'instagram' | 'facebook' | 'tiktok' | 'linkedin' | 'youtube' | 'google_business';
   account_name: string;
   /** @usuário do perfil (ex: ag.pulse) */
   username?: string | null;

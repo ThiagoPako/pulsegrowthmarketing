@@ -105,6 +105,8 @@ export interface SchedulingItem {
   media_items: string[];
   caption: string;
   platform_label: string | null;
+  /** criativo aprovado (anúncio) usado no agendamento: ao agendar vira um card de postagem próprio (03/11/2026) */
+  creative?: boolean;
   /** designer da arte (filtro do Estúdio de Postagem) */
   author?: string | null;
   state: SchedulingState;

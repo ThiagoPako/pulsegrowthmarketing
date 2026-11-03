@@ -45,6 +45,7 @@ function Row({ item, onPick, dragging }: { item: SchedulingItem; onPick: (item: 
         <div className="line-clamp-2 text-xs font-semibold leading-snug text-foreground">{item.title}</div>
         <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
           <span className={cn('rounded px-1.5 py-px font-medium', type.soft, type.text)}>{type.label}</span>
+          {item.creative && <span className="rounded bg-purple-500/10 px-1.5 py-px font-medium text-purple-600 dark:text-purple-300">Criativo</span>}
           {approved && <span>Aprovado {approved}</span>}
           {item.author && <span>· {item.author}</span>}
         </div>
@@ -58,13 +59,13 @@ const ALL_TYPES: SchedulingType[] = ['reels', 'story', 'feed', 'carrossel', 'art
 /** Materiais aprovados do cliente que ainda não têm data de postagem. */
 export default function UnscheduledPanel({ items, onPick, draggable, className }: Props) {
   const [query, setQuery] = useState('');
-  const [type, setType] = useState<SchedulingType | 'all'>('all');
+  const [type, setType] = useState<SchedulingType | 'all' | 'criativo'>('all');
   // filtro por designer das artes (usuário, 03/11/2026)
   const [designer, setDesigner] = useState('');
   const designers = useMemo(() => [...new Set(items.map((i) => i.author).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [items]);
   const normalize = (v: string) => v.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const filtered = useMemo(() => items.filter((i) =>
-    (type === 'all' || i.type === type) && (!designer || i.author === designer) && (!query.trim() || normalize(i.title).includes(normalize(query.trim())))),
+    (type === 'all' || (type === 'criativo' ? !!i.creative : i.type === type && !i.creative)) && (!designer || i.author === designer) && (!query.trim() || normalize(i.title).includes(normalize(query.trim())))),
   [items, type, query, designer]);
   const byKey = useMemo(() => new Map(items.map((i) => [i.key, i])), [items]);
 
@@ -87,8 +88,9 @@ export default function UnscheduledPanel({ items, onPick, draggable, className }
         {/* todos os tipos sempre à vista, com quantos há de cada (usuário, 03/11/2026: "esses filtros precisam ter
             todos os tipos de conteúdo: carrossel, designers, story, feed, reels") */}
         <div className="flex flex-wrap gap-1">
-          {(['all', ...ALL_TYPES] as const).map((t) => {
-            const n = t === 'all' ? items.length : items.filter((i) => i.type === t).length;
+          {(['all', ...ALL_TYPES, 'criativo'] as const).map((t) => {
+            // criativos aprovados (anúncios) num filtro próprio (03/11/2026: "alguns criativos podemos usar para story")
+            const n = t === 'all' ? items.length : t === 'criativo' ? items.filter((i) => i.creative).length : items.filter((i) => i.type === t && !i.creative).length;
             return (
               <button
                 key={t}
@@ -101,8 +103,8 @@ export default function UnscheduledPanel({ items, onPick, draggable, className }
                   type === t ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground',
                 )}
               >
-                {t !== 'all' && <span className={cn('h-1.5 w-1.5 rounded-full', TYPE_STYLES[t].dot)} />}
-                {t === 'all' ? 'Todos' : TYPE_STYLES[t].label}
+                {t !== 'all' && <span className={cn('h-1.5 w-1.5 rounded-full', t === 'criativo' ? 'bg-purple-500' : TYPE_STYLES[t].dot)} />}
+                {t === 'all' ? 'Todos' : t === 'criativo' ? 'Criativos' : TYPE_STYLES[t].label}
                 <span className="tabular-nums opacity-70">{n}</span>
               </button>
             );

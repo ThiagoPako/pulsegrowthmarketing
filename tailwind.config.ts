@@ -55,6 +55,11 @@ export default {
           "100%": { transform: "scale(1.3)", opacity: "0" },
         },
         // pulso da Pulse no melhor horário do calendário (03/11/2026): bem leve
+        // brilho que passa no link do Drive conectado (cadastro do cliente, 03/11/2026)
+        "drive-shine": {
+          "0%": { transform: "translateX(0)" },
+          "60%, 100%": { transform: "translateX(450%)" },
+        },
         "pulse-beat": {
           "0%, 100%": { transform: "scale(1)", opacity: "0.8" },
           "50%": { transform: "scale(1.14)", opacity: "1" },
@@ -102,6 +107,7 @@ export default {
         "pulse-ring": "pulse-ring 1.5s ease-out infinite",
         "soft-pulse": "soft-pulse 3s ease-in-out infinite",
         "pulse-beat": "pulse-beat 2.6s ease-in-out infinite",
+        "drive-shine": "drive-shine 3.2s ease-in-out infinite",
         "soft-glow": "soft-glow 2.5s ease-in-out infinite",
         "kanban-in": "kanban-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both",
         "kanban-flash": "kanban-flash 1.4s ease-out",

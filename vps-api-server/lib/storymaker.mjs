@@ -25,8 +25,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const STORY_NETWORKS = ['instagram', 'facebook'];
-const MAX_POSTS = 300; // por evento
-const MIN_GAP_MS = 3000; // entre dois envios da mesma pessoa
+const MAX_POSTS = 150; // por evento
+const MIN_GAP_MS = 8000; // entre dois envios da mesma pessoa (rajada de stories é sinal de spam)
+const MAX_PER_HOUR = 30; // stories do storymaker por cliente em 1 hora (auditoria anti-bloqueio, 03/11/2026)
 const MAX_GUESTS = 30;
 
 export const tokenOk = (t) => /^[A-Za-z0-9_-]{20,40}$/.test(String(t || ''));
@@ -316,6 +317,11 @@ export function createStorymaker({ pool, prepareScheduledPost, ensureSocialPosts
     );
     if (stat.n >= MAX_POSTS) fail(429, `Este storymaker chegou ao limite de ${MAX_POSTS} stories.`);
     if (stat.at && Date.now() - new Date(stat.at).getTime() < MIN_GAP_MS) fail(429, 'Espere alguns segundos entre um story e outro.');
+    const { rows: [{ h }] } = await pool.query(
+      `SELECT count(*)::int AS h FROM storymaker_posts p JOIN storymaker_links l ON l.id = p.link_id
+        WHERE l.client_id = $1 AND p.created_at > now() - interval '1 hour'`, [l.client_id]
+    );
+    if (h >= MAX_PER_HOUR) fail(429, `Já saíram ${MAX_PER_HOUR} stories na última hora neste perfil. Espere um pouco: muitos stories seguidos fazem o Instagram travar a conta.`);
     const prepared = await prepareScheduledPost({
       client_id: l.client_id, publish_type: 'stories', platforms: l.networks, media_url: mediaUrl, caption: '',
       scheduled_at: new Date().toISOString(),

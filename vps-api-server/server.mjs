@@ -10324,6 +10324,17 @@ async function prepareScheduledPost(input = {}, { requireAccounts = true, apiPub
   if (!scheduled_at || Number.isNaN(when.getTime())) fail('scheduled_at inválido');
   // Data no passado publicaria na hora (o robô pega tudo que já venceu). Folga de 5 min para relógio atrasado.
   if (when.getTime() < Date.now() - 5 * 60_000) fail('O horário escolhido já passou. Escolha um horário futuro.');
+  // Teto do Instagram: até 100 publicações pela API em 24 h por conta (carrossel conta 1). Passar disso derruba as
+  // postagens e marca a conta; o sistema para em 90 (auditoria anti-bloqueio, 03/11/2026).
+  if (apiPublish && client_id) {
+    const { rows: [{ n }] } = await pool.query(
+      `SELECT count(*)::int AS n FROM scheduled_posts
+        WHERE client_id = $1 AND status IN ('agendado', 'publicando', 'publicado') AND coalesce(story_mode, 'auto') <> 'lembrete'
+          AND coalesce(published_at, scheduled_at) > $2::timestamptz - interval '24 hours' AND coalesce(published_at, scheduled_at) <= $2::timestamptz`,
+      [client_id, when.toISOString()]
+    ).catch(() => ({ rows: [{ n: 0 }] }));
+    if (n >= 90) fail('Este perfil já tem 90 publicações nas 24 h antes desse horário. O Instagram bloqueia acima de 100: escolha outro horário.');
+  }
   if (caption.length > 2200) fail('Legenda acima de 2200 caracteres (limite do Instagram)');
 
   // Story em modo lembrete (storySeries.mjs) não passa pela conta: a equipe posta pelo app.

@@ -16,6 +16,7 @@
 // ofensa, conflito de interesse, fora do assunto, dados pessoais), a Ísis sugere o pedido de remoção e pergunta ao
 // cliente; com o sim dele, a equipe faz a denúncia no Google (a API não denuncia) e marca como solicitada.
 
+import { sharedLimiter } from './socialSafety.mjs';
 import crypto from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { VOZ_DA_MARCA_COMENTARIO } from './brandVoice.mjs';
@@ -265,18 +266,54 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
   }
 
   /** A Ísis passa pelos comentários novos do cliente. */
+  // Anti-bloqueio (auditoria de 03/11/2026): uma passada por cliente de cada vez, cada comentário reservado antes (dois
+  // avisos juntos não respondem o mesmo comentário duas vezes), comentário da própria conta ignorado e, no automático,
+  // respostas espaçadas e com teto por hora (rajada de respostas é sinal de spam para o Instagram).
+  const running = new Set();
+  const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  async function ownUsername(clientId) {
+    const { rows: [a] } = await pool.query(
+      `SELECT username FROM social_accounts WHERE client_id = $1 AND platform = 'instagram' AND username IS NOT NULL LIMIT 1`, [clientId]
+    ).catch(() => ({ rows: [] }));
+    return String(a?.username || '').replace(/^@/, '').toLowerCase();
+  }
+
   async function processNew(clientId) {
+    if (running.has(clientId)) return 0;
+    running.add(clientId);
+    try { return await processNewOnce(clientId); } finally { running.delete(clientId); }
+  }
+
+  async function processNewOnce(clientId) {
     const settings = await settingsOf(clientId);
     if (settings.isis_mode === 'desligado') return 0;
     const client = await clientRow(clientId);
+    const own = await ownUsername(clientId);
+    const profile = (await profileOf(clientId)) || clientId;
+    // reserva que ficou de uma passada interrompida (o servidor reiniciou): volta para a fila
+    await pool.query(`UPDATE social_comments SET status = 'novo' WHERE client_id = $1 AND status = 'processando'`, [clientId]);
     const { rows } = await pool.query(
       `SELECT * FROM social_comments WHERE client_id = $1 AND status = 'novo' AND commented_at > now() - interval '7 days' ORDER BY commented_at LIMIT 30`, [clientId]
     );
     let n = 0;
     for (const c of rows) {
+      if (own && String(c.author_username || '').replace(/^@/, '').toLowerCase() === own) {
+        await pool.query(`UPDATE social_comments SET status = 'ignorado', isis_reason = 'Comentário da própria conta' WHERE id = $1 AND status = 'novo'`, [c.id]);
+        continue;
+      }
+      const { rowCount: mine } = await pool.query(`UPDATE social_comments SET status = 'processando' WHERE id = $1 AND status = 'novo'`, [c.id]);
+      if (!mine) continue;
       const d = await aiDecide({ client, settings, kind: 'comment', item: c }).catch((error) => { logger.warn?.('[central-social] IA:', error.message); return null; });
-      if (!d) continue;
+      if (!d) { await pool.query(`UPDATE social_comments SET status = 'novo' WHERE id = $1 AND status = 'processando'`, [c.id]); continue; }
       n += 1;
+      if (d.acao !== 'ignorar' && d.acao !== 'escalar' && settings.isis_mode === 'automatico' && !sharedLimiter.take('public_reply', profile)) {
+        // espera o espaço mínimo entre respostas; passou do teto da hora, fica para a próxima passada
+        await pause(21_000);
+        if (!sharedLimiter.take('public_reply', profile)) {
+          await pool.query(`UPDATE social_comments SET status = 'novo' WHERE id = $1 AND status = 'processando'`, [c.id]);
+          break;
+        }
+      }
       if (d.acao === 'ignorar') {
         await pool.query(`UPDATE social_comments SET status = 'ignorado', isis_reason = $2 WHERE id = $1`, [c.id, d.motivo]);
       } else if (d.acao === 'escalar') {

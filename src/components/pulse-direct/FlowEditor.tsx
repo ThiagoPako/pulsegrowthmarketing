@@ -162,6 +162,7 @@ export default function FlowEditor({ clientId, accountName, initial, onSaved, on
                 </div>
                 <Section title="Resposta no comentário" help="Aparece embaixo do comentário, para a pessoa saber que recebeu no direct. Opcional.">
                   <Input value={flow.public_reply || ''} onChange={(e) => setFlow({ ...flow, public_reply: e.target.value })} placeholder="Te mandei no direct! 💌" />
+                  <p className="text-[11px] text-muted-foreground">Escreva algumas versões separadas por | (ex.: Te mandei no direct! 💌 | Olha seu direct 😉). O sistema chama a pessoa pelo @ e varia a frase: resposta sempre igual o Instagram trata como spam.</p>
                 </Section>
               </>
             )}

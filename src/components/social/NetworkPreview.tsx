@@ -26,8 +26,11 @@ const NET_META: Record<string, { label: string; Icon: typeof Instagram; color: s
 const clampRatio = (r: number) => Math.min(1.91, Math.max(0.8, r));
 
 function Avatar({ src, name, size = 32, ring }: { src?: string | null; name: string; size?: number; ring?: boolean }) {
-  const inner = src
-    ? <img src={src} alt="" className="h-full w-full rounded-full bg-white object-cover" />
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [src]);
+  // logo de cliente: inteira, com respiro (contain), e a inicial se o link não abrir
+  const inner = src && !broken
+    ? <img src={src} alt="" onError={() => setBroken(true)} className="h-full w-full rounded-full bg-white object-contain p-[2px]" />
     : <span className="flex h-full w-full items-center justify-center rounded-full bg-neutral-300 text-[11px] font-bold text-neutral-700">{name.slice(0, 1).toUpperCase()}</span>;
   return (
     <span className={cn('shrink-0 rounded-full', ring && 'bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF] p-[2px]')} style={{ width: size, height: size }}>

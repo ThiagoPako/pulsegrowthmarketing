@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
+import ClientLogo from '@/components/ClientLogo';
 import { useCity, CITY_LABELS } from '@/contexts/CityContext';
 import FlowEditor from '@/components/pulse-direct/FlowEditor';
 import DirectInbox from '@/components/pulse-direct/DirectInbox';
@@ -22,7 +23,7 @@ import AutomationsPanel from '@/components/social/AutomationsPanel';
 import { AREAS, areaOf, formatPhone, type Area } from '@/components/pulse-direct/theme';
 import { flowTemplates, type Contact, type Flow } from '@/components/pulse-direct/types';
 
-interface ClientOpt { id: string; name: string; city: string | null; accounts: { platform: string; username?: string | null; api_base?: string }[] }
+interface ClientOpt { id: string; name: string; city: string | null; logo_url?: string | null; accounts: { platform: string; username?: string | null; api_base?: string }[] }
 
 async function api<T>(path: string, options?: { body?: unknown; method?: string }): Promise<T> {
   const { data, error } = await invokeVpsFunction(path, options as { body?: Record<string, unknown>; method?: string });
@@ -48,7 +49,7 @@ function ClientPicker({ clients, value, onChange }: { clients: ClientOpt[]; valu
       <PopoverTrigger asChild>
         <Button variant="outline" className="h-11 w-full justify-between gap-2 sm:w-72">
           <span className="flex min-w-0 items-center gap-2">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F15A24] text-xs font-bold text-white">{current?.name.slice(0, 1) || '?'}</span>
+            {current ? <ClientLogo client={{ companyName: current.name, color: '', logoUrl: current.logo_url || undefined }} size="sm" /> : <span className="h-7 w-7 rounded-md bg-muted" />}
             <span className="truncate font-semibold">{current?.name || 'Escolha o cliente'}</span>
           </span>
           <ChevronsUpDown size={14} className="shrink-0 opacity-60" />
@@ -61,6 +62,7 @@ function ClientPicker({ clients, value, onChange }: { clients: ClientOpt[]; valu
           {shown.map((c) => (
             <button key={c.id} type="button" onClick={() => { onChange(c.id); setOpen(false); setQ(''); }}
               className={cn('flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted', c.id === value && 'bg-muted')}>
+              <ClientLogo client={{ companyName: c.name, color: '', logoUrl: c.logo_url || undefined }} size="sm" />
               <span className="min-w-0 flex-1 truncate">{c.name}</span>
               {hasIg(c) ? <Instagram size={13} className="shrink-0 text-pink-500" aria-label="Instagram conectado" /> : <span className="shrink-0 text-[10px] text-muted-foreground">sem conexão</span>}
               {!c.city && <Badge variant="outline" className="shrink-0 px-1 text-[9px]">conjunto</Badge>}

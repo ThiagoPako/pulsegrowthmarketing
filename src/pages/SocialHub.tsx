@@ -12,20 +12,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
+import ClientLogo from '@/components/ClientLogo';
 import { useCity } from '@/contexts/CityContext';
 import { useCallback } from 'react';
 import NetworkMetrics, { type NetworkMetric } from '@/components/social/NetworkMetrics';
 
 interface HubComment {
-  id: string; client_id: string; client_name: string | null; platform: string; post_permalink: string | null; post_caption: string | null;
+  id: string; client_id: string; client_name: string | null; client_logo?: string | null; platform: string; post_permalink: string | null; post_caption: string | null;
   post_thumb: string | null; author_username: string | null; text: string; commented_at: string; status: string;
   isis_draft: string | null; isis_reason: string | null; reply_text: string | null; reply_by: string | null; replied_at: string | null;
 }
 interface HubReview {
-  id: string; client_id: string; client_name: string | null; reviewer: string | null; rating: number | null; comment: string | null;
+  id: string; client_id: string; client_name: string | null; client_logo?: string | null; reviewer: string | null; rating: number | null; comment: string | null;
   reviewed_at: string | null; status: string; isis_draft: string | null; isis_reason: string | null; reply_text: string | null; reply_by: string | null;
 }
-interface HubClient { client_id: string; client_name: string; escalados: number; rascunhos: number; respondidos_7d: number; isis_mode: string }
+interface HubClient { client_id: string; client_name: string; client_logo?: string | null; escalados: number; rascunhos: number; respondidos_7d: number; isis_mode: string }
 
 const NETWORK: Record<string, string> = { instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', youtube: 'YouTube', linkedin: 'LinkedIn' };
 const STATUS: Record<string, string> = { escalado: 'Pede a equipe', rascunho: 'Rascunho da Ísis', respondido: 'Respondido', ignorado: 'Ignorado', oculto: 'Oculto', novo: 'Novo' };
@@ -116,7 +117,7 @@ export default function SocialHub() {
             <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos os clientes</SelectItem>
-              {clients.map((c) => <SelectItem key={c.client_id} value={c.client_id}>{c.client_name}</SelectItem>)}
+              {clients.map((c) => <SelectItem key={c.client_id} value={c.client_id}><span className="flex items-center gap-2"><ClientLogo client={{ companyName: c.client_name, color: '', logoUrl: c.client_logo || undefined }} size="sm" />{c.client_name}</span></SelectItem>)}
             </SelectContent>
           </Select>
           {cid && (
@@ -164,7 +165,7 @@ export default function SocialHub() {
           <div className="grid gap-2 md:grid-cols-2">
             {clients.map((c) => (
               <Card key={c.client_id}><CardContent className="flex items-center justify-between gap-2 p-3 text-sm">
-                <span className="truncate font-medium">{c.client_name}</span>
+                <span className="flex min-w-0 items-center gap-2"><ClientLogo client={{ companyName: c.client_name, color: '', logoUrl: c.client_logo || undefined }} size="sm" /><span className="truncate font-medium">{c.client_name}</span></span>
                 <span className="flex shrink-0 items-center gap-1">
                   {c.escalados > 0 && <Badge variant="destructive">{c.escalados}</Badge>}
                   <Badge variant="secondary">{MODES[c.isis_mode]?.split(',')[0] || c.isis_mode}</Badge>
@@ -179,7 +180,7 @@ export default function SocialHub() {
             {reviews.map((r) => (
               <Card key={r.id}><CardContent className="space-y-2 p-4">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{r.client_name}</span>
+                  <span className="flex items-center gap-1.5 font-medium text-foreground"><ClientLogo client={{ companyName: r.client_name || '?', color: '', logoUrl: r.client_logo || undefined }} size="sm" />{r.client_name}</span>
                   <span className="flex">{Array.from({ length: 5 }).map((_, i) => <Star key={i} size={13} className={i < (r.rating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-muted'} />)}</span>
                   <span>{r.reviewer} · {when(r.reviewed_at)}</span>
                   <Badge variant={r.status === 'escalado' ? 'destructive' : 'secondary'}>{STATUS[r.status] || r.status}</Badge>
@@ -207,7 +208,7 @@ export default function SocialHub() {
                 {c.post_thumb && <img src={c.post_thumb} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" loading="lazy" referrerPolicy="no-referrer" />}
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">{c.client_name}</span>
+                    <span className="flex items-center gap-1.5 font-medium text-foreground"><ClientLogo client={{ companyName: c.client_name || '?', color: '', logoUrl: c.client_logo || undefined }} size="sm" />{c.client_name}</span>
                     <span>{NETWORK[c.platform] || c.platform} · {when(c.commented_at)}</span>
                     {c.post_permalink && <a className="underline" href={c.post_permalink} target="_blank" rel="noreferrer">post</a>}
                     <Badge variant={c.status === 'escalado' ? 'destructive' : 'secondary'}>{STATUS[c.status] || c.status}</Badge>

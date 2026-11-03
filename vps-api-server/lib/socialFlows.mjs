@@ -297,7 +297,7 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, log
   async function list(clientId, city = null) {
     await ensureSchema();
     const { rows } = await pool.query(
-      `SELECT f.*, cl.company_name AS client_name FROM social_flows f LEFT JOIN clients cl ON cl.id = f.client_id
+      `SELECT f.*, cl.company_name AS client_name, cl.logo_url AS client_logo FROM social_flows f LEFT JOIN clients cl ON cl.id = f.client_id
         WHERE ($1::uuid IS NULL OR f.client_id = $1) AND ($2::text IS NULL OR cl.city IS NULL OR lower(cl.city) = $2)
         ORDER BY f.active DESC, f.updated_at DESC`, [clientId || null, city || null]
     );

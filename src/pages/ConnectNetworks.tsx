@@ -1,27 +1,62 @@
-// Conectar as redes do cliente com a cara da Pulse (usuário, 02/11/2026: "conexão transparente… dentro da nossa plataforma
-// não mostrar plataforma de terceiros, porque o cliente fica desconfiado"). O cliente abre o link que a equipe mandou,
-// toca em cada rede, faz o login oficial dela e volta para cá com "Conectado". Servidor: lib/uploadPost.mjs.
+// Conectar as redes do cliente com a cara da Pulse (usuário, 02/11/2026: "conexão transparente… não mostrar plataforma de
+// terceiros" e "precisa ter uma experiência envolvida, com motion e visualmente atrativa, gerando a sensação de estar
+// entrando em uma agência de alto nível"). Abertura: a logo do cliente e a da Pulse se encontram e uma linha de luz liga
+// as duas; as redes entram em sequência; cada conexão vira "Conectado" com um brilho; tudo pronto, uma comemoração.
+// Respeita "reduzir movimento" do aparelho. Servidor: lib/uploadPost.mjs (/api/public/conectar).
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Check, Facebook, Instagram, Linkedin, Loader2, Lock, MapPin, Music2, RefreshCw, Youtube } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion, type Transition } from 'framer-motion';
+import { Check, Facebook, Instagram, Linkedin, Loader2, Lock, MapPin, Music2, ShieldCheck, Youtube } from 'lucide-react';
 import logo from '@/assets/pulse-logo-branco.png';
 
 const API = 'https://agenciapulse.tech/api';
+const ORANGE = '#F15A24';
 
-const NETWORKS: Record<string, { label: string; color: string; Icon: typeof Instagram; help: string }> = {
-  instagram: { label: 'Instagram', color: 'linear-gradient(135deg,#F58529,#DD2A7B,#8134AF)', Icon: Instagram, help: 'Conta profissional (empresa ou criador)' },
-  facebook: { label: 'Facebook', color: '#1877F2', Icon: Facebook, help: 'A página da empresa' },
-  tiktok: { label: 'TikTok', color: '#111111', Icon: Music2, help: 'A conta da empresa' },
-  linkedin: { label: 'LinkedIn', color: '#0A66C2', Icon: Linkedin, help: 'O perfil ou a página da empresa' },
-  youtube: { label: 'YouTube', color: '#FF0000', Icon: Youtube, help: 'O canal da empresa' },
-  google_business: { label: 'Google', color: '#34A853', Icon: MapPin, help: 'A ficha da empresa no Google (avaliações)' },
+const NETWORKS: Record<string, { label: string; bg: string; glow: string; Icon: typeof Instagram; help: string }> = {
+  instagram: { label: 'Instagram', bg: 'linear-gradient(135deg,#F58529,#DD2A7B 55%,#8134AF)', glow: '#DD2A7B', Icon: Instagram, help: 'Conta profissional da empresa' },
+  facebook: { label: 'Facebook', bg: '#1877F2', glow: '#1877F2', Icon: Facebook, help: 'A página da empresa' },
+  tiktok: { label: 'TikTok', bg: 'linear-gradient(135deg,#25F4EE,#000 45%,#FE2C55)', glow: '#FE2C55', Icon: Music2, help: 'A conta da empresa' },
+  linkedin: { label: 'LinkedIn', bg: '#0A66C2', glow: '#0A66C2', Icon: Linkedin, help: 'O perfil ou a página da empresa' },
+  youtube: { label: 'YouTube', bg: '#FF0000', glow: '#FF0000', Icon: Youtube, help: 'O canal da empresa' },
+  google_business: { label: 'Google', bg: 'conic-gradient(from 200deg,#4285F4,#34A853,#FBBC05,#EA4335,#4285F4)', glow: '#34A853', Icon: MapPin, help: 'A ficha da empresa, com as avaliações' },
 };
 
 interface Data { client: { name: string; logo: string | null }; networks: { id: string; connected: boolean; reconnect: boolean; account: string | null }[] }
 
+function Mark({ data }: { data: Data }) {
+  return data.client.logo
+    ? <img src={data.client.logo} alt={`Logo ${data.client.name}`} className="h-full w-full rounded-[1.4rem] bg-white object-contain p-2" />
+    : <span className="flex h-full w-full items-center justify-center rounded-[1.4rem] text-3xl font-bold" style={{ background: ORANGE }}>{data.client.name.slice(0, 1)}</span>;
+}
+
+/** A logo do cliente e a da Pulse se aproximam e a linha de luz acende entre elas. */
+function Handshake({ data, still }: { data: Data; still: boolean }) {
+  const t = (d: number): Transition => (still ? { duration: 0 } : { duration: 0.8, delay: d, ease: [0.22, 1, 0.36, 1] as const });
+  return (
+    <div className="relative mx-auto flex h-28 w-full max-w-xs items-center justify-between">
+      <motion.div className="relative z-10 h-24 w-24 shadow-2xl shadow-black/60" initial={{ x: still ? 0 : -40, opacity: still ? 1 : 0 }} animate={{ x: 0, opacity: 1 }} transition={t(0.1)}>
+        <Mark data={data} />
+      </motion.div>
+      <div className="absolute inset-x-24 top-1/2 h-[3px] -translate-y-1/2 overflow-hidden rounded-full bg-white/10">
+        <motion.div className="h-full rounded-full" style={{ background: `linear-gradient(90deg, transparent, ${ORANGE}, #FFB08C, ${ORANGE}, transparent)` }}
+          initial={{ x: still ? '0%' : '-100%' }} animate={{ x: '0%' }} transition={t(0.7)} />
+        {!still && (
+          <motion.div className="absolute top-0 h-full w-10 rounded-full bg-white/80 blur-[2px]" initial={{ left: '-20%' }} animate={{ left: '120%' }}
+            transition={{ duration: 1.6, delay: 1.4, repeat: Infinity, repeatDelay: 2.2, ease: 'easeInOut' }} />
+        )}
+      </div>
+      <motion.div className="relative z-10 flex h-24 w-24 items-center justify-center rounded-[1.4rem] border border-white/10 bg-[#17171B] p-4 shadow-2xl shadow-black/60"
+        initial={{ x: still ? 0 : 40, opacity: still ? 1 : 0 }} animate={{ x: 0, opacity: 1 }} transition={t(0.25)}>
+        <img src={logo} alt="Agência Pulse" className="w-full" />
+      </motion.div>
+    </div>
+  );
+}
+
 export default function ConnectNetworks() {
   const { token } = useParams();
   const [params] = useSearchParams();
+  const still = !!useReducedMotion();
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -44,68 +79,110 @@ export default function ConnectNetworks() {
     } catch (e) { setError((e as Error).message); setBusy(null); }
   };
 
+  const total = data?.networks.length || 0;
   const done = data ? data.networks.filter((n) => n.connected).length : 0;
+  const all = total > 0 && done === total;
+
   return (
-    <div className="min-h-screen bg-[#0E0E10] text-white" style={{ fontFamily: '"DM Sans", system-ui, sans-serif' }}>
-      <header className="border-b-4 border-[#F15A24]">
-        <div className="mx-auto flex max-w-md items-center justify-between px-5 py-4">
-          <img src={logo} alt="Pulse" className="h-6" />
-          <span className="flex items-center gap-1 text-xs text-white/60"><Lock className="h-3.5 w-3.5" /> Conexão segura</span>
-        </div>
+    <div className="relative min-h-screen overflow-hidden bg-[#0B0B0E] text-white" style={{ fontFamily: '"DM Sans", system-ui, sans-serif' }}>
+      {/* luz de fundo que respira devagar */}
+      <motion.div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full blur-3xl"
+        style={{ background: `radial-gradient(circle, ${ORANGE}55, transparent 65%)` }}
+        animate={still ? undefined : { opacity: [0.55, 0.85, 0.55], scale: [1, 1.08, 1] }} transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }} />
+
+      <header className="relative mx-auto flex max-w-md items-center justify-between px-5 pt-5">
+        <img src={logo} alt="Agência Pulse" className="h-5 opacity-90" />
+        <span className="flex items-center gap-1 text-xs text-white/60"><Lock className="h-3.5 w-3.5" /> Conexão segura</span>
       </header>
-      <main className="mx-auto max-w-md space-y-5 px-4 pb-12 pt-6">
-        {!data && !error && <div className="flex justify-center py-24"><Loader2 className="h-6 w-6 animate-spin text-[#F15A24]" /></div>}
-        {error && !data && <div className="rounded-2xl bg-white/5 p-6 text-center"><p className="font-semibold">{error}</p><p className="mt-1 text-sm text-white/60">Fale com a equipe da Pulse que mandamos um link novo.</p></div>}
+
+      <main className="relative mx-auto max-w-md px-5 pb-14 pt-8">
+        {!data && !error && <div className="flex justify-center py-32"><Loader2 className="h-6 w-6 animate-spin" style={{ color: ORANGE }} /></div>}
+        {error && !data && (
+          <div className="mt-16 rounded-3xl border border-white/10 bg-white/5 p-6 text-center">
+            <p className="font-semibold">{error}</p>
+            <p className="mt-1 text-sm text-white/60">Fale com a equipe da Pulse que mandamos um link novo.</p>
+          </div>
+        )}
         {data && (
           <>
-            <div>
-              <h1 className="text-2xl font-bold leading-tight">Conecte as redes de {data.client.name}</h1>
-              <p className="mt-2 text-sm text-white/70">Toque em cada rede e entre com o seu login. A Pulse só publica os conteúdos que você aprovar, e você pode desconectar quando quiser.</p>
+            <Handshake data={data} still={still} />
+
+            <motion.div className="mt-8 text-center" initial={{ opacity: 0, y: still ? 0 : 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: still ? 0 : 0.7, delay: still ? 0 : 1.1 }}>
+              <p className="text-sm font-medium" style={{ color: '#FFB08C' }}>Bem-vindo à Pulse</p>
+              <h1 className="mt-1 text-[1.7rem] font-bold leading-tight">Vamos conectar as redes de {data.client.name}</h1>
+              <p className="mx-auto mt-3 max-w-[22rem] text-sm leading-relaxed text-white/65">Toque em cada rede e entre com o seu login. A gente só publica o que você aprovar, e você desconecta quando quiser.</p>
+            </motion.div>
+
+            <AnimatePresence>
+              {back && status && (
+                <motion.p key="volta" role="status" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                  className={`mt-6 rounded-2xl px-4 py-3 text-center text-sm font-medium ${status === 'success' ? 'bg-[#1F9D55]/20 text-[#7BE0A6]' : 'bg-[#F15A24]/15 text-[#FFB08C]'}`}>
+                  {status === 'success' ? `${NETWORKS[back]?.label || 'Rede'} conectado com sucesso` : `O login do ${NETWORKS[back]?.label || 'aplicativo'} não terminou. Toque de novo para tentar.`}
+                </motion.p>
+              )}
+            </AnimatePresence>
+
+            {/* progresso */}
+            <div className="mt-7 flex items-center gap-3">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                <motion.div className="h-full rounded-full" style={{ background: `linear-gradient(90deg, ${ORANGE}, #FFB08C)` }}
+                  initial={{ width: 0 }} animate={{ width: `${(done / Math.max(1, total)) * 100}%` }} transition={{ duration: still ? 0 : 0.9, delay: still ? 0 : 1.4 }} />
+              </div>
+              <span className="text-xs tabular-nums text-white/60">{done}/{total}</span>
             </div>
 
-            {back && status && (
-              <p className={`rounded-xl px-4 py-3 text-sm font-medium ${status === 'success' ? 'bg-[#1F9D55]/20 text-[#7BE0A6]' : 'bg-[#F15A24]/15 text-[#FFB08C]'}`} role="status">
-                {status === 'success' ? `${NETWORKS[back]?.label || 'Rede'} conectado!` : `O ${NETWORKS[back]?.label || 'login'} não foi concluído. Toque de novo para tentar.`}
-              </p>
-            )}
-
-            <div className="h-2 overflow-hidden rounded-full bg-white/10" aria-label={`${done} de ${data.networks.length} conectadas`}>
-              <div className="h-full rounded-full bg-[#F15A24] transition-all" style={{ width: `${(done / Math.max(1, data.networks.length)) * 100}%` }} />
-            </div>
-            <p className="-mt-3 text-xs text-white/50">{done} de {data.networks.length} conectada(s)</p>
-
-            <div className="space-y-3">
-              {data.networks.map((n) => {
+            <ul className="mt-5 space-y-3">
+              {data.networks.map((n, i) => {
                 const meta = NETWORKS[n.id];
                 if (!meta) return null;
                 return (
-                  <div key={n.id} className="flex items-center gap-3 rounded-2xl bg-white/5 p-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: meta.color }}><meta.Icon className="h-5 w-5" /></span>
-                    <div className="min-w-0 flex-1">
+                  <motion.li key={n.id} initial={{ opacity: 0, y: still ? 0 : 16 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: still ? 0 : 0.5, delay: still ? 0 : 1.3 + i * 0.12, ease: [0.22, 1, 0.36, 1] }}
+                    className="relative flex items-center gap-3 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-3.5">
+                    {n.connected && <span aria-hidden className="pointer-events-none absolute inset-0 opacity-25" style={{ background: `radial-gradient(circle at 15% 50%, ${meta.glow}, transparent 60%)` }} />}
+                    <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg" style={{ background: meta.bg, boxShadow: `0 8px 24px -8px ${meta.glow}` }}>
+                      <meta.Icon className="h-6 w-6" />
+                    </span>
+                    <div className="relative min-w-0 flex-1">
                       <p className="font-semibold">{meta.label}</p>
                       <p className="truncate text-xs text-white/55">{n.connected ? (n.account ? `@${String(n.account).replace(/^@/, '')}` : 'Conectado') : n.reconnect ? 'Precisa entrar de novo' : meta.help}</p>
                     </div>
-                    {n.connected ? (
-                      <span className="flex items-center gap-1 rounded-full bg-[#1F9D55]/20 px-3 py-1.5 text-xs font-semibold text-[#7BE0A6]"><Check className="h-3.5 w-3.5" /> Conectado</span>
-                    ) : (
-                      <button type="button" disabled={!!busy} onClick={() => connect(n.id)}
-                        className="rounded-xl bg-[#F15A24] px-4 py-2.5 text-sm font-bold active:scale-[0.98] disabled:opacity-60">
-                        {busy === n.id ? <Loader2 className="h-4 w-4 animate-spin" /> : n.reconnect ? 'Entrar de novo' : 'Conectar'}
-                      </button>
-                    )}
-                  </div>
+                    <AnimatePresence mode="wait">
+                      {n.connected ? (
+                        <motion.span key="ok" initial={{ scale: still ? 1 : 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 420, damping: 18 }}
+                          className="relative flex items-center gap-1 rounded-full bg-[#1F9D55]/25 px-3 py-1.5 text-xs font-semibold text-[#7BE0A6]">
+                          <Check className="h-3.5 w-3.5" /> Conectado
+                        </motion.span>
+                      ) : (
+                        <motion.button key="btn" type="button" disabled={!!busy} onClick={() => connect(n.id)} whileTap={still ? undefined : { scale: 0.96 }}
+                          className="relative rounded-2xl px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60" style={{ background: ORANGE, boxShadow: `0 10px 30px -10px ${ORANGE}` }}>
+                          {busy === n.id ? <Loader2 className="h-4 w-4 animate-spin" /> : n.reconnect ? 'Entrar de novo' : 'Conectar'}
+                        </motion.button>
+                      )}
+                    </AnimatePresence>
+                  </motion.li>
                 );
               })}
-            </div>
+            </ul>
 
-            {done === data.networks.length && data.networks.length > 0 && (
-              <div className="rounded-2xl bg-[#1F9D55]/15 p-4 text-center">
-                <p className="font-bold text-[#7BE0A6]">Tudo pronto! 🎉</p>
-                <p className="mt-1 text-sm text-white/70">Suas redes estão conectadas. Pode fechar esta página.</p>
-              </div>
-            )}
-            <button type="button" onClick={load} className="mx-auto flex items-center gap-1.5 text-xs text-white/50 underline"><RefreshCw className="h-3 w-3" /> Atualizar</button>
-            <p className="text-center text-xs text-white/40">Agência Pulse · @agenciapulse</p>
+            <AnimatePresence>
+              {all && (
+                <motion.div key="pronto" initial={{ opacity: 0, scale: still ? 1 : 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: still ? 0 : 0.5, delay: still ? 0 : 1.6 }}
+                  className="relative mt-7 overflow-hidden rounded-3xl border border-[#1F9D55]/30 bg-[#1F9D55]/10 p-6 text-center">
+                  {!still && Array.from({ length: 14 }).map((_, k) => (
+                    <motion.span key={k} aria-hidden className="absolute left-1/2 top-1/2 h-1.5 w-1.5 rounded-full"
+                      style={{ background: k % 2 ? ORANGE : '#7BE0A6' }}
+                      initial={{ x: 0, y: 0, opacity: 1 }} animate={{ x: Math.cos((k / 14) * Math.PI * 2) * 140, y: Math.sin((k / 14) * Math.PI * 2) * 70, opacity: 0 }}
+                      transition={{ duration: 1.3, delay: 1.8, ease: 'easeOut' }} />
+                  ))}
+                  <ShieldCheck className="mx-auto h-8 w-8 text-[#7BE0A6]" />
+                  <p className="mt-2 text-lg font-bold">Tudo conectado</p>
+                  <p className="mt-1 text-sm text-white/70">A partir de agora a Pulse cuida das redes de {data.client.name}. Pode fechar esta página.</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <p className="mt-10 text-center text-xs text-white/35">Agência Pulse · seus dados ficam protegidos e você pode desconectar quando quiser</p>
           </>
         )}
       </main>

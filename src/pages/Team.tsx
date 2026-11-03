@@ -28,6 +28,7 @@ import { CITY_LABELS, useCity, type CityCode } from '@/contexts/CityContext';
 import { usePulsePlus } from '@/hooks/usePulsePlus';
 import PulsePlusAccessSwitch, { useTeamPulsePlus } from '@/components/team/PulsePlusAccessSwitch';
 import AgentTrainerSwitch, { useAgentTrainers } from '@/components/team/AgentTrainerSwitch';
+import ClientTag from '@/components/ClientTag';
 
 const ALL_CITIES: CityCode[] = ['minacu', 'uruacu'];
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
@@ -941,7 +942,7 @@ export default function Team() {
                         <p className="text-xs text-muted-foreground">{u.email}</p>
                         {info && (
                           <div className="flex items-center gap-2 mt-1">
-                            {info.company_name && <span className="text-xs bg-muted px-2 py-0.5 rounded">{info.company_name}</span>}
+                            {info.company_name && <span className="text-xs bg-muted px-2 py-0.5 rounded"><ClientTag name={info.company_name} /></span>}
                             <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{info.service_function}</span>
                           </div>
                         )}

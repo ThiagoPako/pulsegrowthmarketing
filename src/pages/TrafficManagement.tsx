@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import ClientLogo from '@/components/ClientLogo';
 import { Megaphone, Search, Play, Pause, Palette, Flame, Zap, Eye, RefreshCw, Send, MessageSquare, Download } from 'lucide-react';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
+import ClientTag from '@/components/ClientTag';
 
 interface Creative {
   id: string;
@@ -283,7 +284,7 @@ export default function TrafficManagement() {
           <SelectTrigger className="w-44"><SelectValue placeholder="Cliente" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os Clientes</SelectItem>
-            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+            {clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}
           </SelectContent>
         </Select>
       </div>

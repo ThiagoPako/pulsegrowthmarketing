@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { DEFAULT_BUTTON_TEXTS } from '@/lib/storySeries';
 import { fetchClientStoryLink, saveClientStoryLink } from '@/services/storiesApi';
+import ClientTag from '@/components/ClientTag';
 
 interface Props {
   clientId: string;
@@ -100,7 +101,7 @@ export default function ClientStoryLinkDialog({ clientId, clientName, onClose, o
             </div>
             <div className="min-w-0">
               <DialogTitle className="text-base">Link do story</DialogTitle>
-              <div className="truncate text-xs text-muted-foreground">{clientName}</div>
+              <div className="truncate text-xs text-muted-foreground"><ClientTag name={clientName} /></div>
             </div>
           </div>
         </DialogHeader>

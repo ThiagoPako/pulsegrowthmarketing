@@ -25,6 +25,7 @@ import {
   DESIGNER_COMPLETED_COLUMNS, EDITOR_APPROVED_COLUMNS, dedupeDeliveryRecords,
   getDesignTaskReferenceDate, getEditorTaskOwnerId, getEditorTaskReferenceDate,
 } from '@/lib/scoringSystem';
+import ClientTag from '@/components/ClientTag';
 
 interface EditorTask {
   id: string;
@@ -1452,7 +1453,7 @@ export default function Reports() {
                       <TableCell className="py-3">
                         <div className="flex items-center gap-2">
                           <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: `hsl(${cc.client.color})` }} />
-                          <span className="font-medium text-sm">{cc.client.companyName}</span>
+                          <span className="font-medium text-sm"><ClientTag id={cc.client?.id} name={cc.client.companyName} logo={cc.client?.logoUrl} /></span>
                         </div>
                       </TableCell>
                       <TableCell className="py-3">

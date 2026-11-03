@@ -46,6 +46,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { sanitizeScriptHtml } from '@/lib/highlightQuotes';
 import { PINNABLE_COLUMNS, pinToggleMessage, pinToggleUpdate } from '@/lib/pinCard';
+import ClientTag from '@/components/ClientTag';
 
 const normalizeDateValue = (value?: string | null) => {
   if (!value) return null;
@@ -1322,7 +1323,7 @@ export default function ContentKanban() {
             <SelectContent>
               <SelectItem value="all">Todos Clientes</SelectItem>
               {clients.map(c => (
-                <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -1574,7 +1575,7 @@ export default function ContentKanban() {
                     <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       {clients.map(c => (
-                        <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                        <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

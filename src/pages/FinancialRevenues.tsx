@@ -27,6 +27,7 @@ import cobrarTodosImg from '@/assets/cobrar_todos.webp';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import ClientLogo from '@/components/ClientLogo';
+import ClientTag from '@/components/ClientTag';
 
 /* ── Rocket Animation Overlay ── */
 function RocketOverlay({ onComplete }: { onComplete: () => void }) {
@@ -538,7 +539,7 @@ export default function FinancialRevenues() {
                 <SelectContent>
                   <SelectItem value="__none__">— Sem cliente vinculado —</SelectItem>
                   {clients.filter(c => c.status === 'ativo').sort((a, b) => a.companyName.localeCompare(b.companyName)).map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>
                   ))}
                 </SelectContent>
               </Select>

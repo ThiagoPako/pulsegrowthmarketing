@@ -10,6 +10,7 @@ import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { useNavigate } from 'react-router-dom';
 import { differenceInDays } from 'date-fns';
 import { isRevenueOverdue, toDateKey, DELINQUENCY_START } from '@/lib/financialCalc';
+import ClientTag from '@/components/ClientTag';
 
 
 export default function FinancialDelinquency() {
@@ -77,7 +78,7 @@ export default function FinancialDelinquency() {
               <TableBody>
                 {inadimplentes.map(r => (
                   <TableRow key={r.id}>
-                    <TableCell className="font-medium">{r.clientName}</TableCell>
+                    <TableCell className="font-medium"><ClientTag name={r.clientName} /></TableCell>
                     <TableCell className="text-red-600 font-bold">{fmt(Number(r.amount))}</TableCell>
                     <TableCell>{r.due_date}</TableCell>
                     <TableCell>

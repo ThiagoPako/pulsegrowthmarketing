@@ -37,6 +37,7 @@ import WaitingBadge from '@/components/kanban/WaitingBadge';
 import { useAgentIds } from '@/hooks/useAgentIds';
 import { usePulsePlus } from '@/hooks/usePulsePlus';
 import { agentWorkState, formatSince } from '@/lib/agentCardStatus';
+import ClientTag from '@/components/ClientTag';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },
@@ -1282,7 +1283,7 @@ export default function EditorDashboard() {
             <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="Cliente" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
-              {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+              {clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={filterType} onValueChange={setFilterType}>
@@ -1336,7 +1337,7 @@ export default function EditorDashboard() {
               <Select value={storyClientId} onValueChange={setStoryClientId}>
                 <SelectTrigger className="h-9 text-sm mt-1"><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                 <SelectContent>
-                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+                  {clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

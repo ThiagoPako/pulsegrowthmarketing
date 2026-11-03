@@ -816,6 +816,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Igual ao useApp, mas devolve null fora do AppProvider (componentes usados também em páginas públicas). */
+export function useAppOptional() {
+  return useContext(AppContext);
+}
+
 export function useApp() {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error('useApp must be used within AppProvider');

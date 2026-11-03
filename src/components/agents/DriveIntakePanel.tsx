@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import ClientTag from '@/components/ClientTag';
 
 // Severino: entrada de vídeos pelo Drive (vps-api-server/agentDriveRoutes.mjs): varre a pasta do cliente, lista as
 // pastas de vídeo sem card e cria os cards em Edição em lote, pelo tipo (story: todas viram 1 card).
@@ -223,7 +224,7 @@ export function DriveIntakePanel() {
         <Select value={clientId} onValueChange={(v) => { setClientId(v); setScan(null); }}>
           <SelectTrigger className="w-72"><SelectValue placeholder="Cliente" /></SelectTrigger>
           <SelectContent>
-            {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+            {clients.map((c) => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.company_name} /></SelectItem>)}
           </SelectContent>
         </Select>
         <Button onClick={runScan} disabled={!clientId || scanning}>

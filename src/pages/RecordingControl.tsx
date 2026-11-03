@@ -24,6 +24,7 @@ import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import TimeMarker from '@/components/scheduling/TimeMarker';
 import { deleteRecordingWithConfirm } from '@/lib/recordingDelete';
+import ClientTag from '@/components/ClientTag';
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   agendada: { bg: 'bg-blue-500/15', text: 'text-blue-400', label: 'Agendada' },
@@ -954,7 +955,7 @@ export default function RecordingControl() {
                       <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                       <SelectContent>
                         {activeClients.map(c => (
-                          <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                          <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

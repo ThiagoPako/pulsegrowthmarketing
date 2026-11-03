@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { fetchAISeasonalAlerts, AISeasonalAlert } from '@/lib/seasonalDates';
 import { fetchTvRemoteState, saveTvPlaylist, TvRemoteCommand, VISIBILITY_KEYS, VisibilityKey } from '@/lib/tvRemote';
+import ClientTag from '@/components/ClientTag';
 
 const VPS = 'https://agenciapulse.tech/api';
 
@@ -450,7 +451,7 @@ function MemberCard({ member }: { member: TeamMember }) {
             </span>
           </motion.div>
           {member.clientName && (
-            <p className="text-[10px] text-white/35 truncate mt-0.5">🏢 {member.clientName}</p>
+            <p className="text-[10px] text-white/35 truncate mt-0.5"><ClientTag name={member.clientName} /></p>
           )}
         </div>
       </div>
@@ -1072,7 +1073,7 @@ function DesignMiniRow({ task, status }: { task: DesignActivityTask; status: 'pa
       style={{ borderColor: `${color}30`, background: `${color}08` }}>
       <Icon className="w-3 h-3 flex-shrink-0" style={{ color }} />
       <span className="text-[11px] text-white/85 truncate flex-1">{task.title}</span>
-      <span className="text-[9px] text-white/50 truncate flex-shrink-0">{task.clientName}</span>
+      <span className="text-[9px] text-white/50 truncate flex-shrink-0"><ClientTag name={task.clientName} /></span>
       {idle !== null && idle >= 4 && (
         <span
           className={`text-[9px] font-bold uppercase tracking-wider flex-shrink-0 px-1.5 py-0.5 rounded ${idleSevere ? 'animate-pulse' : ''}`}
@@ -1203,7 +1204,7 @@ function EditorLiveCard({ editorName, editorAvatar, tasks }: { editorName: strin
                   style={{ borderColor: `${c.color}22`, background: `${c.color}06` }}>
                   <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: c.color }} />
                   <span className="text-[10px] text-white/75 truncate flex-1">{t.title}</span>
-                  <span className="text-[9px] text-white/35 truncate flex-shrink-0 max-w-[80px]">{t.clientName}</span>
+                  <span className="text-[9px] text-white/35 truncate flex-shrink-0 max-w-[80px]"><ClientTag name={t.clientName} /></span>
                   <span className="text-[8px] uppercase tracking-wider font-bold flex-shrink-0" style={{ color: c.color }}>{c.label}</span>
                 </div>
               );

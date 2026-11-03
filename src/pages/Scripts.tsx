@@ -34,6 +34,7 @@ import { Color } from '@tiptap/extension-color';
 import pulseHeader from '@/assets/pulse_header.png';
 import ClientLogo from '@/components/ClientLogo';
 import { useAutoSave } from '@/hooks/useAutoSave';
+import ClientTag from '@/components/ClientTag';
 
 const VIDEO_TYPES: ScriptVideoType[] = ['vendas', 'institucional', 'reconhecimento', 'educacional', 'bastidores', 'depoimento', 'lancamento', 'evento'];
 const CONTENT_FORMATS: ScriptContentFormat[] = ['reels', 'story', 'criativo'];
@@ -1339,7 +1340,7 @@ export default function Scripts() {
           <SelectTrigger className="w-44"><SelectValue placeholder="Cliente" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os Clientes</SelectItem>
-            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+            {clients.map(c => <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.companyName} logo={c?.logoUrl} /></SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterType} onValueChange={setFilterType}>
@@ -1688,7 +1689,7 @@ export default function Scripts() {
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       {endoClientes.filter(c => c.active).map(c => (
-                        <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                        <SelectItem key={c.id} value={c.id}><ClientTag id={c.id} name={c.company_name} /></SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

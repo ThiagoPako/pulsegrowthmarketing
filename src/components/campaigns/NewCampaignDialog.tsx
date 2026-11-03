@@ -12,6 +12,7 @@ import {
   Check, ChevronRight, ChevronLeft, Building2, Rocket, PartyPopper, Heart, Tag, CalendarDays, Sprout, Gift, QrCode,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import ClientTag from '@/components/ClientTag';
 
 interface Props {
   open: boolean;
@@ -250,7 +251,7 @@ export default function NewCampaignDialog({ open, onOpenChange, onCreated }: Pro
                                     {c.companyName.slice(0, 2).toUpperCase()}
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-semibold truncate">{c.companyName}</div>
+                                    <div className="text-sm font-semibold truncate"><ClientTag id={c?.id} name={c.companyName} logo={c?.logoUrl} /></div>
                                     <div className="text-[10px] text-white/40 truncate">{(c as any).segment || 'Cliente Pulse'}</div>
                                   </div>
                                   {active && <Check size={14} className="text-orange-400 shrink-0" />}

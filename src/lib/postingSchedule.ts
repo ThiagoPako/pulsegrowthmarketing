@@ -41,6 +41,9 @@ export interface SchedulingPost {
   media_items: string[];
   story_link: string | null;
   story_link_text: string | null;
+  /** trilha do story de arte (vira vídeo de 15 s ao postar) */
+  story_audio_url?: string | null;
+  story_audio_name?: string | null;
   scheduled_at: string | null;
   published_at: string | null;
   last_error: string | null;

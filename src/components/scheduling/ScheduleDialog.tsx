@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, BellRing, CalendarCheck2, CalendarClock, Check, Copy, Facebook, Instagram, Linkedin, Loader2, Music2, Repeat2, Sparkles, Trash2, Youtube } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, Zap, CalendarCheck2, CalendarClock, Check, Copy, Facebook, Instagram, Linkedin, Loader2, Music2, Repeat2, Sparkles, Trash2, Youtube } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,8 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
 import { cn } from '@/lib/utils';
+import MediaFitNotes from './MediaFitNotes';
+import StoryTrackField, { type StoryTrack } from './StoryTrackField';
 import {
-  addDaysKey, brtToIso, formatDayLabel, suggestFormat, todayKey, weekdayIndex,
+  addDaysKey, brtParts, brtToIso, formatDayLabel, suggestFormat, todayKey, weekdayIndex,
   NETWORK_LABELS, NETWORK_MAX,
   type Network, type PublishFormat, type PublishTarget, type SchedulingAccount, type SchedulingItem, type StoryLinkDefaults,
 } from '@/lib/postingSchedule';
@@ -138,6 +140,13 @@ export default function ScheduleDialog({
   const [storyLink, setStoryLink] = useState('');
   const [storyLinkText, setStoryLinkText] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
+  // ordem do carrossel (usuário, 02/11/2026: "possível postar carrossel e organizar a ordem certinha")
+  const [order, setOrder] = useState<string[]>([]);
+  const [track, setTrack] = useState<StoryTrack | null>(null);
+  // formato que o Instagram recusa (story > 60 s, reels < 3 s): trava o agendamento automático
+  const [mediaBlocked, setMediaBlocked] = useState(false);
+  // "Postar agora" (usuário, 02/11/2026): põe o horário de agora e salva; o robô publica em até 15 s
+  const [postNowPending, setPostNowPending] = useState(false);
   const [repeat, setRepeat] = useState<RepeatDraft>(defaultRepeat(''));
   const [scope, setScope] = useState<Scope>('one');
   const [saving, setSaving] = useState(false);
@@ -171,6 +180,8 @@ export default function ScheduleDialog({
       storyLink: post?.story_link || clientLink?.url || '',
       storyLinkText: post?.story_link_text || clientLink?.default_text || DEFAULT_BUTTON_TEXTS[0],
       mediaUrl: post?.media_url || item.media_url || '',
+      order: post?.media_items?.length ? post.media_items : item.media_items,
+      track: post?.story_audio_url ? { url: post.story_audio_url, name: post.story_audio_name || null } : null,
       repeat: series ? repeatFromRule(series.rule, series.index) : defaultRepeat(initialDate),
       scope: (item.virtual ? 'following' : 'one') as Scope,
     };
@@ -198,11 +209,21 @@ export default function ScheduleDialog({
     setStoryLink(initial.storyLink);
     setStoryLinkText(initial.storyLinkText);
     setMediaUrl(initial.mediaUrl);
+    setOrder(initial.order);
+    setTrack(initial.track);
     setRepeat(initial.repeat);
     setScope(initial.scope);
     setSaving(false);
     setSavedCaption(initial.caption);
   }, [initial]);
+
+  // "Postar agora": depois que o horário de agora entra no estado, salva (o save mais novo fica no ref)
+  const saveRef = useRef<((allowPast?: boolean) => Promise<void>) | null>(null);
+  useEffect(() => {
+    if (!postNowPending) return;
+    setPostNowPending(false);
+    saveRef.current?.(false);
+  }, [postNowPending, date, time]);
 
   const generate = async () => {
     if (!item) return;
@@ -296,6 +317,9 @@ export default function ScheduleDialog({
   };
 
   const postsAlone = mode !== 'manual';
+  const storyMedia = (multiImage ? order[0] : mediaUrl.trim()) || '';
+  // trilha: story de UMA arte postado sozinho, sem repetição (a série não leva trilha)
+  const canTrack = isStory && mode === 'auto' && !repeatOn && !!storyMedia && !/\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(storyMedia);
   const storyFields = () => ({
     client_id: clientId,
     date,
@@ -304,6 +328,8 @@ export default function ScheduleDialog({
     story_mode: mode === 'lembrete' ? 'lembrete' as const : 'auto' as const,
     story_link: mode === 'lembrete' ? storyLink.trim() || null : null,
     story_link_text: mode === 'lembrete' ? storyLinkText.trim() || null : null,
+    story_audio_url: canTrack && track ? track.url : null,
+    story_audio_name: canTrack && track ? track.name : null,
   });
 
   const onlyWhenChanged = scheduled && !isSeriesItem && item.state !== 'erro'
@@ -311,7 +337,20 @@ export default function ScheduleDialog({
     && caption === initial.caption && storyLink === initial.storyLink && storyLinkText === initial.storyLinkText
     && networks.join() === initial.networks.join() && !captionsTouched
     && firstComment === (item.post?.first_comment || '') && collab === (item.post?.collaborators ? item.post.collaborators.split(',').map((u) => `@${u}`).join(', ') : '')
-    && mediaUrl === initial.mediaUrl && !repeatOn;
+    && mediaUrl === initial.mediaUrl && order.join() === initial.order.join() && (track?.url || '') === (initial.track?.url || '') && !repeatOn;
+
+  const askPostNow = () => setConfirm({
+    title: 'Postar agora?',
+    description: 'Sai em menos de 1 minuto, nas redes marcadas.',
+    confirmLabel: 'Postar agora',
+    onConfirm: () => {
+      const now = brtParts(Date.now());
+      if (!now) return;
+      setDate(now.date);
+      setTime(now.time);
+      setPostNowPending(true);
+    },
+  });
 
   const save = async (allowPast = false) => {
     const iso = brtToIso(date, time);
@@ -351,8 +390,8 @@ export default function ScheduleDialog({
       }
       const media = postsAlone
         ? (format === 'carousel'
-          ? { media_items: item.media_items }
-          : { media_url: (multiImage ? item.media_items[0] : mediaUrl.trim()) || null })
+          ? { media_items: order }
+          : { media_url: (multiImage ? order[0] : mediaUrl.trim()) || null })
         : {};
       if (repeatOn) {
         await createStorySeries({
@@ -399,6 +438,7 @@ export default function ScheduleDialog({
       setSaving(false);
     }
   };
+  saveRef.current = save;
 
   const whenLabel = `${item.title}${item.when ? ` · ${formatDayLabel(item.when.date)}${item.when.time ? ` às ${item.when.time}` : ''}` : ''}`;
   // Postagem manual feita (01/11/2026): carimba o material como postado; aparece no portal do cliente e no Kanban
@@ -590,6 +630,10 @@ export default function ScheduleDialog({
               />
             )}
 
+            {canTrack && (
+              <StoryTrackField value={track} onChange={setTrack} disabled={readOnly} />
+            )}
+
             {canRepeat && (
               <StorySeriesRepeat value={repeat} onChange={setRepeat} startDate={date} time={time} forced={following} />
             )}
@@ -672,11 +716,37 @@ export default function ScheduleDialog({
             {postsAlone && !readOnly && !isSeriesItem && (
               multiImage ? (
                 <div className="space-y-1">
-                  <Label className="text-xs">Mídia</Label>
-                  <div className="flex gap-1.5 overflow-x-auto pb-1">
-                    {(format === 'carousel' ? item.media_items : item.media_items.slice(0, 1)).map((url, i) => (
-                      <img key={url + i} src={url} alt="" loading="lazy" className="h-16 w-16 shrink-0 rounded-md border border-border object-cover" />
-                    ))}
+                  <Label className="text-xs">{format === 'carousel' ? 'Ordem do carrossel' : 'Mídia'}</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    {format === 'carousel' ? 'Use as setas para pôr na ordem em que vai aparecer; o X tira a imagem deste post.' : 'Toque na imagem que vai ser postada.'}
+                  </p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {order.map((url, i) => {
+                      const chosen = format === 'carousel' || i === 0;
+                      const move = (to: number) => setOrder((o) => { const n = [...o]; [n[i], n[to]] = [n[to], n[i]]; return n; });
+                      return (
+                        <div key={url} className="relative shrink-0">
+                          <button type="button" disabled={format === 'carousel'} aria-label={`Imagem ${i + 1}`}
+                            onClick={() => setOrder((o) => [url, ...o.filter((u) => u !== url)])}
+                            className={cn('block overflow-hidden rounded-md border-2', chosen ? 'border-primary' : 'border-transparent opacity-50 hover:opacity-100')}>
+                            <img src={url} alt="" loading="lazy" className="h-20 w-16 object-cover" />
+                          </button>
+                          {format === 'carousel' && (
+                            <>
+                              <span className="absolute left-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">{i + 1}</span>
+                              {order.length > 2 && (
+                                <button type="button" aria-label={`Tirar a imagem ${i + 1}`} onClick={() => setOrder((o) => o.filter((u) => u !== url))}
+                                  className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/70 text-[11px] text-white">×</button>
+                              )}
+                              <div className="mt-1 flex justify-between">
+                                <button type="button" aria-label="Para a esquerda" disabled={i === 0} onClick={() => move(i - 1)} className="rounded p-0.5 hover:bg-muted disabled:opacity-30"><ArrowLeft size={13} /></button>
+                                <button type="button" aria-label="Para a direita" disabled={i === order.length - 1} onClick={() => move(i + 1)} className="rounded p-0.5 hover:bg-muted disabled:opacity-30"><ArrowRight size={13} /></button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ) : format !== 'carousel' && (
@@ -685,6 +755,9 @@ export default function ScheduleDialog({
                   <Input id="sched-media" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="https://" className="text-xs" />
                 </div>
               )
+            )}
+            {postsAlone && !readOnly && !isSeriesItem && (
+              <MediaFitNotes urls={format === 'carousel' ? order : [multiImage ? order[0] : mediaUrl.trim()].filter(Boolean)} publishType={format} onBlock={setMediaBlocked} />
             )}
           </div>
 
@@ -706,8 +779,13 @@ export default function ScheduleDialog({
                 </Button>
               )}
               <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={saving}>Fechar</Button>
+              {!readOnly && postsAlone && mode === 'auto' && !repeatOn && !isSeriesItem && (
+                <Button type="button" variant="secondary" size="sm" onClick={askPostNow} disabled={saving || mediaBlocked} className="gap-1.5">
+                  <Zap size={14} /> Postar agora
+                </Button>
+              )}
               {!readOnly && (
-                <Button type="button" size="sm" onClick={() => save(false)} disabled={saving || !date || !time} className="gap-1.5">
+                <Button type="button" size="sm" onClick={() => save(false)} disabled={saving || !date || !time || (postsAlone && mediaBlocked)} className="gap-1.5">
                   {saving ? <Loader2 size={14} className="animate-spin" /> : repeatOn ? <Repeat2 size={14} /> : <CalendarClock size={14} />}
                   {saveLabel}
                 </Button>

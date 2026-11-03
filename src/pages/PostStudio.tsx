@@ -8,6 +8,8 @@ import {
   type SocialPlatformTarget, type SocialPublishType,
 } from '@/services/socialPostsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import MediaFitNotes from '@/components/scheduling/MediaFitNotes';
+import StoryTrackField, { type StoryTrack } from '@/components/scheduling/StoryTrackField';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,6 +54,11 @@ export default function PostStudio() {
   const [publishType, setPublishType] = useState<SocialPublishType>('carousel');
   const [items, setItems] = useState<PostMediaItem[]>([emptyItem(), emptyItem()]);
   const [caption, setCaption] = useState('');
+  const [firstComment, setFirstComment] = useState('');
+  const [collab, setCollab] = useState('');
+  const [track, setTrack] = useState<StoryTrack | null>(null);
+  // formato que o Instagram recusa (story > 60 s, reels < 3 s): não deixa publicar
+  const [mediaBlocked, setMediaBlocked] = useState(false);
   const [storyLink, setStoryLink] = useState('');
   const [storyLinkText, setStoryLinkText] = useState('Saiba mais');
   const [scheduledAt, setScheduledAt] = useState('');
@@ -124,6 +131,9 @@ export default function PostStudio() {
     if (clientId) {
       setItems([emptyItem(), emptyItem()]);
       setCaption('');
+      setFirstComment('');
+      setCollab('');
+      setTrack(null);
       setStoryLink('');
     }
     lastPostRef.current = null;
@@ -133,6 +143,8 @@ export default function PostStudio() {
   const visibleItems = useMemo(() => items.slice(0, maxItems), [items, maxItems]);
   const filledItems = visibleItems.filter(i => i.url.trim());
   const selectedUrls = filledItems.map(i => i.url.trim());
+  // trilha: story de UMA arte (vídeo já leva o próprio som)
+  const canTrack = publishType === 'stories' && selectedUrls.length === 1 && !/\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(selectedUrls[0]);
 
   const updateItem = (i: number, patch: Partial<PostMediaItem>) =>
     setItems(prev => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -186,6 +198,9 @@ export default function PostStudio() {
   const reset = () => {
     setItems([emptyItem(), emptyItem()]);
     setCaption('');
+    setFirstComment('');
+    setCollab('');
+    setTrack(null);
     setStoryLink('');
     setScheduledAt('');
   };
@@ -209,8 +224,11 @@ export default function PostStudio() {
       publish_type: publishType,
       media_items: filledItems.map(i => ({ url: i.url.trim(), label: i.label?.trim() || undefined })),
       caption: publishType === 'stories' ? '' : caption,
+      ...(publishType === 'stories' ? {} : { first_comment: firstComment.trim(), collaborators: collab.trim() }),
       story_link: publishType === 'stories' ? storyLink.trim() || null : null,
       story_link_text: publishType === 'stories' ? storyLinkText.trim() || null : null,
+      story_audio_url: canTrack && track ? track.url : null,
+      story_audio_name: canTrack && track ? track.name : null,
     };
     const key = JSON.stringify({ ...input, when: now ? 'agora' : scheduledAt });
 
@@ -267,10 +285,10 @@ export default function PostStudio() {
       <header className="overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-card to-card p-5">
         <h1 className="flex items-center gap-2 text-2xl font-bold">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/15 text-primary"><Images size={18} /></span>
-          {t('Estúdio de Postagem', 'Publishing Studio')}
+          {t('Postagem avulsa', 'Publishing Studio')}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {t('Escolha o cliente, selecione as artes e vídeos que já estão no sistema e veja a prévia igual ao Instagram antes de publicar.', 'Choose the client, pick media, write the caption, set date/time and preview exactly how it will look on Instagram.')}
+          {t('Escolha o cliente, selecione as artes e vídeos que já estão no sistema, ponha o carrossel na ordem certa e veja a prévia igual ao Instagram antes de publicar.', 'Choose the client, pick media, write the caption, set date/time and preview exactly how it will look on Instagram.')}
         </p>
       </header>
 
@@ -455,6 +473,7 @@ export default function PostStudio() {
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">3. Legenda, link e horário</CardTitle></CardHeader>
               <CardContent className="space-y-4">
+                <MediaFitNotes urls={selectedUrls} publishType={publishType} onBlock={setMediaBlocked} />
                 {publishType === 'stories' ? (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
@@ -468,6 +487,7 @@ export default function PostStudio() {
                     <p className="text-[11px] text-muted-foreground sm:col-span-2">
                       O link só aparece se a conta do cliente tiver permissão de link liberada pela Meta. Se ela recusar, o story é publicado mesmo assim, sem o link.
                     </p>
+                    {canTrack && <div className="sm:col-span-2"><StoryTrackField value={track} onChange={setTrack} /></div>}
                   </div>
                 ) : (
                   <div>
@@ -476,6 +496,18 @@ export default function PostStudio() {
                       <span className={caption.length > 2200 ? 'text-[11px] text-destructive' : 'text-[11px] text-muted-foreground'}>{caption.length}/2200</span>
                     </div>
                     <Textarea value={caption} onChange={e => setCaption(e.target.value)} rows={5} placeholder="Legenda com hashtags…" />
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <Label className="text-xs">Primeiro comentário (opcional)</Label>
+                        <Input value={firstComment} onChange={e => setFirstComment(e.target.value)} placeholder="Link do WhatsApp, hashtags…" />
+                      </div>
+                      {platform !== 'facebook' && (
+                        <div>
+                          <Label className="text-xs">Collab no Instagram (até 3 perfis)</Label>
+                          <Input value={collab} onChange={e => setCollab(e.target.value)} placeholder="@parceiro, @fornecedor" />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -485,10 +517,10 @@ export default function PostStudio() {
                     <Input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)} />
                   </div>
                   <div className="flex items-end gap-2">
-                    <Button className="flex-1" onClick={() => submit(false)} disabled={saving}>
+                    <Button className="flex-1" onClick={() => submit(false)} disabled={saving || mediaBlocked}>
                       {saving ? <Loader2 size={14} className="mr-1 animate-spin" /> : <CalendarClock size={14} className="mr-1" />} {t('Agendar', 'Schedule Post')}
                     </Button>
-                    <Button variant="secondary" onClick={() => submit(true)} disabled={saving}>
+                    <Button variant="secondary" onClick={() => submit(true)} disabled={saving || mediaBlocked}>
                       <Zap size={14} className="mr-1" /> {t('Publicar agora', 'Publish Now')}
                     </Button>
                   </div>

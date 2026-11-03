@@ -199,7 +199,7 @@ export default function Scheduling() {
         <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-primary to-blue-600 text-primary-foreground shadow-lg shadow-primary/20">
           <CalendarClock size={20} />
         </div>
-        <h1 className="text-xl font-bold tracking-tight text-foreground">Agendamentos</h1>
+        <h1 className="text-xl font-bold tracking-tight text-foreground">Estúdio de Postagem</h1>
       </div>
       {clients.length > 0 && <SchedulingClientPicker clients={clients} value={client?.id || null} onChange={selectClient} />}
     </div>

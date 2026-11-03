@@ -119,7 +119,7 @@ export default function StoryReminder() {
           </div>
           {reminder.client && has('pulse_plus') && (
             <Button asChild variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
-              <Link to={`/agendamentos?cliente=${reminder.client.id}`}><ArrowLeft size={14} /> Agendamentos</Link>
+              <Link to={`/estudio-postagem?cliente=${reminder.client.id}`}><ArrowLeft size={14} /> Estúdio de Postagem</Link>
             </Button>
           )}
         </div>

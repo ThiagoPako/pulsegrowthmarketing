@@ -36,6 +36,9 @@ import { isHttpsUrl, registerStoryRoutes } from './storySeries.mjs';
 import { createCaptionPrefetch } from './lib/captionPrefetch.mjs';
 
 export const SCHEDULING_MODULE = 'agendamentos';
+// Estúdio de Postagem (usuário, 02/11/2026: "estúdio de postagem e agendamentos são a mesma função, junte tudo"):
+// o calendário abre também para quem posta pelos clientes, não só para quem tem Pulse Plus.
+export const CALENDAR_ROLES = ['admin', 'gestor_projetos', 'social_media'];
 
 const ACTIVE_POST_STATUSES = new Set(['agendado', 'publicando', 'erro']);
 const KINDS = new Set(['conteudo', 'arte', 'portal', 'post']);
@@ -175,6 +178,8 @@ function postSummary(p) {
     captions: p.captions && typeof p.captions === 'object' ? p.captions : null,
     first_comment: p.first_comment || null,
     collaborators: p.collaborators || null,
+    story_audio_url: p.story_audio_url || null,
+    story_audio_name: p.story_audio_name || null,
     publish_type: p.publish_type,
     caption: p.caption || '',
     media_url: p.media_url || null,
@@ -550,7 +555,7 @@ export function registerSchedulingRoutes(app, deps) {
   const {
     pool, verifyUser, getLinkedUserIds, resolveActiveCity, cityVisibilityExpression,
     ensureSocialPostsSchema, getConnectedAccounts, sanitizeAccount, duplicatedPlatformAccounts,
-    prepareScheduledPost, onSchemaChange, publicAppUrl, logger = console, hasPulsePlus, postCaption = null,
+    prepareScheduledPost, onSchemaChange, publicAppUrl, logger = console, hasPulsePlus, postCaption = null, userHasAnyRole = null,
   } = deps;
   let stories = null; // storySeries.mjs (registrado no fim)
   const historyHasCity = { task_history: false, design_task_history: false };
@@ -811,13 +816,16 @@ export function registerSchedulingRoutes(app, deps) {
     return rows.map((r) => r.module);
   }
 
+  const byRole = async (user) => (typeof userHasAnyRole === 'function' ? userHasAnyRole(user, CALENDAR_ROLES).catch(() => false) : false);
+
   async function requireModule(req) {
     const { user } = await verifyUser(req);
     await ready();
     if (stories) await stories.ready();
-    // Pulse Plus libera o módulo; sem a função (testes antigos), vale a lista 'agendamentos'
+    // Pulse Plus ou um papel de quem posta (CALENDAR_ROLES) libera o módulo; sem as funções (testes antigos),
+    // vale a lista 'agendamentos'
     const allowed = typeof hasPulsePlus === 'function'
-      ? await hasPulsePlus(user)
+      ? (await hasPulsePlus(user)) || await byRole(user)
       : (await userModules(user)).includes(SCHEDULING_MODULE);
     if (!allowed) throw httpError(403, 'Sem acesso a este módulo');
     const city = await resolveActiveCity(req, user.id, user);
@@ -840,7 +848,10 @@ export function registerSchedulingRoutes(app, deps) {
     try {
       const { user } = await verifyUser(req);
       res.set('Cache-Control', 'no-store');
-      res.json({ modules: await userModules(user) });
+      const modules = await userModules(user);
+      // o calendário do Estúdio de Postagem: a tela mostra a aba para quem o servidor deixa entrar
+      if (!modules.includes(SCHEDULING_MODULE) && await byRole(user)) modules.push(SCHEDULING_MODULE);
+      res.json({ modules });
     } catch (error) {
       sendError(res, error, logger);
     }
@@ -1356,6 +1367,9 @@ export function registerSchedulingRoutes(app, deps) {
             // Link e botão só no lembrete: "Postar sozinho" sai sem link clicável (a API da Meta não aplica o adesivo)
             story_link: storyMode === 'lembrete' ? (String(body.story_link || '').trim() || null) : null,
             story_link_text: storyMode === 'lembrete' ? (String(body.story_link_text || '').trim().slice(0, 40) || 'Clique aqui') : null,
+            // trilha do story de arte: só quando o robô posta (o lembrete a equipe posta pelo app, com a música de lá)
+            story_audio_url: storyMode === 'auto' ? body.story_audio_url || null : null,
+            story_audio_name: storyMode === 'auto' ? body.story_audio_name || null : null,
           }, { requireAccounts: storyMode !== 'lembrete' });
         }
 
@@ -1381,8 +1395,8 @@ export function registerSchedulingRoutes(app, deps) {
             `INSERT INTO scheduled_posts
                (client_id, delivery_id, content_task_id, design_task_id, portal_content_id, platform, publish_type,
                 media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text, story_mode, platforms, captions,
-                first_comment, collaborators)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+                first_comment, collaborators, story_audio_url, story_audio_name)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
              RETURNING *`,
             [
               client.id,
@@ -1396,6 +1410,7 @@ export function registerSchedulingRoutes(app, deps) {
               prepared.story_link, prepared.story_link_text, storyMode,
               prepared.platforms, prepared.captions ? JSON.stringify(prepared.captions) : null,
               prepared.first_comment, prepared.collaborators,
+              prepared.story_audio_url || null, prepared.story_audio_name || null,
             ]
           );
           post = created;

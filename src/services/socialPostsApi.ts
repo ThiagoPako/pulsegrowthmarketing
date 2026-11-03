@@ -45,6 +45,8 @@ export interface ScheduledPost {
   media_items?: PostMediaItem[] | null;
   story_link?: string | null;
   story_link_text?: string | null;
+  story_audio_url?: string | null;
+  story_audio_name?: string | null;
   /** Story do Agendamentos: 'lembrete' = a equipe posta pelo app com o link (nunca sai sozinho) */
   story_mode?: 'auto' | 'lembrete' | null;
   /** Data de uma repetição de stories (Agendamentos) */
@@ -68,7 +70,13 @@ export interface CreateScheduledPostInput {
   media_items?: PostMediaItem[];
   story_link?: string | null;
   story_link_text?: string | null;
+  /** story de arte: a arte vira vídeo de 15 s com esta música */
+  story_audio_url?: string | null;
+  story_audio_name?: string | null;
   caption?: string;
+  /** primeiro comentário e Collab no Instagram (até 3 @perfis); não valem para story */
+  first_comment?: string;
+  collaborators?: string;
   /** ISO datetime */
   scheduled_at: string;
 }

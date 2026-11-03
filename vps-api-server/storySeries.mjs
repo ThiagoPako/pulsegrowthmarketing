@@ -573,7 +573,7 @@ export function registerStoryRoutes(app, deps) {
       await notifyUser(ended.series.created_by, {
         title: 'Repetição de stories encerrada',
         message: `${client?.company_name || 'Cliente'}: "${ended.series.title || 'Story'}" saiu da repetição porque ${ended.problem}.`,
-        link: `/agendamentos?cliente=${ended.series.client_id}`,
+        link: `/estudio-postagem?cliente=${ended.series.client_id}`,
         city: clientCityValue(client),
       });
     }
@@ -648,7 +648,7 @@ export function registerStoryRoutes(app, deps) {
           await notifyUser(outcome.ended.created_by, {
             title: 'Repetição de stories encerrada',
             message: `${client?.company_name || 'Cliente'}: "${outcome.ended.title || 'Story'}" saiu da repetição porque ${problem}.`,
-            link: `/agendamentos?cliente=${outcome.ended.client_id}`,
+            link: `/estudio-postagem?cliente=${outcome.ended.client_id}`,
             city: clientCityValue(client),
           });
         }

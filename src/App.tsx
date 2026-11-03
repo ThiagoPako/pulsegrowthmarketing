@@ -109,6 +109,7 @@ const CommercialProposal = lazy(() => import("@/pages/CommercialProposal"));
 const ProposalViewer = lazy(() => import("@/pages/ProposalViewer"));
 const PayBilling = lazy(() => import("@/pages/PayBilling"));
 const ApproveContent = lazy(() => import("@/pages/ApproveContent"));
+const ApproveArt = lazy(() => import("@/pages/ApproveArt"));
 const ReviewApproval = lazy(() => import("@/pages/ReviewApproval"));
 const ConnectNetworks = lazy(() => import("@/pages/ConnectNetworks"));
 const RedesPulse = lazy(() => import("@/pages/RedesPulse"));
@@ -421,6 +422,7 @@ function AppRoutes() {
         <Route path="/proposta/:token" element={<ProposalViewer />} />
         <Route path="/pagar/:token" element={<Suspense fallback={<PageLoader />}><PayBilling /></Suspense>} />
         <Route path="/aprovar/:token" element={<Suspense fallback={<PageLoader />}><ApproveContent /></Suspense>} />
+        <Route path="/aprovar-arte/:token" element={<Suspense fallback={<PageLoader />}><ApproveArt /></Suspense>} />
         <Route path="/avaliacao/:token" element={<Suspense fallback={<PageLoader />}><ReviewApproval /></Suspense>} />
         <Route path="/conectar/:token" element={<Suspense fallback={<PageLoader />}><ConnectNetworks /></Suspense>} />
         <Route path="/redes" element={<Suspense fallback={<PageLoader />}><RedesPulse /></Suspense>} />

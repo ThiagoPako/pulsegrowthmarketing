@@ -56,6 +56,8 @@ export function registerBillingIsisRoutes(app, {
   pool, verifyAdmin, paymentConfigFor, socialReports, paymentLink = async () => null, pixCharge = async () => null, lastReceipt = async () => null,
   autoDebitFor = async () => ({ status: null }), pixAutoAvailable = async () => false, verifyAgent = null, uploadRoot, publicUploadsUrl,
   publicAppUrl = process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech', logger = console,
+  // upgrade de redes (lib/planAddons.mjs): o mês do proporcional não bate com o contrato cheio, e está certo assim
+  planAdjustment = async () => 0,
 }) {
   const appBase = String(publicAppUrl).replace(/\/+$/, '');
   // portal e cadastro no portal, nos botões do começo de todo PDF ao cliente (usuário, 02/11/2026)
@@ -536,7 +538,8 @@ export function registerBillingIsisRoutes(app, {
     const { rows: monthRows, revenue, paid, dueDate, amount } = await monthRevenue(contract, month);
     if (step !== 'pre_vencimento' && paid) return { skip: 'pago', config };
     if (step === 'cobranca' || step === 'lembrete') {
-      const problems = checkBillingData({ contractValue: contract.contract_value, revenues: monthRows, month });
+      const adjust = await planAdjustment(contract.client_id, month).catch(() => 0);
+      const problems = checkBillingData({ contractValue: (Number(contract.contract_value) || 0) - (Number(adjust) || 0), revenues: monthRows, month });
       // duas contas (Uruaçu e Minaçu): sem a configuração da cidade do cliente, não cobra na conta da outra
       const clientCity = normalizeCityValue(contract.client_city || contract.city) || 'minacu';
       if (config && config.city !== undefined && cityOf(config) !== clientCity) {

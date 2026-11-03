@@ -55,6 +55,7 @@ import { recordPortalAccess } from './assistant/temperature.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
 import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOption } from './lib/portalSession.mjs';
 import { createPortalAdmin } from './lib/portalAdmin.mjs';
+import { createPlanAddons } from './lib/planAddons.mjs';
 import { cleanupOldEditVersions } from './lib/versionCleanup.mjs';
 import { createWebVideo, captureVideoUploads, isDerivedVariantName, originalNamesForVariant, WEB_TMP_DIR, resolveUploadFile, webVariantUrl } from './lib/webVideo.mjs';
 import { createInstagramVideo } from './lib/instagramVideo.mjs';
@@ -9719,12 +9720,15 @@ app.get('/api/social-posts/accounts-overview', async (req, res) => {
     // só a cidade ativa (conferida contra as cidades da pessoa) e os clientes globais (trabalho em conjunto), 02/11/2026
     const activeCity = normalizeCityValue(await resolveActiveCity(req, user.id, user));
     const { rows: clients } = await pool.query(
-      `SELECT id, company_name AS name, city, logo_url, COALESCE(portal_insights_enabled, false) AS portal_insights_enabled
+      `SELECT id, company_name AS name, city, logo_url, COALESCE(portal_insights_enabled, false) AS portal_insights_enabled,
+              to_jsonb(clients.*)->'social_networks' AS social_networks
        FROM clients WHERE COALESCE(status,'ativo') <> 'inativo' AND (city IS NULL OR lower(city) = $1) ORDER BY company_name`, [activeCity]
     );
     const { rows: accounts } = await pool.query(
       `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, token_expiration, status, api_base
-       FROM social_accounts WHERE status = 'connected'`
+       FROM social_accounts WHERE status = 'connected'
+         -- Conexões Sociais 100% pela Upload-Post (03/11/2026); a que pede login de novo também aparece
+         OR (api_base = 'upload_post' AND status = 'reauth')`
     );
     // Preenche @usuário/foto de contas conectadas antes dessa melhoria (melhor esforço, sem travar a lista)
     // Sem segurar a resposta (a foto aparece na próxima carga) e sem repetir a mesma conta por 6 h
@@ -20899,7 +20903,37 @@ const pixReceipts = registerPixReceiptRoutes(app, {
 });
 
 // ─── Cobranças da Ísis pelo Assistente PULSE (Financeiro → Cobranças; desligado = a cobrança antiga segue igual) ──
+// ─── Upgrade de redes no plano do cliente (lib/planAddons.mjs, 03/11/2026) ───
+const planAddons = createPlanAddons({ pool });
+const planAddonsFail = (res, error) => {
+  const status = Number(error?.status) || (/admin|Unauthorized/i.test(error?.message || '') ? 403 : 500);
+  if (status >= 500) console.error('[upgrade]', error?.message);
+  res.status(status).json({ error: error?.message || 'Erro' });
+};
+app.get('/api/clients/:id/plan-addons', async (req, res) => {
+  try { await verifySocialManager(req); res.json({ addons: await planAddons.list(req.params.id) }); } catch (error) { planAddonsFail(res, error); }
+});
+app.post('/api/clients/:id/plan-addons/preview', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+    res.json(await planAddons.preview({ clientId: req.params.id, monthly: Number(req.body?.monthly) || 0, startDate: req.body?.start_date || null }));
+  } catch (error) { planAddonsFail(res, error); }
+});
+app.post('/api/clients/:id/plan-addons', async (req, res) => {
+  try {
+    const { user } = await verifyAdmin(req);
+    const network = String(req.body?.network || '').trim();
+    if (!/^[a-z_]{1,30}$/.test(network)) return res.status(400).json({ error: 'Rede inválida' });
+    const start = req.body?.start_date && /^\d{4}-\d{2}-\d{2}$/.test(req.body.start_date) ? req.body.start_date : null;
+    res.json(await planAddons.addUpgrade({
+      clientId: req.params.id, network, monthly: Number(req.body?.monthly) || 0, startDate: start,
+      charge: req.body?.charge === 'cortesia' ? 'cortesia' : 'proporcional', userId: user?.id || null,
+    }));
+  } catch (error) { planAddonsFail(res, error); }
+});
+
 const billingIsis = registerBillingIsisRoutes(app, {
+  planAdjustment: (clientId, month) => planAddons.expectedAdjustment(clientId, month),
   pool,
   verifyAdmin,
   paymentConfigFor: paymentConfigForCity,

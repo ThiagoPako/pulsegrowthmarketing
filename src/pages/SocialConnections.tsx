@@ -4,7 +4,7 @@ import { useLang, tr } from '@/lib/i18n';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { useCity } from '@/contexts/CityContext';
 import ClientLogo from '@/components/ClientLogo';
-import { setPortalInsightsEnabled, diagnoseClientConnection, type ConnectedSocialAccount, type DiagnosticCheck } from '@/services/socialPostsApi';
+import { setPortalInsightsEnabled, type ConnectedSocialAccount } from '@/services/socialPostsApi';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, Share2, Copy, Stethoscope, XCircle, Music2, Linkedin, Youtube, KeyRound, Link2, MapPin } from 'lucide-react';
+import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, Copy, Music2, Linkedin, Youtube, KeyRound, Link2, MapPin, AtSign, Twitter, Pin } from 'lucide-react';
 
 interface ClientConnection {
   id: string;
@@ -23,16 +23,28 @@ interface ClientConnection {
   city: string | null;
   accounts: ConnectedSocialAccount[];
   portal_insights_enabled?: boolean;
+  /** redes que a Pulse cuida do cliente (cadastro → Redes sociais) */
+  social_networks?: string[] | null;
 }
 
-type Platform = 'instagram' | 'facebook';
-// redes que só chegam pela Upload-Post (aparecem quando conectadas)
-const EXTRA_PLATFORMS = [
+// Conexões Sociais 100% pela Upload-Post (usuário, 03/11/2026): todas as redes que ela conecta, com filtro por rede
+const NETWORKS = [
+  { id: 'instagram', label: 'Instagram', Icon: Instagram },
+  { id: 'facebook', label: 'Facebook', Icon: Facebook },
   { id: 'tiktok', label: 'TikTok', Icon: Music2 },
   { id: 'linkedin', label: 'LinkedIn', Icon: Linkedin },
   { id: 'youtube', label: 'YouTube', Icon: Youtube },
+  { id: 'threads', label: 'Threads', Icon: AtSign },
+  { id: 'x', label: 'X', Icon: Twitter },
+  { id: 'pinterest', label: 'Pinterest', Icon: Pin },
   { id: 'google_business', label: 'Google', Icon: MapPin },
 ] as const;
+type NetworkId = typeof NETWORKS[number]['id'];
+/** Redes do plano do cliente (sem cadastro: Instagram e Facebook) mais as que ele conectou por fora do plano. */
+function clientNetworks(c: { social_networks?: string[] | null; accounts: ConnectedSocialAccount[] }): NetworkId[] {
+  const plan = (c.social_networks?.length ? c.social_networks : ['instagram', 'facebook']) as string[];
+  return NETWORKS.map((n) => n.id).filter((id) => plan.includes(id) || c.accounts.some((a) => a.platform === id));
+}
 
 interface UploadPostStatus { configured: boolean; key_end?: string; plan?: string | null; limit?: number | null; used?: number; error?: string }
 
@@ -43,15 +55,12 @@ export default function SocialConnections() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'connected' | 'pending'>('all');
+  const [net, setNet] = useState<'all' | NetworkId>('all');
 
   const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [linkBusy, setLinkBusy] = useState<string | null>(null);
-  const [inviteLink, setInviteLink] = useState<{ client: ClientConnection; url: string; expires: string; reused: boolean } | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<{ client: ClientConnection; account: ConnectedSocialAccount } | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const lastLoadRef = useRef(0);
-  const [diagBusy, setDiagBusy] = useState<string | null>(null);
-  const [diag, setDiag] = useState<{ name: string; checks: DiagnosticCheck[] } | null>(null);
   // Upload-Post (02/11/2026): chave (só admin), link de conexão por cliente e atualização das contas
   const [up, setUp] = useState<UploadPostStatus | null>(null);
   const [upKey, setUpKey] = useState('');
@@ -110,56 +119,8 @@ export default function SocialConnections() {
     }
   };
 
-  /** Roda o teste de conexão do cliente e mostra o resultado em linguagem simples. */
-  const runDiagnostic = async (client: ClientConnection) => {
-    setDiagBusy(client.id);
-    try {
-      const checks = await diagnoseClientConnection(client.id);
-      setDiag({ name: client.name, checks });
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setDiagBusy(null);
-    }
-  };
 
 
-  /**
-   * Link público para o cliente autorizar sozinho as próprias contas.
-   * Primeiro reaproveita o link que ainda vale (o cliente pode já ter recebido);
-   * "Gerar novo" troca o link e o anterior para de funcionar.
-   */
-  const generateInviteLink = async (client: ClientConnection, forceNew = false) => {
-    setLinkBusy(client.id);
-    try {
-      const { data, error } = await invokeVpsFunction('social-connect-links', {
-        body: { client_id: client.id, reuse: !forceNew },
-      });
-      if (error || data?.error || !data?.path) {
-        throw new Error(data?.error || error?.message || 'Não foi possível gerar o link.');
-      }
-      // O link precisa abrir no domínio de produção: o retorno do login da Meta
-      // está cadastrado como https://agenciapulse.tech/ e só funciona lá.
-      const url = `https://agenciapulse.tech${data.path}`;
-      const reused = !!data.reused;
-      setInviteLink({
-        client,
-        url,
-        expires: new Date(data.expires_at).toLocaleDateString('pt-BR'),
-        reused,
-      });
-      try {
-        await navigator.clipboard.writeText(url);
-        toast.success(reused ? 'Link atual copiado.' : 'Link gerado e copiado.');
-      } catch {
-        toast.success(reused ? 'Link atual aberto.' : 'Link gerado.');
-      }
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setLinkBusy(null);
-    }
-  };
 
 
 
@@ -225,19 +186,25 @@ export default function SocialConnections() {
     const term = search.trim().toLowerCase();
     return clients.filter(c => {
       if (term && !c.name.toLowerCase().includes(term)) return false;
-      const connected = c.accounts.length > 0;
+      const nets = clientNetworks(c);
+      // com uma rede escolhida, só os clientes que têm essa rede no plano (ou conectada)
+      if (net !== 'all' && !nets.includes(net)) return false;
+      const wanted = net === 'all' ? nets : [net];
+      const connected = wanted.every((id) => c.accounts.some((a) => a.platform === id && a.status === 'connected'));
       if (filter === 'connected' && !connected) return false;
       if (filter === 'pending' && connected) return false;
       return true;
     });
-  }, [clients, search, filter]);
+  }, [clients, search, filter, net]);
 
-  const stats = useMemo(() => ({
-    total: clients.length,
-    ig: clients.filter(c => c.accounts.some(a => a.platform === 'instagram')).length,
-    fb: clients.filter(c => c.accounts.some(a => a.platform === 'facebook')).length,
-    pending: clients.filter(c => c.accounts.length === 0).length,
-  }), [clients]);
+  const stats = useMemo(() => {
+    const done = (c: ClientConnection) => clientNetworks(c).every((id) => c.accounts.some((a) => a.platform === id && a.status === 'connected'));
+    const perNet = Object.fromEntries(NETWORKS.map((n) => [n.id, {
+      plan: clients.filter((c) => clientNetworks(c).includes(n.id)).length,
+      connected: clients.filter((c) => c.accounts.some((a) => a.platform === n.id && a.status === 'connected')).length,
+    }])) as Record<NetworkId, { plan: number; connected: number }>;
+    return { total: clients.length, done: clients.filter(done).length, pending: clients.filter((c) => !done(c)).length, perNet };
+  }, [clients]);
 
 
 
@@ -317,9 +284,9 @@ export default function SocialConnections() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: 'Clientes', value: stats.total },
-          { label: 'Com Instagram', value: stats.ig },
-          { label: 'Com Facebook', value: stats.fb },
-          { label: 'Sem conexão', value: stats.pending },
+          { label: 'Todas as redes conectadas', value: stats.done },
+          { label: 'Com rede pendente', value: stats.pending },
+          { label: 'Instagram conectados', value: stats.perNet.instagram.connected },
         ].map(s => (
           <Card key={s.label}>
             <CardContent className="p-4">
@@ -340,9 +307,18 @@ export default function SocialConnections() {
           <SelectContent>
             <SelectItem value="all">Todos</SelectItem>
             <SelectItem value="connected">Conectados</SelectItem>
-            <SelectItem value="pending">Sem conexão</SelectItem>
+            <SelectItem value="pending">Com rede pendente</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filtrar por rede" style={{ scrollbarWidth: 'none' }}>
+        <Button size="sm" variant={net === 'all' ? 'default' : 'outline'} className="h-8 shrink-0 rounded-full" onClick={() => setNet('all')}>Todas as redes</Button>
+        {NETWORKS.map(({ id, label, Icon }) => (
+          <Button key={id} size="sm" variant={net === id ? 'default' : 'outline'} className="h-8 shrink-0 gap-1.5 rounded-full" aria-pressed={net === id} onClick={() => setNet(net === id ? 'all' : id)}>
+            <Icon size={13} /> {label}
+            <span className="tabular-nums opacity-70">{stats.perNet[id].connected}/{stats.perNet[id].plan}</span>
+          </Button>
+        ))}
       </div>
 
       {loading ? (
@@ -355,11 +331,12 @@ export default function SocialConnections() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {filtered.map(client => {
             const ig = client.accounts.find(a => a.platform === 'instagram');
-            const rows = (['instagram', 'facebook'] as Platform[]).flatMap(plat => {
+            const plan = client.social_networks?.length ? client.social_networks : ['instagram', 'facebook'];
+            const rows = clientNetworks(client).filter((id) => net === 'all' || id === net).flatMap((plat) => {
               const list = client.accounts.filter(a => a.platform === plat);
-              return list.length ? list.map(account => ({ plat, account, duplicated: list.length > 1 })) : [{ plat, account: undefined, duplicated: false }];
+              return list.length ? list.map(account => ({ plat, account, duplicated: list.length > 1 })) : [{ plat, account: undefined as ConnectedSocialAccount | undefined, duplicated: false }];
             });
-            const duplicatedPlatforms = (['instagram', 'facebook'] as Platform[]).filter(plat => client.accounts.filter(a => a.platform === plat).length > 1);
+            const duplicatedPlatforms = NETWORKS.map((n) => n.id).filter(plat => client.accounts.filter(a => a.platform === plat).length > 1);
             return (
               <Card key={client.id}>
                 <CardHeader className="pb-2">
@@ -379,8 +356,9 @@ export default function SocialConnections() {
                     </div>
                   )}
                   {rows.map(({ plat, account, duplicated }) => {
-                    const Icon = plat === 'instagram' ? Instagram : Facebook;
-                    const label = plat === 'instagram' ? 'Instagram' : 'Facebook';
+                    const meta = NETWORKS.find((n) => n.id === plat)!;
+                    const Icon = meta.Icon;
+                    const label = meta.label;
                     return (
                     <div key={account?.id || plat} className={`flex items-center justify-between gap-2 rounded-lg border p-3 ${duplicated ? 'border-destructive/40' : ''}`}>
                       <div className="flex items-center gap-2 min-w-0">
@@ -398,18 +376,20 @@ export default function SocialConnections() {
                           </span>
                         )}
                         <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{label}</p>
+                          <p className="text-sm font-medium truncate flex items-center gap-1.5">
+                            {label}
+                            {!plan.includes(plat) && <Badge variant="outline" className="h-4 px-1 text-[10px]">fora do plano</Badge>}
+                          </p>
                           {account ? (
                             <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
                               <CheckCircle2 size={12} className="text-primary shrink-0" />
                               {accountLabel(account)}
-                              {account.api_base === 'upload_post' && <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">Upload-Post</Badge>}
                               {account.expiring_soon && (
                                 <span className="text-destructive flex items-center gap-1"><AlertTriangle size={12} /> token expirando</span>
                               )}
                             </p>
                           ) : (
-                            <p className="text-xs text-muted-foreground">Não conectado</p>
+                            <p className="text-xs text-amber-600 dark:text-amber-400">Não conectado</p>
                           )}
                         </div>
                       </div>
@@ -424,30 +404,12 @@ export default function SocialConnections() {
                     );
                   })}
 
-                  {EXTRA_PLATFORMS.map(({ id, label, Icon }) => {
-                    const account = client.accounts.find(a => a.platform === id);
-                    if (!account) return null;
-                    return (
-                      <div key={account.id} className="flex items-center gap-2 rounded-lg border p-3">
-                        {account.profile_picture_url
-                          ? <img src={account.profile_picture_url} alt={`Foto do perfil ${account.username || account.account_name}`} className="h-9 w-9 rounded-full object-cover shrink-0 border" loading="lazy" referrerPolicy="no-referrer" />
-                          : <span className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0"><Icon size={16} className="text-muted-foreground" /></span>}
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{label}</p>
-                          <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                            <CheckCircle2 size={12} className="text-primary shrink-0" />{account.username ? `@${account.username.replace(/^@/, '')}` : account.account_name}
-                            <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">Upload-Post</Badge>
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
 
                   {up?.configured !== false && (
                     <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/40 p-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium">Conectar redes pela Upload-Post</p>
-                        <p className="text-xs text-muted-foreground">Instagram, Facebook, TikTok, LinkedIn e YouTube. Abra aqui ou mande o link ao cliente.</p>
+                        <p className="text-sm font-medium">Conectar as redes do cliente</p>
+                        <p className="text-xs text-muted-foreground">Abra aqui ou mande o link ao cliente. As redes são as marcadas no cadastro dele.</p>
                       </div>
                       <div className="flex gap-1 shrink-0">
                         <Button size="sm" variant="ghost" title="Atualizar contas da Upload-Post" disabled={upBusy === client.id} onClick={() => uploadPostSync(client)}>
@@ -460,47 +422,7 @@ export default function SocialConnections() {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">Link de autorização do cliente</p>
-                      <p className="text-xs text-muted-foreground">
-                        Gere um link e envie ao cliente para ele entrar na própria conta.
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1 shrink-0"
-                      disabled={linkBusy === client.id}
-                      onClick={() => generateInviteLink(client)}
-                    >
-                      {linkBusy === client.id
-                        ? <Loader2 size={14} className="animate-spin" />
-                        : <Share2 size={14} />}
-                      Gerar link
-                    </Button>
-                  </div>
 
-                  <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{t('Testar conexão', 'Test Connection')}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Verifica o acesso ao perfil, o limite de postagens e as métricas.
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1 shrink-0"
-                      disabled={diagBusy === client.id}
-                      onClick={() => runDiagnostic(client)}
-                    >
-                      {diagBusy === client.id
-                        ? <Loader2 size={14} className="animate-spin" />
-                        : <Stethoscope size={14} />}
-                      Testar
-                    </Button>
-                  </div>
 
 
 
@@ -550,51 +472,6 @@ export default function SocialConnections() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!inviteLink} onOpenChange={o => !o && setInviteLink(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Link de autorização</DialogTitle>
-            <DialogDescription>
-              {inviteLink?.reused ? 'Este é o link atual de ' : 'Envie este link para '}{inviteLink?.client.name}. O cliente entra na conta dele
-              na Meta e autoriza a agência. Válido até {inviteLink?.expires} (depois de usado, vale por mais 24 h).
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex gap-2">
-            <Input readOnly value={inviteLink?.url ?? ''} onFocus={e => e.currentTarget.select()} />
-            <Button
-              variant="outline"
-              className="gap-1 shrink-0"
-              onClick={async () => {
-                if (!inviteLink) return;
-                try {
-                  await navigator.clipboard.writeText(inviteLink.url);
-                  toast.success('Link copiado');
-                } catch {
-                  toast.error('Copie manualmente o link acima.');
-                }
-              }}
-            >
-              <Copy size={14} /> Copiar
-            </Button>
-          </div>
-          <DialogFooter className="gap-2">
-            {inviteLink?.reused && (
-              <Button
-                variant="outline"
-                disabled={linkBusy === inviteLink.client.id}
-                onClick={() => {
-                  if (!inviteLink) return;
-                  if (!window.confirm('Gerar um novo link? O link enviado antes para o cliente deixa de funcionar.')) return;
-                  generateInviteLink(inviteLink.client, true);
-                }}
-              >
-                Gerar novo link
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => setInviteLink(null)}>Fechar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <AlertDialog open={!!confirmDisconnect} onOpenChange={o => { if (!o && !disconnecting) setConfirmDisconnect(null); }}>
         <AlertDialogContent>
@@ -603,7 +480,7 @@ export default function SocialConnections() {
               Desconectar {confirmDisconnect ? accountLabel(confirmDisconnect.account) : ''} de {confirmDisconnect?.client.name}?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              As postagens automáticas agendadas nessa conta vão falhar até o cliente autorizar de novo pelo link.
+              Os posts agendados nessa rede vão falhar até ela ser conectada de novo pelo link de conexão do cliente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -623,32 +500,6 @@ export default function SocialConnections() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={!!diag} onOpenChange={o => !o && setDiag(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Teste de conexão · {diag?.name}</DialogTitle>
-            <DialogDescription>
-              Resultado da verificação feita agora direto na Meta.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-            {diag?.checks.map((c, i) => (
-              <div key={i} className="flex items-start gap-2 rounded-lg border p-3">
-                {c.ok
-                  ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-500" />
-                  : <XCircle size={16} className="mt-0.5 shrink-0 text-destructive" />}
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{c.label}</p>
-                  {c.detail && <p className="text-xs text-muted-foreground break-words">{c.detail}</p>}
-                </div>
-              </div>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDiag(null)}>Fechar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
 
 

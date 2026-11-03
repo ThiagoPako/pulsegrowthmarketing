@@ -1165,7 +1165,7 @@ export default function Clients() {
       </div>
 
       {/* redes sociais do cliente (02/11/2026): escolher as redes e gerar o link de login (Upload-Post) */}
-      {editing?.id && <ClientSocialNetworks clientId={editing.id} whatsapp={form.whatsapp} />}
+      {editing?.id && <ClientSocialNetworks clientId={editing.id} whatsapp={form.whatsapp} onContractValue={setContractValue} />}
 
       {/* financeiro do cliente (02/11/2026): quem recebe as cobranças e quem recebe os recibos */}
       <div className="p-4 rounded-xl border space-y-4">

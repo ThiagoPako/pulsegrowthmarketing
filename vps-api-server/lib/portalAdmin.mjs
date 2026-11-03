@@ -28,6 +28,17 @@ export function createPortalAdmin({ pool }) {
           used_at TIMESTAMPTZ,
           used_by UUID
         )`);
+      // link fixo de admin (03/11/2026: "ao passar o mouse aparece a opção de copiar link admin; o cliente com esse link
+      // consegue acessar"). Um ativo por cliente; trocar o link desliga o anterior e as sessões abertas por ele.
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS client_portal_admin_links (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+          token TEXT NOT NULL UNIQUE,
+          created_by UUID,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          revoked_at TIMESTAMPTZ
+        )`);
     })().catch((error) => { ready = null; throw error; });
     return ready;
   }
@@ -115,5 +126,33 @@ export function createPortalAdmin({ pool }) {
     return { ok: true };
   }
 
-  return { ensureSchema, createInvite, inviteInfo, consumeInvite, roleOf, listUsers, setRole, removeUser };
+  /** O link fixo de admin do cliente (cria na primeira vez; renew = troca e desliga o anterior). */
+  async function adminLink(clientId, { createdBy = null, renew = false } = {}) {
+    await ensureSchema();
+    if (renew) await pool.query(`UPDATE client_portal_admin_links SET revoked_at = now() WHERE client_id = $1 AND revoked_at IS NULL`, [clientId]);
+    else {
+      const { rows: [cur] } = await pool.query(`SELECT token FROM client_portal_admin_links WHERE client_id = $1 AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1`, [clientId]);
+      if (cur) return cur.token;
+    }
+    const token = crypto.randomBytes(24).toString('base64url');
+    await pool.query(`INSERT INTO client_portal_admin_links (client_id, token, created_by) VALUES ($1, $2, $3)`, [clientId, token, createdBy]);
+    return token;
+  }
+
+  /** Quem abriu o link: { id, client_id } do link ativo, ou null. */
+  async function adminLinkByToken(token) {
+    if (!token || typeof token !== 'string' || token.length < 20) return null;
+    await ensureSchema();
+    const { rows: [row] } = await pool.query(`SELECT id, client_id FROM client_portal_admin_links WHERE token = $1 AND revoked_at IS NULL`, [token]);
+    return row || null;
+  }
+
+  /** A sessão aberta pelo link ainda vale (o link não foi trocado)? */
+  async function adminLinkActive(linkId, clientId) {
+    await ensureSchema();
+    const { rows: [row] } = await pool.query(`SELECT 1 FROM client_portal_admin_links WHERE id = $1 AND client_id = $2 AND revoked_at IS NULL`, [linkId, clientId]);
+    return !!row;
+  }
+
+  return { adminLink, adminLinkByToken, adminLinkActive, ensureSchema, createInvite, inviteInfo, consumeInvite, roleOf, listUsers, setRole, removeUser };
 }

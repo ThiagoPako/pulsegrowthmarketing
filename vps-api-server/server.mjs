@@ -5417,6 +5417,8 @@ async function resolvePortalCaller(req) {
     const { rows: [alive] } = await pool.query('SELECT 1 FROM client_portal_users WHERE id = $1 AND client_id = $2', [caller.portalUserId, caller.clientId]).catch(() => ({ rows: [{}] }));
     if (!alive) return null;
   }
+  // sessão do link de admin: o link trocado derruba quem entrou por ele
+  if (caller?.kind === 'client' && caller.adminLinkId && !(await portalAdmin.adminLinkActive(caller.adminLinkId, caller.clientId).catch(() => false))) return null;
   return caller;
 }
 
@@ -5821,6 +5823,18 @@ app.post('/api/client-portal-auth', async (req, res) => {
       );
       const invitedRole = convite ? await portalAdmin.consumeInvite(convite, clientRow.id, newPortalUser?.id).catch(() => null) : null;
       return res.json({ success: true, client_id, company_name: clientRow.company_name, display_name: name, role: invitedRole || 'membro', invite_used: !!invitedRole, portal_token: portalSession.sign({ clientId: clientRow.id, portalUserId: newPortalUser?.id }) });
+    }
+
+    if (action === 'admin_link_login') {
+      // link fixo de admin da empresa: abre a sessão do portal como admin
+      const attemptKey = loginAttemptKey('portal-admin-link', req.ip || 'ip');
+      const retryAfter = loginRetryAfterSeconds(attemptKey);
+      if (retryAfter > 0) return sendTooManyLoginAttempts(res, retryAfter);
+      const link = await portalAdmin.adminLinkByToken(String(req.body?.token || ''));
+      if (!link) { registerLoginFailure(attemptKey); return res.status(404).json({ error: 'Este link de admin não vale mais. Peça um novo à equipe Pulse.' }); }
+      const { rows: [c] } = await pool.query('SELECT id, company_name, color, logo_url FROM clients WHERE id = $1', [link.client_id]);
+      if (!c) return res.status(404).json({ error: 'Cliente não encontrado' });
+      return res.json({ success: true, client_id: c.id, company_name: c.company_name, color: c.color, logo_url: c.logo_url, role: 'admin', portal_token: portalSession.sign({ clientId: c.id, adminLinkId: link.id }) });
     }
 
     if (action === 'invite_info') {
@@ -6240,7 +6254,7 @@ app.post('/api/portal-admin', async (req, res) => {
     const clientId = effectiveClientId(caller, bodyClientId);
     if (!clientId || !UUID_RE.test(String(clientId))) return res.status(400).json({ error: 'client_id required' });
     const isTeam = caller.kind === 'team';
-    const myRole = isTeam ? 'equipe' : (await portalAdmin.roleOf(caller.portalUserId, clientId)) || 'membro';
+    const myRole = isTeam ? 'equipe' : caller.adminLinkId ? 'admin' : (await portalAdmin.roleOf(caller.portalUserId, clientId)) || 'membro';
 
     if (action === 'me') return res.json({ role: myRole, portal_user_id: caller.portalUserId || null });
 
@@ -6251,6 +6265,15 @@ app.post('/api/portal-admin', async (req, res) => {
       if (!client) return res.status(404).json({ error: 'Cliente não encontrado' });
       const invite = await portalAdmin.createInvite({ clientId, createdBy: caller.user?.id || null, role: 'admin' });
       return res.json({ path: `/portal-registro/${clientId}?convite=${invite.token}`, expires_at: invite.expires_at });
+    }
+
+    if (action === 'admin_link') {
+      // link fixo de admin: só a equipe copia ou troca
+      if (!isTeam) return res.status(403).json({ error: 'Só a equipe Pulse copia o link de admin' });
+      const { rows: [client] } = await pool.query('SELECT id FROM clients WHERE id = $1', [clientId]);
+      if (!client) return res.status(404).json({ error: 'Cliente não encontrado' });
+      const token = await portalAdmin.adminLink(clientId, { createdBy: caller.user?.id || null, renew: req.body?.renew === true });
+      return res.json({ path: `/portal-acesso/${token}` });
     }
 
     if (!isTeam && myRole !== 'admin') return res.status(403).json({ error: 'Só o admin da empresa pode fazer isso' });

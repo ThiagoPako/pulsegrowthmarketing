@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Copy, Crown, Link2, Loader2, ShieldCheck, UserMinus, UserPlus, Users } from 'lucide-react';
+import { Crown, Link2, Loader2, ShieldCheck, UserMinus, UserPlus, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { portalAdmin } from '@/lib/portalApi';
+import { copyPortalAdminLink, portalAdmin } from '@/lib/portalApi';
 
 // Admin da empresa no portal (pedido do usuário, 03/11/2026): quem tem acesso, tirar acesso, promover outro admin e o
 // link de cadastro dos colaboradores. A equipe Pulse vê o mesmo e ainda gera o convite de admin.
@@ -23,7 +23,7 @@ async function copy(text: string, ok: string) {
   }
 }
 
-export default function PortalCompanyAdmin({ clientId, clientColor, isTeamMember }: { clientId: string; clientColor: string; isTeamMember: boolean }) {
+export default function PortalCompanyAdmin({ clientId, clientColor, isTeamMember, companyName = '' }: { clientId: string; clientColor: string; isTeamMember: boolean; companyName?: string }) {
   const [users, setUsers] = useState<PortalLogin[]>([]);
   const [me, setMe] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,12 +48,13 @@ export default function PortalCompanyAdmin({ clientId, clientColor, isTeamMember
     load();
   };
 
-  const inviteAdmin = async () => {
+  const adminLink = async (renew: boolean) => {
+    if (renew && !window.confirm('Trocar o link admin? O link antigo para de funcionar e quem entrou por ele sai do portal.')) return;
     setBusy('invite');
-    const data = await portalAdmin({ action: 'create_invite', client_id: clientId });
+    const r = await copyPortalAdminLink(clientId, companyName || 'empresa', renew);
     setBusy(null);
-    if (data?.error) { toast.error(data.error); return; }
-    await copy(`${window.location.origin}${data.path}`, 'Link de admin copiado! Vale por 7 dias e uma pessoa só.');
+    if (r.ok) toast.success(renew ? 'Link novo copiado; o antigo não vale mais' : 'Link admin copiado, já com o aviso para não compartilhar');
+    else toast.error(r.error || 'Não foi possível copiar');
   };
 
   const memberLink = `${window.location.origin}/portal-registro/${clientId}`;
@@ -73,18 +74,18 @@ export default function PortalCompanyAdmin({ clientId, clientColor, isTeamMember
           </span>
         </button>
         {isTeamMember && (
-          <button
-            type="button"
-            onClick={inviteAdmin}
-            disabled={busy === 'invite'}
-            className="flex items-start gap-3 rounded-2xl border border-violet-400/25 bg-violet-500/10 p-4 text-left transition-colors hover:bg-violet-500/15 disabled:opacity-60"
-          >
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-500/20 text-violet-300">{busy === 'invite' ? <Loader2 size={17} className="animate-spin" /> : <Link2 size={17} />}</span>
-            <span>
-              <span className="block text-sm font-semibold text-white">Gerar link de admin</span>
-              <span className="mt-0.5 block text-xs text-white/45">Para o dono ou gestor da empresa. Uso único, vale 7 dias.</span>
-            </span>
-          </button>
+          <div className="rounded-2xl border border-violet-400/25 bg-violet-500/10 p-4">
+            <button type="button" onClick={() => adminLink(false)} disabled={busy === 'invite'} className="flex w-full items-start gap-3 text-left disabled:opacity-60">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-500/20 text-violet-300">{busy === 'invite' ? <Loader2 size={17} className="animate-spin" /> : <Link2 size={17} />}</span>
+              <span>
+                <span className="block text-sm font-semibold text-white">Copiar link admin</span>
+                <span className="mt-0.5 block text-xs text-white/45">Só para o dono da empresa: entra como admin, sem senha.</span>
+              </span>
+            </button>
+            <button type="button" onClick={() => adminLink(true)} disabled={busy === 'invite'} className="mt-2 pl-12 text-[11px] font-medium text-violet-300/80 underline-offset-2 hover:underline">
+              Trocar link (o antigo para de funcionar)
+            </button>
+          </div>
         )}
       </div>
 

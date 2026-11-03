@@ -92,6 +92,7 @@ const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
 const ContentManager = lazy(() => import("@/pages/ContentManager"));
 const ClientPortalLogin = lazy(() => import("@/pages/ClientPortalLogin"));
 const ClientPortalRegister = lazy(() => import("@/pages/ClientPortalRegister"));
+const PortalAdminAccess = lazy(() => import("@/pages/PortalAdminAccess"));
 const TrafficManagement = lazy(() => import("@/pages/TrafficManagement"));
 const AutomationFlows = lazy(() => import("@/pages/AutomationFlows"));
 const FlyerTemplates = lazy(() => import("@/pages/FlyerTemplates"));
@@ -396,6 +397,7 @@ function AppRoutes() {
         <Route path="/onboarding/:clientId" element={<ClientOnboarding />} />
         <Route path="/portal-login/:clientId" element={<ClientPortalLogin />} />
         <Route path="/portal-registro/:clientId" element={<ClientPortalRegister />} />
+        <Route path="/portal-acesso/:token" element={<PortalAdminAccess />} />
         <Route path="/portal/:clientId" element={<ClientPortal />} />
         <Route path="/conteudos-portal" element={<ProtectedRoute><ContentManager /></ProtectedRoute>} />
         <Route path="/trafego" element={<ProtectedRoute><TrafficManagement /></ProtectedRoute>} />

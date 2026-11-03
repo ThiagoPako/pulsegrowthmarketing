@@ -9,9 +9,15 @@ function fakePool() {
     { id: 'a', client_id: C, role: 'admin' },
     { id: 'b', client_id: C, role: 'membro' },
   ];
+  const links: { id: string; client_id: string; token: string; revoked: boolean }[] = [];
   const invites: { token_hash: string; client_id: string; role: string; used_at: string | null; expires: number }[] = [];
   const query = async (sql: string, p: unknown[] = []) => {
     if (/^\s*(ALTER|CREATE)/.test(sql)) return { rows: [] };
+    if (sql.includes('UPDATE client_portal_admin_links SET revoked_at')) { links.filter((l) => l.client_id === p[0]).forEach((l) => { l.revoked = true; }); return { rows: [] }; }
+    if (sql.includes('INSERT INTO client_portal_admin_links')) { links.push({ id: `l${links.length}`, client_id: p[0] as string, token: p[1] as string, revoked: false }); return { rows: [] }; }
+    if (sql.includes('SELECT token FROM client_portal_admin_links')) return { rows: links.filter((l) => l.client_id === p[0] && !l.revoked).slice(-1) };
+    if (sql.includes('SELECT id, client_id FROM client_portal_admin_links')) return { rows: links.filter((l) => l.token === p[0] && !l.revoked) };
+    if (sql.includes('FROM client_portal_admin_links WHERE id')) return { rows: links.filter((l) => l.id === p[0] && l.client_id === p[1] && !l.revoked).map(() => ({})) };
     if (sql.includes('UPDATE client_portal_invites SET expires_at = now()')) {
       invites.filter((i) => i.client_id === p[0] && !i.used_at).forEach((i) => { i.expires = 0; });
       return { rows: [] };
@@ -79,5 +85,20 @@ describe('admin da empresa no portal', () => {
     expect(await adm.removeUser(C, 'b', 'a')).toEqual({ ok: true });
     expect(users.map((u) => u.id)).toEqual(['a']);
     expect(await adm.setRole(C, 'a', 'chefe')).toMatchObject({ error: 'Papel inválido' });
+  });
+
+  it('link fixo de admin: o mesmo a cada cópia, e trocar desliga o antigo e as sessões dele', async () => {
+    const { pool } = fakePool();
+    const adm = createPortalAdmin({ pool });
+    const t1 = await adm.adminLink(C);
+    expect(await adm.adminLink(C)).toBe(t1);
+    const l1 = await adm.adminLinkByToken(t1);
+    expect(l1).toMatchObject({ client_id: C });
+    expect(await adm.adminLinkActive(l1!.id, C)).toBe(true);
+    const t2 = await adm.adminLink(C, { renew: true });
+    expect(t2).not.toBe(t1);
+    expect(await adm.adminLinkByToken(t1)).toBeNull();
+    expect(await adm.adminLinkActive(l1!.id, C)).toBe(false);
+    expect(await adm.adminLinkByToken('curto')).toBeNull();
   });
 });

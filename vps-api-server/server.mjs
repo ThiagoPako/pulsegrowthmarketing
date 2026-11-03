@@ -6590,6 +6590,36 @@ app.post('/api/portal-actions', async (req, res) => {
       return res.json({ success: true });
     }
 
+    // ── Revisão interna pela equipe no portal (03/11/2026) ──
+    // "Aprovar" = mostrar ao cliente: o card vai para Envio, o conteúdo fica "pendente" no portal e o servidor manda
+    // sozinho o link do vídeo no grupo do cliente no WhatsApp para ele aprovar. "Pedir ajuste" = volta ao editor.
+    if (action === 'team_release' || action === 'team_adjust') {
+      if (!isTeamCaller) return res.status(403).json({ error: 'Só a equipe faz a revisão interna' });
+      if (!content_id) return res.status(400).json({ error: 'content_id required' });
+      const { rows: [row] } = await pool.query(
+        `SELECT id, status, content_task_id FROM client_portal_contents WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)`,
+        [content_id, scopeClientId]
+      );
+      if (!row) return res.status(404).json({ error: 'Conteúdo não encontrado' });
+      if (row.status !== 'revisao_interna') return res.status(409).json({ error: 'Este conteúdo já saiu da revisão interna.' });
+      if (!row.content_task_id) return res.status(409).json({ error: 'Este conteúdo não tem card ligado: libere pelo Kanban.' });
+      const who = String(author_name || caller.user?.name || 'equipe').trim();
+      const move = (column, opts) => agentApi.moveEditCard(row.content_task_id, column, opts)
+        .catch((error) => { throw Object.assign(error, { portalStatus: error.status || 500 }); });
+      try {
+      if (action === 'team_release') {
+        await move('envio', { human: true, userId: caller.user?.id || null, reason: `Aprovado pela equipe no portal (${who})` });
+        return res.json({ success: true, status: 'pendente' });
+      }
+      const note = String(message || '').trim();
+      if (note.length < 3) return res.status(400).json({ error: 'Conte o que precisa mudar no vídeo' });
+      await move('alteracao', { userId: caller.user?.id || null, notes: `Ajuste pedido pela equipe no portal (${who}): ${note}`, reason: 'Ajuste pedido pela equipe no portal' });
+      return res.json({ success: true, status: 'revisao_interna', sent_to: 'alteracao' });
+      } catch (error) {
+        return res.status(error.portalStatus || 500).json({ error: error.message });
+      }
+    }
+
     if (action === 'approve') {
       if (!content_id) return res.status(400).json({ error: 'content_id required' });
       // Idempotente (clique duplo não aprova nem avisa duas vezes) e nunca em 'revisao_interna':

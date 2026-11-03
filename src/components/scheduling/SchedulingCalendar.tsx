@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Draggable, Droppable, type DraggableProvided } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
 import {
-  brtParts, canDrag, formatDayLabel, groupByDate, isWeekendKey, monthGridKeys, sameMonth, weekKeys, weekdayIndex, type SchedulingItem,
+  brtParts, canDrag, formatDayLabel, groupByDate, monthGridKeys, sameMonth, weekKeys, weekdayIndex, type SchedulingItem,
 } from '@/lib/postingSchedule';
 import type { BestTimeSlot, CalendarEvents } from '@/services/schedulingApi';
 import BestTimeBadge, { DayMark, PulseMark, slotTime } from './BestTimeBadge';
@@ -74,8 +74,8 @@ function DayNumber({ day, today }: { day: string; today: string }) {
   return (
     <span
       className={cn(
-        'grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs font-semibold tabular-nums',
-        day === today ? 'bg-primary text-primary-foreground shadow-sm' : 'text-foreground',
+        'grid h-6 min-w-6 place-items-center rounded-full px-1 text-[12px] font-semibold tabular-nums tracking-tight',
+        day === today ? 'bg-primary text-primary-foreground shadow-[0_4px_12px_-4px_hsl(var(--primary)/0.7)]' : 'text-foreground/80',
       )}
     >
       {n}
@@ -119,18 +119,16 @@ export default function SchedulingCalendar({
       <div className={cn(compact ? 'space-y-2' : 'grid grid-cols-7 gap-2')}>
         {days.map((day) => {
           const list = byDate.get(day) || [];
-          const weekend = isWeekendKey(day);
           return (
             <section
               key={day}
               aria-label={formatDayLabel(day)}
               className={cn(
-                'flex min-w-0 flex-col rounded-xl border border-border bg-card/60',
-                weekend && 'bg-muted/40',
-                day === today && 'border-primary/60 ring-1 ring-primary/30',
+                'flex min-w-0 flex-col rounded-2xl border border-border/70 bg-card shadow-sm transition-colors hover:border-primary/30',
+                day === today && 'border-primary/50 shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]',
               )}
             >
-              <header className={cn('flex items-center justify-between gap-1 border-b border-border/60 px-2 py-1.5', weekend && 'text-muted-foreground')}>
+              <header className="flex items-center justify-between gap-1 border-b border-border/50 px-2.5 py-2">
                 <span className="text-[11px] font-semibold uppercase tracking-wide">{formatDayLabel(day).split(' ')[0]}</span>
                 <div className="flex items-center gap-1">
                   {list.length > 0 && <span className="text-[10px] text-muted-foreground">{list.length}</span>}
@@ -191,7 +189,6 @@ export default function SchedulingCalendar({
                     aria-label={`${formatDayLabel(day)}: ${list.length}`}
                     className={cn(
                       'relative flex min-h-[52px] flex-col items-center gap-1 rounded-lg border border-transparent p-1 transition-colors',
-                      isWeekendKey(day) && 'bg-muted/40',
                       outside && 'opacity-40',
                       selectedDay === day && 'border-primary bg-primary/10',
                       snapshot.isDraggingOver && 'border-primary bg-primary/15 ring-2 ring-primary/40',
@@ -234,13 +231,10 @@ export default function SchedulingCalendar({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-border">
-      <div className="grid grid-cols-7 gap-px">
-        {WEEKDAYS.map((w, i) => (
-          <div
-            key={w}
-            className={cn('bg-muted/60 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground', i >= 5 && 'bg-muted')}
-          >
+    <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-muted/30 to-transparent p-2">
+      <div className="grid grid-cols-7 gap-1.5">
+        {WEEKDAYS.map((w) => (
+          <div key={w} className="px-2 pb-1 pt-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground">
             {w}
           </div>
         ))}
@@ -255,11 +249,10 @@ export default function SchedulingCalendar({
                   ref={provided.innerRef}
                   {...provided.droppableProps}
                   className={cn(
-                    'flex min-h-[124px] min-w-0 flex-col gap-1 bg-card p-1.5 transition-colors',
-                    isWeekendKey(day) && 'bg-muted/40',
-                    outside && 'bg-muted/60 [&>*]:opacity-60',
-                    day === today && 'bg-primary/5 shadow-[inset_0_0_0_2px_hsl(var(--primary)/0.55)]',
-                    snapshot.isDraggingOver && 'bg-primary/10 shadow-[inset_0_0_0_2px_hsl(var(--primary)/0.6)]',
+                    'group/day flex min-h-[128px] min-w-0 flex-col gap-1 rounded-xl border border-border/60 bg-card p-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 hover:border-primary/30 hover:shadow-md',
+                    outside && 'border-transparent bg-transparent shadow-none [&>*]:opacity-40 hover:shadow-none',
+                    day === today && 'border-primary/50 bg-primary/[0.04] shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]',
+                    snapshot.isDraggingOver && 'border-primary bg-primary/10 shadow-[0_0_0_3px_hsl(var(--primary)/0.25)]',
                   )}
                 >
                   <div className="flex items-center justify-between">

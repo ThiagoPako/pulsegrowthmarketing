@@ -53,6 +53,8 @@ function Row({ item, onPick, dragging }: { item: SchedulingItem; onPick: (item: 
   );
 }
 
+const ALL_TYPES: SchedulingType[] = ['reels', 'story', 'feed', 'carrossel', 'arte'];
+
 /** Materiais aprovados do cliente que ainda não têm data de postagem. */
 export default function UnscheduledPanel({ items, onPick, draggable, className }: Props) {
   const [query, setQuery] = useState('');
@@ -60,7 +62,6 @@ export default function UnscheduledPanel({ items, onPick, draggable, className }
   // filtro por designer das artes (usuário, 03/11/2026)
   const [designer, setDesigner] = useState('');
   const designers = useMemo(() => [...new Set(items.map((i) => i.author).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [items]);
-  const types = useMemo(() => [...new Set(items.map((i) => i.type))], [items]);
   const normalize = (v: string) => v.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const filtered = useMemo(() => items.filter((i) =>
     (type === 'all' || i.type === type) && (!designer || i.author === designer) && (!query.trim() || normalize(i.title).includes(normalize(query.trim())))),
@@ -83,32 +84,35 @@ export default function UnscheduledPanel({ items, onPick, draggable, className }
             <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar" className="h-8 pl-7 text-xs" aria-label="Buscar material" />
           </div>
         )}
-        {designers.length > 0 && (
-          <select value={designer} onChange={(e) => setDesigner(e.target.value)} aria-label="Filtrar por designer"
-            className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs">
-            <option value="">Todos os designers</option>
-            {designers.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
-        )}
-        {types.length > 1 && (
-          <div className="flex flex-wrap gap-1">
-            {(['all', ...types] as const).map((t) => (
+        {/* todos os tipos sempre à vista, com quantos há de cada (usuário, 03/11/2026: "esses filtros precisam ter
+            todos os tipos de conteúdo: carrossel, designers, story, feed, reels") */}
+        <div className="flex flex-wrap gap-1">
+          {(['all', ...ALL_TYPES] as const).map((t) => {
+            const n = t === 'all' ? items.length : items.filter((i) => i.type === t).length;
+            return (
               <button
                 key={t}
                 type="button"
                 onClick={() => setType(t)}
                 aria-pressed={type === t}
+                disabled={t !== 'all' && n === 0}
                 className={cn(
-                  'flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors',
+                  'flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors disabled:cursor-default disabled:opacity-40',
                   type === t ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground',
                 )}
               >
                 {t !== 'all' && <span className={cn('h-1.5 w-1.5 rounded-full', TYPE_STYLES[t].dot)} />}
                 {t === 'all' ? 'Todos' : TYPE_STYLES[t].label}
+                <span className="tabular-nums opacity-70">{n}</span>
               </button>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
+        <select value={designer} onChange={(e) => setDesigner(e.target.value)} aria-label="Filtrar por designer" disabled={!designers.length}
+          className="h-8 w-full rounded-lg border border-border bg-background px-2 text-xs disabled:opacity-50">
+          <option value="">{designers.length ? 'Todos os designers' : 'Designers: nenhuma arte na lista'}</option>
+          {designers.map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
       </div>
 
       {items.length === 0 ? (

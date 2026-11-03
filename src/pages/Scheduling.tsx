@@ -430,6 +430,8 @@ export default function Scheduling() {
           presetDate={dialog.presetDate}
           presetTime={dialog.presetTime}
           clientId={client.id}
+          clientName={client.company_name}
+          clientLogo={client.logo_url}
           accounts={accounts}
           storyLink={data?.story_link}
           onEditClientLink={() => setLinkDialog(true)}

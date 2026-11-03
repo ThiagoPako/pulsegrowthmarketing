@@ -48,6 +48,9 @@ interface Props {
   onEditClientLink?: () => void;
   onClose: () => void;
   onSaved: (message: string) => void;
+  /** nome e logo do cliente na prévia quando a conta não tem foto (usuário, 03/11/2026) */
+  clientName?: string;
+  clientLogo?: string | null;
 }
 
 type PostMode = 'auto' | 'lembrete' | 'manual';
@@ -111,7 +114,7 @@ async function copyText(text: string) {
 }
 
 export default function ScheduleDialog({
-  item, presetDate, presetTime, clientId, accounts, storyLink: clientLink, onEditClientLink, onClose, onSaved,
+  item, presetDate, presetTime, clientId, clientName, clientLogo, accounts, storyLink: clientLink, onEditClientLink, onClose, onSaved,
 }: Props) {
   const hasIg = accounts.some((a) => a.platform === 'instagram');
   const hasFb = accounts.some((a) => a.platform === 'facebook');
@@ -775,7 +778,8 @@ export default function ScheduleDialog({
                 media={format === 'carousel' ? order : [multiImage ? order[0] : mediaUrl.trim() || item.media_url || ''].filter(Boolean)}
                 captions={postsAlone ? captions : Object.fromEntries(previewNets.map((n) => [n, caption]))}
                 accounts={accounts.map((a) => ({ platform: a.platform, name: a.account_name, username: a.username, picture: a.profile_picture_url }))}
-                fallbackName={accounts[0]?.account_name || 'Cliente'}
+                fallbackName={clientName?.trim() || accounts[0]?.account_name || 'Cliente'}
+                fallbackPicture={clientLogo}
                 firstComment={firstComment}
                 collaborators={networks.includes('instagram') ? collab : ''}
                 storyLink={mode === 'lembrete' && storyLink ? { url: storyLink, text: storyLinkText } : null}

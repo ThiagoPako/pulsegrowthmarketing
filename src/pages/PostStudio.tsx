@@ -32,6 +32,7 @@ interface ClientConnection {
   id: string;
   name: string;
   city: string | null;
+  logo_url?: string | null;
   accounts: ConnectedSocialAccount[];
 }
 
@@ -540,7 +541,8 @@ export default function PostStudio() {
                   media={selectedUrls}
                   captions={{ instagram: caption, facebook: caption }}
                   accounts={(client?.accounts || []).map(a => ({ platform: a.platform, name: a.account_name, username: a.username, picture: a.profile_picture_url }))}
-                  fallbackName={accountName || client?.name || 'Cliente'}
+                  fallbackName={client?.name || accountName || 'Cliente'}
+                  fallbackPicture={client?.logo_url}
                   firstComment={publishType === 'stories' ? '' : firstComment}
                   collaborators={publishType === 'stories' || platform === 'facebook' ? '' : collab}
                   storyLink={publishType === 'stories' && storyLink ? { url: storyLink, text: storyLinkText } : null}

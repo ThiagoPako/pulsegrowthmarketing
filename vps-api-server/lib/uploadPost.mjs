@@ -240,6 +240,25 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     return { url: r.authorize_url };
   }
 
+  // Instagram ligado à página (03/11/2026: "páginas que não têm Instagram ativo não devem aparecer"). A resposta da
+  // Upload-Post pode trazer o Instagram em campos diferentes: o @ (ou true) quando tem, false quando a resposta diz que
+  // não tem, null quando ela não fala nada (aí a tela decide pelo cliente).
+  let loggedPageKeys = false;
+  function instagramOfPage(p) {
+    if (!loggedPageKeys) { loggedPageKeys = true; logger.info?.('[upload-post] campos da página do Facebook:', Object.keys(p || {}).join(',')); }
+    const keys = ['instagram_business_account', 'instagram_account', 'connected_instagram_account', 'instagram', 'ig_account', 'instagram_id', 'ig_id', 'instagram_username'];
+    const present = keys.filter((k) => Object.prototype.hasOwnProperty.call(p || {}, k));
+    if (!present.length) return null;
+    for (const k of present) {
+      const v = p[k];
+      if (!v) continue;
+      if (typeof v === 'string') return v.replace(/^@/, '');
+      if (typeof v === 'object') return String(v.username || v.name || v.id || true);
+      return true;
+    }
+    return false;
+  }
+
   /** Páginas do Facebook do perfil: com uma só, é ela; com várias, mantém a escolhida antes (ou nenhuma, e avisa). */
   async function facebookPage(username, current) {
     // a resposta veio com nomes de campo diferentes da documentação (03/11/2026: páginas sem nome na tela): aceita os
@@ -248,6 +267,7 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
       id: String(p.page_id ?? p.id ?? p.facebook_page_id ?? ''),
       name: String(p.page_name ?? p.name ?? p.title ?? '').trim(),
       picture: (typeof p.picture === 'string' ? p.picture : p.picture?.data?.url) || p.page_picture || null,
+      instagram: instagramOfPage(p),
     })).filter((p) => p.id && p.id !== 'undefined');
     const r = await call('GET', `/uploadposts/facebook/pages?profile=${encodeURIComponent(username)}`).catch(() => ({ pages: [] }));
     let pages = norm(r.pages || r.data);

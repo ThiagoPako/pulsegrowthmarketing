@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, Zap, CalendarCheck2, CalendarClock, Check, Copy, Facebook, Instagram, Linkedin, Loader2, Music2, Repeat2, Sparkles, Trash2, Youtube } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, Zap, CalendarCheck2, CalendarClock, Check, Copy, Facebook, Instagram, Linkedin, Loader2, Music2, Repeat2, Sparkles, Trash2, UserPlus, Youtube } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -723,13 +723,29 @@ export default function ScheduleDialog({
                   <Label htmlFor="sched-first-comment" className="text-xs">Primeiro comentário (opcional)</Label>
                   <Input id="sched-first-comment" value={firstComment} onChange={(e) => setFirstComment(e.target.value)} placeholder="Link do WhatsApp, hashtags…" />
                 </div>
-                {networks.includes('instagram') && (
+                {networks.includes('instagram') ? (
                   <div className="space-y-1">
-                    <Label htmlFor="sched-collab" className="text-xs">Collab no Instagram (até 3 perfis)</Label>
+                    <Label htmlFor="sched-collab" className="flex items-center gap-1 text-xs"><UserPlus size={12} /> Adicionar colaborador (Collab)</Label>
                     <Input id="sched-collab" value={collab} onChange={(e) => setCollab(e.target.value)} placeholder="@parceiro, @fornecedor" />
+                    <p className="text-[10px] text-muted-foreground">Até 3 perfis do Instagram. Cada um recebe o convite e aceita no app.</p>
                   </div>
+                ) : (
+                  <p className="self-end rounded-lg border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">
+                    <UserPlus size={11} className="mr-1 inline" />Colaborador (Collab) só existe no Instagram: marque o Instagram para adicionar.
+                  </p>
                 )}
               </div>
+            )}
+            {/* o usuário procurou o colaborador e não achou (03/11/2026): diz por que não aparece */}
+            {!readOnly && !isSeriesItem && (isStory || mode !== 'auto') && (
+              <p className="flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">
+                <UserPlus size={11} className="shrink-0" />
+                {isStory
+                  ? 'Story não aceita colaborador no Instagram; ele entra em feed, carrossel e reels.'
+                  : hasAccounts
+                    ? 'Para adicionar colaborador (Collab), escolha a postagem automática: o convite sai junto com o post.'
+                    : 'Para adicionar colaborador (Collab), conecte o Instagram do cliente: ele entra na postagem automática.'}
+              </p>
             )}
 
             {postsAlone && !readOnly && !isSeriesItem && (

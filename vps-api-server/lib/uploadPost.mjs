@@ -48,7 +48,8 @@ export function uploadFields({ platform, publishType, media, caption, facebookPa
   const video = urls.length === 1 && VIDEO_RE.test(urls[0]);
   const story = publishType === 'stories';
   const fields = [['platform[]', platform]];
-  if (caption) fields.push(['title', caption]);
+  // title é obrigatório na Upload-Post (é a legenda no Instagram/TikTok): post sem legenda vai com um espaço
+  fields.push(['title', caption || ' ']);
   if (platform === 'instagram') fields.push(['media_type', story ? 'STORIES' : video ? 'REELS' : 'IMAGE']);
   if (platform === 'facebook') {
     if (caption) fields.push(['facebook_description', caption]);

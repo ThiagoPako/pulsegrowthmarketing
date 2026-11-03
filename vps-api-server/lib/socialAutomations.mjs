@@ -131,7 +131,7 @@ export function createAutomations({ pool, uploadPost, logger = console }) {
   async function list(clientId, city = null) {
     await ensureSchema();
     const { rows } = await pool.query(
-      `SELECT a.*, cl.company_name AS client_name FROM social_automations a LEFT JOIN clients cl ON cl.id = a.client_id
+      `SELECT a.*, cl.company_name AS client_name, cl.logo_url AS client_logo FROM social_automations a LEFT JOIN clients cl ON cl.id = a.client_id
         WHERE ($1::uuid IS NULL OR a.client_id = $1) AND ($2::text IS NULL OR cl.city IS NULL OR lower(cl.city) = $2)
         ORDER BY (a.status = 'ativa') DESC, a.created_at DESC`, [clientId || null, city || null]
     );

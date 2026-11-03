@@ -10,11 +10,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
+import ClientLogo from '@/components/ClientLogo';
 import ButtonEditor from '@/components/pulse-direct/ButtonEditor';
 import type { LinkButton } from '@/components/pulse-direct/types';
 
 interface Automation {
-  id: string; client_name: string | null; name: string; platform: string; post_url: string | null; trigger_keywords: string[] | null;
+  id: string; client_name: string | null; client_logo?: string | null; name: string; platform: string; post_url: string | null; trigger_keywords: string[] | null;
   reply_message: string; buttons: { title: string; url: string }[] | null; status: string; created_at: string; last_error: string | null;
   stats: { total_comments?: number; successful_replies?: number; failed_replies?: number } | null;
 }
@@ -133,7 +134,7 @@ export default function AutomationsPanel({ clientId }: { clientId: string | unde
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{a.name}</span>
             <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', STATUS_TONE[a.status] || 'bg-muted')}>{a.status}</span>
-            {a.client_name && <Badge variant="outline">{a.client_name}</Badge>}
+            {a.client_name && <Badge variant="outline" className="gap-1.5 py-0.5 pl-0.5"><ClientLogo client={{ companyName: a.client_name, color: '', logoUrl: a.client_logo || undefined }} size="sm" className="!h-5 !w-5" />{a.client_name}</Badge>}
             {a.post_url && <a href={a.post_url} target="_blank" rel="noreferrer" className="text-xs underline">post</a>}
           </div>
           <p className="text-xs text-muted-foreground">Palavras: {(a.trigger_keywords || []).join(', ') || 'qualquer comentário'} · {a.stats?.successful_replies ?? 0} directs enviados de {a.stats?.total_comments ?? 0} comentários{a.stats?.failed_replies ? ` · ${a.stats.failed_replies} falharam` : ''}</p>

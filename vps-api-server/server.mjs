@@ -61,6 +61,7 @@ import { createUploadPost, registerUploadPostRoutes } from './lib/uploadPost.mjs
 import { createSocialHub, registerSocialHubRoutes } from './lib/socialHub.mjs';
 import { createAutomations, registerAutomationRoutes } from './lib/socialAutomations.mjs';
 import { createFlows, registerFlowRoutes } from './lib/socialFlows.mjs';
+import { registerAgentClientLogoRoutes } from './lib/agentClientLogo.mjs';
 import { buildProposalRevenueSchedule, stripRevenueMark } from './lib/proposalRevenues.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
@@ -9564,7 +9565,7 @@ app.get('/api/social-posts/accounts-overview', async (req, res) => {
     // só a cidade ativa (conferida contra as cidades da pessoa) e os clientes globais (trabalho em conjunto), 02/11/2026
     const activeCity = normalizeCityValue(await resolveActiveCity(req, user.id, user));
     const { rows: clients } = await pool.query(
-      `SELECT id, company_name AS name, city, COALESCE(portal_insights_enabled, false) AS portal_insights_enabled
+      `SELECT id, company_name AS name, city, logo_url, COALESCE(portal_insights_enabled, false) AS portal_insights_enabled
        FROM clients WHERE COALESCE(status,'ativo') <> 'inativo' AND (city IS NULL OR lower(city) = $1) ORDER BY company_name`, [activeCity]
     );
     const { rows: accounts } = await pool.query(
@@ -20507,6 +20508,8 @@ const socialScope = {
 registerAutomationRoutes(app, { automations: createAutomations({ pool, uploadPost }), verifySocialManager: verifySocialOrAgent, pool, scope: socialScope });
 // Pulse Direct: funis no direct estilo ManyChat (lib/socialFlows.mjs, 02/11/2026)
 const pulseDirect = createFlows({ pool, uploadPost, notifyTeam: notifySocialTeam });
+// logo dos clientes pelos agentes (Severino cuida; a Nina faz quando a do Drive não serve), 02/11/2026
+registerAgentClientLogoRoutes(app, { pool, verifyAgent: (req) => agentApi.verifyAgent(req), uploadRoot: UPLOAD_ROOT, appBase: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' });
 registerFlowRoutes(app, { flows: pulseDirect, pool, verifySocialManager: verifySocialOrAgent, scope: socialScope });
 registerSocialHubRoutes(app, { flows: pulseDirect, hub: socialHub, uploadPost, pool, verifySocialManager: verifySocialOrAgent, verifyAdmin, scope: socialScope, publicApiUrl: process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech' });
 

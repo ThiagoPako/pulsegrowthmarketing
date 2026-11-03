@@ -61,7 +61,10 @@ export default function ReviewApproval() {
         {error && <div className="rounded-2xl bg-white/5 p-6 text-center"><p className="font-semibold">Não encontramos esta avaliação.</p><p className="mt-1 text-sm text-white/60">Confira o link ou fale com a gente.</p></div>}
         {data && (
           <>
-            <p className="text-sm text-white/70">Olá{data.you ? `, ${data.you}` : ''}! Chegou uma avaliação no Google de <b className="text-white">{data.client.name}</b>:</p>
+            <div className="flex items-center gap-3">
+              {data.client.logo ? <img src={data.client.logo} alt={`Logo ${data.client.name}`} className="h-12 w-12 rounded-xl bg-white object-contain p-1" /> : <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F15A24] text-lg font-bold">{data.client.name.slice(0, 1)}</span>}
+              <p className="text-sm text-white/70">Olá{data.you ? `, ${data.you}` : ''}! Chegou uma avaliação no Google de <b className="text-white">{data.client.name}</b>:</p>
+            </div>
 
             <div className="rounded-2xl bg-white p-4 text-[#161616]">
               <div className="flex items-center gap-2">

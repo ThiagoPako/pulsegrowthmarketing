@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLang, tr } from '@/lib/i18n';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { useCity } from '@/contexts/CityContext';
+import ClientLogo from '@/components/ClientLogo';
 import { setPortalInsightsEnabled, diagnoseClientConnection, type ConnectedSocialAccount, type DiagnosticCheck } from '@/services/socialPostsApi';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,6 +18,7 @@ import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, 
 interface ClientConnection {
   id: string;
   name: string;
+  logo_url?: string | null;
   city: string | null;
   accounts: ConnectedSocialAccount[];
   portal_insights_enabled?: boolean;
@@ -359,7 +361,7 @@ export default function SocialConnections() {
               <Card key={client.id}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center justify-between gap-2">
-                    <span className="truncate">{client.name}</span>
+                    <span className="flex min-w-0 items-center gap-2"><ClientLogo client={{ companyName: client.name, color: '', logoUrl: client.logo_url || undefined }} size="sm" /><span className="truncate">{client.name}</span></span>
                     {client.city && <Badge variant="outline" className="shrink-0">{client.city}</Badge>}
                   </CardTitle>
                 </CardHeader>

@@ -615,7 +615,7 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
     if (forPortal) where.push(`c.status <> 'oculto' AND c.status <> 'ignorado'`);
     params.push(Math.min(Number(limit) || 100, 300));
     const { rows } = await pool.query(
-      `SELECT c.id, c.client_id, cl.company_name AS client_name, c.platform, c.post_permalink, c.post_caption, c.post_thumb, c.author_username, c.text,
+      `SELECT c.id, c.client_id, cl.company_name AS client_name, cl.logo_url AS client_logo, c.platform, c.post_permalink, c.post_caption, c.post_thumb, c.author_username, c.text,
               c.commented_at, c.status, ${forPortal ? 'NULL AS isis_draft, NULL AS isis_reason,' : 'c.isis_draft, c.isis_reason,'} c.reply_text, c.reply_by, c.replied_at
          FROM social_comments c LEFT JOIN clients cl ON cl.id = c.client_id
         WHERE ${where.join(' AND ')}
@@ -629,7 +629,7 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
     // removal_status e a auditoria vão para a equipe; o cliente vê só avaliação e resposta
     await ensureSchema();
     const { rows } = await pool.query(
-      `SELECT r.id, r.client_id, cl.company_name AS client_name, r.reviewer, r.rating, r.comment, r.reviewed_at, r.status,
+      `SELECT r.id, r.client_id, cl.company_name AS client_name, cl.logo_url AS client_logo, r.reviewer, r.rating, r.comment, r.reviewed_at, r.status,
               ${forPortal ? 'NULL AS isis_draft, NULL AS isis_reason, NULL AS removal_reason, NULL AS removal_status,' : 'r.isis_draft, r.isis_reason, r.removal_reason, r.removal_status,'} r.reply_text, r.reply_by, r.replied_at
          FROM google_reviews r LEFT JOIN clients cl ON cl.id = r.client_id
         WHERE ($1::uuid IS NULL OR r.client_id = $1) AND ($2::text IS NULL OR cl.city IS NULL OR lower(cl.city) = $2)
@@ -641,7 +641,7 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
   async function overview(city = null) {
     await ensureSchema();
     const { rows } = await pool.query(
-      `SELECT cl.id AS client_id, cl.company_name AS client_name,
+      `SELECT cl.id AS client_id, cl.company_name AS client_name, cl.logo_url AS client_logo,
               count(*) FILTER (WHERE c.status = 'escalado')::int AS escalados,
               count(*) FILTER (WHERE c.status = 'rascunho')::int AS rascunhos,
               count(*) FILTER (WHERE c.status = 'respondido' AND c.replied_at > now() - interval '7 days')::int AS respondidos_7d,
@@ -651,7 +651,7 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
          LEFT JOIN social_comments c ON c.client_id = cl.id
          LEFT JOIN social_hub_settings s ON s.client_id = cl.id
         WHERE ($1::text IS NULL OR cl.city IS NULL OR lower(cl.city) = $1)
-        GROUP BY cl.id, cl.company_name, s.isis_mode ORDER BY cl.company_name`, [city || null]
+        GROUP BY cl.id, cl.company_name, cl.logo_url, s.isis_mode ORDER BY cl.company_name`, [city || null]
     );
     return rows;
   }

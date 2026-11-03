@@ -122,7 +122,7 @@ export function registerAgentWhatsAppRoutes(app, { pool, uploadRoot, publicUploa
         `SELECT g.jid, g.subject, g.size, g.updated_at, c.name AS connection, c.status
            FROM wa_groups g JOIN wa_connections c ON c.id = g.connection_id ORDER BY lower(g.subject)`
       ).catch(() => ({ rows: [] }));
-      const { rows: conns } = await pool.query(`SELECT name, status, last_seen_at FROM wa_connections ORDER BY created_at`).catch(() => ({ rows: [] }));
+      const { rows: conns } = await pool.query(`SELECT * FROM wa_connections ORDER BY created_at`).then((r) => ({ rows: r.rows.map((c) => ({ name: c.name, status: c.status, last_seen_at: c.last_seen_at, groups_error: c.groups_error || null, groups_synced_at: c.groups_synced_at || null, groups_tried_at: c.groups_tried_at || null })) })).catch(() => ({ rows: [] }));
       res.json({ groups: q ? rows.filter((r) => semAcento(r.subject || '').includes(q)) : rows, connections: conns });
     } catch (error) {
       sendError(res, error);

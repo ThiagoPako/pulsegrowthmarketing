@@ -14,8 +14,8 @@ import { nameMatch, normalizeName } from '@/lib/pageMatch';
 // cliente pelo nome da página. O post do Facebook do cliente sai por esse login, na página ligada.
 
 interface TeamPage { id: string; name: string; picture?: string | null; instagram?: string | boolean | null; client_id: string | null; client_name: string | null }
-interface TeamFacebook { id: string; name: string; connected: boolean; reauth: boolean; account: string | null; pages: TeamPage[] }
-interface ClientLite { id: string; name: string; logo_url?: string | null }
+interface TeamFacebook { id: string; name: string; connected: boolean; reauth: boolean; account: string | null; pages: TeamPage[]; instagram_known?: boolean; page_fields?: string[] }
+interface ClientLite { id: string; name: string; logo_url?: string | null; has_facebook?: boolean }
 
 const norm = normalizeName;
 
@@ -61,14 +61,18 @@ export default function TeamFacebookPanel({ clients }: { clients: ClientLite[] }
   }, [teams]);
   // só a página de cliente aparece (usuário, 03/11/2026): ligada a um cliente, ou com Instagram e com nome de um cliente.
   // Página que a Upload-Post diz não ter Instagram, ou sem cliente parecido, fica em "outras páginas", recolhida.
-  const isClientPage = useCallback((pg: TeamPage) => !!pg.client_id
-    || (pg.instagram !== false && clients.some((c) => nameMatch(pg.name, c.name) >= 0.5)), [clients]);
+  const isClientPage = useCallback((pg: TeamPage, igKnown = false) => !!pg.client_id
+    || (igKnown ? !!pg.instagram : pg.instagram !== false) && clients.some((c) => nameMatch(pg.name, c.name) >= 0.5), [clients]);
   const selected = teams?.find((t) => t.id === selectedId) || null;
   const q = norm(query);
   const linked = (selected?.pages || []).filter((pg) => pg.client_id && (!q || norm(`${pg.name} ${pg.client_name}`).includes(q)));
   const freeAll = (selected?.pages || []).filter((pg) => !pg.client_id && (!q || norm(pg.name).includes(q)));
-  const free = freeAll.filter(isClientPage);
-  const others = freeAll.filter((pg) => !isClientPage(pg));
+  const igKnown = !!selected?.instagram_known;
+  const free = freeAll.filter((pg) => isClientPage(pg, igKnown));
+  const others = freeAll.filter((pg) => !isClientPage(pg, igKnown));
+  // clientes sem Facebook em nenhum lugar (nem ligado a um Facebook da equipe, nem conectado pelo próprio cliente)
+  const withoutFacebook = clients.filter((c) => !c.has_facebook && !linkOf.has(c.id));
+  const [showWithout, setShowWithout] = useState(false);
 
   const suggestionFor = useCallback((page: TeamPage): ClientLite | null => {
     let best: ClientLite | null = null; let score = 0;
@@ -143,13 +147,32 @@ export default function TeamFacebookPanel({ clients }: { clients: ClientLite[] }
           </Button>
         </div>
 
+        {teams && teams.length > 0 && withoutFacebook.length > 0 && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2.5">
+            <button type="button" onClick={() => setShowWithout((v) => !v)} className="flex w-full items-center gap-2 text-left text-xs">
+              <AlertTriangle size={14} className="shrink-0 text-amber-500" />
+              <span className="flex-1"><b className="tabular-nums">{withoutFacebook.length}</b> cliente{withoutFacebook.length === 1 ? '' : 's'} sem página do Facebook conectada a nenhum Facebook</span>
+              <span className="text-[11px] text-muted-foreground underline-offset-2 hover:underline">{showWithout ? 'Esconder' : 'Ver quais'}</span>
+            </button>
+            {showWithout && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {withoutFacebook.map((c) => (
+                  <span key={c.id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-[11px]">
+                    <Avatar src={c.logo_url} name={c.name} className="h-4 w-4 text-[8px]" /> {c.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* cartões dos Facebooks */}
         {teams === null ? (
           <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin text-muted-foreground" /></div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {teams.map((t) => {
-              const n = t.pages.filter(isClientPage).length; const m = t.pages.filter((pg) => pg.client_id).length;
+              const n = t.pages.filter((pg) => isClientPage(pg, !!t.instagram_known)).length; const m = t.pages.filter((pg) => pg.client_id).length;
               const on = t.id === selectedId;
               return (
                 <button
@@ -218,6 +241,11 @@ export default function TeamFacebookPanel({ clients }: { clients: ClientLite[] }
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar página ou cliente" className="h-9 pl-8" />
                 </div>
+                {!igKnown && (
+                  <p className="text-[11px] text-muted-foreground" title={selected.page_fields?.length ? `Campos recebidos: ${selected.page_fields.join(', ')}` : undefined}>
+                    A Upload-Post não informou se cada página tem Instagram; aparecem as páginas com nome de cliente. Confira o Instagram antes de ligar.
+                  </p>
+                )}
 
                 <section className="space-y-2">
                   <h4 className="text-xs font-semibold text-muted-foreground">Clientes ligados · {linked.length}</h4>
@@ -282,7 +310,7 @@ export default function TeamFacebookPanel({ clients }: { clients: ClientLite[] }
                 {others.length > 0 && (
                   <section className="space-y-2">
                     <button type="button" onClick={() => setShowOthers((v) => !v)} className="text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
-                      {showOthers ? 'Esconder' : 'Mostrar'} outras {others.length} página{others.length === 1 ? '' : 's'} (sem Instagram ou sem cliente parecido)
+                      {showOthers ? 'Esconder' : 'Mostrar'} outras {others.length} página{others.length === 1 ? '' : 's'} deste Facebook ({igKnown ? 'sem Instagram ou sem cliente' : 'sem cliente parecido'})
                     </button>
                     {showOthers && (
                       <div className="grid gap-2 opacity-80 sm:grid-cols-2 xl:grid-cols-3">

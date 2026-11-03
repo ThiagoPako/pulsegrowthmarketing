@@ -263,8 +263,10 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
   async function facebookPage(username, current) {
     // a resposta veio com nomes de campo diferentes da documentação (03/11/2026: páginas sem nome na tela): aceita os
     // dois formatos e, sem nome, tenta a lista do perfil (/users/facebook-page), que traz nome e foto
-    const norm = (list) => (Array.isArray(list) ? list : []).map((p) => ({
+    const fields = new Set();
+    const norm = (list) => (Array.isArray(list) ? list : []).map((p) => (Object.keys(p || {}).forEach((k) => fields.add(k)), {
       id: String(p.page_id ?? p.id ?? p.facebook_page_id ?? ''),
+      profile: p.profile ?? p.profile_username ?? p.user ?? null,
       name: String(p.page_name ?? p.name ?? p.title ?? '').trim(),
       picture: (typeof p.picture === 'string' ? p.picture : p.picture?.data?.url) || p.page_picture || null,
       instagram: instagramOfPage(p),
@@ -276,9 +278,12 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
       const altPages = norm(alt?.pages);
       if (altPages.length) pages = altPages;
     }
-    pages = pages.map((p) => ({ ...p, name: p.name || `Página ${p.id}` }));
+    // só as páginas DESTE perfil (03/11/2026: "quando eu selecionar o Facebook, apareça apenas as páginas daquele
+    // Facebook"); a lista pode vir com as páginas de todos os perfis, cada uma marcada com o perfil dela
+    pages = pages.filter((p) => !p.profile || String(p.profile) === String(username))
+      .map(({ profile: _profile, ...p }) => ({ ...p, name: p.name || `Página ${p.id}` }));
     const chosen = pages.length === 1 ? pages[0].id : pages.find((p) => p.id === current)?.id || null;
-    return { pages, chosen };
+    return { pages, chosen, fields: [...fields].sort() };
   }
 
   /** Grava as contas conectadas de um perfil em social_accounts (api_base = 'upload_post'). */
@@ -417,14 +422,16 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     );
     const out = [];
     for (const t of teams) {
-      let connected = false; let reauth = false; let account = null; let pages = [];
+      let connected = false; let reauth = false; let account = null; let pages = []; let fields = [];
       try {
         const r = await call('GET', `/uploadposts/users/${encodeURIComponent(t.username)}`);
         const fb = connectedAccounts(r.profile?.social_accounts || {}).find((a) => a.platform === 'facebook');
-        if (fb) { connected = true; reauth = !!fb.reauth; account = fb.name || fb.handle || null; pages = (await facebookPage(t.username, null)).pages; }
+        if (fb) { connected = true; reauth = !!fb.reauth; account = fb.name || fb.handle || null; ({ pages, fields } = await facebookPage(t.username, null)); }
       } catch (error) { logger.warn?.('[upload-post] Facebook da equipe:', t.username, error.message); }
       out.push({
         id: t.id, name: t.name, connected, reauth, account,
+        // a Upload-Post disse o Instagram das páginas? (sem isso, a tela usa o nome do cliente e avisa)
+        instagram_known: pages.some((pg) => pg.instagram !== null), page_fields: fields,
         pages: pages.map((pg) => {
           const l = links.find((x) => x.facebook_team_profile === t.username && String(x.facebook_page_id) === pg.id);
           return { ...pg, client_id: l?.client_id || null, client_name: l ? String(l.company_name || '').trim() : null };

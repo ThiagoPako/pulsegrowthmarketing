@@ -312,7 +312,7 @@ export default function SocialConnections() {
         </Card>
       )}
 
-      {up?.configured && <TeamFacebookPanel clients={clients.map(c => ({ id: c.id, name: c.name, logo_url: c.logo_url }))} />}
+      {up?.configured && <TeamFacebookPanel clients={clients.map(c => ({ id: c.id, name: c.name, logo_url: c.logo_url, has_facebook: c.accounts.some(a => a.platform === 'facebook' && a.status === 'connected') }))} />}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[

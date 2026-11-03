@@ -242,8 +242,21 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
 
   /** Páginas do Facebook do perfil: com uma só, é ela; com várias, mantém a escolhida antes (ou nenhuma, e avisa). */
   async function facebookPage(username, current) {
+    // a resposta veio com nomes de campo diferentes da documentação (03/11/2026: páginas sem nome na tela): aceita os
+    // dois formatos e, sem nome, tenta a lista do perfil (/users/facebook-page), que traz nome e foto
+    const norm = (list) => (Array.isArray(list) ? list : []).map((p) => ({
+      id: String(p.page_id ?? p.id ?? p.facebook_page_id ?? ''),
+      name: String(p.page_name ?? p.name ?? p.title ?? '').trim(),
+      picture: (typeof p.picture === 'string' ? p.picture : p.picture?.data?.url) || p.page_picture || null,
+    })).filter((p) => p.id && p.id !== 'undefined');
     const r = await call('GET', `/uploadposts/facebook/pages?profile=${encodeURIComponent(username)}`).catch(() => ({ pages: [] }));
-    const pages = (r.pages || []).map((p) => ({ id: String(p.page_id), name: p.page_name }));
+    let pages = norm(r.pages || r.data);
+    if (!pages.length || pages.some((p) => !p.name)) {
+      const alt = await call('GET', `/uploadposts/users/facebook-page?profile_username=${encodeURIComponent(username)}`).catch(() => null);
+      const altPages = norm(alt?.pages);
+      if (altPages.length) pages = altPages;
+    }
+    pages = pages.map((p) => ({ ...p, name: p.name || `Página ${p.id}` }));
     const chosen = pages.length === 1 ? pages[0].id : pages.find((p) => p.id === current)?.id || null;
     return { pages, chosen };
   }

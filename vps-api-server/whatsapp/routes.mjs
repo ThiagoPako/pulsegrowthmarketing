@@ -14,6 +14,7 @@
 //   PATCH  /api/whatsapp/config      (admin, social media, gestor de projetos) { integration_active, auto_*, msg_* }
 //          A configuração é uma só para as duas cidades: é a mesma linha que o servidor usa nos envios.
 //   GET    /api/whatsapp/groups      (gestão) grupos em que os números conectados estão — para o cadastro do cliente
+//   POST   /api/whatsapp/groups/refresh  (gestão) relê os grupos de todos os números agora (o motor pega em até ~20 s)
 //
 // Pulse Plus (pulsePlus.mjs): a função "assistente" e a conexão só do PULSE só aparecem (e só se mexem) para quem
 // tem o acesso. Para o resto, a conexão do PULSE não existe na lista e a função some das outras conexões.
@@ -771,6 +772,19 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     }
     return askOnce(`Não entendi se é um ajuste 🙂\nPara aprovar, responda *APROVADO*.\nPara pedir ajuste, escreva *AJUSTE* e o que mudar (ex.: *AJUSTE trocar a música*).`);
   }
+
+  app.post('/api/whatsapp/groups/refresh', async (req, res) => {
+    try {
+      await verifyTeamManager(req);
+      await ensureWhatsAppSchema(pool);
+      await pool.query(
+        `INSERT INTO wa_engine (id, groups_refresh_at) VALUES (1, now()) ON CONFLICT (id) DO UPDATE SET groups_refresh_at = now()`
+      );
+      res.json({ ok: true });
+    } catch (error) {
+      fail(res, error);
+    }
+  });
 
   app.get('/api/whatsapp/groups', async (req, res) => {
     try {

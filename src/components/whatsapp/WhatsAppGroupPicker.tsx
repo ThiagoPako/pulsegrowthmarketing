@@ -18,13 +18,25 @@ export default function WhatsAppGroupPicker({ value, onChange }: { value: string
   const [groups, setGroups] = useState<Group[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    vpsAuthedFetch('/whatsapp/groups')
-      .then((r) => (r.ok ? r.json() : { groups: [] }))
-      .then((body) => setGroups(body.groups || []))
-      .catch(() => setGroups([]))
-      .finally(() => setLoaded(true));
-  }, []);
+  const [refreshing, setRefreshing] = useState(false);
+  const load = () => vpsAuthedFetch('/whatsapp/groups')
+    .then((r) => (r.ok ? r.json() : { groups: [] }))
+    .then((body) => setGroups(body.groups || []))
+    .catch(() => setGroups([]))
+    .finally(() => setLoaded(true));
+  useEffect(() => { load(); }, []);
+  // número do sistema acabou de entrar no grupo: pede para reler e busca de novo (03/11/2026)
+  const refresh = async () => {
+    setRefreshing(true);
+    const before = groups.length;
+    await vpsAuthedFetch('/whatsapp/groups/refresh', { method: 'POST' }).catch(() => null);
+    for (let i = 0; i < 6; i += 1) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const body = await vpsAuthedFetch('/whatsapp/groups').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (body?.groups) { setGroups(body.groups); if (body.groups.length !== before) break; }
+    }
+    setRefreshing(false);
+  };
 
   const current = groups.find((g) => g.jid === value);
   const isLink = /chat\.whatsapp\.com\//i.test(value || '');
@@ -44,6 +56,9 @@ export default function WhatsAppGroupPicker({ value, onChange }: { value: string
           ))}
         </SelectContent>
       </Select>
+      <button type="button" onClick={refresh} disabled={refreshing} className="text-[11px] font-medium text-primary underline-offset-2 hover:underline disabled:opacity-60">
+        {refreshing ? 'Procurando grupos novos… (até 30 s)' : 'Não achou o grupo? Atualizar a lista'}
+      </button>
       {!current && (
         <Input
           value={value || ''}

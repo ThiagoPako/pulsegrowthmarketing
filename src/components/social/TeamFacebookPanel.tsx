@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Facebook, Link2, Loader2, LogIn, Plus, RefreshCw, Search, Sparkles, Unlink, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Facebook, Instagram, Link2, Loader2, LogIn, Plus, RefreshCw, Search, Sparkles, Unlink, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,7 +15,8 @@ import { nameMatch, normalizeName } from '@/lib/pageMatch';
 
 interface TeamPage { id: string; name: string; picture?: string | null; instagram?: string | boolean | null; client_id: string | null; client_name: string | null }
 interface TeamFacebook { id: string; name: string; connected: boolean; reauth: boolean; account: string | null; pages: TeamPage[]; instagram_known?: boolean; page_fields?: string[] }
-interface ClientLite { id: string; name: string; logo_url?: string | null; has_facebook?: boolean }
+interface ClientAccount { platform: string; name: string; username: string | null; status: string }
+interface ClientLite { id: string; name: string; logo_url?: string | null; has_facebook?: boolean; accounts?: ClientAccount[] }
 
 const norm = normalizeName;
 
@@ -114,6 +115,19 @@ export default function TeamFacebookPanel({ clients }: { clients: ClientLite[] }
     setPicking(null); setPickQuery('');
     toast.success(`${client.name} ligado à página "${page.name}"`);
     load();
+  };
+
+  // Instagram do cliente: abre a página de conexão dele (o Instagram é ligado por cliente na Upload-Post)
+  const connectInstagram = async (clientId: string) => {
+    setBusy(`ig:${clientId}`);
+    const { data, error } = await invokeVpsFunction(`upload-post/clients/${clientId}/connect`, { body: {} });
+    setBusy(null);
+    if (error || data?.error) { toast.error(data?.error || error?.message); return; }
+    // navegador que bloqueia a janela: o link vai para a área de transferência
+    if (!window.open(data.url, '_blank', 'noopener')) {
+      await navigator.clipboard.writeText(data.url).catch(() => {});
+      toast.success('Link de conexão copiado: abra numa aba nova para conectar o Instagram');
+    }
   };
 
   const unlink = async (page: TeamPage) => {
@@ -255,18 +269,43 @@ export default function TeamFacebookPanel({ clients }: { clients: ClientLite[] }
                     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                       {linked.map((pg) => {
                         const c = pg.client_id ? clientById.get(pg.client_id) : null;
+                        const ig = c?.accounts?.find((a) => a.platform === 'instagram');
+                        const igOk = ig?.status === 'connected';
                         return (
-                          <div key={pg.id} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-                            <Avatar src={c?.logo_url} name={pg.client_name || '?'} className="h-10 w-10" />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-semibold">{pg.client_name}</p>
-                              <p className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
-                                <Avatar src={pg.picture} name={pg.name} className="h-4 w-4 text-[8px]" /> {pg.name}
-                              </p>
+                          <div key={pg.id} className="space-y-2.5 rounded-xl border border-border bg-card p-3">
+                            <div className="flex items-center gap-3">
+                              <Avatar src={c?.logo_url} name={pg.client_name || '?'} className="h-10 w-10" />
+                              <p className="min-w-0 flex-1 truncate text-sm font-semibold">{pg.client_name}</p>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Desligar o Facebook" aria-label={`Desligar o Facebook de ${pg.client_name}`} disabled={busy === pg.id} onClick={() => unlink(pg)}>
+                                {busy === pg.id ? <Loader2 size={13} className="animate-spin" /> : <Unlink size={13} />}
+                              </Button>
                             </div>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Desligar" aria-label={`Desligar ${pg.client_name}`} disabled={busy === pg.id} onClick={() => unlink(pg)}>
-                              {busy === pg.id ? <Loader2 size={13} className="animate-spin" /> : <Unlink size={13} />}
-                            </Button>
+                            {/* as conexões do cliente: o Facebook (página ligada aqui) e o Instagram (conectado pelo cliente) */}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2 rounded-lg bg-[#1877F2]/[0.07] px-2 py-1.5 text-[11px]">
+                                <Facebook size={13} className="shrink-0 text-[#1877F2]" />
+                                <span className="min-w-0 flex-1 truncate">{pg.name}</span>
+                                <CheckCircle2 size={12} className="shrink-0 text-emerald-500" aria-label="Conectado" />
+                              </div>
+                              <div className={cn('flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px]', igOk ? 'bg-pink-500/[0.07]' : 'bg-amber-500/[0.08]')}>
+                                <Instagram size={13} className={cn('shrink-0', igOk ? 'text-pink-500' : 'text-amber-500')} />
+                                {igOk ? (
+                                  <>
+                                    <span className="min-w-0 flex-1 truncate">{ig?.username ? `@${ig.username.replace(/^@/, '')}` : ig?.name}</span>
+                                    <CheckCircle2 size={12} className="shrink-0 text-emerald-500" aria-label="Conectado" />
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="min-w-0 flex-1 truncate text-amber-700 dark:text-amber-300">{ig?.status === 'reauth' ? 'Instagram pede login de novo' : 'Instagram não conectado'}</span>
+                                    {pg.client_id && (
+                                      <button type="button" disabled={busy === `ig:${pg.client_id}`} onClick={() => pg.client_id && connectInstagram(pg.client_id)} className="shrink-0 font-semibold text-pink-600 underline-offset-2 hover:underline disabled:opacity-50 dark:text-pink-400">
+                                        {busy === `ig:${pg.client_id}` ? 'Abrindo…' : 'Conectar'}
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         );
                       })}

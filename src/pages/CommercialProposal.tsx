@@ -29,7 +29,7 @@ import {
 import { toast } from 'sonner';
 import ScopeDescription from '@/components/ScopeDescription';
 
-type ProposalType = 'marketing' | 'sistema' | 'endomarketing' | 'personalizada' | 'cronograma' | 'videos';
+type ProposalType = 'marketing' | 'sistema' | 'endomarketing' | 'personalizada' | 'cronograma' | 'videos' | 'sob_medida';
 
 interface BonusService {
   id: string;
@@ -97,6 +97,8 @@ const PROPOSAL_TYPE_LABELS: Record<ProposalType, string> = {
   personalizada: 'Proposta Única',
   cronograma: 'Cronograma Completo',
   videos: 'Vídeos Avulsos',
+  // feita pela Ísis no módulo dela (04/11/2026): nome, atividade, o que vamos vender e o valor
+  sob_medida: 'Sob medida (Ísis)',
 };
 
 const PAYMENT_METHODS = [
@@ -336,6 +338,12 @@ export default function CommercialProposal() {
 
   // Load an existing proposal into the form for editing
   const loadProposalForEdit = useCallback((p: any) => {
+    // a proposta sob medida é escrita pela Ísis: o ajuste é pedido a ela, no módulo dela
+    if (p.proposal_type === 'sob_medida') {
+      toast.info('Esta proposta foi feita pela Ísis. Peça o ajuste a ela no módulo Ísis.');
+      window.location.assign('/isis');
+      return;
+    }
     try {
       setEditingProposalId(p.id);
       setTargetCity((p.city as any) || '');
@@ -948,6 +956,7 @@ export default function CommercialProposal() {
     personalizada: Target,
     cronograma: CalendarDays,
     videos: Film,
+    sob_medida: Sparkles,
   };
 
   // ===== RENDER FORM SECTIONS =====
@@ -3044,7 +3053,16 @@ export default function CommercialProposal() {
           <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="text-base">Tipo de Proposta</CardTitle></CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
+                {/* Sob medida: a Ísis escreve a partir do nome, da atividade, do que vamos vender e do valor */}
+                <button
+                  type="button"
+                  onClick={() => window.location.assign('/isis')}
+                  className="rounded-xl border-2 border-dashed border-orange-300 p-4 text-center transition-all hover:border-orange-500 hover:bg-orange-50/60 dark:hover:bg-orange-950/20"
+                >
+                  <Sparkles className="h-6 w-6 mx-auto mb-2 text-orange-500" />
+                  <p className="font-bold text-sm">Sob medida com a Ísis</p>
+                </button>
                 {(['marketing', 'sistema', 'endomarketing', 'personalizada', 'cronograma', 'videos'] as ProposalType[]).map(type => {
                   const Icon = typeIcons[type];
                   return (

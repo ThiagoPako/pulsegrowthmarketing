@@ -67,6 +67,22 @@ const PAYMENT_METHODS: Record<string, string> = {
   pix: 'PIX', boleto: 'Boleto Bancário', cartao: 'Cartão de Crédito', transferencia: 'Transferência Bancária',
 };
 
+/** Proposta sob medida (Ísis): o conteúdo vem pronto em system_data (vps-api-server/isisModuleRoutes.mjs). */
+interface SobMedida {
+  atividade?: string;
+  titulo: string;
+  subtitulo?: string;
+  momento: string[];
+  solucao?: string;
+  entregas: { titulo: string; descricao?: string; quantidade?: string | null }[];
+  resultados: string[];
+  investimento: { valor: number | null; de?: number | null; periodo?: 'mes' | 'unico' | 'projeto'; parcelas?: number; meses?: number; forma?: string; condicoes?: string };
+  bonus: { titulo: string; descricao?: string }[];
+  passos: string[];
+  garantia?: string;
+  cta?: string;
+}
+
 // Animated section wrapper
 function AnimatedSection({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -262,7 +278,8 @@ export default function ProposalViewer() {
   const discount = proposal.custom_discount || 0;
   const isExpired = validityEnd(proposal.validity_date) < new Date();
   const isResolved = proposal.status === 'aceita' || proposal.status === 'recusada';
-  const headerTitle = proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : proposalType === 'personalizada' ? 'Proposta Personalizada' : proposalType === 'cronograma' ? 'Cronograma Completo' : proposalType === 'videos' ? 'Proposta de Vídeos' : 'Proposta Comercial';
+  const headerTitle = proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : proposalType === 'personalizada' ? 'Proposta Personalizada' : proposalType === 'cronograma' ? 'Cronograma Completo' : proposalType === 'videos' ? 'Proposta de Vídeos' : proposalType === 'sob_medida' ? 'Proposta sob medida' : 'Proposta Comercial';
+  const venda = proposalType === 'sob_medida' ? (systemData as SobMedida) : null;
 
   const accentColor = 'hsl(16 82% 51%)';
   const accentDark = 'hsl(16 82% 38%)';
@@ -1017,6 +1034,120 @@ export default function ProposalViewer() {
   };
 
   // ===== VIDEOS AVULSOS =====
+  // ===== SOB MEDIDA (feita pela Ísis, 04/11/2026): página de venda — a pessoa, o momento dela, o que muda, o preço =====
+  const renderSobMedidaContent = () => {
+    if (!venda) return null;
+    const inv = venda.investimento || ({} as SobMedida['investimento']);
+    const firstName = String(proposal.client_name || '').trim().split(/\s+/)[0];
+    const periodo = inv.periodo === 'unico' ? 'pagamento único' : inv.periodo === 'projeto' ? 'pelo projeto' : 'por mês';
+    const parcelas = inv.parcelas && inv.parcelas > 1 ? inv.parcelas : 0;
+    return (
+      <>
+        <AnimatedSection className="px-6 md:px-10 pt-9 pb-6">
+          {firstName && <p className="text-sm font-medium" style={{ color: accentColor }}>{firstName}{venda.atividade ? `, ${venda.atividade}` : ''}</p>}
+          <h2 className="mt-2 text-[1.7rem] md:text-[2.1rem] font-bold leading-[1.15] text-gray-900 text-balance">{venda.titulo}</h2>
+          {venda.subtitulo && <p className="mt-3 text-[15px] leading-relaxed text-gray-600 max-w-[60ch]">{venda.subtitulo}</p>}
+        </AnimatedSection>
+
+        {venda.momento?.length > 0 && (
+          <AnimatedSection className="px-6 md:px-10 pb-7">
+            <h3 className="text-base font-bold text-gray-800 mb-3">O que a gente sabe do seu momento</h3>
+            <div className="space-y-2">
+              {venda.momento.map((m, i) => (
+                <div key={i} className="flex gap-3 rounded-xl bg-gray-50 p-3.5 text-sm text-gray-700 leading-relaxed">
+                  <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ background: accentColor }} />
+                  <span>{m}</span>
+                </div>
+              ))}
+            </div>
+          </AnimatedSection>
+        )}
+
+        {venda.solucao && (
+          <AnimatedSection className="px-6 md:px-10 pb-7">
+            <div className="rounded-2xl p-5 md:p-6 text-white" style={{ background: `linear-gradient(135deg, ${accentColor}, ${accentDark})` }}>
+              <p className="text-xs font-semibold text-white/80 mb-1.5">Nossa proposta para você</p>
+              <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{venda.solucao}</p>
+            </div>
+          </AnimatedSection>
+        )}
+
+        <AnimatedSection className="px-6 md:px-10 pb-7">
+          <h3 className="text-base font-bold text-gray-800 mb-3">O que você recebe</h3>
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            {venda.entregas.map((e, i) => (
+              <motion.div key={i} whileHover={{ y: -3 }} className="rounded-xl border border-gray-100 p-4 hover:shadow-lg transition-shadow">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-semibold text-sm text-gray-800">{e.titulo}</p>
+                  {e.quantidade && <Badge variant="secondary" className="shrink-0 text-[10px] font-bold" style={{ color: accentColor }}>{e.quantidade}</Badge>}
+                </div>
+                {e.descricao && <p className="mt-1.5 text-xs leading-relaxed text-gray-500">{e.descricao}</p>}
+              </motion.div>
+            ))}
+          </div>
+        </AnimatedSection>
+
+        {venda.resultados?.length > 0 && (
+          <AnimatedSection className="px-6 md:px-10 pb-7">
+            <h3 className="text-base font-bold text-gray-800 mb-3">O que muda para você</h3>
+            <ul className="space-y-2">
+              {venda.resultados.map((r, i) => (
+                <li key={i} className="flex gap-2.5 text-sm text-gray-700 leading-relaxed">
+                  <CheckCircle2 className="h-5 w-5 shrink-0" style={{ color: 'hsl(142 71% 40%)' }} />
+                  <span>{r}</span>
+                </li>
+              ))}
+            </ul>
+          </AnimatedSection>
+        )}
+
+        {venda.bonus?.length > 0 && (
+          <AnimatedSection className="px-6 md:px-10 pb-7">
+            <div className="rounded-2xl p-5" style={{ background: 'linear-gradient(135deg, hsl(16 82% 96%), hsl(16 82% 92%))' }}>
+              <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-2.5"><Gift className="h-5 w-5" style={{ color: accentColor }} /> De presente, fechando agora</h3>
+              <div className="space-y-1.5">
+                {venda.bonus.map((b, i) => (
+                  <div key={i} className="rounded-xl bg-white/75 p-3">
+                    <p className="text-sm font-medium text-gray-800">{b.titulo}</p>
+                    {b.descricao && <p className="text-xs text-gray-500 mt-0.5">{b.descricao}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </AnimatedSection>
+        )}
+
+        <AnimatedSection className="px-6 md:px-10 pb-7">
+          <div className="rounded-2xl border-2 p-6 text-center" style={{ borderColor: 'hsl(16 82% 85%)' }}>
+            <p className="text-sm text-gray-500">Investimento</p>
+            {inv.de && inv.de > (inv.valor || 0) && <p className="mt-1 text-sm text-gray-400 line-through">de {fmt(inv.de)}</p>}
+            <p className="mt-1 text-4xl md:text-5xl font-bold text-gray-900">{fmt(inv.valor || 0)}</p>
+            <p className="text-sm text-gray-500 mt-1">{periodo}{inv.periodo === 'mes' && inv.meses ? ` · contrato de ${inv.meses} meses` : ''}</p>
+            {parcelas > 0 && (
+              <p className="mt-2 text-sm text-gray-700">ou <strong>{parcelas}x de {fmt((inv.valor || 0) / parcelas)}</strong> no {PAYMENT_METHODS[inv.forma || 'cartao'] || 'cartão'}</p>
+            )}
+            {inv.condicoes && <p className="mt-3 text-xs text-gray-500 leading-relaxed max-w-[52ch] mx-auto">{inv.condicoes}</p>}
+            {venda.garantia && <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700"><CheckCircle2 className="h-3.5 w-3.5" /> {venda.garantia}</p>}
+          </div>
+        </AnimatedSection>
+
+        {venda.passos?.length > 0 && (
+          <AnimatedSection className="px-6 md:px-10 pb-8">
+            <h3 className="text-base font-bold text-gray-800 mb-3">Como começamos</h3>
+            <ol className="space-y-2.5">
+              {venda.passos.map((p, i) => (
+                <li key={i} className="flex items-start gap-3 text-sm text-gray-700">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: accentColor }}>{i + 1}</span>
+                  <span className="pt-0.5 leading-relaxed">{p}</span>
+                </li>
+              ))}
+            </ol>
+          </AnimatedSection>
+        )}
+      </>
+    );
+  };
+
   const renderVideosContent = () => {
     const qty = Number(systemData.quantity) || 0;
     const unit = Number(systemData.unitPrice) || 0;
@@ -1206,6 +1337,7 @@ export default function ProposalViewer() {
           {proposalType === 'personalizada' && renderCustomContent()}
           {proposalType === 'cronograma' && renderCronogramaContent()}
           {proposalType === 'videos' && renderVideosContent()}
+          {proposalType === 'sob_medida' && renderSobMedidaContent()}
 
           {/* Bonus */}
           {bonus.length > 0 && (
@@ -1304,7 +1436,7 @@ export default function ProposalViewer() {
                 <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="flex-1">
                   <Button onClick={() => respondProposal('aceita')} disabled={responding} className="w-full text-white font-bold py-5 text-sm rounded-xl" style={{ background: 'hsl(142 71% 45%)' }}>
                     <ThumbsUp className="h-4 w-4 mr-2" />
-                    {responding ? 'Enviando...' : 'Aceitar Proposta'}
+                    {responding ? 'Enviando...' : venda?.cta || 'Aceitar Proposta'}
                   </Button>
                 </motion.div>
                 <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="flex-1">

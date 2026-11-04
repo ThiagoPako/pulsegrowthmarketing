@@ -8,7 +8,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CalendarHeart, Check, FileText, Image as ImageIcon, Loader2, Mic, Paperclip, Send, Square, X, Lightbulb, AlertTriangle, ClipboardCheck } from 'lucide-react';
-import IsisAvatar, { type IsisMood } from '@/components/isis/IsisAvatar';
+import IsisOrb, { type IsisMood } from '@/components/isis/IsisOrb';
+import IsisTutorial from '@/components/isis/IsisTutorial';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/hooks/useAuth';
@@ -142,7 +144,7 @@ export default function IsisPage() {
   if (!access && !chat.isLoading && chat.isError) {
     return (
       <div className="mx-auto max-w-md py-16 text-center space-y-4">
-        <IsisAvatar mood="pensando" size={140} className="mx-auto" />
+        <IsisOrb mood="pensando" size={160} className="mx-auto" />
         <p className="text-sm text-muted-foreground">Você ainda não tem acesso à Ísis. Peça ao administrador para liberar na tela Equipe.</p>
       </div>
     );
@@ -154,15 +156,35 @@ export default function IsisPage() {
     <div className="mx-auto max-w-6xl grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
       {/* Ísis e as sugestões dela */}
       <section className="space-y-5">
-        <div className="relative overflow-hidden rounded-3xl border bg-gradient-to-br from-orange-50 via-amber-50 to-pink-50 dark:from-orange-950/30 dark:via-zinc-900 dark:to-pink-950/20 p-5 flex items-end gap-4">
-          <button type="button" onClick={poke} className="shrink-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400" aria-label="Falar com a Ísis">
-            <IsisAvatar mood={mood} size={150} wave />
-          </button>
-          <div className="pb-4 min-w-0">
-            <p className="text-xs font-medium text-orange-700/80 dark:text-orange-300/80">Ísis · social media da Pulse</p>
-            <h1 className="text-xl font-semibold tracking-tight">{firstName ? `Oi, ${firstName}!` : 'Oi!'}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{GREETINGS[greeting]}</p>
+        {/* painel holográfico (04/11/2026): nuvem de pontos + HUD no lugar do avatar */}
+        <div className="isis-hud relative overflow-hidden rounded-3xl border border-cyan-400/20 bg-[#05090f] p-5 text-cyan-50 shadow-[0_0_40px_-12px_rgba(94,234,255,0.35)]">
+          <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.18]"
+            style={{ backgroundImage: 'linear-gradient(rgba(94,234,255,.25) 1px, transparent 1px), linear-gradient(90deg, rgba(94,234,255,.25) 1px, transparent 1px)', backgroundSize: '22px 22px', maskImage: 'radial-gradient(ellipse at 30% 50%, black 30%, transparent 75%)' }} />
+          <div aria-hidden className="isis-scan pointer-events-none absolute inset-x-0 h-16 bg-gradient-to-b from-transparent via-cyan-300/[0.07] to-transparent" />
+          {['left-2 top-2 border-l border-t', 'right-2 top-2 border-r border-t', 'left-2 bottom-2 border-l border-b', 'right-2 bottom-2 border-r border-b'].map((c) => (
+            <span key={c} aria-hidden className={`pointer-events-none absolute h-4 w-4 border-cyan-300/60 ${c}`} />
+          ))}
+          <div className="absolute right-4 top-4 z-10"><IsisTutorial onExample={(t) => setText(t)} /></div>
+          <div className="relative flex items-center gap-4">
+            <button type="button" onClick={poke} className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300" aria-label="Falar com a Ísis">
+              <IsisOrb mood={mood} size={168} />
+            </button>
+            <div className="min-w-0 pr-6">
+              <p className="font-mono text-[11px] tracking-wider text-cyan-300/80">
+                ÍSIS // SOCIAL MEDIA IA <span className="ml-1 inline-flex items-center gap-1 text-emerald-300"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> {{ idle: 'online', ouvindo: 'ouvindo', pensando: 'processando', falando: 'respondendo', feliz: 'online' }[mood]}</span>
+              </p>
+              <h1 className="mt-1.5 text-xl font-semibold tracking-tight text-white">{firstName ? `Oi, ${firstName}.` : 'Oi.'}</h1>
+              <p className="mt-1 text-sm text-cyan-100/70">{GREETINGS[greeting]}</p>
+              <Link to="/central-social" className="mt-3 inline-block font-mono text-[11px] text-cyan-300/70 underline-offset-4 hover:text-cyan-200 hover:underline">
+                resposta automática dos comentários →
+              </Link>
+            </div>
           </div>
+          <style>{`
+            @keyframes isis-scan { 0% { top: -4rem } 100% { top: 100% } }
+            .isis-scan { animation: isis-scan 5.5s linear infinite }
+            @media (prefers-reduced-motion: reduce) { .isis-scan { animation: none; display: none } }
+          `}</style>
         </div>
 
         <div className="space-y-2.5">
@@ -233,7 +255,7 @@ export default function IsisPage() {
           )}
           {messages.map((m) => (
             <div key={m.id} className={`flex ${m.author === 'user' ? 'justify-end' : 'justify-start'} gap-2`}>
-              {m.author === 'isis' && <IsisAvatar size={34} className="shrink-0 -mb-1 self-end" />}
+              {m.author === 'isis' && <IsisOrb size={34} hud={false} className="shrink-0 self-end rounded-full bg-[#05090f]" />}
               <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm ${m.author === 'user' ? 'bg-orange-500 text-white rounded-br-md' : 'bg-muted rounded-bl-md'}`}>
                 {m.body && <p className="whitespace-pre-wrap leading-relaxed">{m.body}</p>}
                 {m.transcript && <p className={`mt-1 text-xs italic ${m.author === 'user' ? 'text-white/85' : 'text-muted-foreground'}`}>🎙 "{m.transcript}"</p>}
@@ -255,7 +277,7 @@ export default function IsisPage() {
             </div>
           ))}
           {sending && (
-            <div className="flex items-end gap-2"><IsisAvatar size={34} mood="pensando" /><span className="text-xs text-muted-foreground">a Ísis está lendo…</span></div>
+            <div className="flex items-end gap-2"><IsisOrb size={34} hud={false} mood="pensando" className="rounded-full bg-[#05090f]" /><span className="font-mono text-xs text-muted-foreground">processando…</span></div>
           )}
           <div ref={endRef} />
         </div>

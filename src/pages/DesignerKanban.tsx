@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Kanban, List, Clock, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame, Pause, AlertTriangle, Timer, Filter, X, ArrowRightLeft, FolderOpen, ClipboardList, ScanSearch, UserCog } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
@@ -1524,8 +1525,10 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
   const sla = COMPLETED_COLS.includes(task.kanban_column) ? null : getDesignSlaStatus(task);
   const idle = COMPLETED_COLS.includes(task.kanban_column) || task.timer_running ? null : getIdleStatus(task);
   const chip = 'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border';
+  // prévia das artes ao passar o mouse (04/11/2026, pedido do usuário: ver as artes sem abrir o card)
+  const artImages = getTaskArtUrls(task).filter(u => /\.(png|jpe?g|webp|gif|svg)(\?|#|$)/i.test(u));
 
-  return (
+  const card = (
     <div
       draggable
       onDragStart={onDragStart}
@@ -1666,8 +1669,10 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
         {task.kanban_column === 'fila_baixa_prioridade' && (
           <span className={`${chip} border-transparent bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200`}><Pause size={10} /> Pausada</span>
         )}
-        {task.attachment_url && (
-          <span className={`${chip} border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300`}><CheckCircle2 size={10} /> Arte</span>
+        {(task.attachment_url || artImages.length > 0) && (
+          <span className={`${chip} border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300`}>
+            <CheckCircle2 size={10} /> {artImages.length > 1 ? `${artImages.length} artes` : 'Arte'}
+          </span>
         )}
       </div>
 
@@ -1716,5 +1721,27 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
         </Button>
       )}
     </div>
+  );
+
+  if (artImages.length === 0) return card;
+  return (
+    <HoverCard openDelay={350} closeDelay={80}>
+      <HoverCardTrigger asChild>{card}</HoverCardTrigger>
+      <HoverCardContent side="right" align="start" sideOffset={10} className="w-[320px] p-2" onClick={(e) => e.stopPropagation()}>
+        <p className="px-1 pb-1.5 text-[11px] font-semibold text-muted-foreground truncate">
+          {artImages.length > 1 ? `${artImages.length} artes · ` : ''}{task.title}
+        </p>
+        <div className={`grid gap-1.5 max-h-[70vh] overflow-y-auto ${artImages.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {artImages.map((url, i) => (
+            <div key={url} className="relative rounded-md overflow-hidden bg-muted/40">
+              <img src={url} alt={`Arte ${i + 1}`} loading="lazy" className={`w-full object-contain ${artImages.length > 1 ? 'max-h-[220px]' : 'max-h-[60vh]'}`} />
+              {artImages.length > 1 && (
+                <span className="absolute bottom-1 left-1 text-[9px] bg-black/60 text-white px-1.5 py-0.5 rounded pointer-events-none">{i + 1}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
   );
 }

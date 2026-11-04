@@ -29,6 +29,7 @@ import { usePulsePlus } from '@/hooks/usePulsePlus';
 import PulsePlusAccessSwitch, { useTeamPulsePlus } from '@/components/team/PulsePlusAccessSwitch';
 import AgentTrainerSwitch, { useAgentTrainers } from '@/components/team/AgentTrainerSwitch';
 import ConexoesAccessSwitch, { useTeamConexoesAccess } from '@/components/team/ConexoesAccessSwitch';
+import IsisAccessSwitch, { useTeamIsisAccess } from '@/components/team/IsisAccessSwitch';
 import ClientTag from '@/components/ClientTag';
 
 const ALL_CITIES: CityCode[] = ['minacu', 'uruacu'];
@@ -145,6 +146,8 @@ export default function Team() {
   const canGrantPulsePlus = isAdminRole && pulsePlus;
   const { data: pulsePlusMembers } = useTeamPulsePlus(canGrantPulsePlus);
   const { data: conexoesMembers } = useTeamConexoesAccess(canManageTeam);
+  // módulo da Ísis: o admin escolhe quem fala com ela (04/11/2026)
+  const { data: isisMembers } = useTeamIsisAccess(canManageTeam);
   // quem pode treinar os agentes (Treinar agentes / módulo Agentes): o mesmo admin com Pulse Plus marca
   const { data: agentTrainers } = useAgentTrainers(canGrantPulsePlus);
 
@@ -799,6 +802,9 @@ export default function Team() {
                   )}
                   {canManageTeam && conexoesMembers && (
                     <ConexoesAccessSwitch userId={u.id} name={u.displayName || u.name} members={conexoesMembers} />
+                  )}
+                  {canManageTeam && isisMembers && (
+                    <IsisAccessSwitch userId={u.id} name={u.displayName || u.name} members={isisMembers} />
                   )}
                   {canGrantPulsePlus && agentTrainers && (
                     <AgentTrainerSwitch userId={u.id} name={u.displayName || u.name} members={agentTrainers} />

@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { ROLE_LABELS } from '@/types';
 import { useMyPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
 import { useModuleAccess } from '@/hooks/useModuleAccess';
+import { useIsisAccess } from '@/hooks/useIsis';
 import { GraduationCap } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import pulseLogo from '@/assets/pulse_logo.png';
@@ -38,6 +39,7 @@ import type { Profile } from '@/hooks/useAuth';
 // carregam junto com a página, sem pesar no chunk do menu. Se um deles falhar (chunk de
 // versão antiga), some só ele, sem derrubar a tela.
 const ProductionAssistant = lazy(() => import('@/components/ProductionAssistant'));
+const IsisBubble = lazy(() => import('@/components/isis/IsisBubble'));
 const WelcomeRocket = lazy(() => import('@/components/WelcomeRocket'));
 const VirtualOffice = lazy(() => import('@/components/VirtualOffice'));
 const NO_WIDGET = <></>;
@@ -63,6 +65,8 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/dashboard', label: 'Início', icon: LayoutDashboard, roles: ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'designer', 'fotografo', 'copywriter', 'gestor_projetos'] },
       { path: '/conteudo', label: 'Conteúdo', icon: Kanban, roles: ['admin', 'social_media', 'videomaker', 'editor', 'gestor_projetos'] },
+      // Ísis, a social media da agência (04/11/2026): quem tem acesso é o servidor que diz (admin ou liberado na Equipe)
+      { path: '/isis', label: 'Ísis', icon: Sparkles, roles: [] },
     ],
   },
 
@@ -269,6 +273,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { hasModuleAccess } = useMyPermissions();
   const hiddenModules = useModuleAccess();
+  const isis = useIsisAccess();
   const isMobile = useIsMobile();
   const { theme, toggleTheme } = useTheme();
 
@@ -311,6 +316,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       ...cat,
       items: cat.items.filter(item => {
         if (!currentUser) return false;
+        if (item.path === '/isis') return isis.access;
         if (item.module && !hiddenModules.has(item.module)) return false;
         // Conexões Sociais liberada para a pessoa na tela Equipe (sem precisar do cargo)
         if (item.path === '/conexoes-sociais' && hiddenModules.has('conexoes_sociais')) return true;
@@ -911,6 +917,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Production Assistant Mascot */}
       <ErrorBoundary fallback={NO_WIDGET}>
         <Suspense fallback={null}><ProductionAssistant /></Suspense>
+      </ErrorBoundary>
+      <ErrorBoundary fallback={NO_WIDGET}>
+        <Suspense fallback={null}><IsisBubble /></Suspense>
       </ErrorBoundary>
       <ErrorBoundary fallback={NO_WIDGET}>
         <Suspense fallback={null}><WelcomeRocket /></Suspense>

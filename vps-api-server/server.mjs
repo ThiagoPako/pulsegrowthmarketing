@@ -44,6 +44,7 @@ import { registerAgentDriveRoutes } from './agentDriveRoutes.mjs';
 import { transcribeUrl } from './assistant/transcribe.mjs';
 import { registerAgentTriageRoutes } from './agentTriageRoutes.mjs';
 import { registerAgentWhatsAppRoutes } from './agentWhatsAppRoutes.mjs';
+import { registerIsisModuleRoutes } from './isisModuleRoutes.mjs';
 import { registerSchedulingRoutes } from './scheduling.mjs';
 import { registerWallpaperRoutes } from './wallpaper.mjs';
 import { createPostCaption } from './lib/postCaption.mjs';
@@ -21325,6 +21326,22 @@ registerAgentTriageRoutes(app, { pool, agentApi, designApi: agentDesignApi });
 
 // ─── WhatsApp pelos agentes (a chefe manda arte/vídeo ao grupo do cliente pela fila) ──
 registerAgentWhatsAppRoutes(app, { pool, uploadRoot: UPLOAD_ROOT, publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL, agentApi });
+
+// ─── Módulo Ísis (social media da agência): demandas da equipe por texto, voz e arquivo; a Ísis do PC faz e responde ──
+registerIsisModuleRoutes(app, {
+  pool,
+  verifyUser,
+  verifyAdmin,
+  isStrictAdmin: (user) => (user?.role === 'admin' ? true : userHasAssignedRole(user, 'admin')),
+  agentApi,
+  transcribeUrl,
+  // resposta na hora: modelo rápido (a equipe não espera a IA)
+  askAi: async (messages, options) => {
+    const ai = await resolveAiConfig();
+    const model = { gemini: 'gemini-3.5-flash', openai: 'gpt-4o-mini', claude: 'claude-haiku-5-5' }[ai.provider] || 'gemini-3.5-flash';
+    return callAi(ai, model, messages, options);
+  },
+});
 
 // ─── Agendamentos (calendário de postagem por cliente; acesso: Pulse Plus) ──
 // Fotos de perfil gravadas dentro do banco viram arquivo (deixavam o Kanban de Design com ~18 MB por abertura)

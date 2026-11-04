@@ -21077,7 +21077,10 @@ app.post('/api/portal-contents/:id/send-whatsapp', async (req, res) => {
 // "Um botão no Design que envia para o cliente e encaminha ele para ver a arte; a página se adapta ao formato: carrossel
 // ele consegue interagir e ver como ficaria no Insta dele, story da mesma forma, sequência de story… e enviar direto no
 // grupo dele com o link e o tema." Mesma ideia do /aprovar/<token> dos vídeos, para as artes do Kanban de Design.
-//   POST /api/design-tasks/:id/send-approval { target?: grupo|privado, message? }  (gestão e design) link + WhatsApp
+//   POST /api/design-tasks/:id/send-approval { target?: grupo|privado, message?, art_url? }  (gestão e design) link + WhatsApp
+//        art_url (04/11/2026, pedido do usuário: "um botão específico para cada arte, para enviar uma específica pro
+//        cliente sem enviar o card inteiro"): link só com aquela arte; o card só aprova quando todas as artes dele foram
+//        aprovadas (por link de arte ou pelo link do card inteiro).
 //   GET  /api/public/aprovar-arte/:token                 a arte, o formato e o "perfil" do Instagram do cliente
 //   POST /api/public/aprovar-arte/:token { action: approve|adjust, option?, notes?, name? }
 let designShareReady = null;
@@ -21092,15 +21095,24 @@ function ensureDesignShareSchema() {
       decided_at TIMESTAMPTZ,
       decision TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
+    );
+    ALTER TABLE design_share_links ADD COLUMN IF NOT EXISTS art_url TEXT;
+    ALTER TABLE design_share_links DROP CONSTRAINT IF EXISTS design_share_links_design_task_id_key;
+    CREATE UNIQUE INDEX IF NOT EXISTS design_share_links_task_art ON design_share_links (design_task_id, (COALESCE(art_url, '')));
   `).catch((error) => { designShareReady = null; throw error; });
   return designShareReady;
 }
 
 const ART_IMAGE_RE = /\.(png|jpe?g|webp|gif)(\?|#|$)/i;
+function absArtUrl(u) {
+  const base = String(process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech').replace(/\/+$/, '');
+  return u.startsWith('/') ? `${base}${u}` : u;
+}
 /** As imagens entregues da arte, na ordem, separadas por opção (A/B) quando o nome do arquivo diz. */
 function artOptions(task) {
   const base = String(process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech').replace(/\/+$/, '');
+  // link de uma arte só: a página mostra só ela
+  if (task.share_art_url) return [{ key: 'única', images: [task.share_art_url.startsWith('/') ? `${base}${task.share_art_url}` : task.share_art_url] }];
   let urls = [];
   const raw = task.attachment_urls;
   if (Array.isArray(raw)) urls = raw;
@@ -21135,7 +21147,7 @@ async function designShareByToken(token) {
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(String(token || ''))) throw Object.assign(new Error('Link não encontrado'), { status: 404 });
   await ensureDesignShareSchema();
   const { rows: [row] } = await pool.query(
-    `SELECT l.token, l.decision, dt.*, cl.company_name, cl.logo_url
+    `SELECT l.token, l.decision, l.art_url AS share_art_url, dt.*, cl.company_name, cl.logo_url
        FROM design_share_links l JOIN design_tasks dt ON dt.id = l.design_task_id LEFT JOIN clients cl ON cl.id = dt.client_id
       WHERE l.token = $1`, [token]
   );
@@ -21156,6 +21168,15 @@ app.post('/api/design-tasks/:id/send-approval', async (req, res) => {
     if (!task) return res.status(404).json({ error: 'Arte não encontrada (ou sem cliente cadastrado)' });
     if (!artOptions(task).some((o) => o.images.length)) return res.status(400).json({ error: 'A arte ainda não tem imagem entregue (PNG ou JPG)' });
     if (['aprovado', 'postado'].includes(task.kanban_column)) return res.status(409).json({ error: 'Esta arte já foi aprovada' });
+    const allArts = artOptions(task).flatMap((o) => o.images);
+    let artUrl = null;
+    let artIndex = -1;
+    if (req.body?.art_url) {
+      const wanted = absArtUrl(String(req.body.art_url));
+      artIndex = allArts.indexOf(wanted);
+      if (artIndex < 0) return res.status(400).json({ error: 'Essa imagem não é uma das artes entregues deste card (PNG ou JPG)' });
+      artUrl = wanted;
+    }
     const target = req.body?.target === 'privado' ? 'privado' : 'grupo';
     const to = target === 'grupo' ? String(task.whatsapp_group || '').trim() : String(task.whatsapp || '').replace(/\D/g, '');
     if (!to) return res.status(400).json({ error: target === 'grupo' ? 'O cliente não tem grupo de WhatsApp cadastrado' : 'O cliente não tem WhatsApp cadastrado' });
@@ -21166,14 +21187,15 @@ app.post('/api/design-tasks/:id/send-approval', async (req, res) => {
     }
     const token = crypto.randomBytes(18).toString('base64url');
     const { rows: [link] } = await pool.query(
-      `INSERT INTO design_share_links (token, design_task_id, client_id, sent_at) VALUES ($1, $2, $3, now())
-       ON CONFLICT (design_task_id) DO UPDATE SET sent_at = now(), decided_at = NULL, decision = NULL RETURNING token`,
-      [token, task.id, task.client_id]
+      `INSERT INTO design_share_links (token, design_task_id, client_id, sent_at, art_url) VALUES ($1, $2, $3, now(), $4)
+       ON CONFLICT (design_task_id, (COALESCE(art_url, ''))) DO UPDATE SET sent_at = now(), decided_at = NULL, decision = NULL RETURNING token`,
+      [token, task.id, task.client_id, artUrl]
     );
+    if (artUrl) await insertDesignTaskHistoryFromPortal(task.id, `📤 Arte ${artIndex + 1} de ${allArts.length} enviada sozinha ao cliente pelo link de aprovação`).catch(() => {});
     const base = String(process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech').replace(/\/+$/, '');
     const url = `${base}/aprovar-arte/${link.token}`;
-    const kind = { story: 'o story', sequencia: 'a sequência de stories', carrossel: 'o carrossel', feed: 'a arte' }[artPreviewFormat(task)];
-    const options = artOptions(task).length;
+    const kind = artUrl ? 'a arte' : { story: 'o story', sequencia: 'a sequência de stories', carrossel: 'o carrossel', feed: 'a arte' }[artPreviewFormat(task)];
+    const options = artUrl ? 1 : artOptions(task).length;
     const message = String(req.body?.message || '').trim().slice(0, 1500)
       || `Olá! 👋 ${kind.charAt(0).toUpperCase() + kind.slice(1)} *${String(task.title || '').trim()}* da ${String(task.company_name || '').trim()} está pronto para a sua aprovação.${options > 1 ? ` São ${options} opções: escolha a que mais gostar.` : ''}\n\nVeja como fica no seu Instagram e aprove por aqui:\n${url}`;
     if (!message.includes(url)) return res.status(400).json({ error: 'A mensagem precisa ter o link de aprovação' });
@@ -21193,13 +21215,16 @@ app.get('/api/public/aprovar-arte/:token', async (req, res) => {
     const { rows: [ig] } = await pool.query(
       `SELECT username, profile_picture_url FROM social_accounts WHERE client_id = $1 AND platform ILIKE 'instagram%' ORDER BY created_at DESC LIMIT 1`, [row.client_id]
     ).catch(() => ({ rows: [] }));
-    const decided = ['aprovado', 'postado'].includes(row.kanban_column) ? 'aprovado' : row.kanban_column === 'ajustes' && row.decision === 'ajuste' ? 'ajuste' : null;
+    const decided = ['aprovado', 'postado'].includes(row.kanban_column) || (row.share_art_url && row.decision === 'aprovado') ? 'aprovado'
+      : row.kanban_column === 'ajustes' && row.decision === 'ajuste' ? 'ajuste' : null;
     res.set('Cache-Control', 'no-store');
     res.json({
-      title: row.title, format: artPreviewFormat(row), options: artOptions(row),
+      // uma arte só: story fica story; o resto aparece como post único (não carrossel de uma lâmina)
+      title: row.title, format: row.share_art_url ? (['story', 'sequencia'].includes(artPreviewFormat(row)) ? 'story' : 'feed') : artPreviewFormat(row),
+      options: artOptions(row),
       caption: row.copy_text || null,
       client: { name: String(row.company_name || '').trim(), logo: row.logo_url || null, username: ig?.username || null, avatar: ig?.profile_picture_url || row.logo_url || null },
-      decided, can_decide: row.kanban_column === 'enviar_cliente',
+      decided, can_decide: row.kanban_column === 'enviar_cliente' && !(row.share_art_url && row.decision),
     });
   } catch (error) { res.status(error.status || 500).json({ error: error.message }); }
 });
@@ -21209,6 +21234,20 @@ app.post('/api/public/aprovar-arte/:token', async (req, res) => {
     const row = await designShareByToken(req.params.token);
     const name = String(req.body?.name || '').trim().slice(0, 80) || 'Cliente';
     const option = String(req.body?.option || '').trim().slice(0, 10);
+    if (req.body?.action === 'approve' && row.share_art_url) {
+      // link de uma arte só: aprova a arte; o card só anda quando todas as artes dele estão aprovadas
+      if (row.kanban_column !== 'enviar_cliente' || row.decision) return res.status(409).json({ error: 'Esta arte não está mais esperando aprovação. Fale com a gente pelo WhatsApp.' });
+      const arts = artOptions({ ...row, share_art_url: null }).flatMap((o) => o.images);
+      const idx = arts.indexOf(absArtUrl(row.share_art_url));
+      await pool.query(`UPDATE design_share_links SET decided_at = now(), decision = 'aprovado' WHERE token = $1`, [row.token]);
+      await insertDesignTaskHistoryFromPortal(row.id, `✅ ${name} aprovou a arte ${idx >= 0 ? idx + 1 : ''} pelo link de aprovação`.replace('  ', ' ')).catch(() => {});
+      const { rows: approved } = await pool.query(
+        `SELECT art_url FROM design_share_links WHERE design_task_id = $1 AND decision = 'aprovado' AND art_url IS NOT NULL`, [row.id]
+      );
+      const done = new Set(approved.map((a) => absArtUrl(a.art_url)));
+      if (arts.length && arts.every((a) => done.has(a))) await approveDesignTaskFromPortal(row.id, row.client_id);
+      return res.json({ success: true, decided: 'aprovado' });
+    }
     if (req.body?.action === 'approve') {
       const r = await approveDesignTaskFromPortal(row.id, row.client_id);
       if (r.status === 'conflict' || r.status === 'not_found') return res.status(409).json({ error: 'Esta arte não está mais esperando aprovação. Fale com a gente pelo WhatsApp.' });
@@ -21219,7 +21258,12 @@ app.post('/api/public/aprovar-arte/:token', async (req, res) => {
     if (req.body?.action === 'adjust') {
       const notes = String(req.body?.notes || '').trim().slice(0, 2000);
       if (notes.length < 3) return res.status(400).json({ error: 'Conte o que você quer mudar na arte' });
-      const text = `${option && option !== 'única' ? `(sobre a opção ${option}) ` : ''}${notes} — ${name}, pelo link de aprovação`;
+      let about = option && option !== 'única' ? `(sobre a opção ${option}) ` : '';
+      if (row.share_art_url) {
+        const idx = artOptions({ ...row, share_art_url: null }).flatMap((o) => o.images).indexOf(absArtUrl(row.share_art_url));
+        about = `(sobre a arte ${idx >= 0 ? idx + 1 : 'enviada sozinha'}) `;
+      }
+      const text = `${about}${notes} — ${name}, pelo link de aprovação`;
       const r = await requestDesignAdjustmentFromPortal(row.id, row.client_id, text);
       if (r.status === 'conflict' || r.status === 'not_found') return res.status(409).json({ error: 'Esta arte não está mais esperando aprovação. Fale com a gente pelo WhatsApp.' });
       await pool.query(`UPDATE design_share_links SET decided_at = now(), decision = 'ajuste' WHERE token = $1`, [row.token]);

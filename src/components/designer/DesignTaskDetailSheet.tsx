@@ -156,15 +156,18 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const queryClient = useQueryClient();
   const [sendingLink, setSendingLink] = useState(false);
   // Link de aprovação no formato do Instagram (03/11/2026): manda no grupo do cliente com o tema da arte
-  const handleSendApprovalLink = async () => {
+  // artUrl (04/11/2026): manda só aquela arte, sem o card inteiro
+  const handleSendApprovalLink = async (artUrl?: string, artNumber?: number) => {
     if (sendingLink) return;
-    if (!window.confirm(`Mandar "${task.title}" para o cliente aprovar? Vai o link no grupo do WhatsApp dele, com o tema da arte.`)) return;
+    const what = artUrl ? `a arte ${artNumber} de "${task.title}"` : `"${task.title}"`;
+    if (!window.confirm(`Mandar ${what} para o cliente aprovar? Vai o link no grupo do WhatsApp dele, com o tema da arte.`)) return;
     setSendingLink(true);
     try {
-      let res = await invokeVpsFunction(`design-tasks/${task.id}/send-approval`, { body: { target: 'grupo' } });
+      const extra = artUrl ? { art_url: artUrl } : {};
+      let res = await invokeVpsFunction(`design-tasks/${task.id}/send-approval`, { body: { target: 'grupo', ...extra } });
       const err = res.data?.error || res.error?.message || '';
       if (/grupo de WhatsApp/i.test(err) && window.confirm('O cliente não tem grupo cadastrado. Mandar no WhatsApp privado dele?')) {
-        res = await invokeVpsFunction(`design-tasks/${task.id}/send-approval`, { body: { target: 'privado' } });
+        res = await invokeVpsFunction(`design-tasks/${task.id}/send-approval`, { body: { target: 'privado', ...extra } });
       }
       if (res.error || res.data?.error) throw new Error(res.data?.error || res.error?.message || 'Não deu para enviar');
       try { await navigator.clipboard.writeText(res.data.url); } catch { /* sem área de transferência */ }
@@ -674,7 +677,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
       actions.push({ key: 'ajustes', label: 'PEDIR AJUSTES', color: 'hsl(0 72% 51%)', icon: RotateCcw, onClick: () => setShowAdjustmentForm(true) });
     }
     if (task.kanban_column === 'em_analise' && isSocialMedia && task.client_id) {
-      actions.push({ key: 'link_aprovacao' as DesignTaskColumn, label: sendingLink ? 'ENVIANDO…' : 'APROVAÇÃO NO GRUPO', color: 'hsl(330 81% 56%)', icon: Link2, onClick: handleSendApprovalLink });
+      actions.push({ key: 'link_aprovacao' as DesignTaskColumn, label: sendingLink ? 'ENVIANDO…' : 'APROVAÇÃO NO GRUPO', color: 'hsl(330 81% 56%)', icon: Link2, onClick: () => handleSendApprovalLink() });
     }
     if (task.kanban_column === 'em_analise' && isSocialMedia) {
       actions.push({ key: 'enviar_cliente', label: 'APROVAR ARTE', color: 'hsl(142 71% 45%)', icon: CheckCircle, onClick: handleApprove });
@@ -682,7 +685,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
       actions.push({ key: 'ajustes', label: 'PEDIR AJUSTES', color: 'hsl(0 72% 51%)', icon: RotateCcw, onClick: () => setShowAdjustmentForm(true) });
     }
     if (task.kanban_column === 'enviar_cliente' && isSocialMedia) {
-      if (task.client_id) actions.push({ key: 'link_aprovacao' as DesignTaskColumn, label: sendingLink ? 'ENVIANDO…' : 'APROVAÇÃO NO GRUPO', color: 'hsl(330 81% 56%)', icon: Link2, onClick: handleSendApprovalLink });
+      if (task.client_id) actions.push({ key: 'link_aprovacao' as DesignTaskColumn, label: sendingLink ? 'ENVIANDO…' : 'APROVAÇÃO NO GRUPO', color: 'hsl(330 81% 56%)', icon: Link2, onClick: () => handleSendApprovalLink() });
       actions.push({ key: 'enviar_cliente', label: 'ENVIAR VIA WHATSAPP', color: 'hsl(142 71% 45%)', icon: Send, onClick: handleSendToClient });
       actions.push({ key: 'aprovado', label: 'MARCAR APROVADO', color: 'hsl(217 91% 60%)', icon: CheckCircle, onClick: handleClientApproval });
     }
@@ -1546,14 +1549,14 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                           {attachmentUrls.length > 0 && (
                             <div className="mt-2 mb-3 space-y-2">
                               <p className="text-[10px] text-muted-foreground font-medium">{attachmentUrls.length} arte(s) enviada(s)</p>
-                              <div className="grid grid-cols-3 gap-2">
+                              <div className="grid grid-cols-2 gap-2">
                                 {attachmentUrls.map((url, idx) => {
                                   const isImg = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(url);
                                   return (
                                     <div key={idx} className="relative group/art rounded-lg overflow-hidden border border-border">
                                       {isImg ? (
                                         <button onClick={() => setPreviewImage(url)} className="w-full">
-                                          <img src={url} alt={`Arte ${idx + 1}`} className="w-full h-20 object-cover bg-muted/30" />
+                                          <img src={url} alt={`Arte ${idx + 1}`} className="w-full h-44 object-contain bg-muted/30" />
                                           <div className="absolute inset-0 bg-black/0 group-hover/art:bg-black/20 transition-colors flex items-center justify-center">
                                             <ZoomIn size={14} className="text-white opacity-0 group-hover/art:opacity-100 transition-opacity" />
                                           </div>
@@ -1658,14 +1661,15 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     <div className="space-y-2">
                       {/* Show all arts gallery */}
                       {((task as any).attachment_urls?.length > 0) ? (
-                        <div className="grid grid-cols-2 gap-2">
+                        // arte inteira e legível (04/11/2026: "fica pequenininha no quadradinho")
+                        <div className={`grid gap-3 ${(task as any).attachment_urls.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                           {(task as any).attachment_urls.map((url: string, idx: number) => {
                             const isImg = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(url);
                             return (
                               <div key={idx} className="relative group rounded-lg overflow-hidden border border-border hover:ring-2 hover:ring-primary/50 transition-all">
                                 {isImg ? (
                                   <button type="button" onClick={() => setPreviewImage(url)} className="w-full block">
-                                    <img src={url} alt={`Arte ${idx + 1}`} className="w-full h-24 object-cover bg-muted/30" />
+                                    <img src={url} alt={`Arte ${idx + 1}`} className="w-full h-auto max-h-[460px] object-contain bg-muted/30" />
                                   </button>
                                 ) : (
                                   <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 hover:bg-muted/30 transition-colors text-xs text-primary">
@@ -1673,6 +1677,17 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                                   </a>
                                 )}
                                 <span className="absolute bottom-1 left-1 text-[9px] bg-black/60 text-white px-1.5 py-0.5 rounded pointer-events-none">{idx + 1}</span>
+                                {isSocialMedia && task.client_id && isImg && ['em_analise', 'enviar_cliente'].includes(task.kanban_column) && (task as any).attachment_urls.length > 1 && (
+                                  <button
+                                    type="button"
+                                    disabled={sendingLink}
+                                    onClick={(e) => { e.stopPropagation(); handleSendApprovalLink(url, idx + 1); }}
+                                    className="absolute bottom-1 right-1 z-10 flex items-center gap-1 rounded-md bg-pink-600 px-2 py-1 text-[10px] font-semibold text-white shadow hover:bg-pink-700 disabled:opacity-60"
+                                    title="Manda só esta arte para o cliente aprovar"
+                                  >
+                                    <Send size={10} /> Enviar só esta
+                                  </button>
+                                )}
                                 {isDesigner && (
                                   <label
                                     className="absolute inset-0 bg-black/0 group-hover:bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer"
@@ -1700,7 +1715,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         <div className="relative group rounded-lg overflow-hidden border border-border w-full hover:ring-2 hover:ring-primary/50 transition-all">
                           {/\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(task.attachment_url) ? (
                             <button type="button" onClick={() => setPreviewImage(task.attachment_url!)} className="w-full block">
-                              <img src={task.attachment_url} alt="Arte" className="w-full max-h-48 object-contain bg-muted/30" />
+                              <img src={task.attachment_url} alt="Arte" className="w-full h-auto max-h-[460px] object-contain bg-muted/30" />
                             </button>
                           ) : (
                             <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 hover:bg-muted/30 transition-colors text-sm text-primary">

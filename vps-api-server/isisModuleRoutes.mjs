@@ -158,17 +158,30 @@ export function registerIsisModuleRoutes(app, { pool, verifyUser, verifyAdmin, i
       }
 
       // resposta na hora (IA): diz o que entendeu e o que vai acontecer; o trabalho é da Ísis do PC
+      // 04/11/2026 (primeiro uso do Thiago): sem a conversa anterior a IA perguntava de novo o cliente e o prazo
+      // que ele já tinha dito ("falei que é pra Venon"). Agora ela lê as últimas mensagens e não faz pergunta:
+      // quem completa o que falta é a Ísis do PC, que lê tudo junto.
       let reply = '';
       if (askAi) {
         try {
+          const { rows: recent } = await pool.query(
+            `SELECT author, body, transcript FROM isis_chat WHERE user_id = $1 AND id <> $2 AND created_at > now() - interval '6 hours'
+              ORDER BY created_at DESC LIMIT 12`, [user.id, msg.id]
+          );
+          const history = recent.reverse().map((m) => ({
+            role: m.author === 'user' ? 'user' : 'assistant',
+            content: [m.body, m.transcript && `(áudio) ${m.transcript}`].filter(Boolean).join(' ').slice(0, 800) || '(anexo)',
+          }));
           reply = clip(await askAi([
             { role: 'system', content: 'Você é a Ísis, social media da agência Pulse, simpática, animada e direta, em português do Brasil. ' +
-              'Recebeu uma demanda da equipe. Responda em até 3 frases curtas: diga o que entendeu (vídeo, arte, story, legenda, ' +
-              'campanha, outra coisa; cliente e prazo se foram ditos) e o próximo passo (vídeo vira card de edição, e sem gravação ' +
-              'vira animação; arte vira card no Design para as designers). Se faltar algo essencial (cliente, formato, data), ' +
-              'pergunte só isso. Não invente dados, preços nem datas, e não diga que já está pronto.' },
-            { role: 'user', content: `${who} pediu: ${pedido}` },
-          ], { temperature: 0.4, max_tokens: 220 }), 900);
+              'A equipe manda demandas aos poucos, em várias mensagens: junte a mensagem nova com as anteriores desta conversa. ' +
+              'Responda em até 2 frases curtas: o que entendeu do pedido completo até agora (formato, cliente, prazo, o que foi dito) ' +
+              'e que você já vai criar (vídeo vira card de edição, sem gravação vira animação; arte vira card no Design). ' +
+              'NÃO faça perguntas e não peça informação que já foi dita; o que faltar você resolve depois. ' +
+              'Não invente dados, preços nem datas, e não diga que já está pronto.' },
+            ...history,
+            { role: 'user', content: `${who}: ${pedido}` },
+          ], { temperature: 0.3, max_tokens: 160 }), 700);
         } catch { reply = ''; }
       }
       if (!reply) reply = 'Recebi! 💛 Já estou vendo isso e te respondo aqui com o que eu criei.';

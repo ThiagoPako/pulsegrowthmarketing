@@ -115,6 +115,14 @@ export function buildProposalRevenueSchedule(proposal, startDate) {
     const total = toNumber(vid.totalValue) || (toNumber(vid.quantity) * toNumber(vid.unitPrice) + extras);
     amounts = splitTotal(withDiscount(total), vid.installments);
     label = `Vídeos Avulsos - ${company}`;
+  } else if (type === 'sob_medida') {
+    // feita pela Ísis: mensal pelo número de meses do contrato; único/projeto dividido nas parcelas
+    const inv = toObject(toObject(proposal?.system_data).investimento);
+    const valor = withDiscount(toNumber(inv.valor));
+    amounts = inv.periodo === 'mes'
+      ? Array(Math.min(24, Math.max(1, toNumber(inv.meses) || 12))).fill(round2(valor))
+      : splitTotal(valor, inv.parcelas);
+    label = `Proposta sob medida - ${company}`;
   } else {
     return [];
   }

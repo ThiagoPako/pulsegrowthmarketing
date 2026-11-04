@@ -16,6 +16,12 @@
 //     POST /api/agent/isis/chat/:id/responder { body, status? }      resposta na conversa de quem pediu
 //     POST /api/agent/isis/chat/:id/status { status: lida|fazendo|feita }
 //     PUT  /api/agent/isis/sugestoes { items: [{ title, body?, action? , link? }] }   troca os cartões
+//     POST /api/agent/isis/propostas { client_name, client_company, venda: {...}, validade_dias?, whatsapp?, city? }
+//     PUT  /api/agent/isis/propostas/:id { venda?, client_name?, client_company?, validade_dias? }   ajuste
+//     GET  /api/agent/isis/propostas                                     as últimas 20 (link e status)
+//        Proposta "sob medida" (04/11/2026, pedido do Thiago: "falar o nome da pessoa, a atividade e o que vamos
+//        vender, e a Ísis cria a proposta focada em vendas, que o cliente entenda e deseje comprar"). Fica em
+//        commercial_proposals (proposal_type 'sob_medida', o conteúdo em system_data) e abre em /proposta/<token>.
 const MODULE = 'isis';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const AUDIO_RE = /\.(webm|ogg|oga|opus|mp3|m4a|wav|aac)(\?|#|$)/i;
@@ -281,6 +287,95 @@ export function registerIsisModuleRoutes(app, { pool, verifyUser, verifyAdmin, i
       if (!UUID_RE.test(req.params.id) || !STATUSES.has(req.body?.status)) return res.status(400).json({ error: 'Use status: lida, fazendo ou feita' });
       await pool.query(`UPDATE isis_chat SET status = $2 WHERE id = $1 AND author = 'user'`, [req.params.id, req.body.status]);
       res.json({ ok: true });
+    } catch (error) { send(res, error); }
+  });
+
+  // ── Propostas sob medida ──
+  const money = (v) => { const n = Number(String(v ?? '').replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null; };
+  const list = (v, n, max = 300) => (Array.isArray(v) ? v : []).slice(0, n).map((x) => clip(x, max)).filter(Boolean);
+  function cleanVenda(v = {}) {
+    const inv = v.investimento || {};
+    const venda = {
+      atividade: clip(v.atividade, 160),
+      titulo: clip(v.titulo, 160),
+      subtitulo: clip(v.subtitulo, 400),
+      momento: list(v.momento, 5),
+      solucao: clip(v.solucao, 1200),
+      entregas: (Array.isArray(v.entregas) ? v.entregas : []).slice(0, 12)
+        .map((e) => ({ titulo: clip(e?.titulo, 120), descricao: clip(e?.descricao, 400), quantidade: clip(e?.quantidade, 40) || null }))
+        .filter((e) => e.titulo),
+      resultados: list(v.resultados, 6),
+      investimento: {
+        valor: money(inv.valor),
+        de: money(inv.de),
+        periodo: ['mes', 'unico', 'projeto'].includes(inv.periodo) ? inv.periodo : 'mes',
+        parcelas: Math.min(24, Math.max(1, parseInt(inv.parcelas, 10) || 1)),
+        // mensal: duração do contrato (as receitas previstas saem por ela quando o cliente aceita)
+        meses: Math.min(24, Math.max(1, parseInt(inv.meses, 10) || 12)),
+        forma: ['pix', 'boleto', 'cartao', 'transferencia'].includes(inv.forma) ? inv.forma : 'pix',
+        condicoes: clip(inv.condicoes, 400),
+      },
+      bonus: (Array.isArray(v.bonus) ? v.bonus : []).slice(0, 6)
+        .map((b) => ({ titulo: clip(b?.titulo, 120), descricao: clip(b?.descricao, 300) })).filter((b) => b.titulo),
+      passos: list(v.passos, 6, 200),
+      garantia: clip(v.garantia, 400),
+      cta: clip(v.cta, 120),
+    };
+    if (!venda.titulo || !venda.entregas.length || !venda.investimento.valor) {
+      throw httpError(400, 'A proposta precisa de titulo, ao menos 1 entrega e investimento.valor');
+    }
+    return venda;
+  }
+  const proposalLink = (token) => `${String(process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech').replace(/\/+$/, '')}/proposta/${token}`;
+
+  app.post('/api/agent/isis/propostas', async (req, res) => {
+    try {
+      const agent = await isisAgent(req);
+      const clientName = clip(req.body?.client_name, 120);
+      if (!clientName) return res.status(400).json({ error: 'Informe client_name (o nome da pessoa)' });
+      const venda = cleanVenda(req.body?.venda);
+      const days = Math.min(60, Math.max(1, parseInt(req.body?.validade_dias, 10) || 7));
+      const city = ['minacu', 'uruacu'].includes(req.body?.city) ? req.body.city : null;
+      const { rows: [p] } = await pool.query(
+        `INSERT INTO commercial_proposals (client_name, client_company, proposal_type, system_data, validity_date, whatsapp_number,
+                                           has_contract, created_by, city)
+         VALUES ($1, $2, 'sob_medida', $3::jsonb, CURRENT_DATE + $4::int, $5, false, $6, $7) RETURNING id, token, validity_date`,
+        [clientName, clip(req.body?.client_company, 160) || clientName, JSON.stringify(venda), days,
+          clip(req.body?.whatsapp, 30).replace(/\D/g, ''), agent.userId, city]
+      );
+      res.json({ ok: true, id: p.id, link: proposalLink(p.token), validade: p.validity_date });
+    } catch (error) { send(res, error); }
+  });
+
+  app.put('/api/agent/isis/propostas/:id', async (req, res) => {
+    try {
+      await isisAgent(req);
+      if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Proposta inválida' });
+      const { rows: [cur] } = await pool.query(`SELECT * FROM commercial_proposals WHERE id = $1 AND proposal_type = 'sob_medida'`, [req.params.id]);
+      if (!cur) return res.status(404).json({ error: 'Proposta sob medida não encontrada' });
+      if (cur.status !== 'pendente') return res.status(409).json({ error: `Esta proposta já foi ${cur.status}` });
+      const venda = req.body?.venda ? cleanVenda({ ...(cur.system_data || {}), ...req.body.venda }) : cur.system_data;
+      const days = parseInt(req.body?.validade_dias, 10);
+      const { rows: [p] } = await pool.query(
+        `UPDATE commercial_proposals SET system_data = $2::jsonb, client_name = COALESCE($3, client_name),
+                client_company = COALESCE($4, client_company),
+                validity_date = CASE WHEN $5::int IS NULL THEN validity_date ELSE CURRENT_DATE + $5::int END, updated_at = now()
+          WHERE id = $1 RETURNING token, validity_date`,
+        [req.params.id, JSON.stringify(venda), clip(req.body?.client_name, 120) || null, clip(req.body?.client_company, 160) || null,
+          Number.isFinite(days) ? Math.min(60, Math.max(1, days)) : null]
+      );
+      res.json({ ok: true, link: proposalLink(p.token), validade: p.validity_date });
+    } catch (error) { send(res, error); }
+  });
+
+  app.get('/api/agent/isis/propostas', async (req, res) => {
+    try {
+      await isisAgent(req);
+      const { rows } = await pool.query(
+        `SELECT id, client_name, client_company, status, token, validity_date, created_at, client_response_note
+           FROM commercial_proposals WHERE proposal_type = 'sob_medida' ORDER BY created_at DESC LIMIT 20`
+      );
+      res.json({ items: rows.map(({ token, ...r }) => ({ ...r, link: proposalLink(token) })) });
     } catch (error) { send(res, error); }
   });
 

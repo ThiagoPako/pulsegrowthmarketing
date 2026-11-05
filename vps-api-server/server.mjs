@@ -21138,6 +21138,10 @@ function artOptions(task) {
 
 function artPreviewFormat(task) {
   const preset = String(task.dimensions?.preset || task.format_type || '').toLowerCase();
+  // 05/11/2026 (Thiago): impresso aparece num mockup (outdoor, banner, panfleto) e criativo de anúncio em feed, story e reels
+  if (['outdoor', 'banner', 'panfleto_a4', 'panfleto_a5', 'cartao_visita'].includes(preset) || preset === 'midia_fisica'
+    || (preset === 'personalizado' && task.dimensions?.unit && task.dimensions.unit !== 'px')) return 'impresso';
+  if (/\bcriativo|an[uú]ncio|patrocinad|tr[aá]fego pago/i.test(String(task.title || ''))) return 'criativo';
   if (preset === 'story_sequencia') return 'sequencia';
   if (preset.startsWith('story') || preset === 'capa' || preset === 'capa_destaque') return 'story';
   if (preset.startsWith('carros')) return 'carrossel';
@@ -21195,7 +21199,7 @@ app.post('/api/design-tasks/:id/send-approval', async (req, res) => {
     if (artUrl) await insertDesignTaskHistoryFromPortal(task.id, `📤 Arte ${artIndex + 1} de ${allArts.length} enviada sozinha ao cliente pelo link de aprovação`).catch(() => {});
     const base = String(process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech').replace(/\/+$/, '');
     const url = `${base}/aprovar-arte/${link.token}`;
-    const kind = artUrl ? 'a arte' : { story: 'o story', sequencia: 'a sequência de stories', carrossel: 'o carrossel', feed: 'a arte' }[artPreviewFormat(task)];
+    const kind = artUrl ? 'a arte' : { story: 'o story', sequencia: 'a sequência de stories', carrossel: 'o carrossel', feed: 'a arte', impresso: 'o material impresso', criativo: 'o criativo' }[artPreviewFormat(task)] || 'a arte';
     const options = artUrl ? 1 : artOptions(task).length;
     const message = String(req.body?.message || '').trim().slice(0, 1500)
       || `Olá! 👋 ${kind.charAt(0).toUpperCase() + kind.slice(1)} *${String(task.title || '').trim()}* da ${String(task.company_name || '').trim()} está pronto para a sua aprovação.${options > 1 ? ` São ${options} opções: escolha a que mais gostar.` : ''}\n\nVeja como fica no seu Instagram e aprove por aqui:\n${url}`;
@@ -21221,7 +21225,8 @@ app.get('/api/public/aprovar-arte/:token', async (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({
       // uma arte só: story fica story; o resto aparece como post único (não carrossel de uma lâmina)
-      title: row.title, format: row.share_art_url ? (['story', 'sequencia'].includes(artPreviewFormat(row)) ? 'story' : 'feed') : artPreviewFormat(row),
+      title: row.title, format: row.share_art_url ? (['story', 'sequencia'].includes(artPreviewFormat(row)) ? 'story' : ['impresso', 'criativo'].includes(artPreviewFormat(row)) ? artPreviewFormat(row) : 'feed') : artPreviewFormat(row),
+      preset: String(row.dimensions?.preset || row.format_type || '').toLowerCase() || null,
       options: artOptions(row),
       caption: row.copy_text || null,
       client: { name: String(row.company_name || '').trim(), logo: row.logo_url || null, username: ig?.username || null, avatar: ig?.profile_picture_url || row.logo_url || null },

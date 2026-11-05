@@ -116,6 +116,7 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
         );
         ALTER TABLE upload_post_config ADD COLUMN IF NOT EXISTS webhook_secret TEXT;
         ALTER TABLE google_reviews ADD COLUMN IF NOT EXISTS removal_reason TEXT;
+        ALTER TABLE google_reviews ADD COLUMN IF NOT EXISTS source_user TEXT;
         ALTER TABLE google_reviews ADD COLUMN IF NOT EXISTS removal_status TEXT;
         -- métricas de cada rede, uma foto por dia (Upload-Post /analytics; 02/11/2026)
         CREATE TABLE IF NOT EXISTS social_metrics (
@@ -376,26 +377,36 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
   }
 
   // ── avaliações do Google ──
+  // fichas do Google do cliente: as ligadas pelo Google da equipe (um login para várias fichas, 04/11/2026; um cliente
+  // pode ter várias) ou a do perfil dele
+  async function reviewSources(clientId) {
+    const team = uploadPost.googleSourcesOf ? await uploadPost.googleSourcesOf(clientId).catch(() => []) : [];
+    if (team.length) return team;
+    const user = await profileOf(clientId);
+    return user ? [{ user, location_id: null }] : [];
+  }
+
   async function syncReviews(clientId) {
     await ensureSchema();
-    const user = await profileOf(clientId);
-    if (!user) return 0;
-    const r = await uploadPost.call('GET', `/uploadposts/google-business/reviews?user=${encodeURIComponent(user)}&pageSize=50&orderBy=${encodeURIComponent('updateTime desc')}`).catch(() => null);
-    if (!r?.reviews) return 0;
     let added = 0;
+    for (const src of await reviewSources(clientId)) {
+    const loc = src.location_id ? `&location_id=${encodeURIComponent(src.location_id)}` : '';
+    const r = await uploadPost.call('GET', `/uploadposts/google-business/reviews?user=${encodeURIComponent(src.user)}${loc}&pageSize=50&orderBy=${encodeURIComponent('updateTime desc')}`).catch(() => null);
+    if (!r?.reviews) continue;
     for (const v of r.reviews) {
       const replied = v.reviewReply?.comment || null;
       const { rows: [saved] } = await pool.query(
-        `INSERT INTO google_reviews (client_id, review_name, reviewer, rating, comment, reviewed_at, status, reply_text, reply_by, replied_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         ON CONFLICT (review_name) DO UPDATE SET comment = EXCLUDED.comment, rating = EXCLUDED.rating,
+        `INSERT INTO google_reviews (client_id, review_name, reviewer, rating, comment, reviewed_at, status, reply_text, reply_by, replied_at, source_user)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         ON CONFLICT (review_name) DO UPDATE SET comment = EXCLUDED.comment, rating = EXCLUDED.rating, source_user = EXCLUDED.source_user,
            reply_text = coalesce(google_reviews.reply_text, EXCLUDED.reply_text),
            status = CASE WHEN EXCLUDED.reply_text IS NOT NULL AND google_reviews.status <> 'respondido' THEN 'respondido' ELSE google_reviews.status END
          RETURNING (xmax = 0) AS inserted`,
         [clientId, v.name, v.reviewer?.displayName || null, STARS[v.starRating] || null, v.comment || null, v.createTime ? new Date(v.createTime) : null,
-          replied ? 'respondido' : 'novo', replied, replied ? 'Google' : null, v.reviewReply?.updateTime ? new Date(v.reviewReply.updateTime) : null]
+          replied ? 'respondido' : 'novo', replied, replied ? 'Google' : null, v.reviewReply?.updateTime ? new Date(v.reviewReply.updateTime) : null, src.user]
       );
       if (saved?.inserted && !replied) added += 1;
+    }
     }
     if (added) await processReviews(clientId).catch((error) => logger.error('[central-social] avaliações:', error.message));
     return added;
@@ -431,7 +442,9 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
     if (!v) throw Object.assign(new Error('Avaliação não encontrada'), { status: 404 });
     const message = String(text || '').trim();
     if (message.length < 2) throw Object.assign(new Error('Escreva a resposta'), { status: 400 });
-    const user = await profileOf(v.client_id);
+    // responde pelo mesmo login que trouxe a avaliação (o review_name já diz a ficha)
+    const user = v.source_user || (await reviewSources(v.client_id))[0]?.user;
+    if (!user) throw Object.assign(new Error('O cliente não tem ficha do Google conectada'), { status: 409 });
     await uploadPost.call('PUT', '/uploadposts/google-business/reviews/reply', { json: { user, review_name: v.review_name, comment: message.slice(0, 4000) } });
     // aprovado pelo cliente na página do monitoramento: fica o nome de quem aprovou
     const author = /^Aprovado por /.test(by || '') ? by : by === 'Ísis' || message === v.isis_draft ? 'Ísis' : by || 'Equipe Pulse';
@@ -615,6 +628,13 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
       const { rows: [g] } = await pool.query(`SELECT 1 FROM social_accounts WHERE client_id = $1 AND api_base = 'upload_post' AND platform = 'google_business'`, [r.client_id]);
       if (g) await syncReviews(r.client_id).catch((error) => logger.error('[central-social] avaliações:', error.message));
     }
+    // fichas do Google da equipe (inclui clientes só de monitoramento, que não têm perfil próprio)
+    const mapped = uploadPost.googleMappedClients ? await uploadPost.googleMappedClients().catch(() => []) : [];
+    const seen = new Set(rows.map((r) => String(r.client_id)));
+    for (const clientId of mapped) {
+      if (seen.has(String(clientId))) continue;
+      await syncReviews(clientId).catch((error) => logger.error('[central-social] avaliações (Google da equipe):', error.message));
+    }
   }
 
   // ── aviso em tempo real: cadastro na Upload-Post ──
@@ -679,6 +699,7 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
 
   async function overview(city = null) {
     await ensureSchema();
+    await uploadPost.ensureSchema?.(); // google_team_locations (Google da equipe)
     const { rows } = await pool.query(
       `SELECT cl.id AS client_id, cl.company_name AS client_name, cl.logo_url AS client_logo,
               count(*) FILTER (WHERE c.status = 'escalado')::int AS escalados,
@@ -686,7 +707,8 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
               count(*) FILTER (WHERE c.status = 'respondido' AND c.replied_at > now() - interval '7 days')::int AS respondidos_7d,
               coalesce(s.isis_mode, 'aprovar') AS isis_mode
          FROM clients cl
-         JOIN (SELECT DISTINCT client_id FROM social_accounts WHERE api_base = 'upload_post') a ON a.client_id = cl.id
+         JOIN (SELECT client_id FROM social_accounts WHERE api_base = 'upload_post'
+               UNION SELECT client_id FROM google_team_locations WHERE client_id IS NOT NULL) a ON a.client_id = cl.id
          LEFT JOIN social_comments c ON c.client_id = cl.id
          LEFT JOIN social_hub_settings s ON s.client_id = cl.id
         WHERE ($1::text IS NULL OR cl.city IS NULL OR lower(cl.city) = $1)

@@ -235,7 +235,8 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
       // primeiro as do plano; depois as outras, apagadas na página, com convite para ampliar o plano (usuário, 02/11/2026)
       networks: [...l.networks, ...UP_PLATFORMS.filter((p) => !l.networks.includes(p))].map((p) => {
         const acc = rows.find((x) => x.platform === p);
-        return { id: p, in_plan: l.networks.includes(p), connected: !!acc && acc.status === 'connected', reconnect: acc?.status === 'reauth', account: acc ? acc.username || acc.account_name : null };
+        // 'duplicada' = a conta já é de outro cliente: não conta como conectada e a página pede a conta certa
+        return { id: p, in_plan: l.networks.includes(p), connected: !!acc && acc.status === 'connected', reconnect: acc?.status === 'reauth', duplicate: acc?.status === 'duplicada', account: acc ? acc.username || acc.account_name : null };
       }),
       expires_at: l.expires_at,
     };
@@ -318,10 +319,20 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
       for (const a of accounts) {
         // uma conta por rede: a conexão da Upload-Post substitui a da Meta naquela rede
         await db.query(`DELETE FROM social_accounts WHERE client_id = $1 AND platform = $2`, [clientId, a.platform]);
+        // a mesma conta não fica em dois clientes (05/11/2026, Thiago: "não ter 2 Instagram conectados para o mesmo
+        // cliente", depois da Goianinha): quem conectou primeiro fica com ela; aqui ela entra como 'duplicada', sem publicar
+        let state = a.reauth ? 'reauth' : 'connected';
+        if (a.handle) {
+          const { rows: [owner] } = await db.query(
+            `SELECT 1 FROM social_accounts WHERE client_id <> $1 AND platform = $2 AND lower(username) = lower($3)
+                AND api_base = 'upload_post' AND status <> 'duplicada' LIMIT 1`, [clientId, a.platform, a.handle]
+          );
+          if (owner) state = 'duplicada';
+        }
         await db.query(
           `INSERT INTO social_accounts (client_id, platform, facebook_page_id, account_name, username, profile_picture_url, access_token, status, api_base)
            VALUES ($1, $2, $3, $4, $5, $6, '', $7, 'upload_post')`,
-          [clientId, a.platform, a.platform === 'facebook' ? fb.chosen : null, a.name, a.handle, a.picture, a.reauth ? 'reauth' : 'connected']
+          [clientId, a.platform, a.platform === 'facebook' ? fb.chosen : null, a.name, a.handle, a.picture, state]
         );
       }
       if (teamFacebook) await db.query(`UPDATE client_upload_post SET synced_at = now() WHERE client_id = $1`, [clientId]);
@@ -404,6 +415,10 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
   async function publish(account, post, media, { maxWaitMs = 10 * 60_000 } = {}) {
     const { rows: [cp] } = await pool.query(`SELECT username, facebook_team_profile FROM client_upload_post WHERE client_id = $1`, [post.client_id]);
     if (!cp) throw new Error('Cliente sem perfil na Upload-Post. Conecte as redes em Conexões Sociais.');
+    const { rows: [dup] } = await pool.query(
+      `SELECT username FROM social_accounts WHERE client_id = $1 AND platform = $2 AND status = 'duplicada' LIMIT 1`, [post.client_id, account.platform]
+    );
+    if (dup) throw new Error(`A conta @${dup.username} já é de outro cliente. Conecte a conta certa deste cliente (Conexões Sociais → link → "Não é esta conta? Trocar").`);
     if (account.platform === 'facebook' && !account.facebook_page_id) {
       throw new Error('Facebook conectado sem Página escolhida. Em Conexões Sociais, clique em Atualizar no cliente.');
     }

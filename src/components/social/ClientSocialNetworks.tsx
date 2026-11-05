@@ -161,7 +161,7 @@ export default function ClientSocialNetworks({ clientId, whatsapp, onContractVal
       )}
       {info.accounts.length > 0 && (
         <p className="text-[11px] text-muted-foreground">
-          Conectadas: {info.accounts.map((a) => `${NETWORKS.find((n) => n.id === a.platform)?.label || a.platform}${a.username ? ` (@${a.username.replace(/^@/, '')})` : ''}${a.status !== 'connected' ? ' · precisa reconectar' : ''}`).join(' · ')}
+          Conectadas: {info.accounts.map((a) => `${NETWORKS.find((n) => n.id === a.platform)?.label || a.platform}${a.username ? ` (@${a.username.replace(/^@/, '')})` : ''}${a.status === 'duplicada' ? ' · já é de outro cliente, não publica' : a.status !== 'connected' ? ' · precisa reconectar' : ''}`).join(' · ')}
         </p>
       )}
       {(info.shared || []).map((s) => (

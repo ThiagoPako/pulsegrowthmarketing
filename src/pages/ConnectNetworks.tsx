@@ -25,7 +25,7 @@ const NETWORKS: Record<string, { label: string; bg: string; glow: string; Icon: 
   pinterest: { label: 'Pinterest', bg: '#E60023', glow: '#E60023', Icon: Pin, help: 'A conta da empresa' },
 };
 
-interface Data { client: { name: string; logo: string | null }; kind?: 'evento' | 'cliente'; networks: { id: string; in_plan?: boolean; connected: boolean; reconnect: boolean; account: string | null }[] }
+interface Data { client: { name: string; logo: string | null }; kind?: 'evento' | 'cliente'; networks: { id: string; in_plan?: boolean; connected: boolean; reconnect: boolean; duplicate?: boolean; account: string | null }[] }
 
 function Mark({ data }: { data: Data }) {
   return data.client.logo
@@ -158,7 +158,7 @@ export default function ConnectNetworks() {
                     </span>
                     <div className="relative min-w-0 flex-1">
                       <p className="font-semibold">{meta.label}</p>
-                      <p className="truncate text-xs text-white/55">{n.connected ? (n.account ? `@${String(n.account).replace(/^@/, '')}` : 'Conectado') : n.reconnect ? 'Precisa entrar de novo' : meta.help}</p>
+                      <p className={`text-xs ${n.duplicate ? 'text-amber-300' : 'truncate text-white/55'}`}>{n.duplicate ? `@${String(n.account || '').replace(/^@/, '')} já está ligada a outra empresa. Entre com a conta de ${data.client.name}.` : n.connected ? (n.account ? `@${String(n.account).replace(/^@/, '')}` : 'Conectado') : n.reconnect ? 'Precisa entrar de novo' : meta.help}</p>
                       {/* conta errada (05/11/2026, Goianinha: o navegador entrou com a conta que já estava logada) */}
                       {n.connected && (
                         <button type="button" disabled={!!busy} onClick={() => connect(n.id)}
@@ -176,7 +176,7 @@ export default function ConnectNetworks() {
                       ) : (
                         <motion.button key="btn" type="button" disabled={!!busy} onClick={() => connect(n.id)} whileTap={still ? undefined : { scale: 0.96 }}
                           className="relative rounded-2xl px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60" style={{ background: ORANGE, boxShadow: `0 10px 30px -10px ${ORANGE}` }}>
-                          {busy === n.id ? <Loader2 className="h-4 w-4 animate-spin" /> : n.reconnect ? 'Entrar de novo' : 'Conectar'}
+                          {busy === n.id ? <Loader2 className="h-4 w-4 animate-spin" /> : n.duplicate ? 'Trocar conta' : n.reconnect ? 'Entrar de novo' : 'Conectar'}
                         </motion.button>
                       )}
                     </AnimatePresence>

@@ -3,15 +3,18 @@
 // stories (passa um por um). Com duas opções (A e B), escolhe a que quer. Embaixo: Aprovar ou Pedir ajuste.
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Check, Download, Loader2, Pencil } from 'lucide-react';
+import { Check, Download, Loader2, MessageCircle, Pencil, ZoomIn, X } from 'lucide-react';
 import NetworkPreview, { type PreviewFormat } from '@/components/social/NetworkPreview';
+import PrintMockup, { PRINT_LABEL, printKindOf } from '@/components/approval/PrintMockup';
 import logo from '@/assets/pulse-logo-branco.png';
 
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
 
 interface ArtShare {
   title: string;
-  format: 'feed' | 'carrossel' | 'story' | 'sequencia';
+  // impresso (outdoor, banner, panfleto…) vira mockup; criativo (anúncio) mostra feed, story e reels (05/11/2026)
+  format: 'feed' | 'carrossel' | 'story' | 'sequencia' | 'impresso' | 'criativo';
+  preset?: string | null;
   options: { key: string; images: string[] }[];
   caption: string | null;
   client: { name: string; logo: string | null; username: string | null; avatar: string | null };
@@ -24,7 +27,13 @@ const FORMAT: Record<ArtShare['format'], { preview: PreviewFormat; label: string
   carrossel: { preview: 'carousel', label: 'Carrossel', hint: 'Use as setas para passar as lâminas, como no Instagram.' },
   story: { preview: 'stories', label: 'Story', hint: '' },
   sequencia: { preview: 'stories', label: 'Sequência de stories', hint: 'Use as setas para ver cada story, na ordem em que vão sair.' },
+  impresso: { preview: 'feed', label: 'Impresso', hint: '' },
+  criativo: { preview: 'feed', label: 'Criativo (anúncio)', hint: '' },
 };
+
+const PLACEMENTS: { key: PreviewFormat; label: string }[] = [
+  { key: 'feed', label: 'Feed' }, { key: 'stories', label: 'Story' }, { key: 'reels', label: 'Reels' },
+];
 
 export default function ApproveArt() {
   const { token } = useParams<{ token: string }>();
@@ -38,6 +47,8 @@ export default function ApproveArt() {
   const [name, setName] = useState('');
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState<'aprovado' | 'ajuste' | null>(null);
+  const [placement, setPlacement] = useState<PreviewFormat>('feed');
+  const [zoom, setZoom] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${VPS_API_BASE}/public/aprovar-arte/${token}`)
@@ -106,7 +117,53 @@ export default function ApproveArt() {
               </div>
             )}
 
-            {current && (
+            {current && data.format === 'impresso' && (
+              <div className="space-y-2">
+                <PrintMockup kind={printKindOf(data.preset)} src={current.images[0]} alt={data.title} />
+                <p className="text-center text-[11px] text-white/50">{PRINT_LABEL[printKindOf(data.preset)]} · simulação de como fica aplicado</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {current.images.map((url, i) => (
+                    <button key={url} type="button" onClick={() => setZoom(url)}
+                      className="flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold hover:bg-white/15">
+                      <ZoomIn size={14} /> Ver detalhes da arte{current.images.length > 1 ? ` ${i + 1}` : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {current && data.format === 'criativo' && (
+              <div className="space-y-2">
+                <div role="tablist" aria-label="Onde o anúncio aparece" className="flex justify-center gap-1.5">
+                  {PLACEMENTS.map((p) => (
+                    <button key={p.key} type="button" role="tab" aria-selected={placement === p.key} onClick={() => setPlacement(p.key)}
+                      className={`rounded-full px-3.5 py-1 text-xs font-semibold ${placement === p.key ? 'bg-white text-black' : 'bg-white/10 text-white/70'}`}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="rounded-3xl bg-white p-3 text-foreground">
+                  <NetworkPreview
+                    key={`${option}-${placement}`}
+                    networks={['instagram']}
+                    format={placement}
+                    media={[current.images[Math.min(PLACEMENTS.findIndex((p) => p.key === placement), current.images.length - 1)] || current.images[0]]}
+                    captions={{ instagram: data.caption || '' }}
+                    accounts={[{ platform: 'instagram', name: data.client.name, username: data.client.username, picture: data.client.avatar }]}
+                    fallbackName={data.client.name}
+                    fallbackPicture={data.client.avatar}
+                  />
+                  {/* botão do anúncio: chamar no WhatsApp (o preferido nos criativos da Pulse) */}
+                  <div className="mx-auto mt-2 flex max-w-[300px] items-center justify-between rounded-lg bg-[#25D366] px-3 py-2 text-sm font-semibold text-white">
+                    <span className="flex items-center gap-1.5"><MessageCircle size={15} /> Chamar no WhatsApp</span>
+                    <span aria-hidden>›</span>
+                  </div>
+                  <p className="mt-1 text-center text-[11px] text-neutral-500">Patrocinado · prévia de como o anúncio aparece no {PLACEMENTS.find((p) => p.key === placement)?.label}</p>
+                </div>
+              </div>
+            )}
+
+            {current && data.format !== 'impresso' && data.format !== 'criativo' && (
               <div className="rounded-3xl bg-white p-3 text-foreground">
                 {storyCount > 1 && (
                   <div className="mx-auto mb-2 flex max-w-[300px] gap-1" aria-label={`Story ${story + 1} de ${storyCount}`}>
@@ -185,7 +242,18 @@ export default function ApproveArt() {
             {error && data && <p className="text-center text-xs text-red-300">{error}</p>}
           </>
         )}
-        <p className="pt-2 text-center text-[10px] text-white/30">Pulse Growth Marketing · prévia ilustrativa do Instagram</p>
+        <p className="pt-2 text-center text-[10px] text-white/30">Pulse Growth Marketing · prévia ilustrativa{data?.format === 'impresso' ? '' : ' do Instagram'}</p>
+        {zoom && (
+          <div role="dialog" aria-label="Arte em detalhe" className="fixed inset-0 z-50 flex flex-col bg-black/95" onClick={() => setZoom(null)}>
+            <div className="flex items-center justify-between p-3">
+              <a href={zoom} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs text-white/70 underline">Abrir no tamanho original</a>
+              <button type="button" aria-label="Fechar" className="rounded-full bg-white/10 p-2"><X size={18} /></button>
+            </div>
+            <div className="flex-1 overflow-auto p-3" onClick={(e) => e.stopPropagation()}>
+              <img src={zoom} alt="Arte em detalhe" className="mx-auto h-auto w-full max-w-none" />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

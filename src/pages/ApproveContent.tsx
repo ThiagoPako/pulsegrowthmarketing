@@ -5,7 +5,7 @@
 // post quando já existe, e os botões Aprovar e Pedir alteração. Depois, o convite para a Área do Cliente.
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Bookmark, Check, Download, Heart, Loader2, MessageCircle, Mic, MoreHorizontal, Music2, Pencil, Play, Send, Square, Trash2, Volume2, VolumeX } from 'lucide-react';
+import { Bookmark, Check, Download, Heart, Loader2, Maximize, MessageCircle, Mic, MoreHorizontal, Music2, Pencil, Play, RotateCw, Send, Square, Trash2, Volume2, VolumeX } from 'lucide-react';
 import logo from '@/assets/pulse-logo-branco.png';
 
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
@@ -116,6 +116,29 @@ export default function ApproveContent() {
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
   const [moreCaption, setMoreCaption] = useState(false);
+  // vídeo horizontal (telão, YouTube, TV; 05/11/2026): sem moldura de Reels, player 16:9 e convite para virar o celular
+  const [horizontal, setHorizontal] = useState(false);
+  // criativo (anúncio, 05/11/2026): o mesmo vídeo em feed, story e reels, com o botão de chamar no WhatsApp
+  const [placement, setPlacement] = useState<'feed' | 'story' | 'reels'>('reels');
+  const [portrait, setPortrait] = useState(() => typeof window !== 'undefined' && window.matchMedia?.('(orientation: portrait)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.('(orientation: portrait)');
+    if (!mq) return;
+    const on = () => setPortrait(mq.matches);
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
+  const fullscreen = async () => {
+    const v = video.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
+    if (!v) return;
+    try {
+      if (v.requestFullscreen) await v.requestFullscreen();
+      else v.webkitEnterFullscreen?.(); // iPhone
+      await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> })?.lock?.('landscape').catch(() => {});
+    } catch { v.webkitEnterFullscreen?.(); }
+    v.play().catch(() => {});
+    setPlaying(true);
+  };
   const [mode, setMode] = useState<'idle' | 'adjust'>('idle');
   const [notes, setNotes] = useState('');
   const [audio, setAudio] = useState<Blob | null>(null);
@@ -180,7 +203,7 @@ export default function ApproveContent() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-md px-4 pb-10 pt-4">
+      <main className={`mx-auto px-4 pb-10 pt-4 ${horizontal ? 'max-w-3xl' : 'max-w-md'}`}>
         {!data && !error && <div className="flex justify-center py-24"><Loader2 className="h-6 w-6 animate-spin text-[#F15A24]" /></div>}
         {error && (
           <div className="rounded-2xl bg-white/5 p-6 text-center">
@@ -204,13 +227,31 @@ export default function ApproveContent() {
               <p className="mb-3 text-center text-sm text-white/70">Assim vai ficar no Instagram de <b className="text-white">{data.client.name}</b></p>
             )}
 
-            {/* Reels de mentira: o vídeo com a cara do Instagram */}
-            <div className="relative mx-auto aspect-[9/16] w-full overflow-hidden rounded-2xl bg-black shadow-2xl ring-1 ring-white/10">
+            {data.type === 'criativo' && !horizontal && (
+              <div role="tablist" aria-label="Onde o anúncio aparece" className="mb-3 flex justify-center gap-1.5">
+                {([['feed', 'Feed'], ['story', 'Story'], ['reels', 'Reels']] as const).map(([k, label]) => (
+                  <button key={k} type="button" role="tab" aria-selected={placement === k} onClick={() => setPlacement(k)}
+                    className={`rounded-full px-3.5 py-1 text-xs font-semibold ${placement === k ? 'bg-white text-black' : 'bg-white/10 text-white/70'}`}>{label}</button>
+                ))}
+              </div>
+            )}
+            {data.type === 'criativo' && !horizontal && placement === 'feed' && (
+              <div className="mx-auto flex items-center gap-2 rounded-t-2xl bg-black px-3 py-2">
+                {data.client.avatar
+                  ? <img src={data.client.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
+                  : <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F15A24] text-xs font-bold">{data.client.name.slice(0, 1)}</span>}
+                <span className="text-sm font-semibold">{handleOf(data)}</span>
+                <span className="text-[11px] text-white/60">Patrocinado</span>
+              </div>
+            )}
+            {/* Reels de mentira: o vídeo com a cara do Instagram (horizontal: player 16:9, sem a moldura do Reels) */}
+            <div className={`relative mx-auto w-full overflow-hidden bg-black shadow-2xl ring-1 ring-white/10 ${horizontal ? 'aspect-video rounded-2xl' : data.type === 'criativo' && placement === 'feed' ? 'aspect-[4/5]' : 'aspect-[9/16] rounded-2xl'}`}>
               <video
                 ref={video}
                 src={src}
                 poster={data.thumbnail_url || undefined}
-                className="h-full w-full object-cover"
+                className={`h-full w-full ${horizontal ? 'object-contain' : 'object-cover'}`}
+                onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth > v.videoHeight * 1.1) setHorizontal(true); }}
                 playsInline
                 loop
                 muted={muted}
@@ -223,6 +264,20 @@ export default function ApproveContent() {
                   <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 backdrop-blur"><Play className="h-8 w-8 fill-white" /></span>
                 </button>
               )}
+              {horizontal || (data.type === 'criativo' && placement !== 'reels') ? (
+                <>
+                  {data.type === 'criativo' && placement === 'story' && !horizontal && (
+                    <div className="pointer-events-none absolute left-0 right-0 top-0 bg-gradient-to-b from-black/50 to-transparent px-3 pb-6 pt-2">
+                      <div className="h-0.5 w-full rounded-full bg-white/40"><div className="h-full w-1/3 rounded-full bg-white" /></div>
+                      <div className="mt-2 flex items-center gap-2 text-sm font-semibold">{handleOf(data)} <span className="text-[11px] font-normal text-white/70">Patrocinado</span></div>
+                    </div>
+                  )}
+                  <button type="button" onClick={() => setMuted((m) => !m)} aria-label={muted ? 'Ligar o som' : 'Desligar o som'}
+                    className="absolute bottom-3 right-3 rounded-full bg-black/50 p-1.5">
+                    {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                  </button>
+                </>
+              ) : (<>
               <div className="pointer-events-none absolute left-0 right-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/50 to-transparent px-4 pb-6 pt-3">
                 <span className="text-[17px] font-bold">Reels</span>
                 <button type="button" onClick={() => setMuted((m) => !m)} aria-label={muted ? 'Ligar o som' : 'Desligar o som'}
@@ -253,7 +308,27 @@ export default function ApproveContent() {
                 )}
                 <p className="mt-2 flex items-center gap-1.5 text-[12px] text-white/85"><Music2 className="h-3.5 w-3.5" /> Áudio original · {handleOf(data)}</p>
               </div>
+              </>)}
             </div>
+
+            {data.type === 'criativo' && !horizontal && (
+              <div className={`mx-auto flex items-center justify-between bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white ${placement === 'feed' ? 'rounded-b-2xl' : 'mt-2 rounded-xl'}`}>
+                <span className="flex items-center gap-1.5"><MessageCircle className="h-4 w-4" /> Chamar no WhatsApp</span>
+                <span aria-hidden>›</span>
+              </div>
+            )}
+
+            {horizontal && (
+              <div className="mt-3 flex items-center gap-3 rounded-2xl bg-white/5 p-3">
+                {portrait && <RotateCw className="h-6 w-6 shrink-0 animate-[spin_3s_linear_infinite] text-[#F15A24] motion-reduce:animate-none" />}
+                <p className="flex-1 text-[13px] text-white/80">
+                  {portrait ? 'Vídeo horizontal: vire o celular para assistir em tela cheia.' : 'Vídeo horizontal, para telão, TV ou YouTube.'}
+                </p>
+                <button type="button" onClick={fullscreen} className="flex shrink-0 items-center gap-1.5 rounded-xl bg-[#F15A24] px-3 py-2 text-[13px] font-semibold text-white">
+                  <Maximize className="h-4 w-4" /> Tela cheia
+                </button>
+              </div>
+            )}
 
             <p className="mt-3 text-center text-[13px] font-semibold">{data.title}</p>
 

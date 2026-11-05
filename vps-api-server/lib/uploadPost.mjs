@@ -369,7 +369,15 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     const { rows: accounts } = await pool.query(
       `SELECT platform, account_name, username, status FROM social_accounts WHERE client_id = $1 AND api_base = 'upload_post' ORDER BY platform`, [clientId]
     );
-    return { networks: c?.social_networks || [], accounts, configured: !!(await apiKey()), whatsapp: c?.whatsapp || null, responsible: c?.responsible_person || null, name: c?.company_name || null };
+    // mesma conta ligada em outro cliente (05/11/2026, Goianinha: o Instagram do navegador entrou nos dois perfis)
+    const { rows: shared } = await pool.query(
+      `SELECT s.platform, s.username, array_agg(DISTINCT c.company_name) AS clients
+         FROM social_accounts s JOIN clients c ON c.id = s.client_id
+        WHERE s.api_base = 'upload_post' AND s.client_id <> $1 AND s.username IS NOT NULL AND s.username <> ''
+          AND (s.platform, lower(s.username)) IN (SELECT platform, lower(username) FROM social_accounts WHERE client_id = $1 AND api_base = 'upload_post')
+        GROUP BY s.platform, s.username`, [clientId]
+    );
+    return { networks: c?.social_networks || [], accounts, shared, configured: !!(await apiKey()), whatsapp: c?.whatsapp || null, responsible: c?.responsible_person || null, name: c?.company_name || null };
   }
 
   async function status(key) {

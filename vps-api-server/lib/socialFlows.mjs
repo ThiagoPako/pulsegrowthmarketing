@@ -49,7 +49,8 @@ export const FIELD_RETRY = {
 export function normalizeFlow(body) {
   const fail = (m) => { throw Object.assign(new Error(m), { status: 400 }); };
   const name = clean(body?.name, 80) || fail('Dê um nome ao funil');
-  const type = ['comment_keyword', 'dm_keyword'].includes(body?.trigger?.type) ? body.trigger.type : fail('Escolha o gatilho');
+  // story_reply e first_message: automações prontas do Pulse Direct (04/11/2026)
+  const type = ['comment_keyword', 'dm_keyword', 'story_reply', 'first_message'].includes(body?.trigger?.type) ? body.trigger.type : fail('Escolha o gatilho');
   const keywords = (Array.isArray(body?.trigger?.keywords) ? body.trigger.keywords : String(body?.trigger?.keywords || '').split(','))
     .map((k) => clean(k, 40)).filter(Boolean).slice(0, 15);
   if (type === 'dm_keyword' && !keywords.length) fail('No gatilho do direct, coloque pelo menos uma palavra');
@@ -62,7 +63,8 @@ export function normalizeFlow(body) {
     const id = clean(s?.id, 40) || fail(`Etapa ${i + 1} sem id`);
     const text = clean(s?.text, 1000) || fail(`Etapa ${i + 1}: escreva a mensagem`);
     const buttons = (Array.isArray(s?.buttons) ? s.buttons : []).map((b) => ({ title: clean(b?.title, 20), url: clean(b?.url, 500) }))
-      .filter((b) => b.title && /^https?:\/\//.test(b.url)).slice(0, 3);
+      // {whatsapp} = o WhatsApp de atendimento do cadastro do cliente, preenchido na hora do envio
+      .filter((b) => b.title && (/^https?:\/\//.test(b.url) || b.url === '{whatsapp}')).slice(0, 3);
     const replies = (Array.isArray(s?.replies) ? s.replies : []).map((r) => ({ title: clean(r?.title, 20), next: clean(r?.next, 40) }))
       .filter((r) => r.title).slice(0, 13);
     for (const r of replies) if (r.next && !ids.has(r.next)) fail(`Etapa ${i + 1}: o botão "${r.title}" leva para uma etapa que não existe`);
@@ -93,7 +95,8 @@ export function normalizeFlow(body) {
 export function matchesTrigger(flow, text, postId) {
   const t = flow.trigger || {};
   if (t.type === 'comment_keyword' && t.post_ids?.length && !t.post_ids.includes(String(postId))) return false;
-  if (!t.keywords?.length) return t.type === 'comment_keyword';
+  // sem palavras: qualquer comentário, qualquer resposta ao story e o 1º contato disparam; no direct, palavra é obrigatória
+  if (!t.keywords?.length) return t.type !== 'dm_keyword';
   const n = norm(text);
   return t.keywords.some((k) => {
     const kk = norm(k);
@@ -102,6 +105,20 @@ export function matchesTrigger(flow, text, postId) {
 }
 
 /** {nome} e {primeiro_nome} na mensagem. */
+/** Resposta ao story ou menção no story (o Instagram manda no próprio direct; 04/11/2026, pedido do Thiago). */
+export function isStoryReply(message) {
+  if (!message) return false;
+  if (message.reply_to?.story || message.story) return true;
+  return (message.attachments || []).some((a) => /story/i.test(String(a?.type || '')));
+}
+
+/** {whatsapp} nos botões vira o link do WhatsApp de atendimento do cliente (cadastro do cliente). */
+export function whatsappLink(phone) {
+  const d = String(phone || '').replace(/\D/g, '');
+  if (d.length < 10) return null;
+  return `https://wa.me/${d.startsWith('55') ? d : `55${d}`}`;
+}
+
 export function fillVars(text, contact) {
   const name = contact?.fields?.nome || contact?.username || '';
   return String(text || '').replace(/\{nome\}/g, name).replace(/\{primeiro_nome\}/g, String(name).split(/\s+/)[0] || '').replace(/\s{2,}/g, ' ').trim();
@@ -205,6 +222,13 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, isF
   /** Manda uma etapa (e as seguintes encadeadas por "seguir direto", até 5). */
   async function sendStep({ profile, contact, flow, step, viaComment = null, depth = 0 }) {
     const text = fillVars(step.text, contact);
+    if (step.buttons?.some((b) => String(b.url || '').includes('{whatsapp}'))) {
+      const { rows: [cl] } = await pool.query(`SELECT whatsapp FROM clients WHERE id = $1`, [flow.client_id]);
+      const wa = whatsappLink(cl?.whatsapp);
+      // sem WhatsApp no cadastro do cliente, o botão não vai (link quebrado afasta quem clicou)
+      step = { ...step, buttons: step.buttons.map((b) => ({ ...b, url: String(b.url).replace('{whatsapp}', wa || '') })).filter((b) => /^https:\/\/\S+/.test(b.url) && !b.url.endsWith('{whatsapp}')) };
+      if (!wa) logger.warn?.('[pulse-direct] cliente sem WhatsApp no cadastro, botão de WhatsApp não enviado:', flow.client_id);
+    }
     const quick = (step.replies || []).filter((r) => r.next).map((r) => ({ title: r.title, payload: payloadOf(flow.id, r.next) }));
     if (!canSend(profile)) return;
     if (viaComment) {
@@ -377,12 +401,24 @@ export function createFlows({ pool, uploadPost, notifyTeam = async () => {}, isF
       const hit = step?.replies?.find((r) => r.next && norm(r.title) === norm(text));
       if (hit) return go(flow.id, hit.next);
     }
-    // 4) palavra que começa um funil do direct
-    const flow = (await activeFlows(cp.client_id, 'dm_keyword')).find((f) => matchesTrigger(f, text));
-    if (flow) {
-      await pool.query(`UPDATE social_flows SET runs = runs + 1 WHERE id = $1`, [flow.id]);
-      await sendStep({ profile: payload.profile_username, contact, flow, step: flow.steps[0] });
+    const start = async (f) => {
+      await pool.query(`UPDATE social_flows SET runs = runs + 1 WHERE id = $1`, [f.id]);
+      await sendStep({ profile: payload.profile_username, contact, flow: f, step: f.steps[0] });
       return true;
+    };
+    // 4) resposta ao story (stories não aceitam link: "manda um oi no story" e o direct responde com o WhatsApp)
+    if (isStoryReply(payload.message)) {
+      const storyFlow = (await activeFlows(cp.client_id, 'story_reply')).find((f) => matchesTrigger(f, text));
+      if (storyFlow) return start(storyFlow);
+    }
+    // 5) palavra que começa um funil do direct
+    const flow = (await activeFlows(cp.client_id, 'dm_keyword')).find((f) => matchesTrigger(f, text));
+    if (flow) return start(flow);
+    // 6) boas-vindas no 1º contato (o Instagram não avisa quem começou a seguir; o 1º direct da pessoa é o gatilho)
+    const { rows: [first] } = await pool.query(`SELECT count(*)::int AS n FROM social_dm_messages WHERE contact_id = $1 AND direction = 'in'`, [contact.id]);
+    if (first?.n === 1) {
+      const welcome = (await activeFlows(cp.client_id, 'first_message'))[0];
+      if (welcome) return start(welcome);
     }
     return false;
   }

@@ -7,15 +7,25 @@ import { cn } from '@/lib/utils';
 import { parseWhatsapp, whatsappLink } from './theme';
 import type { LinkButton } from './types';
 
-interface Draft { kind: 'whatsapp' | 'link'; title: string; number: string; message: string; url: string }
+// fromClient: o WhatsApp de atendimento do cadastro do cliente ({whatsapp}, preenchido pelo servidor na hora do envio)
+interface Draft { kind: 'whatsapp' | 'link'; title: string; number: string; message: string; url: string; fromClient?: boolean }
 
+const CLIENT_WHATSAPP = '{whatsapp}';
 const toDraft = (b: LinkButton): Draft => {
+  if (b.url === CLIENT_WHATSAPP) return { kind: 'whatsapp', title: b.title, number: '', message: '', url: '', fromClient: true };
   const w = parseWhatsapp(b.url);
   return w ? { kind: 'whatsapp', title: b.title, number: w.number, message: w.message, url: '' } : { kind: 'link', title: b.title, number: '', message: '', url: b.url };
 };
-const toButton = (d: Draft): LinkButton => ({ title: d.title, url: d.kind === 'whatsapp' ? whatsappLink(d.number, d.message) || '' : d.url });
+const toButton = (d: Draft): LinkButton => ({
+  title: d.title,
+  url: d.kind === 'whatsapp' ? (d.fromClient ? CLIENT_WHATSAPP : whatsappLink(d.number, d.message) || '') : d.url,
+});
 
-export default function ButtonEditor({ value, onChange, max = 3 }: { value: LinkButton[]; onChange: (v: LinkButton[]) => void; max?: number }) {
+export default function ButtonEditor({ value, onChange, max = 3, clientNumber = false }: {
+  value: LinkButton[]; onChange: (v: LinkButton[]) => void; max?: number;
+  /** funis: oferece "WhatsApp do cadastro do cliente" (a caixa de entrada manda na hora e precisa do número) */
+  clientNumber?: boolean;
+}) {
   const drafts = value.map(toDraft);
   const set = (i: number, patch: Partial<Draft>) => onChange(drafts.map((d, j) => toButton(j === i ? { ...d, ...patch } : d)));
   const add = (kind: Draft['kind']) => onChange([...value, toButton(kind === 'whatsapp'
@@ -25,7 +35,7 @@ export default function ButtonEditor({ value, onChange, max = 3 }: { value: Link
   return (
     <div className="space-y-2">
       {drafts.map((d, i) => {
-        const bad = d.kind === 'whatsapp' ? d.number.replace(/\D/g, '').length > 0 && !whatsappLink(d.number) : d.url.length > 8 && !/^https?:\/\/\S+\.\S+/.test(d.url);
+        const bad = d.kind === 'whatsapp' ? !d.fromClient && d.number.replace(/\D/g, '').length > 0 && !whatsappLink(d.number) : d.url.length > 8 && !/^https?:\/\/\S+\.\S+/.test(d.url);
         return (
           <div key={i} className="rounded-lg border bg-muted/30 p-2.5">
             <div className="flex items-center gap-2">
@@ -36,7 +46,13 @@ export default function ButtonEditor({ value, onChange, max = 3 }: { value: Link
               <span className="ml-auto text-[11px] text-muted-foreground">{d.title.length}/20</span>
               <Button type="button" size="sm" variant="ghost" className="h-8" aria-label="Remover botão" onClick={() => onChange(value.filter((_, j) => j !== i))}><Trash2 size={13} /></Button>
             </div>
-            {d.kind === 'whatsapp' ? (
+            {d.kind === 'whatsapp' && clientNumber && (
+              <label className="mt-2 flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={!!d.fromClient} onChange={(e) => set(i, { fromClient: e.target.checked })} />
+                Usar o WhatsApp de atendimento do cadastro do cliente
+              </label>
+            )}
+            {d.kind === 'whatsapp' && d.fromClient ? null : d.kind === 'whatsapp' ? (
               <div className="mt-2 grid gap-2 md:grid-cols-[180px_1fr]">
                 <Input className={cn('h-8', bad && 'border-destructive')} inputMode="tel" value={d.number} placeholder="(62) 99999-0000" onChange={(e) => set(i, { number: e.target.value })} />
                 <Input className="h-8" value={d.message} placeholder="Mensagem que já vem escrita (opcional)" onChange={(e) => set(i, { message: e.target.value })} />

@@ -32,6 +32,8 @@ async function api<T>(path: string, options?: { body?: unknown; method?: string 
 }
 
 const TEMPLATE_INFO: Record<string, { help: string; color: string }> = {
+  'story-whats': { help: 'Story não aceita link: peça "manda um oi aqui" e quem responder o story recebe o botão do WhatsApp de atendimento.', color: '#E1306C' },
+  'boas-vindas': { help: 'Quem fala com o perfil pela primeira vez recebe boas-vindas com botões e o WhatsApp de atendimento.', color: '#22A06B' },
   link: { help: 'Quem comentar a palavra recebe o link no direct. Ideal para produto, cardápio ou cupom.', color: '#7C5CFF' },
   whats: { help: 'Pergunta se quer ser chamado, guarda o WhatsApp e avisa a equipe. Ideal para gerar contatos.', color: '#10B981' },
   menu: { help: 'Quem manda "oi" no direct recebe um menu com botões. Ideal para atendimento.', color: '#3797F0' },
@@ -200,7 +202,7 @@ export default function PulseDirect() {
 
   const shownFlows = useMemo(() => (flows || []).filter((f) => (!flowQ || `${f.name} ${f.trigger.keywords.join(' ')}`.toLowerCase().includes(flowQ.toLowerCase()))
     && (flowFilter === 'todos' || (flowFilter === 'ligados' && f.active) || (flowFilter === 'desligados' && !f.active)
-      || (flowFilter === 'comentario' && f.trigger.type === 'comment_keyword') || (flowFilter === 'direct' && f.trigger.type === 'dm_keyword'))), [flows, flowQ, flowFilter]);
+      || (flowFilter === 'comentario' && f.trigger.type === 'comment_keyword') || (flowFilter === 'direct' && f.trigger.type !== 'comment_keyword'))), [flows, flowQ, flowFilter]);
 
   const current = areaOf(area);
   const templates = flowTemplates();
@@ -279,7 +281,7 @@ export default function PulseDirect() {
                   <p className="text-sm font-semibold">Comece por um modelo pronto</p>
                   <div className="grid gap-3 md:grid-cols-3">
                     {templates.map((t) => {
-                      const info = TEMPLATE_INFO[t.id];
+                      const info = TEMPLATE_INFO[t.id] || { help: '', color: '#7C5CFF' };
                       return (
                         <button key={t.id} type="button" onClick={() => newFlow(t.flow)} className="rounded-xl border bg-card p-4 text-left transition-colors hover:bg-muted/40" style={{ boxShadow: `inset 4px 0 0 ${info.color}` }}>
                           <p className="font-semibold">{t.label}</p>
@@ -313,19 +315,19 @@ export default function PulseDirect() {
                 ) : (
                   <div className="grid gap-3 xl:grid-cols-2">
                     {shownFlows.map((f) => {
-                      const color = f.trigger.type === 'comment_keyword' ? '#7C5CFF' : '#3797F0';
+                      const color = f.trigger.type === 'comment_keyword' ? '#7C5CFF' : f.trigger.type === 'story_reply' ? '#E1306C' : f.trigger.type === 'first_message' ? '#22A06B' : '#3797F0';
                       const clicks = f.clicks ? Object.values(f.clicks).reduce((a, b) => a + b, 0) : 0;
                       return (
                         <div key={f.id} className={cn('rounded-xl border bg-card p-4', !f.active && 'opacity-70')} style={{ boxShadow: `inset 4px 0 0 ${color}` }}>
                           <div className="flex items-start gap-3">
                             <div className="min-w-0 flex-1">
                               <p className="truncate font-semibold">{f.name}</p>
-                              <p className="text-xs text-muted-foreground">{f.trigger.type === 'comment_keyword' ? 'Comentou no post' : 'Mandou no direct'}{f.trigger.post_ids?.length ? `, em ${f.trigger.post_ids.length} post(s)` : ''}</p>
+                              <p className="text-xs text-muted-foreground">{{ comment_keyword: 'Comentou no post', dm_keyword: 'Mandou no direct', story_reply: 'Respondeu o story', first_message: 'Primeiro contato no direct' }[f.trigger.type]}{f.trigger.post_ids?.length ? `, em ${f.trigger.post_ids.length} post(s)` : ''}</p>
                             </div>
                             <Switch checked={f.active} onCheckedChange={() => toggle(f)} aria-label={f.active ? 'Desligar funil' : 'Ligar funil'} />
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1">
-                            {(f.trigger.keywords.length ? f.trigger.keywords : ['qualquer comentário']).map((k) => <span key={k} className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: `${color}1f`, color }}>{k}</span>)}
+                            {(f.trigger.keywords.length ? f.trigger.keywords : [f.trigger.type === 'story_reply' ? 'qualquer resposta ao story' : f.trigger.type === 'first_message' ? 'primeira mensagem' : 'qualquer comentário']).map((k) => <span key={k} className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: `${color}1f`, color }}>{k}</span>)}
                           </div>
                           <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                             <div className="rounded-lg bg-muted/50 p-2"><p className="text-lg font-bold tabular-nums">{f.runs || 0}</p><p className="text-[11px] text-muted-foreground">entraram</p></div>

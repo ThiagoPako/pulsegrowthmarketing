@@ -390,7 +390,7 @@ export default function Scheduling() {
             ))}
           </div>
           <Button size="sm" className="h-8 gap-1.5 rounded-full" onClick={() => setUploadOpen(true)}>
-            <Upload size={13} /> Subir post
+            <Upload size={13} /> Adicionar conteúdo
           </Button>
           <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={refresh} aria-label="Atualizar">
             {materialsQuery.isFetching ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
@@ -445,7 +445,7 @@ export default function Scheduling() {
                 {calendar}
               </>
             ) : (
-              <UnscheduledPanel items={unscheduled} onPick={(item) => pickMaterial(item)} draggable={false} />
+              <UnscheduledPanel items={unscheduled} onPick={(item) => pickMaterial(item)} draggable={false} onAdd={() => setUploadOpen(true)} />
             )}
           </div>
         ) : (
@@ -454,6 +454,7 @@ export default function Scheduling() {
             <UnscheduledPanel
               items={unscheduled}
               onPick={(item) => pickMaterial(item)}
+              onAdd={() => setUploadOpen(true)}
               draggable
               className="self-start"
             />

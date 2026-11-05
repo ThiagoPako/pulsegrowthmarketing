@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import TeamFacebookPanel from '@/components/social/TeamFacebookPanel';
+import TeamGooglePanel from '@/components/social/TeamGooglePanel';
 import { useLang, tr } from '@/lib/i18n';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { useCity } from '@/contexts/CityContext';
@@ -317,6 +318,8 @@ export default function SocialConnections() {
       )}
 
       {up?.configured && <TeamFacebookPanel clients={clients.map(c => ({ id: c.id, name: c.name, logo_url: c.logo_url, has_facebook: c.accounts.some(a => a.platform === 'facebook' && a.status === 'connected'), accounts: c.accounts.map(a => ({ platform: a.platform, name: a.account_name, username: a.username || null, status: a.status })) }))} />}
+      {/* Google da equipe (04/11/2026): um login para as fichas de todos os clientes, inclusive os só de monitoramento */}
+      {up?.configured && <TeamGooglePanel clients={clients.map(c => ({ id: c.id, name: c.name }))} />}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[

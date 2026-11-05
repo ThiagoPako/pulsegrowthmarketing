@@ -120,6 +120,19 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
           created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
         ALTER TABLE client_upload_post ADD COLUMN IF NOT EXISTS facebook_team_profile TEXT;
+        -- Google da equipe (04/11/2026, pedido do Thiago): um login do Google (um perfil, um slot) com todas as fichas
+        -- que o e-mail administra; cada ficha é ligada a um cliente, inclusive cliente só de monitoramento de avaliações
+        ALTER TABLE upload_post_team_profiles ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'facebook';
+        CREATE TABLE IF NOT EXISTS google_team_locations (
+          location_id TEXT PRIMARY KEY,
+          team_profile TEXT NOT NULL,
+          title TEXT,
+          client_id UUID UNIQUE,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        -- um cliente pode ter várias fichas do Google (Thiago, 04/11/2026: "tem cliente que tem várias contas do google")
+        ALTER TABLE google_team_locations DROP CONSTRAINT IF EXISTS google_team_locations_client_id_key;
+        CREATE INDEX IF NOT EXISTS google_team_locations_client ON google_team_locations (client_id);
       `).catch((error) => { schemaPromise = null; throw error; });
     }
     return schemaPromise;
@@ -427,7 +440,7 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
   /** Cada Facebook da equipe: se o login está feito, as páginas dele e a que cliente cada página está ligada. */
   async function teamList() {
     await ensureSchema();
-    const { rows: teams } = await pool.query(`SELECT id, name, username, created_at FROM upload_post_team_profiles ORDER BY created_at`);
+    const { rows: teams } = await pool.query(`SELECT id, name, username, created_at FROM upload_post_team_profiles WHERE kind = 'facebook' ORDER BY created_at`);
     const { rows: links } = await pool.query(
       `SELECT u.client_id, u.facebook_team_profile, u.facebook_page_id, c.company_name
          FROM client_upload_post u JOIN clients c ON c.id = u.client_id WHERE u.facebook_team_profile IS NOT NULL`
@@ -517,7 +530,113 @@ export function createUploadPost({ pool, appBase = 'https://agenciapulse.tech', 
     return { ok: true };
   }
 
-  return { teamList, teamCreate, teamLogin, teamAssign, teamUnassign, ensureSchema, apiKey, saveKey, call, ensureProfile, connectLink, connectPage, connectStart, clientInfo, sync, syncAll, status, publish };
+  // ── Google da equipe ──
+  async function googleTeamRow(id) {
+    await ensureSchema();
+    const { rows: [t] } = await pool.query(`SELECT * FROM upload_post_team_profiles WHERE id = $1 AND kind = 'google'`, [id]);
+    if (!t) throw Object.assign(new Error('Google da equipe não encontrado'), { status: 404 });
+    return t;
+  }
+
+  /** As fichas do Google de um login (a Upload-Post devolve name = accounts/…/locations/…, title). */
+  async function googleLocations(username) {
+    const r = await call('GET', `/uploadposts/google-business/locations?profile=${encodeURIComponent(username)}`);
+    const list = Array.isArray(r) ? r : r.locations || r.data || [];
+    return list.map((l) => ({ id: String(l.name || l.gbp_location_id || l.id || ''), title: String(l.title || l.locationName || l.name || '').trim() }))
+      .filter((l) => l.id);
+  }
+
+  /** Cada Google da equipe: se o login está feito, as fichas dele e a que cliente cada ficha está ligada. */
+  async function googleTeamList() {
+    await ensureSchema();
+    const { rows: teams } = await pool.query(`SELECT id, name, username FROM upload_post_team_profiles WHERE kind = 'google' ORDER BY created_at`);
+    const { rows: links } = await pool.query(
+      `SELECT g.location_id, g.team_profile, g.client_id, c.company_name, c.status
+         FROM google_team_locations g LEFT JOIN clients c ON c.id = g.client_id`
+    );
+    const out = [];
+    for (const t of teams) {
+      let connected = false; let reauth = false; let account = null; let locations = [];
+      try {
+        const r = await call('GET', `/uploadposts/users/${encodeURIComponent(t.username)}`);
+        const g = connectedAccounts(r.profile?.social_accounts || {}).find((a) => a.platform === 'google_business');
+        if (g) { connected = true; reauth = !!g.reauth; account = g.name || g.handle || null; locations = await googleLocations(t.username); }
+      } catch (error) { logger.warn?.('[upload-post] Google da equipe:', t.username, error.message); }
+      out.push({
+        id: t.id, name: t.name, connected, reauth, account,
+        locations: locations.map((l) => {
+          const k = links.find((x) => x.team_profile === t.username && x.location_id === l.id);
+          return { ...l, client_id: k?.client_id || null, client_name: k ? String(k.company_name || '').trim() : null, monitor_only: k?.status === 'monitoramento' };
+        }),
+      });
+    }
+    return out;
+  }
+
+  async function googleTeamCreate(name, userId) {
+    await ensureSchema();
+    const label = String(name || '').trim().slice(0, 60);
+    if (label.length < 2) throw Object.assign(new Error('Dê um nome ao Google (ex.: Google Thiago)'), { status: 400 });
+    const username = `pulse-google-${crypto.randomBytes(4).toString('hex')}`;
+    await call('POST', '/uploadposts/users', { json: { username, display_name: `Equipe · ${label}` } });
+    const { rows: [t] } = await pool.query(
+      `INSERT INTO upload_post_team_profiles (name, username, created_by, kind) VALUES ($1, $2, $3, 'google') RETURNING id, name`, [label, username, userId || null]
+    );
+    return t;
+  }
+
+  async function googleTeamLogin(id) {
+    const t = await googleTeamRow(id);
+    const r = await call('POST', '/uploadposts/oauth/google-business/start', {
+      json: { profile: t.username, redirect_url: `${appBase}/conexoes-sociais?google_equipe=${t.id}` },
+    });
+    if (!r.authorize_url) throw Object.assign(new Error('Não deu para abrir o login do Google. Tente de novo.'), { status: 502 });
+    return { url: r.authorize_url };
+  }
+
+  /** Liga uma ficha a um cliente; com new_client_name, cria um cliente só de monitoramento (fora dos clientes fixos). */
+  async function googleAssign(id, locationId, clientId, newClientName) {
+    const t = await googleTeamRow(id);
+    const loc = (await googleLocations(t.username)).find((l) => l.id === String(locationId));
+    if (!loc) throw Object.assign(new Error('Essa ficha não está nesse Google. Faça o login de novo.'), { status: 400 });
+    let target = String(clientId || '');
+    if (!target) {
+      const name = String(newClientName || loc.title || '').trim().slice(0, 120);
+      if (name.length < 2) throw Object.assign(new Error('Escolha um cliente ou dê o nome do cliente novo'), { status: 400 });
+      const { rows: [c] } = await pool.query(
+        `INSERT INTO clients (company_name, status, client_type) VALUES ($1, 'monitoramento', 'monitoramento') RETURNING id`, [name]
+      );
+      target = c.id;
+    }
+    await pool.query(
+      `INSERT INTO google_team_locations (location_id, team_profile, title, client_id, updated_at) VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (location_id) DO UPDATE SET team_profile = EXCLUDED.team_profile, title = EXCLUDED.title, client_id = EXCLUDED.client_id, updated_at = now()`,
+      [loc.id, t.username, loc.title, target]
+    );
+    return { ok: true, client_id: target, location: loc };
+  }
+
+  async function googleUnassign(locationId) {
+    await ensureSchema();
+    await pool.query(`UPDATE google_team_locations SET client_id = NULL, updated_at = now() WHERE location_id = $1`, [String(locationId)]);
+    return { ok: true };
+  }
+
+  /** De onde ler as avaliações do cliente: as fichas ligadas pelo Google da equipe (perfil + location_id), uma ou várias. */
+  async function googleSourcesOf(clientId) {
+    await ensureSchema();
+    const { rows } = await pool.query(`SELECT team_profile, location_id FROM google_team_locations WHERE client_id = $1 ORDER BY location_id`, [clientId]);
+    return rows.map((g) => ({ user: g.team_profile, location_id: g.location_id }));
+  }
+
+  async function googleMappedClients() {
+    await ensureSchema();
+    const { rows } = await pool.query(`SELECT DISTINCT client_id FROM google_team_locations WHERE client_id IS NOT NULL`);
+    return rows.map((r) => r.client_id);
+  }
+
+  return { googleTeamList, googleTeamCreate, googleTeamLogin, googleAssign, googleUnassign, googleSourcesOf, googleMappedClients,
+    teamList, teamCreate, teamLogin, teamAssign, teamUnassign, ensureSchema, apiKey, saveKey, call, ensureProfile, connectLink, connectPage, connectStart, clientInfo, sync, syncAll, status, publish };
 }
 
 export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifyOwner = verifyAdmin, verifySocialManager, scope = null, sendWhatsApp = null, logger = console }) {
@@ -619,6 +738,28 @@ export function registerUploadPostRoutes(app, { uploadPost, verifyAdmin, verifyO
   });
   app.post('/api/upload-post/clients/:id/team-facebook/remove', async (req, res) => {
     try { await verifyOwner(req); await guard(req, req.params.id); res.json(await uploadPost.teamUnassign(req.params.id)); } catch (error) { fail(res, error); }
+  });
+
+  // Google da equipe (04/11/2026): um login do Google, as fichas ligadas aos clientes (ou a clientes só de monitoramento)
+  app.get('/api/upload-post/team-google', async (req, res) => {
+    try { await verifyOwner(req); res.set('Cache-Control', 'no-store'); res.json({ teams: await uploadPost.googleTeamList() }); } catch (error) { fail(res, error); }
+  });
+  app.post('/api/upload-post/team-google', async (req, res) => {
+    try { const { user } = await verifyOwner(req); res.json(await uploadPost.googleTeamCreate(req.body?.name, user?.id)); } catch (error) { fail(res, error); }
+  });
+  app.post('/api/upload-post/team-google/:id/login', async (req, res) => {
+    try { await verifyOwner(req); res.json(await uploadPost.googleTeamLogin(req.params.id)); } catch (error) { fail(res, error); }
+  });
+  app.post('/api/upload-post/team-google/:id/assign', async (req, res) => {
+    try {
+      await verifyOwner(req);
+      const clientId = String(req.body?.client_id || '');
+      if (clientId) await guard(req, clientId);
+      res.json(await uploadPost.googleAssign(req.params.id, String(req.body?.location_id || ''), clientId, req.body?.new_client_name));
+    } catch (error) { fail(res, error); }
+  });
+  app.post('/api/upload-post/team-google/unassign', async (req, res) => {
+    try { await verifyOwner(req); res.json(await uploadPost.googleUnassign(String(req.body?.location_id || ''))); } catch (error) { fail(res, error); }
   });
 
   const timer = setInterval(() => uploadPost.syncAll().catch((error) => logger.error('[upload-post] sync geral:', error.message)), 15 * 60_000);

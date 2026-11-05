@@ -18,6 +18,8 @@
 //   POST /api/scheduling/posted      { client_id, kind, id }  postagem manual feita: carimba o material como postado
 //        (card do Kanban → Arquivado/postado, entrega Social → postado, portal → publicado, histórico com quem marcou)
 //   POST /api/scheduling/caption     { client_id, kind, id, caption }  guarda a legenda (também no modo manual)
+//   POST /api/scheduling/avulso      { client_id, tipo, title, caption, media_urls[] }  post que não veio do sistema:
+//        vídeo vira card do Kanban em 'agendamentos'; imagem vira arte em 'aprovado'. Volta { kind, id } para agendar.
 //   POST /api/scheduling/caption/generate { client_id, kind, id }      legenda pela IA (roteiro, vídeo ou arte: lib/postCaption.mjs)
 //   GET  /api/scheduling/thumb?src=/uploads/…   miniatura (quadro JPEG) de um vídeo de /uploads, sem login (o vídeo já é público)
 // kind: conteudo (content_tasks) | arte (design_tasks) | portal (client_portal_contents) | post (scheduled_posts sem material)
@@ -1191,6 +1193,66 @@ export function registerSchedulingRoutes(app, deps) {
     );
     return card.id;
   }
+
+  // Post avulso (05/11/2026, Thiago: "um botão no Estúdio de Postagem para subir post, reels, arte para agendar sem ser
+  // apenas os que já têm no sistema"). O arquivo já subiu pelo /api/upload; aqui ele vira um material aprovado do
+  // cliente e entra no fluxo normal (agendar, postar sozinho ou marcar como postado).
+  const AVULSO_TIPOS = { reels: 'video', story: 'any', feed: 'image', carrossel: 'image' };
+  app.post('/api/scheduling/avulso', async (req, res) => {
+    try {
+      const { user, city } = await requireModule(req);
+      const body = req.body || {};
+      const client = await loadClient(String(body.client_id || ''), city);
+      const tipo = String(body.tipo || '');
+      if (!AVULSO_TIPOS[tipo]) throw httpError(400, 'Escolha o tipo: reels, story, arte do feed ou carrossel');
+      const urls = (Array.isArray(body.media_urls) ? body.media_urls : []).map((u) => String(u || '').trim()).filter(Boolean);
+      if (!urls.length) throw httpError(400, 'Envie o arquivo do post');
+      if (urls.length > 10) throw httpError(400, 'No máximo 10 arquivos');
+      if (urls.some((u) => !isHttpsUrl(u) && !u.startsWith('/uploads/'))) throw httpError(400, 'Arquivo inválido');
+      const videos = urls.filter((u) => VIDEO_RE.test(u));
+      const images = urls.filter((u) => IMAGE_RE.test(u));
+      if (videos.length + images.length !== urls.length) throw httpError(400, 'Use vídeo (mp4, mov) ou imagem (png, jpg, webp)');
+      if (videos.length && images.length) throw httpError(400, 'Mande só vídeo ou só imagens no mesmo post');
+      if (videos.length > 1) throw httpError(400, 'Um vídeo por post');
+      if (AVULSO_TIPOS[tipo] === 'video' && !videos.length) throw httpError(400, 'Reels precisa de um vídeo');
+      if (AVULSO_TIPOS[tipo] === 'image' && !images.length) throw httpError(400, 'Arte e carrossel são imagens');
+      if (tipo === 'carrossel' && images.length < 2) throw httpError(400, 'Carrossel precisa de 2 imagens ou mais');
+      const label = { reels: 'Reels', story: 'Story', feed: 'Arte', carrossel: 'Carrossel' }[tipo];
+      const title = String(body.title || '').trim().slice(0, 160) || `${label} avulso`;
+      const note = `Post avulso enviado pelo Estúdio de Postagem por ${user?.email || 'equipe'}.`;
+      let kind;
+      let id;
+      if (videos.length) {
+        kind = 'conteudo';
+        const { rows: [card] } = await pool.query(
+          `INSERT INTO content_tasks (client_id, title, content_type, kanban_column, description, edited_video_link, approved_at, created_by, position)
+           VALUES ($1, $2, $3, 'agendamentos', $4, $5, now(), $6, 0) RETURNING id`,
+          [client.id, title, tipo === 'story' ? 'story' : 'reels', note, videos[0], user?.id || null]
+        );
+        id = card.id;
+      } else {
+        kind = 'arte';
+        const { rows: [art] } = await pool.query(
+          `INSERT INTO design_tasks (client_id, title, description, format_type, priority, kanban_column, attachment_url, attachment_urls,
+                                     client_approved_at, completed_at, created_by, city)
+           VALUES ($1, $2, $3, $4, 'media', 'aprovado', $5, $6, now(), now(), $7, $8) RETURNING id`,
+          [client.id, title, note, tipo === 'carrossel' ? 'carrossel' : tipo === 'story' ? 'story' : 'feed', images[0], images, user?.id || null, client.city || null]
+        );
+        id = art.id;
+      }
+      const caption = String(body.caption || '').trim();
+      if (caption) {
+        await pool.query(
+          `INSERT INTO scheduling_captions (kind, material_id, client_id, caption, updated_by) VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (kind, material_id) DO UPDATE SET caption = EXCLUDED.caption, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+          [kind, id, client.id, caption.slice(0, 2200), user?.id || null]
+        );
+      }
+      res.json({ kind, id });
+    } catch (error) {
+      sendError(res, error, logger);
+    }
+  });
 
   // ── Escrita (transação: material e posts travados até o fim) ──
   function readTarget(body) {

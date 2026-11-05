@@ -5,7 +5,7 @@ import { DragDropContext, type DropResult } from '@hello-pangea/dnd';
 import { toast } from 'sonner';
 import {
   AlertTriangle, BellRing, CalendarClock, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Facebook, Hourglass,
-  Instagram, LayoutGrid, Link2, Loader2, RefreshCw, Repeat2, Rows3, Search,
+  Instagram, LayoutGrid, Link2, Loader2, RefreshCw, Repeat2, Rows3, Search, Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ import SchedulingCalendar from '@/components/scheduling/SchedulingCalendar';
 import UnscheduledPanel from '@/components/scheduling/UnscheduledPanel';
 import ScheduleDialog from '@/components/scheduling/ScheduleDialog';
 import ClientStoryLinkDialog from '@/components/scheduling/ClientStoryLinkDialog';
+import UploadPostDialog from '@/components/scheduling/UploadPostDialog';
 import BestTimePicker from '@/components/scheduling/BestTimePicker';
 import UnscheduledStrip from '@/components/scheduling/UnscheduledStrip';
 import SchedulingClientPicker, { AccountIcons } from '@/components/scheduling/SchedulingClientPicker';
@@ -67,6 +68,7 @@ export default function Scheduling() {
   const [selectedDay, setSelectedDay] = useState<string | null>(today);
   const [dialog, setDialog] = useState<{ item: SchedulingItem; presetDate?: string | null; presetTime?: string | null } | null>(null);
   const [linkDialog, setLinkDialog] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   // melhor horário: o dia/hora tocado no calendário, esperando o material
   const [bestPick, setBestPick] = useState<{ day: string; time: string } | null>(null);
   // Material da lista: abre o agendamento com a hora padrão (a última usada)
@@ -201,6 +203,16 @@ export default function Scheduling() {
       if (material) { setDialog({ item: material, presetDate: item.when?.date || null }); return; }
     }
     setDialog({ item });
+  };
+
+  // post avulso enviado: relê a lista e abre o agendamento dele
+  const onAvulso = async (target: { kind: SchedulingItem['kind']; id: string }) => {
+    setUploadOpen(false);
+    const fresh = await materialsQuery.refetch();
+    const item = fresh.data?.unscheduled.find((i) => i.kind === target.kind && i.id === target.id);
+    if (item) pickMaterial(item, selectedDay && selectedDay >= today ? selectedDay : undefined);
+    else toast.message('O post entrou na lista de não agendados.');
+    refresh();
   };
 
   const onSaved = (message: string) => {
@@ -377,6 +389,9 @@ export default function Scheduling() {
               </button>
             ))}
           </div>
+          <Button size="sm" className="h-8 gap-1.5 rounded-full" onClick={() => setUploadOpen(true)}>
+            <Upload size={13} /> Subir post
+          </Button>
           <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={refresh} aria-label="Atualizar">
             {materialsQuery.isFetching ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
           </Button>
@@ -468,6 +483,9 @@ export default function Scheduling() {
         onClose={() => setBestPick(null)}
         onPick={(item) => { const p = bestPick; setBestPick(null); if (p) setDialog({ item, presetDate: p.day, presetTime: p.time }); }}
       />
+      {uploadOpen && (
+        <UploadPostDialog clientId={client.id} clientName={client.company_name} onClose={() => setUploadOpen(false)} onCreated={onAvulso} />
+      )}
       {linkDialog && (
         <ClientStoryLinkDialog
           clientId={client.id}

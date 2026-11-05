@@ -71,6 +71,13 @@ export async function scheduleMaterial(input: ScheduleInput): Promise<{ when: Sc
   return call('scheduling/schedule', { body: input });
 }
 
+/** Post avulso (arquivo enviado na hora): vira um material aprovado do cliente, pronto para agendar. */
+export async function createAvulsoPost(input: {
+  client_id: string; tipo: 'reels' | 'story' | 'feed' | 'carrossel'; title?: string; caption?: string; media_urls: string[];
+}): Promise<{ kind: SchedulingKind; id: string }> {
+  return call('scheduling/avulso', { body: input });
+}
+
 export async function rescheduleMaterial(input: {
   client_id: string; kind: SchedulingKind; id: string; date: string; time?: string; allow_past?: boolean;
 }): Promise<{ when: SchedulingWhen; mode: 'auto' | 'manual' }> {

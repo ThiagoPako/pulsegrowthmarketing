@@ -3,7 +3,7 @@
 // aprovou) e o pedido de remoção quando a avaliação fere as regras do Google. Servidor: lib/socialHub.mjs.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { BellRing, Check, ExternalLink, Flag, History, Loader2, Plus, RefreshCw, Star, Trash2 } from 'lucide-react';
+import { BellRing, Check, ExternalLink, Flag, FlaskConical, History, Loader2, Plus, RefreshCw, Star, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -56,6 +56,11 @@ export default function GooglePanel({ clientId }: { clientId: string }) {
     try { await fn(); toast.success(ok); await load(); } catch (err) { toast.error((err as Error).message); } finally { setBusy(null); }
   };
   const saveMonitor = (m: Monitor) => act('monitor', async () => setMonitor(await api<Monitor>(`social-hub/review-monitor/${clientId}`, { method: 'PUT', body: m })), m.active ? 'Monitoramento ligado' : 'Monitoramento salvo');
+  // salva os números e manda uma avaliação de exemplo para o cliente ver como chega o aviso (nada vai para o Google)
+  const testMonitor = (m: Monitor) => act('monitor-test', async () => {
+    setMonitor(await api<Monitor>(`social-hub/review-monitor/${clientId}`, { method: 'PUT', body: m }));
+    await api(`social-hub/review-monitor/${clientId}/test`, { method: 'POST' });
+  }, 'Mensagem de teste enviada no WhatsApp');
 
   return (
     <div className="space-y-4">
@@ -82,6 +87,9 @@ export default function GooglePanel({ clientId }: { clientId: string }) {
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" className="gap-1" onClick={() => setMonitor({ ...monitor, numbers: [...monitor.numbers, { name: '', phone: '' }] })}><Plus size={13} /> Outro WhatsApp</Button>
                 <Button size="sm" disabled={busy === 'monitor'} onClick={() => saveMonitor(monitor)}>{busy === 'monitor' ? <Loader2 size={13} className="animate-spin" /> : 'Salvar'}</Button>
+                <Button size="sm" variant="outline" className="gap-1" disabled={busy === 'monitor-test' || !monitor.numbers.some((n) => n.phone.trim())}
+                  title="Manda uma avaliação de exemplo para os números acima. Nada é publicado no Google."
+                  onClick={() => testMonitor(monitor)}>{busy === 'monitor-test' ? <Loader2 size={13} className="animate-spin" /> : <FlaskConical size={13} />} Enviar mensagem de teste</Button>
               </div>
             </div>
           )}

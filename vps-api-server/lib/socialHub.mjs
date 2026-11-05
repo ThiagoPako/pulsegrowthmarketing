@@ -476,15 +476,36 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
   }
 
   /** Avaliação negativa: um link próprio no WhatsApp de cada número do monitoramento. */
-  async function alertMonitors(v, client) {
+  // Mensagem de teste do monitoramento (05/11/2026, pedido do Thiago: "um botão para disparar uma mensagem de teste para o
+  // cliente que tem Google conectado, para ele ver como seria"). Cria uma avaliação fictícia marcada como teste
+  // (review_name "teste:…"): a página de aprovação funciona igual, mas nada é publicado no Google.
+  async function sendMonitorTest(clientId) {
+    await ensureSchema();
+    const m = await monitorOf(clientId);
+    if (!m.numbers.length) throw Object.assign(new Error('Cadastre pelo menos um WhatsApp no monitoramento antes do teste'), { status: 400 });
+    if (!sendWhatsApp) throw Object.assign(new Error('WhatsApp indisponível no servidor'), { status: 503 });
+    const client = await clientRow(clientId);
+    const { rows: [v] } = await pool.query(
+      `INSERT INTO google_reviews (client_id, review_name, reviewer, rating, comment, reviewed_at, status, isis_draft, isis_reason)
+       VALUES ($1, $2, 'Cliente de teste', 2, $3, now(), 'escalado', $4, 'Mensagem de teste do monitoramento') RETURNING *`,
+      [clientId, `teste:${crypto.randomUUID()}`,
+        'Fui atendido, mas demorou mais do que eu esperava. (avaliação de exemplo)',
+        `Olá! Obrigado por nos contar. Sentimos muito pela espera: isso não é o que queremos para você. Chame a gente no WhatsApp para entendermos o que houve e resolvermos. Equipe ${String(client.company_name || '').trim()}.`]
+    );
+    const sent = await alertMonitors(v, client, { test: true, force: true });
+    return { ok: true, sent, numbers: m.numbers.map((n) => n.name) };
+  }
+
+  async function alertMonitors(v, client, { test = false, force = false } = {}) {
     const m = await monitorOf(v.client_id);
-    if (!m.active || !m.numbers.length || !sendWhatsApp) return 0;
+    if ((!m.active && !force) || !m.numbers.length || !sendWhatsApp) return 0;
     const stars = '⭐'.repeat(Math.max(1, v.rating || 1));
     let n = 0;
     for (const who of m.numbers) {
       const token = crypto.randomBytes(18).toString('base64url');
       await pool.query(`INSERT INTO review_approvals (review_id, token, name, phone) VALUES ($1, $2, $3, $4)`, [v.id, token, who.name, who.phone]);
       const body = [
+        ...(test ? ['🧪 *TESTE* · é só um exemplo de como você vai receber os avisos. Nada será publicado no Google.', ''] : []),
         `⚠️ *Nova avaliação no Google* · ${client.company_name}`,
         `${stars} de ${v.reviewer || 'um cliente'}${v.comment ? `: "${String(v.comment).slice(0, 160)}"` : ''}`,
         '',
@@ -537,11 +558,14 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
     const { a, v } = await approvalByToken(token);
     const who = a.name || 'Cliente';
     const mark = (act, n = null) => pool.query(`UPDATE review_approvals SET action = $2, note = $3, acted_at = now() WHERE id = $1`, [a.id, act, n]);
+    const isTest = String(v.review_name || '').startsWith('teste:');
     if (action === 'approve' || action === 'edit') {
       if (v.status === 'respondido') throw Object.assign(new Error(`Esta avaliação já foi respondida (${v.reply_by}).`), { status: 409 });
       const message = action === 'edit' ? String(text || '').trim() : v.isis_draft;
       if (!message || message.length < 2) throw Object.assign(new Error('Escreva a resposta'), { status: 400 });
-      await replyReview(v.id, message, `Aprovado por ${who}`);
+      // teste: marca como respondida sem publicar no Google
+      if (isTest) await pool.query(`UPDATE google_reviews SET status = 'respondido', reply_text = $2, reply_by = $3, replied_at = now() WHERE id = $1`, [v.id, message, `Aprovado por ${who} (teste)`]);
+      else await replyReview(v.id, message, `Aprovado por ${who}`);
       await mark(action === 'edit' ? 'aprovou com ajuste' : 'aprovou', action === 'edit' ? message.slice(0, 500) : null);
       return { ok: true, decided: 'aprovado' };
     }
@@ -550,7 +574,7 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
       if (n.length < 3) throw Object.assign(new Error('Conte o que mudar na resposta'), { status: 400 });
       await mark('pediu ajuste', n);
       const { rows: [cl] } = await pool.query(`SELECT company_name FROM clients WHERE id = $1`, [v.client_id]);
-      await notifyTeam('✏️ Cliente pediu ajuste na resposta do Google', `${cl?.company_name || 'Cliente'} · ${who}: "${n.slice(0, 200)}"`).catch(() => {});
+      if (!isTest) await notifyTeam('✏️ Cliente pediu ajuste na resposta do Google', `${cl?.company_name || 'Cliente'} · ${who}: "${n.slice(0, 200)}"`).catch(() => {});
       return { ok: true, decided: 'ajuste' };
     }
     if (action === 'remove_yes' || action === 'remove_no') {
@@ -692,6 +716,7 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
               ${forPortal ? 'NULL AS isis_draft, NULL AS isis_reason, NULL AS removal_reason, NULL AS removal_status,' : 'r.isis_draft, r.isis_reason, r.removal_reason, r.removal_status,'} r.reply_text, r.reply_by, r.replied_at
          FROM google_reviews r LEFT JOIN clients cl ON cl.id = r.client_id
         WHERE ($1::uuid IS NULL OR r.client_id = $1) AND ($2::text IS NULL OR cl.city IS NULL OR lower(cl.city) = $2)
+          AND r.review_name NOT LIKE 'teste:%'
         ORDER BY (r.status IN ('escalado', 'rascunho', 'aguardando_cliente')) DESC, r.reviewed_at DESC NULLS LAST LIMIT 200`, [clientId || null, city || null]
     );
     return rows;
@@ -731,7 +756,7 @@ export function createSocialHub({ pool, uploadPost, resolveAiConfig, resolveAiMo
   return {
     ensureSchema, syncComments, ingestWebhookComment, processNew, replyComment, setCommentStatus, hideComment, redraft,
     syncReviews, replyReview, syncAll, registerWebhook, webhookSecret, listComments, listReviews, overview, settingsOf, saveSettings,
-    monitorOf, saveMonitor, alertMonitors, audit, publicReview, publicDecide, markRemovalRequested, snapshotMetrics, metricsOf,
+    monitorOf, saveMonitor, alertMonitors, sendMonitorTest, audit, publicReview, publicDecide, markRemovalRequested, snapshotMetrics, metricsOf,
   };
 }
 
@@ -781,6 +806,7 @@ export function registerSocialHubRoutes(app, { hub, uploadPost, pool, verifySoci
   app.get('/api/social-hub/metrics/:clientId', team(async (req) => { await guard(req, req.params.clientId); return { metrics: await hub.metricsOf(req.params.clientId, req.query.days) }; }));
   app.post('/api/social-hub/metrics/:clientId/refresh', team(async (req) => { await guard(req, req.params.clientId); return { saved: await hub.snapshotMetrics(req.params.clientId), metrics: await hub.metricsOf(req.params.clientId) }; }));
   app.put('/api/social-hub/review-monitor/:clientId', team(async (req) => { await guard(req, req.params.clientId); return hub.saveMonitor(req.params.clientId, req.body || {}); }));
+  app.post('/api/social-hub/review-monitor/:clientId/test', team(async (req) => { await guard(req, req.params.clientId); return hub.sendMonitorTest(req.params.clientId); }));
   app.get('/api/social-hub/reviews/:id/audit', team(async (req) => { await guardItem(req, 'google_reviews', req.params.id); return { audit: await hub.audit(req.params.id) }; }));
   app.post('/api/social-hub/reviews/:id/removal-requested', team(async (req) => { await guardItem(req, 'google_reviews', req.params.id); return hub.markRemovalRequested(req.params.id); }));
 

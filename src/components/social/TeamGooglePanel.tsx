@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BellRing, CheckCircle2, Loader2, LogIn, MapPin, Plus, Search, Star, Trash2, Unlink } from 'lucide-react';
+import { BellRing, CheckCircle2, FlaskConical, Loader2, LogIn, MapPin, Plus, Search, Star, Trash2, Unlink } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,6 +23,7 @@ interface Monitor { active: boolean; numbers: { name: string; phone: string }[] 
 function MonitorEditor({ clientId }: { clientId: string }) {
   const [m, setM] = useState<Monitor | null>(null);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   useEffect(() => {
     invokeVpsFunction(`social-hub/review-monitor/${clientId}`, { method: 'GET' }).then(({ data }) => setM(data?.error ? { active: false, numbers: [] } : data));
   }, [clientId]);
@@ -34,6 +35,16 @@ function MonitorEditor({ clientId }: { clientId: string }) {
     if (error || data?.error) { toast.error(data?.error || error?.message); return; }
     setM(data);
     toast.success(data.active ? 'Aviso de avaliação ligado' : 'Aviso salvo');
+  };
+  // salva os números e manda uma avaliação de exemplo, para o cliente ver como chega o aviso (nada vai para o Google)
+  const test = async () => {
+    setTesting(true);
+    const saved = await invokeVpsFunction(`social-hub/review-monitor/${clientId}`, { method: 'PUT', body: m });
+    const { data, error } = saved.error || saved.data?.error ? saved : await invokeVpsFunction(`social-hub/review-monitor/${clientId}/test`, { method: 'POST' });
+    setTesting(false);
+    if (error || data?.error) { toast.error(data?.error || error?.message); return; }
+    if (saved.data && !saved.data.error) setM(saved.data);
+    toast.success('Mensagem de teste enviada no WhatsApp');
   };
   return (
     <div className="space-y-2 rounded-lg bg-muted/40 p-2.5">
@@ -57,6 +68,10 @@ function MonitorEditor({ clientId }: { clientId: string }) {
               <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setM({ ...m, numbers: [...m.numbers, { name: '', phone: '' }] })}><Plus size={12} /> Outro WhatsApp</Button>
             )}
             <Button size="sm" className="h-7 text-xs" disabled={saving} onClick={save}>{saving ? <Loader2 size={12} className="animate-spin" /> : 'Salvar'}</Button>
+            <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" disabled={testing || !m.numbers.some((n) => n.phone.trim())}
+              title="Manda uma avaliação de exemplo para os números acima. Nada é publicado no Google." onClick={test}>
+              {testing ? <Loader2 size={12} className="animate-spin" /> : <FlaskConical size={12} />} Enviar teste
+            </Button>
           </div>
         </div>
       )}

@@ -3,7 +3,7 @@
 // que eu selecionei". O link é a página de conexão da Upload-Post (lib/uploadPost.mjs), só com as redes marcadas.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { AtSign, CheckCircle2, Copy, ExternalLink, Facebook, Instagram, Link2, Linkedin, Loader2, MapPin, MessageCircle, Music2, Pin, RefreshCw, Send, Twitter, Youtube } from 'lucide-react';
+import { AlertTriangle, AtSign, CheckCircle2, Copy, ExternalLink, Facebook, Instagram, Link2, Linkedin, Loader2, MapPin, MessageCircle, Music2, Pin, RefreshCw, Send, Twitter, Youtube } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,8 @@ const NETWORKS = [
 interface Info {
   networks: string[];
   accounts: { platform: string; account_name: string; username: string | null; status: string }[];
+  // a mesma conta ligada também em outro cliente (o login do navegador entrou nos dois perfis)
+  shared?: { platform: string; username: string; clients: string[] }[];
   configured: boolean;
   whatsapp?: string | null;
   responsible?: string | null;
@@ -162,6 +164,16 @@ export default function ClientSocialNetworks({ clientId, whatsapp, onContractVal
           Conectadas: {info.accounts.map((a) => `${NETWORKS.find((n) => n.id === a.platform)?.label || a.platform}${a.username ? ` (@${a.username.replace(/^@/, '')})` : ''}${a.status !== 'connected' ? ' · precisa reconectar' : ''}`).join(' · ')}
         </p>
       )}
+      {(info.shared || []).map((s) => (
+        <div key={`${s.platform}-${s.username}`} role="alert" className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-600" />
+          <p>
+            <b>{NETWORKS.find((n) => n.id === s.platform)?.label || s.platform} @{s.username.replace(/^@/, '')}</b> também está conectado em{' '}
+            <b>{s.clients.join(', ')}</b>. Os posts deste cliente iriam para essa conta. Se ela não é deste cliente, gere o link abaixo
+            e abra numa <b>janela anônima</b>, entrando no Instagram certo (o navegador aproveita a conta que já está logada).
+          </p>
+        </div>
+      ))}
       <Button type="button" size="sm" className="gap-1.5" disabled={!!busy || !chosen.length || !info.configured} onClick={makeLink}>
         {busy === 'link' ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />} Gerar link para o cliente
       </Button>

@@ -159,6 +159,13 @@ export default function ConnectNetworks() {
                     <div className="relative min-w-0 flex-1">
                       <p className="font-semibold">{meta.label}</p>
                       <p className="truncate text-xs text-white/55">{n.connected ? (n.account ? `@${String(n.account).replace(/^@/, '')}` : 'Conectado') : n.reconnect ? 'Precisa entrar de novo' : meta.help}</p>
+                      {/* conta errada (05/11/2026, Goianinha: o navegador entrou com a conta que já estava logada) */}
+                      {n.connected && (
+                        <button type="button" disabled={!!busy} onClick={() => connect(n.id)}
+                          className="mt-0.5 text-[11px] text-white/45 underline underline-offset-2 hover:text-white/80 disabled:opacity-50">
+                          {busy === n.id ? 'Abrindo…' : 'Não é esta conta? Trocar'}
+                        </button>
+                      )}
                     </div>
                     <AnimatePresence mode="wait">
                       {n.connected ? (

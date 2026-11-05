@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Draggable, Droppable } from '@hello-pangea/dnd';
-import { Inbox, Search } from 'lucide-react';
+import { Inbox, Plus, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { SchedulingItem, SchedulingType } from '@/lib/postingSchedule';
@@ -16,6 +16,8 @@ interface Props {
    */
   draggable: boolean;
   className?: string;
+  /** Adicionar conteúdo que não está no sistema (post avulso, 05/11/2026) */
+  onAdd?: () => void;
 }
 
 function approvedLabel(value: string | null): string {
@@ -57,7 +59,7 @@ function Row({ item, onPick, dragging }: { item: SchedulingItem; onPick: (item: 
 const ALL_TYPES: SchedulingType[] = ['reels', 'story', 'feed', 'carrossel', 'arte'];
 
 /** Materiais aprovados do cliente que ainda não têm data de postagem. */
-export default function UnscheduledPanel({ items, onPick, draggable, className }: Props) {
+export default function UnscheduledPanel({ items, onPick, draggable, className, onAdd }: Props) {
   const [query, setQuery] = useState('');
   const [type, setType] = useState<SchedulingType | 'all' | 'criativo'>('all');
   // filtro por designer das artes (usuário, 03/11/2026)
@@ -76,6 +78,12 @@ export default function UnscheduledPanel({ items, onPick, draggable, className }
           <h2 className="text-sm font-bold text-foreground">Não agendados</h2>
           <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-bold tabular-nums text-amber-700 dark:text-amber-300">{items.length}</span>
         </div>
+        {onAdd && (
+          <button type="button" onClick={onAdd}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-primary/50 bg-primary/5 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/10">
+            <Plus size={14} /> Adicionar conteúdo para agendar
+          </button>
+        )}
         {draggable && items.length > 0 && (
           <p className="text-[11px] text-muted-foreground">Arraste até um dia do calendário para agendar.</p>
         )}

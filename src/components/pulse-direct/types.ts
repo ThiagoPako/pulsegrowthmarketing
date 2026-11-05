@@ -18,7 +18,7 @@ export interface Flow {
   client_name?: string | null;
   name: string;
   active: boolean;
-  trigger: { type: 'comment_keyword' | 'dm_keyword'; keywords: string[]; post_ids: string[]; followers_only?: boolean; follow_message?: string | null };
+  trigger: { type: 'comment_keyword' | 'dm_keyword' | 'story_reply' | 'first_message'; keywords: string[]; post_ids: string[]; followers_only?: boolean; follow_message?: string | null };
   public_reply: string | null;
   steps: FlowStep[];
   runs?: number;
@@ -48,6 +48,27 @@ export function flowTemplates(): { id: string; label: string; flow: Flow }[] {
   const c = newStepId();
   const d = newStepId();
   return [
+    {
+      // pedido do Thiago (04/11/2026): story não aceita link, então "manda um oi no story" e o direct responde com o WhatsApp
+      id: 'story-whats', label: 'Respondeu o story, recebe o WhatsApp',
+      flow: {
+        name: 'Story → WhatsApp de atendimento', active: true, trigger: { type: 'story_reply', keywords: [], post_ids: [] },
+        public_reply: null,
+        steps: [{ id: a, text: 'Oi, {primeiro_nome}! 😊 Que bom que você chamou. Toque no botão e fale com a nossa equipe no WhatsApp:', buttons: [{ title: 'Falar no WhatsApp', url: '{whatsapp}' }], replies: [] }],
+      },
+    },
+    {
+      id: 'boas-vindas', label: 'Boas-vindas no primeiro contato',
+      flow: {
+        name: 'Boas-vindas', active: true, trigger: { type: 'first_message', keywords: [], post_ids: [] },
+        public_reply: null,
+        steps: [
+          { id: a, text: 'Oi, {primeiro_nome}! Seja muito bem-vindo(a) 💛 Que bom ter você aqui. Como podemos te ajudar?', buttons: [{ title: 'Falar no WhatsApp', url: '{whatsapp}' }], replies: [{ title: 'Conhecer mais', next: b }, { title: 'Falar com alguém', next: c }] },
+          { id: b, text: 'Fica à vontade para conhecer o nosso perfil! Qualquer dúvida, é só mandar aqui 😉', buttons: [], replies: [] },
+          { id: c, text: 'Já chamei alguém da equipe, só um instante 😊', buttons: [], replies: [], handoff: true },
+        ],
+      },
+    },
     {
       id: 'link', label: 'Comentou, recebe o link',
       flow: {

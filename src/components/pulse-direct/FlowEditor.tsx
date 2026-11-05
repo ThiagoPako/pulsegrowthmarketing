@@ -116,7 +116,12 @@ export default function FlowEditor({ clientId, accountName, initial, onSaved, on
           <div className="space-y-4 rounded-xl border-2 p-4" style={{ borderColor: `${VIOLET}55` }}>
             <p className="flex items-center gap-2 font-semibold" style={{ color: VIOLET }}><Workflow size={16} /> Quando o funil começa</p>
             <div className="grid gap-2 sm:grid-cols-2">
-              {([['comment_keyword', 'Comentou no post', 'A pessoa comenta e recebe a mensagem no direct'], ['dm_keyword', 'Mandou mensagem no direct', 'A pessoa escreve uma palavra no direct']] as const).map(([v, label, help]) => (
+              {([
+                ['comment_keyword', 'Comentou no post', 'A pessoa comenta e recebe a mensagem no direct'],
+                ['dm_keyword', 'Mandou mensagem no direct', 'A pessoa escreve uma palavra no direct'],
+                ['story_reply', 'Respondeu o story', 'Stories não aceitam link: peça "manda um oi aqui" e o direct responde com o botão'],
+                ['first_message', 'Primeiro contato no direct', 'Boas-vindas para quem fala com o perfil pela primeira vez'],
+              ] as const).map(([v, label, help]) => (
                 <button key={v} type="button" onClick={() => setFlow({ ...flow, trigger: { ...flow.trigger, type: v } })}
                   className={cn('rounded-lg border-2 p-3 text-left transition-colors', flow.trigger.type === v ? 'bg-[#7C5CFF]/10' : 'border-border hover:border-[#7C5CFF]/40')}
                   style={flow.trigger.type === v ? { borderColor: VIOLET } : undefined}>
@@ -125,12 +130,20 @@ export default function FlowEditor({ clientId, accountName, initial, onSaved, on
                 </button>
               ))}
             </div>
-            <Section title="Palavras que disparam" help={flow.trigger.type === 'comment_keyword' ? 'Separe por vírgula. Sem palavras, qualquer comentário dispara. Acento, maiúscula e pontuação não importam.' : 'Separe por vírgula. Acento, maiúscula e pontuação não importam.'}>
+            {flow.trigger.type !== 'first_message' && (
+            <Section title="Palavras que disparam" help={flow.trigger.type === 'comment_keyword' ? 'Separe por vírgula. Sem palavras, qualquer comentário dispara. Acento, maiúscula e pontuação não importam.' : flow.trigger.type === 'story_reply' ? 'Opcional. Sem palavras, qualquer resposta a qualquer story dispara.' : 'Separe por vírgula. Acento, maiúscula e pontuação não importam.'}>
               <Input value={flow.trigger.keywords.join(', ')} onChange={(e) => setFlow({ ...flow, trigger: { ...flow.trigger, keywords: e.target.value.split(',').map((k) => k.trimStart()) } })} placeholder="EU QUERO, LINK, PREÇO" />
               {flow.trigger.keywords.filter((k) => k.trim()).length > 0 && (
                 <div className="flex flex-wrap gap-1">{flow.trigger.keywords.filter((k) => k.trim()).map((k) => <span key={k} className="rounded-full px-2 py-0.5 text-xs font-medium text-white" style={{ background: VIOLET }}>{k.trim()}</span>)}</div>
               )}
             </Section>
+            )}
+            {flow.trigger.type === 'first_message' && (
+              <p className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
+                O Instagram não avisa nenhuma ferramenta quando alguém começa a seguir. Por isso a boas-vindas vai na primeira mensagem
+                que a pessoa manda no direct (inclusive resposta a story, quando não houver funil de story ligado).
+              </p>
+            )}
             {flow.trigger.type === 'comment_keyword' && (
               <>
                 <Section title="Em quais posts" help={flow.trigger.post_ids.length ? `${flow.trigger.post_ids.length} post(s) escolhido(s). Toque de novo para tirar.` : 'Nenhum escolhido: vale para todos os posts.'}>
@@ -202,7 +215,7 @@ export default function FlowEditor({ clientId, accountName, initial, onSaved, on
                     </Section>
 
                     <Section title="Botões de link" help="Até 3. O de WhatsApp pede só o número.">
-                      <ButtonEditor value={s.buttons} onChange={(buttons) => setStep(s.id, { buttons })} />
+                      <ButtonEditor clientNumber value={s.buttons} onChange={(buttons) => setStep(s.id, { buttons })} />
                     </Section>
 
                     <Section title="Depois desta mensagem" help="O que a pessoa faz para continuar a conversa.">

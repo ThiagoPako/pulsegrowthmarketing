@@ -1908,10 +1908,12 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           }
         }
       }
-      // alteração vai para a fila do agente pelo "editado por"; edição volta livre para ele pegar
+      // alteração vai para a fila do agente pelo "editado por"; edição volta livre para ele pegar. Otimização fica
+      // reservada para quem recebeu (sem dono, ela não entra na fila de nenhum agente; 06/11/2026, INSS da AlvesCred)
       await pool.query(
         `UPDATE content_tasks SET edited_by = CASE WHEN kanban_column = 'alteracao' THEN $2 ELSE edited_by END,
-                assigned_to = NULL, agent_step = NULL, agent_heartbeat_at = NULL, updated_at = now()
+                assigned_to = CASE WHEN content_type = 'otimizacao' AND kanban_column = 'edicao' THEN $2::uuid ELSE NULL END,
+                agent_step = NULL, agent_heartbeat_at = NULL, updated_at = now()
           WHERE id = $1`,
         [task.id, target.user_id]
       );

@@ -9687,6 +9687,8 @@ async function recoverStuckScheduledPosts() {
 }
 
 let socialPostWorkerBusy = false;
+const SOCIAL_POSTS_MAX_PARALLEL = Math.max(1, Number(process.env.SOCIAL_POSTS_MAX_PARALLEL) || 6);
+const SOCIAL_POSTS_CLIENTS_IN_FLIGHT = new Map(); // client_id → posts publicando agora
 async function processDueScheduledPosts() {
   if (socialPostWorkerBusy) return;
   socialPostWorkerBusy = true;
@@ -9699,22 +9701,37 @@ async function processDueScheduledPosts() {
     }
     // Claim atômico: evita publicar duas vezes se houver mais de uma instância.
     // Post adiado pelo vídeo em preparação fica de fora por alguns segundos (não ocupa a vez dos outros).
+    // Em paralelo (06/11/2026, Thiago: "agendamento de postagem demorando demais para postar"): antes o robô publicava
+    // um post por vez e esperava a Upload-Post terminar cada um (até 10 min), então posts do mesmo horário faziam fila.
+    // Agora cada post publica sozinho, até SOCIAL_POSTS_MAX_PARALLEL ao mesmo tempo; o ciclo só pega os que já venceram.
+    const vagas = SOCIAL_POSTS_MAX_PARALLEL - SOCIAL_POSTS_IN_FLIGHT.size;
+    if (vagas <= 0) return;
     const { rows } = await pool.query(
       `UPDATE scheduled_posts SET status='publicando', updated_at=now()
        WHERE id IN (
-         SELECT id FROM scheduled_posts
-         WHERE status='agendado' AND scheduled_at <= now() AND story_mode IS DISTINCT FROM 'lembrete'
-           AND NOT (id::text = ANY($1::text[]))
-         ORDER BY scheduled_at ASC LIMIT 5 FOR UPDATE SKIP LOCKED
-       ) RETURNING *`,
-      [igVideo.deferredPostIds()]
+         -- um post por cliente por vez (stories em sequência saem na ordem); clientes diferentes em paralelo
+         SELECT id FROM (
+           SELECT DISTINCT ON (client_id) id, scheduled_at FROM scheduled_posts
+            WHERE status='agendado' AND scheduled_at <= now() AND story_mode IS DISTINCT FROM 'lembrete'
+              AND NOT (id::text = ANY($1::text[]))
+              AND NOT (COALESCE(client_id::text, '-') = ANY($3::text[]))
+            ORDER BY client_id, scheduled_at ASC
+         ) primeiro
+         ORDER BY scheduled_at ASC LIMIT $2
+       ) AND status='agendado' RETURNING *`,
+      [[...igVideo.deferredPostIds(), ...SOCIAL_POSTS_IN_FLIGHT], vagas, [...SOCIAL_POSTS_CLIENTS_IN_FLIGHT.keys()]]
     );
     for (const post of rows) {
-      try { await runScheduledPost(post); }
-      catch (err) {
+      const cliente = String(post.client_id ?? '-');
+      SOCIAL_POSTS_CLIENTS_IN_FLIGHT.set(cliente, (SOCIAL_POSTS_CLIENTS_IN_FLIGHT.get(cliente) || 0) + 1);
+      const soltar = () => {
+        const n = (SOCIAL_POSTS_CLIENTS_IN_FLIGHT.get(cliente) || 1) - 1;
+        if (n > 0) SOCIAL_POSTS_CLIENTS_IN_FLIGHT.set(cliente, n); else SOCIAL_POSTS_CLIENTS_IN_FLIGHT.delete(cliente);
+      };
+      runScheduledPost(post).finally(soltar).catch(async (err) => {
         console.error('[social-posts] unexpected failure', post.id, err.message);
         await pool.query(`UPDATE scheduled_posts SET status='erro', last_error=$2, updated_at=now() WHERE id=$1`, [post.id, err.message]).catch(() => {});
-      }
+      });
     }
   } catch (err) {
     console.error('[social-posts] worker error:', err.message);

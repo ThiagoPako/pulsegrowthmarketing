@@ -24,6 +24,7 @@ import cors from 'cors';
 import compression from 'compression';
 import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
+import { registerClientRulesRoutes } from './lib/clientRules.mjs';
 import { registerAgentTrainingRoutes } from './agentTrainingRoutes.mjs';
 import { registerVictoriaRoutes } from './victoriaRoutes.mjs';
 import { registerSocialReportRoutes } from './socialReportRoutes.mjs';
@@ -20829,6 +20830,9 @@ const agentApi = registerAgentRoutes(app, {
   isStrictAdmin: (user) => (user?.role === 'admin' ? true : userHasAssignedRole(user, 'admin')),
   publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
 });
+
+// ─── Regras de cada cliente (05/11/2026): a equipe lê e corrige na aba Regras; os agentes leem e gravam pela API ──
+registerClientRulesRoutes(app, { pool, verifyUser, verifyAgent: agentApi.verifyAgent });
 
 // ─── Treino dos agentes (quem tem Pulse Plus ou a função 'treino_agentes' ensina; o agente lê com `pulse treino`) ──
 registerAgentTrainingRoutes(app, {

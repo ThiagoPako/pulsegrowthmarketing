@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon, MonitorPlay, Loader2, UserMinus, Sparkles, Palette, Users as UsersIcon, Megaphone, Lightbulb, Camera, Award, Layers, MoveHorizontal, ArrowRightLeft, Save, Crown } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon, MonitorPlay, Loader2, UserMinus, Sparkles, Palette, Users as UsersIcon, Megaphone, Lightbulb, Camera, Award, Layers, MoveHorizontal, ArrowRightLeft, Save, Crown, BookOpenCheck } from 'lucide-react';
 import { copyPortalAdminLink } from '@/lib/portalApi';
 import { TransferClientDialog } from '@/components/TransferClientDialog';
 import FacebookPagePickerDialog, { type FacebookPageOption } from '@/components/social/FacebookPagePickerDialog';
@@ -37,6 +37,7 @@ import { syncFinancialContract } from '@/lib/financialContracts';
 import ProposalChecklist from '@/components/ProposalChecklist';
 import ClientTemperatureBadge from '@/components/clients/ClientTemperatureBadge';
 import ClientSocialNetworks from '@/components/social/ClientSocialNetworks';
+import ClientRulesPanel from '@/components/clients/ClientRulesPanel';
 import { useClientTemperatures } from '@/hooks/useClientTemperatures';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -2559,6 +2560,7 @@ export default function Clients() {
       { id: 'identidade', title: 'Identidade', icon: Building2, state: form.companyName && form.responsiblePerson && form.niche ? 'ok' : 'pending', hint: 'Logo, nome, responsável, nicho e cor' },
       { id: 'contato', title: 'Contato e cobrança', icon: MessageSquare, state: (form.whatsapp || '').trim() ? 'ok' : 'pending', hint: 'WhatsApp, grupo e quem recebe cobrança e recibo' },
       { id: 'redes', title: 'Redes sociais', icon: Globe, state: 'neutral', hint: 'Redes do plano, conexão e upgrades' },
+      ...(editing?.id ? [{ id: 'regras', title: 'Regras do cliente', icon: BookOpenCheck, state: 'neutral' as const, hint: 'O que ele gosta, aprovou e recusou' }] : []),
       { id: 'drives', title: 'Pastas do Drive', icon: FolderOpen, state: (form.driveLink || '').trim() ? 'ok' : 'pending', hint: `${drives} de 4 pastas com link` },
       { id: 'acessos', title: 'Portal e acessos', icon: KeyRound, state: 'neutral', hint: 'Login, métricas no portal e cliente admin' },
       { id: 'editorial', title: 'Linha editorial', icon: FileTextIcon, state: ((form as any).editorial || '').trim() ? 'ok' : 'pending', hint: 'Base para os roteiros' },
@@ -2628,6 +2630,11 @@ export default function Clients() {
             <FormSection id="redes" icon={Globe} title="Redes sociais" description="Redes que a Pulse cuida, link de conexão e upgrades do plano.">
               {editing?.id && <ClientSocialNetworks clientId={editing.id} whatsapp={form.whatsapp} onContractValue={setContractValue} />}
             </FormSection>
+            {editing?.id && (
+              <FormSection id="regras" icon={BookOpenCheck} title="Regras do cliente" description="O que este cliente gosta, aprovou e recusou. Os agentes leem antes de editar e gravam o que aprendem.">
+                <ClientRulesPanel clientId={editing.id} />
+              </FormSection>
+            )}
             <FormSection id="drives" icon={FolderOpen} title="Pastas do Drive" description="Onde a equipe e os agentes acham fotos, identidade e referências."
               aside={<span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">{[form.driveLink, form.driveFotos, form.driveIdentidadeVisual, form.driveReferenciasDesign].filter(v => (v || '').trim()).length}/4</span>}>
               {renderDrives()}

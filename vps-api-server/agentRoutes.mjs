@@ -2330,7 +2330,10 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       if (task.assigned_to !== agent.userId || task.kanban_column !== 'edicao') {
         return res.status(409).json({ error: 'Assuma o card de story (claim) antes de entregar' });
       }
-      if (task.content_type !== 'story') return res.status(400).json({ error: 'Só cards de story recebem vários vídeos' });
+      // otimização também (06/11/2026, INSS da AlvesCred): várias peças de um mesmo material (stories, criativo, corte)
+      if (task.content_type !== 'story' && task.content_type !== 'otimizacao') {
+        return res.status(400).json({ error: 'Só cards de story ou de otimização recebem vários vídeos' });
+      }
       req.agentUploadDir = path.resolve(uploadRoot, path.join('content', task.client_id || 'avulso', task.id, 'stories'));
       if (!req.agentUploadDir.startsWith(path.resolve(uploadRoot))) return res.status(400).json({ error: 'Pasta inválida' });
     } catch (error) {
@@ -2381,12 +2384,15 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           const rel = path.relative(path.resolve(uploadRoot), files[i].path).split(path.sep).join('/');
           const url = `${uploadsBase}/${rel}`;
           const title = `${task.title.trim()} · ${names[i]}`;
+          // peça de otimização ganha o tipo pelo nome ("Criativo …" → criativo, "Corte/Reels …" → reels); o resto é story
+          const childType = task.content_type !== 'otimizacao' ? 'story'
+            : /criativ/i.test(names[i]) ? 'criativo' : /corte|reels|feed/i.test(names[i]) ? 'reels' : 'story';
           const { rows: child } = await db.query(
             `INSERT INTO content_tasks
                (client_id, title, content_type, kanban_column, description, recording_id, script_id, drive_link,
                 edited_video_link, edited_video_type, created_by, edited_by, assigned_to, position, parent_task_id,
                 review_deadline, approval_sent_at${hasCity ? ', city' : ''}, created_at, updated_at)
-             VALUES ($1, $2, 'story', 'pre_revisao', $3, $4, $5, $6, $7, 'upload', $8, $8, NULL, $9, $10, $11, $12${hasCity ? ', $13' : ''}, now(), now())
+             VALUES ($1, $2, '${childType}', 'pre_revisao', $3, $4, $5, $6, $7, 'upload', $8, $8, NULL, $9, $10, $11, $12${hasCity ? ', $13' : ''}, now(), now())
              RETURNING id`,
             [task.client_id, title, task.description || null, task.recording_id || null, task.script_id || null,
               task.drive_link || null, url, agent.userId, i, task.id, null, null,

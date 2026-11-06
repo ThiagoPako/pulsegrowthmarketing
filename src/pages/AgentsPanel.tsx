@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DriveIntakePanel } from '@/components/agents/DriveIntakePanel';
 import { AgentTrainingDialog } from '@/components/agents/AgentTrainingDialog';
-import { RenderQueueHud } from '@/components/agents/RenderQueueHud';
+import { RenderQueueHud, useRenderQueue } from '@/components/agents/RenderQueueHud';
+import { AgentsHud } from '@/components/agents/AgentsHud';
 
 interface PauseRow {
   scope: string;
@@ -105,6 +106,8 @@ export default function AgentsPanel() {
   // clicar no agente abre a conversa de treino (ensinar como é feito, com anexos)
   const [training, setTraining] = useState<{ id: string; name: string } | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // fila de render do PC ao vivo (06/11/2026): alimenta o card da fila e a barra de render no card do agente
+  const fila = useRenderQueue();
 
   const load = useCallback(async () => {
     try {
@@ -215,7 +218,7 @@ export default function AgentsPanel() {
   const queue = data?.queue;
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="max-w-7xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Cpu className="text-primary" />
@@ -239,7 +242,17 @@ export default function AgentsPanel() {
         </div>
       </div>
 
-      <RenderQueueHud />
+      {/* versão nova do módulo (06/11/2026): equipe em cards com atividade e barra, e a fila de render ao vivo */}
+      {data && (
+        <AgentsHud
+          agents={data.agents || []}
+          artCurrent={design?.current || []}
+          pausedAll={pausedAll}
+          fila={fila.dados}
+          onOpen={(a) => setTraining({ id: a.user_id, name: a.name?.trim() || a.email || 'Agente' })}
+        />
+      )}
+      <RenderQueueHud fila={fila} />
 
       {loadError && (
         <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">

@@ -26,6 +26,7 @@ import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerClientRulesRoutes } from './lib/clientRules.mjs';
 import { registerLearningRoutes } from './lib/agentLearning.mjs';
+import { registerRenderQueueRoutes } from './lib/renderQueue.mjs';
 import { registerAgentTrainingRoutes } from './agentTrainingRoutes.mjs';
 import { registerVictoriaRoutes } from './victoriaRoutes.mjs';
 import { registerSocialReportRoutes } from './socialReportRoutes.mjs';
@@ -20836,6 +20837,8 @@ const agentApi = registerAgentRoutes(app, {
 registerClientRulesRoutes(app, { pool, verifyUser, verifyAgent: agentApi.verifyAgent });
 // relatório semanal de aprendizado (Juvenal, 05/11/2026): alterações e pareceres da semana para a chefe
 registerLearningRoutes(app, { pool, verifyAgent: agentApi.verifyAgent });
+// fila de render do PC no painel de agentes (06/11/2026): estado ao vivo e ordem arrastada na tela
+registerRenderQueueRoutes(app, { pool, verifyUser, verifyAgent: agentApi.verifyAgent, isStrictAdmin: isStrictAdminUser });
 
 // ─── Treino dos agentes (quem tem Pulse Plus ou a função 'treino_agentes' ensina; o agente lê com `pulse treino`) ──
 registerAgentTrainingRoutes(app, {

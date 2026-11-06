@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DriveIntakePanel } from '@/components/agents/DriveIntakePanel';
 import { AgentTrainingDialog } from '@/components/agents/AgentTrainingDialog';
+import { RenderQueueHud } from '@/components/agents/RenderQueueHud';
 
 interface PauseRow {
   scope: string;
@@ -237,6 +238,8 @@ export default function AgentsPanel() {
           )}
         </div>
       </div>
+
+      <RenderQueueHud />
 
       {loadError && (
         <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">

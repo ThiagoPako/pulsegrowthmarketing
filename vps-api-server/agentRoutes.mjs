@@ -1308,7 +1308,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
            FROM content_tasks t
            LEFT JOIN clients c ON c.id = t.client_id
            LEFT JOIN scripts s ON s.id = t.script_id
-          WHERE t.content_type IS DISTINCT FROM 'otimizacao'
+          -- otimização fica com a equipe, salvo quando a chefe a atribuiu a este agente (pulse atribuir, 06/11/2026)
+          WHERE (t.content_type IS DISTINCT FROM 'otimizacao' OR t.assigned_to = $1)
             -- fixado: reservado para a equipe presencial até alguém desfixar
             AND t.pinned_at IS NULL
             AND (
@@ -1366,7 +1367,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             agent_heartbeat_at = now(),
             updated_at = now()
           WHERE id = $1
-            AND content_type IS DISTINCT FROM 'otimizacao'
+            AND (content_type IS DISTINCT FROM 'otimizacao' OR assigned_to = $2)
             AND pinned_at IS NULL
             AND (assigned_to IS NULL OR assigned_to = $2)
             AND (
